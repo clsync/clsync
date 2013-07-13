@@ -32,14 +32,13 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/mman.h>
-#include <iconv.h>
 #include <errno.h>
-#include <endian.h>
 #include <ctype.h>
 #include <regex.h>
 #include <signal.h>
 #include <wait.h>
 #include <sys/fanotify.h>
+#include <dirent.h>
 #include "config.h"
 
 #ifndef MIN
@@ -49,12 +48,7 @@
 #ifndef MAX
 #define MAX(a,b) (a>b?a:b)
 #endif
-/*
-#define sizeof_bit(a) (sizeof(a)*CHAR_BIT)
-#define intvalues(a) (1 << sizeof_bit(a))
 
-#define parse_le32uint(ptr_p) le32toh(*(uint32_t *)*(ptr_p)); *(ptr_p) = (typeof(*(ptr_p)))((char *)*(ptr_p)) + sizeof(uint32_t);
-*/
 enum flags_enum {
 	BACKGROUND	= 'b',
 	HELP		= 'h',

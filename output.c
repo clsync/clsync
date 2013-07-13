@@ -48,7 +48,7 @@ int out_init() {
 
 int debug_print_flags() {
 	int flag=0;
-	printf("current flags: ");
+	printf("Debug: current flags: ");
 	while(flag < (1<<8)) {
 		if(flags[flag]) {
 			int i=0;

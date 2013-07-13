@@ -88,7 +88,7 @@ int parse_rules_fromfile(const char *exfpath, rule_t *rules) {
 			rule_t *rule;
 
 			rule = &rules[i];
-			line[linelen-1] = 0; 
+			line[--linelen] = 0; 
 			switch(*line) {
 				case '+':
 					rule->action = RULE_ACCEPT;

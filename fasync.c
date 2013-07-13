@@ -69,8 +69,40 @@ int fasync_initialsync(const char *path, const char *actfpath) {
 	return fasync_exec(actfpath, "initialsync", path, NULL);
 }
 
-int fasync_walk_inotifyset(const char *path, rule_t *rules) {
+int fasync_walk_fanotifyset(const char *dirpath, rule_t *rules) {
+	struct dirent *dent;
+	DIR *dir;
+	printf_dd("Debug2: fasync_walk_fanotifyset(\"%s\", rules).\n", dirpath);
+	char path[FILENAME_MAX+1];
+	size_t pathlen = strlen(dirpath);
 
+	if(pathlen+2 >= FILENAME_MAX) {
+		printf_e("Error: Too long path \"%s\" (#0)\n", dirpath);
+		return EINVAL;
+	}
+
+	if(!(dir = opendir(dirpath))) {
+		printf_e("Error: Cannot opendir() on directory \"%s\": %s (errno: %i).\n", dirpath, strerror(errno), errno);
+		return errno;
+	}
+
+	memcpy(path, dir, pathlen+1);
+	path[pathlen++] = '/';
+	path[pathlen  ] = 0;		// Just in case
+
+	while((dent = readdir(dir))) {
+		if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, ".."))			continue;
+
+		size_t objnamelen = strlen(dent->d_name);
+
+		if(pathlen + objnamelen + 1>= FILENAME_MAX) {
+			printf_e("Error: Too long path \"%s/%s\" (#1)\n", dirpath, dent->d_name);
+			return EINVAL;
+		}
+		memcpy(&path[pathlen], dent->d_name, objnamelen+1);
+
+		printf_dd("Debug2: obj path <%s>\n", path);
+	}
 
 	return 0;
 }
@@ -81,7 +113,7 @@ int fasync_run(const char *path, const char *actfpath, rule_t *rules) {
 	ret = fasync_initialsync(path, actfpath);
 	if(ret) return ret;
 
-	ret = fasync_walk_inotifyset(path, rules);
+	ret = fasync_walk_fanotifyset(path, rules);
 	if(ret) return ret;
 
 	int fanotify_d = fanotify_init(FANOTIFY_FLAGS, FANOTIFY_EVFLAGS);
