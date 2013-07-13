@@ -76,6 +76,7 @@ typedef enum ruleaction_enum ruleaction_t;
 
 struct rule {
 	regex_t		expr;
+	mode_t		objtype;
 	ruleaction_t	action;
 };
 typedef struct rule rule_t;

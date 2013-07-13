@@ -71,6 +71,7 @@ int fasync_initialsync(const char *path, const char *actfpath) {
 
 int fasync_walk_inotifyset(const char *path, rule_t *rules) {
 
+
 	return 0;
 }
 
@@ -85,7 +86,7 @@ int fasync_run(const char *path, const char *actfpath, rule_t *rules) {
 
 	int fanotify_d = fanotify_init(FANOTIFY_FLAGS, FANOTIFY_EVFLAGS);
 	if(fanotify_d == -1) {
-		printf_e("Error: cannot fanotify_init(): %s (errno: %i).", strerror(errno), errno);
+		printf_e("Error: cannot fanotify_init(%i, %i): %s (errno: %i).\n", FANOTIFY_FLAGS, FANOTIFY_EVFLAGS, strerror(errno), errno);
 		return errno;
 	}
 

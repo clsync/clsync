@@ -72,7 +72,7 @@ char *parse_arguments(int argc, char *argv[], char **actfpath, char **exfpath) {
 
 int parse_rules_fromfile(const char *exfpath, rule_t *rules) {
 	char buf[BUFSIZ];
-	char *line;
+	char *line_buf=NULL;
 	FILE *f = fopen(exfpath, "r");
 	
 	if(f == NULL) {
@@ -82,41 +82,79 @@ int parse_rules_fromfile(const char *exfpath, rule_t *rules) {
 
 	int i=0;
 	size_t linelen, size=0;
-	while((linelen = getline(&line, &size, f)) != -1) {
-		if(linelen>0) {
+	while((linelen = getline(&line_buf, &size, f)) != -1) {
+		if(linelen>1) {
+			char *line = line_buf;
+			rule_t *rule;
+
+			rule = &rules[i];
 			line[linelen-1] = 0; 
 			switch(*line) {
 				case '+':
-					rules[i].action = RULE_ACCEPT;
+					rule->action = RULE_ACCEPT;
 					break;
 				case '-':
-					rules[i].action = RULE_REJECT;
+					rule->action = RULE_REJECT;
 					break;
+				case '#':	// Comment?
+					continue;
 				default:
 					printf_e("Error: Wrong rule action <%c>.\n", *line);
 					return EINVAL;
 			}
-			
+
 			line++;
 			linelen--;
-			printf_d("Debug2: Rule pattern <%s> (length: %i).\n", line, linelen);
+
+			*line |= 0x20;	// lower-casing
+			switch(*line) {
+				case '*':
+					rule->objtype = 0;	// "0" - means "of any type"
+					break;
+				case 's':
+					rule->objtype = S_IFSOCK;
+					break;
+				case 'l':
+					rule->objtype = S_IFLNK;
+					break;
+				case 'f':
+					rule->objtype = S_IFREG;
+					break;
+				case 'b':
+					rule->objtype = S_IFBLK;
+					break;
+				case 'd':
+					rule->objtype = S_IFDIR;
+					break;
+				case 'c':
+					rule->objtype = S_IFCHR;
+					break;
+				case 'p':
+					rule->objtype = S_IFIFO;
+					break;
+			}
+
+			line++;
+			linelen--;
+
+			printf_d("Debug2: Rule <%c> <%c> pattern <%s> (length: %i).\n", line[-2], line[-1], line, linelen);
 			int ret;
 			if(i >= MAXRULES) {
 				printf_e("Error: Too many rules (%i >= %i).\n", i, MAXRULES);
-				rules[i].action = RULE_END;
+				rule->action = RULE_END;
 				return ENOMEM;
 			}
-			if((ret = regcomp(&rules[i].expr, line, REG_EXTENDED | REG_NOSUB))) {
-				regerror(ret, &rules[i].expr, buf, BUFSIZ);
+			if((ret = regcomp(&rule->expr, line, REG_EXTENDED | REG_NOSUB))) {
+				regerror(ret, &rule->expr, buf, BUFSIZ);
 				printf_e("Error: Invalid regexp pattern <%s>: %s (regex-errno: %i).\n", line, buf, ret);
-				rules[i].action = RULE_END;
+				rule->action = RULE_END;
 				return ret;
 			}
 			i++;
 		}
 	}
 	if(size)
-		free(line);
+		free(line_buf);
 
 	fclose(f);
 
@@ -163,6 +201,10 @@ int main(int argc, char *argv[]) {
 
 	if(ret == 0)
 		ret = fasync_run(dpath, actfpath, rules);
+
+	int i=0;
+	while((i < MAXRULES) && (rules[i].action != RULE_END))
+		regfree(&rules[i++].expr);
 
 	out_flush();
 	printf_d("Debug: finished, exitcode: %i.\n", ret);
