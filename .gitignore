@@ -1,0 +1,12 @@
+
+# objects:
+*.o
+
+# linked:
+insync
+insync-debug
+
+# other:
+build
+exceptions
+
