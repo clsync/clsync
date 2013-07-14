@@ -1,5 +1,5 @@
 /*
-    fasync - sync utility based on fanotify
+    fasync - file tree sync utility based on fanotify
 
     Copyright (C) 2013  Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
 
@@ -124,16 +124,12 @@ int fasync_walk_fanotifyset(const char *dirpath, rule_t *rules) {
 }
 */
 
-static int fasync_walk_fanotifyset_cmp(const FTSENT **a, const FTSENT **b) {
-	return 0;
-}
-
 int fasync_walk_fanotifyset(int fanotify_d, const char *dirpath, rule_t *rules) {
 	const char *rootpaths[] = {dirpath, NULL};
 	FTS *tree;
 	printf_dd("Debug2: fasync_walk_fanotifyset(\"%s\", rules).\n", dirpath);
 
-	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL, fasync_walk_fanotifyset_cmp);
+	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL, NULL);
 
 	if(tree == NULL) {
 		printf_e("Error: Cannot fts_open() on \"%s\": %s (errno: %i).\n", dirpath, strerror(errno), errno);
@@ -142,6 +138,29 @@ int fasync_walk_fanotifyset(int fanotify_d, const char *dirpath, rule_t *rules) 
 
 	FTSENT *node;
 	while((node = fts_read(tree))) {
+
+		switch(node->fts_info) {
+			case FTS_DP:	// Duplicates:
+				continue;
+			case FTS_D:	// To sync:
+			case FTS_F:
+			case FTS_DEFAULT:
+			case FTS_SL:
+			case FTS_SLNONE:
+			case FTS_DOT:
+				break;
+			case FTS_ERR:	// Error cases:
+			case FTS_NS:
+			case FTS_NSOK:
+			case FTS_DNR:
+			case FTS_DC:
+				printf_e("Error: Got error while fts_read(): %s (errno: %i; fts_info: %i).\n", strerror(errno), errno, node->fts_info);
+				return errno;
+			default:
+				printf_e("Error: Got unknown fts_info vlaue while fts_read(): %i.\n", node->fts_info);
+				return EINVAL;
+		}
+
 		int i = 0;
 		rule_t *rule_p = rules;
 		mode_t ftype = node->fts_statp->st_mode & S_IFMT;
@@ -158,32 +177,27 @@ int fasync_walk_fanotifyset(int fanotify_d, const char *dirpath, rule_t *rules) 
 			rule_p = &rules[i++];
 
 		}
-		printf_dd("test2\n");
 
 		ruleaction_t action = rule_p->action;
 		if(action == RULE_END)
 			action = RULE_DEFAULT;
 
-		printf_dd("Debug2: \"%s\" matched to rule #%i: %i -> %i.\n", node->fts_accpath, i, rule_p->action, action);
+		printf_dd("Debug2: matched to rule #%u for \"%s\":\t%i -> %i.\n", rule_p->action==RULE_END?-1:i, node->fts_accpath, rule_p->action, action);
 
 		if(action == RULE_REJECT) {
 			fts_set(tree, node, FTS_SKIP);
 			continue;
 		}
 
+		printf_dd("Debug2: fa-marking \"%s\" (depth %u)\n", node->fts_path, node->fts_level);
 		if((fanotify_mark(fanotify_d, FAN_MARK_ADD | FAN_MARK_DONT_FOLLOW,
-			FANOTIFY_MARKMASK, FAN_NOFD, node->fts_accpath)) == -1)
+			FANOTIFY_MARKMASK, AT_FDCWD, node->fts_accpath)) == -1)
 		{
 			printf_e("Error: Cannot fanotify_mark() on \"%s\": %s (errno: %i).\n", 
 				node->fts_path, strerror(errno), errno);
 			return errno;
 		}
 
-		printf_d("Debug: got file named %s at depth %d, "
-		"accessible via %s from the current directory "
-		"or via %s from the original starting directory\n",
-		node->fts_name, node->fts_level,
-		node->fts_accpath, node->fts_path);
 	}
 	if(errno) {
 		printf_e("Error: Got error while fts_read() and related routines: %s (errno: %i).\n", strerror(errno), errno);

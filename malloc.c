@@ -1,5 +1,5 @@
 /*
-    fasync - sync utility based on fanotify
+    fasync - file tree sync utility based on fanotify
 
     Copyright (C) 2013  Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
 
