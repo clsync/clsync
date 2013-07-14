@@ -1,18 +1,18 @@
 /*
     fasync - file tree sync utility based on fanotify
-
+    
     Copyright (C) 2013  Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
-
+    
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
-
+    
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
+    
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -226,6 +226,39 @@ int fasync_run(const char *path, const char *actfpath, rule_t *rules) {
 	ret = fasync_initialsync(path, actfpath);
 	if(ret) return ret;
 
+	struct fanotify_event_metadata buf[BUFSIZ/sizeof(struct fanotify_event_metadata) + 1];
+	int running=1;
+	while(running) {
+		struct fanotify_event_metadata *metadata;
+		size_t len = read(fanotify_d, (void *)buf, sizeof(buf));
+		metadata=buf;
+		if(len == -1) {
+			printf_e("Error: cannot read(%i, &metadata, sizeof(metadata)): %s (errno: %i).\n", fanotify_d, strerror(errno), errno);
+			return errno;
+		}
+		while(FAN_EVENT_OK(metadata, len)) {
+			printf_dd("Debug2: metadata->pid: %i\n", metadata->pid);
+			if (metadata->fd != FAN_NOFD) {
+				if (metadata->fd >= 0) {
+					char lpath[PATH_MAX];
+					if (metadata->mask & FAN_CLOSE_WRITE) {
+						printf("FAN_CLOSE_WRITE: ");
+					}
+					sprintf(lpath, "/proc/self/fd/%d", metadata->fd);
+					size_t path_len = readlink(lpath, lpath, sizeof(path) - 1);
+					if (path_len > 0) {
+
+						lpath[path_len] = 0x00;
+						printf("File %s", lpath);
+					}
+					close(metadata->fd);
+				}
+				printf("\n");
+			}
+			metadata = FAN_EVENT_NEXT(metadata, len);
+		}
+	}
+	close(fanotify_d);
 
 	return 0;
 }
