@@ -63,7 +63,7 @@ int parse_arguments(int argc, char *argv[], struct options *options) {
 				options->listoutdir   = optarg;
 				break;
 			case 't':
-				options->collectdelay = atoi(optarg);
+				options->collectdelay = (unsigned int)atol(optarg);
 				break;
 			case 'f':
 				options->notifyengine = NE_FANOTIFY;
@@ -207,6 +207,10 @@ int main(int argc, char *argv[]) {
 	out_init(options.flags);
 	if(options.flags[DEBUG])
 		debug_print_flags();
+
+	if(options.notifyengine != NE_INOTIFY) {
+		printf_e("Warning: fanotify is not fully supported, yet!\n");
+	}
 
 	if(options.rulfpath != NULL)
 		ret = parse_rules_fromfile(options.rulfpath, rules);

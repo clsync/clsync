@@ -3,11 +3,12 @@
 *.o
 
 # linked:
-insync
-insync-debug
+clsync
+clsync-debug
 
 # other:
 build
 rules
 test*
+.gdbcommands
 

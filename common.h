@@ -41,7 +41,9 @@
 #include <wait.h>
 #include <fts.h>
 #include <sys/fanotify.h>
+#include <sys/inotify.h>
 #include <dirent.h>
+#include <glib.h>
 #include "config.h"
 
 #ifndef MIN
@@ -87,7 +89,7 @@ struct options {
 	char *actfpath;
 	char *rulfpath;
 	char *listoutdir;
-	int collectdelay;
+	unsigned int collectdelay;
 	int notifyengine;
 };
 

@@ -20,6 +20,7 @@
 #include "common.h"
 #include "output.h"
 #include "fileutils.h"
+#include "malloc.h"
 
 int sync_exec(const char *actfpath, ...) {
 	va_list list;
@@ -74,25 +75,35 @@ int sync_notify_mark(int notify_d, struct options *options, const char *path) {
 	switch(options->notifyengine) {
 		case NE_FANOTIFY: {
 			int fanotify_d = notify_d;
+			int wd;
 
-			if((fanotify_mark(fanotify_d, FAN_MARK_ADD | FAN_MARK_DONT_FOLLOW,
+			if((wd = fanotify_mark(fanotify_d, FAN_MARK_ADD | FAN_MARK_DONT_FOLLOW,
 				FANOTIFY_MARKMASK, AT_FDCWD, path)) == -1)
 			{
 				printf_e("Error: Cannot fanotify_mark() on \"%s\": %s (errno: %i).\n", 
 					path, strerror(errno), errno);
 				return errno;
 			}
-			return 0;
+			return wd;
 		}
-		case NE_INOTIFY:
-			return -1;
+		case NE_INOTIFY: {
+			int inotify_d = notify_d;
+			int wd;
+
+			if((wd = inotify_add_watch(inotify_d, path, INOTIFY_MARKMASK)) == -1) {
+				printf_e("Error: Cannot inotify_add_watch() on \"%s\": %s (errno: %i).\n", 
+					path, strerror(errno), errno);
+				return errno;
+			}
+			return wd;
+		}
 	}
 	printf_e("Error: unknown notify-engine: %i\n", options->notifyengine);
 	errno = EINVAL;
 	return -1;
 }
 
-int sync_walk_notifymark(int notify_d, struct options *options, const char *dirpath, rule_t *rules) {
+int sync_walk_notifymark(int notify_d, struct options *options, const char *dirpath, rule_t *rules, GHashTable *wd2fpath_ht) {
 	const char *rootpaths[] = {dirpath, NULL};
 	FTS *tree;
 	printf_dd("Debug2: sync_walk_notifymark(%i, options, \"%s\", rules).\n", notify_d, dirpath);
@@ -158,7 +169,16 @@ int sync_walk_notifymark(int notify_d, struct options *options, const char *dirp
 		}
 
 		printf_dd("Debug2: marking \"%s\" (depth %u)\n", node->fts_path, node->fts_level);
-		sync_notify_mark(notify_d, options, node->fts_accpath);
+		int wd = sync_notify_mark(notify_d, options, node->fts_accpath);
+		if(wd < 0) {
+			printf_e("Error: Got error while notify-marking \"%s\": %s (errno: %i).\n", node->fts_path, strerror(errno), errno);
+			return errno;
+		}
+		printf_dd("Debug2: watching descriptor is %i.\n", wd);
+
+		char *fpath = xmalloc(node->fts_pathlen+1);
+		memcpy(fpath, node->fts_path, node->fts_pathlen+1);
+		g_hash_table_insert(wd2fpath_ht, GINT_TO_POINTER(wd), fpath);
 
 	}
 	if(errno) {
@@ -186,7 +206,13 @@ int sync_notify_init(struct options *options) {
 			return fanotify_d;
 		}
 		case NE_INOTIFY: {
-			return -1;
+			int inotify_d = inotify_init1(INOTIFY_FLAGS);
+			if(inotify_d == -1) {
+				printf_e("Error: cannot inotify_init(%i): %s (errno: %i).\n", INOTIFY_FLAGS, strerror(errno), errno);
+				return -1;
+			}
+
+			return inotify_d;
 		}
 	}
 	printf_e("Error: unknown notify-engine: %i\n", options->notifyengine);
@@ -194,12 +220,16 @@ int sync_notify_init(struct options *options) {
 	return -1;
 }
 
-int sync_fanotify_loop(int fanotify_d, struct options *options) {
+int sync_dosync(const char *fpath, struct options *options) {
+	return 0;
+}
+
+int sync_fanotify_loop(int fanotify_d, struct options *options, GHashTable *wd2fpath_ht) {
 	struct fanotify_event_metadata buf[BUFSIZ/sizeof(struct fanotify_event_metadata) + 1];
 	int running=1;
 	while(running) {
 		struct fanotify_event_metadata *metadata;
-		size_t len = read(fanotify_d, (void *)buf, sizeof(buf));
+		size_t len = read(fanotify_d, (void *)buf, sizeof(buf)-sizeof(*buf));
 		metadata=buf;
 		if(len == -1) {
 			printf_e("Error: cannot read(%i, &metadata, sizeof(metadata)): %s (errno: %i).\n", fanotify_d, strerror(errno), errno);
@@ -210,6 +240,7 @@ int sync_fanotify_loop(int fanotify_d, struct options *options) {
 			if (metadata->fd != FAN_NOFD) {
 				if (metadata->fd >= 0) {
 					char *fpath = fd2fpath_malloc(metadata->fd);
+					sync_dosync(fpath, options);
 					printf_dd("Debug2: Event %i on \"%s\".\n", metadata->mask, fpath);
 					free(fpath);
 				}
@@ -221,16 +252,69 @@ int sync_fanotify_loop(int fanotify_d, struct options *options) {
 	return 0;
 }
 
-int sync_inotify_loop(int inotify_d, struct options *options) {
+int sync_inotify_wait(int inotify_d) {
+	fd_set rfds;
+	FD_ZERO(&rfds);
+	FD_SET(inotify_d, &rfds);
+	return select(FD_SETSIZE, &rfds, NULL, NULL, NULL);
+}
+
+int sync_inotify_handle(int inotify_d, GHashTable *wd2fpath_ht) {
+	char buf[BUFSIZ + 1];
+	size_t r = read(inotify_d, buf, BUFSIZ);
+	if(r <= 0) {
+		printf_e("Error: Got error while reading events from inotify with read(): %s (errno: %i).\n", strerror(errno), errno);
+		return -1;
+	}
+
+	int count = 0;
+	char *ptr =  buf;
+	char *end = &buf[r];
+	while(ptr < end) {
+		struct inotify_event *event = (struct inotify_event *)ptr;
+
+		char *fpath = g_hash_table_lookup(wd2fpath_ht, GINT_TO_POINTER(event->wd));
+		printf_dd("Debug2: Event %i on \"%s\" (wd: %i; fpath: \"%s\").\n", event->mask, event->name, event->wd, fpath);
+
+//		sync_dosync(fpath, options);
+
+		ptr += sizeof(struct inotify_event) + event->len;
+		count++;
+	}
+
+	return count;
+}
+
+int sync_inotify_loop(int inotify_d, struct options *options, GHashTable *wd2fpath_ht) {
+
+	int running=1;
+	while(running) {
+		int events = sync_inotify_wait(inotify_d);
+
+		if(events == 0) {
+			printf_dd("Debug2: sync_inotify_wait(%i) timed-out.\n", inotify_d);
+			continue;	// Timeout
+		}
+		if(events  < 0) {
+			printf_e("Error: Got error while waiting for event from inotify with select(): %s (errno: %i).\n", strerror(errno), errno);
+			return errno;
+		}
+
+		int count=sync_inotify_handle(inotify_d, wd2fpath_ht);
+		if(count<=0) {
+			printf_e("Error: Cannot handle with inotify events: %s (errno: %i).\n", strerror(errno), errno);
+			return errno;
+		}
+	}
 	return 0;
 }
 
-int sync_notify_loop(int notify_d, struct options *options) {
+int sync_notify_loop(int notify_d, struct options *options, GHashTable *wd2fpath_ht) {
 	switch(options->notifyengine) {
 		case NE_FANOTIFY:
-			return sync_fanotify_loop(notify_d, options);
+			return sync_fanotify_loop(notify_d, options, wd2fpath_ht);
 		case NE_INOTIFY:
-			return sync_inotify_loop (notify_d, options);
+			return sync_inotify_loop (notify_d, options, wd2fpath_ht);
 	}
 	printf_e("Error: unknown notify-engine: %i\n", options->notifyengine);
 	errno = EINVAL;
@@ -239,20 +323,25 @@ int sync_notify_loop(int notify_d, struct options *options) {
 
 int sync_run(struct options *options, rule_t *rules) {
 	int ret;
+	GHashTable* wd2fpath_ht = g_hash_table_new(g_direct_hash, g_direct_equal);
 
 	int notify_d = sync_notify_init(options);
 	if(notify_d == -1) return errno;
 
-	ret = sync_walk_notifymark(notify_d, options, options->watchdir, rules);
+	ret = sync_walk_notifymark(notify_d, options, options->watchdir, rules, wd2fpath_ht);
 	if(ret) return ret;
 
 	ret = sync_initialsync(options->watchdir, options->actfpath);
 	if(ret) return ret;
 
-	ret = sync_notify_loop(notify_d, options);
+	ret = sync_notify_loop(notify_d, options, wd2fpath_ht);
 	if(ret) return ret;
 
+	// TODO: Do cleanup of watching points
+
 	close(notify_d);
+	// TODO: Cleanup fpath's from wd2fpath_ht
+	g_hash_table_destroy(wd2fpath_ht);
 
 	return 0;
 }
