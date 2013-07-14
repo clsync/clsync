@@ -17,6 +17,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define _GNU_SOURCE
 #define _LARGEFILE64_SOURCE
 
 #include <stdio.h>
@@ -37,6 +38,7 @@
 #include <regex.h>
 #include <signal.h>
 #include <wait.h>
+#include <fts.h>
 #include <sys/fanotify.h>
 #include <dirent.h>
 #include "config.h"
@@ -51,6 +53,7 @@
 
 enum flags_enum {
 	BACKGROUND	= 'b',
+	PTHREAD		= 'p',
 	HELP		= 'h',
 	DEBUG		= 'd',
 	QUITE		= 'q',

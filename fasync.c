@@ -69,6 +69,7 @@ int fasync_initialsync(const char *path, const char *actfpath) {
 	return fasync_exec(actfpath, "initialsync", path, NULL);
 }
 
+/*
 int fasync_walk_fanotifyset(const char *dirpath, rule_t *rules) {
 	struct dirent *dent;
 	DIR *dir;
@@ -106,21 +107,111 @@ int fasync_walk_fanotifyset(const char *dirpath, rule_t *rules) {
 
 	return 0;
 }
+*/
+/*
+int fasync_fanotifyset(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf) {
+	printf_dd("Debug2: fasync_fanotifyset(\"%s\", sb, %i, ftwbuf).\n", fpath, typeflag);
+
+	return FTW_CONTINUE;
+}
+
+int fasync_walk_fanotifyset(const char *dirpath, rule_t *rules) {
+	if(nftw(dirpath, fasync_fanotifyset, MAXFOPEN, FTW_ACTIONRETVAL|FTW_PHYS)) {
+		printf_e("Error: Cannot nftw() on \"%s\": %s (errno: %i).\n", dirpath, strerror(errno), errno);
+		return errno;
+	}
+	return 0;
+}
+*/
+
+static int fasync_walk_fanotifyset_cmp(const FTSENT **a, const FTSENT **b) {
+	return 0;
+}
+
+int fasync_walk_fanotifyset(int fanotify_d, const char *dirpath, rule_t *rules) {
+	const char *rootpaths[] = {dirpath, NULL};
+	FTS *tree;
+	printf_dd("Debug2: fasync_walk_fanotifyset(\"%s\", rules).\n", dirpath);
+
+	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL, fasync_walk_fanotifyset_cmp);
+
+	if(tree == NULL) {
+		printf_e("Error: Cannot fts_open() on \"%s\": %s (errno: %i).\n", dirpath, strerror(errno), errno);
+		return errno;
+	}
+
+	FTSENT *node;
+	while((node = fts_read(tree))) {
+		int i = 0;
+		rule_t *rule_p = rules;
+		mode_t ftype = node->fts_statp->st_mode & S_IFMT;
+		while(rule_p->action != RULE_END) {
+
+			if(rule_p->objtype && (rule_p->objtype != ftype)) {
+				rule_p = &rules[i++];
+				continue;
+			}
+
+			if(!regexec(&rule_p->expr, node->fts_path, 0, NULL, 0))
+				break;
+
+			rule_p = &rules[i++];
+
+		}
+		printf_dd("test2\n");
+
+		ruleaction_t action = rule_p->action;
+		if(action == RULE_END)
+			action = RULE_DEFAULT;
+
+		printf_dd("Debug2: \"%s\" matched to rule #%i: %i -> %i.\n", node->fts_accpath, i, rule_p->action, action);
+
+		if(action == RULE_REJECT) {
+			fts_set(tree, node, FTS_SKIP);
+			continue;
+		}
+
+		if((fanotify_mark(fanotify_d, FAN_MARK_ADD | FAN_MARK_DONT_FOLLOW,
+			FANOTIFY_MARKMASK, FAN_NOFD, node->fts_accpath)) == -1)
+		{
+			printf_e("Error: Cannot fanotify_mark() on \"%s\": %s (errno: %i).\n", 
+				node->fts_path, strerror(errno), errno);
+			return errno;
+		}
+
+		printf_d("Debug: got file named %s at depth %d, "
+		"accessible via %s from the current directory "
+		"or via %s from the original starting directory\n",
+		node->fts_name, node->fts_level,
+		node->fts_accpath, node->fts_path);
+	}
+	if(errno) {
+		printf_e("Error: Got error while fts_read() and related routines: %s (errno: %i).\n", strerror(errno), errno);
+		return errno;
+	}
+
+	if(fts_close(tree)) {
+		printf_e("Error: Got error while fts_close(): %s (errno: %i).\n", strerror(errno), errno);
+		return errno;
+	}
+	return 0;
+}
 
 int fasync_run(const char *path, const char *actfpath, rule_t *rules) {
 	int ret;
-
-	ret = fasync_initialsync(path, actfpath);
-	if(ret) return ret;
-
-	ret = fasync_walk_fanotifyset(path, rules);
-	if(ret) return ret;
 
 	int fanotify_d = fanotify_init(FANOTIFY_FLAGS, FANOTIFY_EVFLAGS);
 	if(fanotify_d == -1) {
 		printf_e("Error: cannot fanotify_init(%i, %i): %s (errno: %i).\n", FANOTIFY_FLAGS, FANOTIFY_EVFLAGS, strerror(errno), errno);
 		return errno;
 	}
+
+	ret = fasync_walk_fanotifyset(fanotify_d, path, rules);
+	if(ret) return ret;
+
+	ret = fasync_initialsync(path, actfpath);
+	if(ret) return ret;
+
 
 	return 0;
 }

@@ -26,6 +26,7 @@ int flags[(1<<8)] = {0};
 static struct option long_options[] =
 {
 	{"background",	no_argument,	&flags[BACKGROUND],	BACKGROUND},
+//	{"pthread",	no_argument,	&flags[PTHREAD],	PTHREAD},	// Not implemented, yet
 	{"verbose",	no_argument,	&flags[VERBOSE],	VERBOSE},
 	{"debug",	no_argument,	&flags[DEBUG],		DEBUG},
 	{"quite",	no_argument,	&flags[QUITE],		QUITE},
@@ -47,7 +48,7 @@ char *parse_arguments(int argc, char *argv[], char **actfpath, char **exfpath) {
 	int c;
 	int option_index = 0;
 	while(1) {
-		c = getopt_long (argc, argv, "bqvdh", long_options, &option_index);
+		c = getopt_long (argc, argv, "bpqvdh", long_options, &option_index);
 	
 		if (c == -1) break;
 		switch (c) {
@@ -137,7 +138,7 @@ int parse_rules_fromfile(const char *exfpath, rule_t *rules) {
 			line++;
 			linelen--;
 
-			printf_d("Debug2: Rule <%c> <%c> pattern <%s> (length: %i).\n", line[-2], line[-1], line, linelen);
+			printf_d("Debug2: Rule #%i <%c> <%c> pattern <%s> (length: %i).\n", i+1, line[-2], line[-1], line, linelen);
 			int ret;
 			if(i >= MAXRULES) {
 				printf_e("Error: Too many rules (%i >= %i).\n", i, MAXRULES);
