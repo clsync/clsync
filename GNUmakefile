@@ -5,10 +5,11 @@ DEBUGCFLAGS = -pipe -Wall -Werror -ggdb3 -Wno-error=unused-variable -fstack-prot
 objs=\
 main.o\
 output.o\
-fasync.o\
+fileutils.o\
+sync.o\
 malloc.o
 
-binary=fasync
+binary=clsync
 
 binarydebug=$(binary)-debug
 

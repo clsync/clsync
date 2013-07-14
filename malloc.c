@@ -1,5 +1,5 @@
 /*
-    fasync - file tree sync utility based on fanotify
+    clsync - file tree sync utility based on fanotify and inotify
 
     Copyright (C) 2013  Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
 
@@ -28,7 +28,7 @@ char *xmalloc(size_t size) {
 
 	if(ret == NULL) {
 		printf_e("xmalloc(%i): Cannot allocate memory (#%i: %s).\n", size, errno, strerror(errno));
-		exit(ENOMEM);
+		exit(errno);
 	}
 
 	memset(ret, size, 0);	// Just in case
@@ -43,10 +43,23 @@ char *xcalloc(size_t nmemb, size_t size) {
 
 	if(ret == NULL) {
 		printf_e("xcalloc(%i): Cannot allocate memory (#%i: %s).\n", size, errno, strerror(errno));
-		exit(ENOMEM);
+		exit(errno);
 	}
 
 	memset(ret, nmemb*size, 0);	// Just in case
+	return ret;
+}
+
+char *xrealloc(char *oldptr, size_t size) {
+	size++;	// Just in case
+
+	char *ret = (char *)realloc(oldptr, size);
+
+	if(ret == NULL) {
+		printf_e("xrealloc(%p, %i): Cannot reallocate memory (#%i: %s).\n", oldptr, size, errno, strerror(errno));
+		exit(errno);
+	}
+
 	return ret;
 }
 

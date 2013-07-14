@@ -1,5 +1,5 @@
 /*
-    fasync - file tree sync utility based on fanotify
+    clsync - file tree sync utility based on fanotify and inotify
     
     Copyright (C) 2013  Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
     
@@ -19,8 +19,9 @@
 
 #include "common.h"
 #include "output.h"
+#include "fileutils.h"
 
-int fasync_exec(const char *actfpath, ...) {
+int sync_exec(const char *actfpath, ...) {
 	va_list list;
 	va_start(list, actfpath);
 
@@ -65,69 +66,36 @@ int fasync_exec(const char *actfpath, ...) {
 	return 0;
 }
 
-int fasync_initialsync(const char *path, const char *actfpath) {
-	return fasync_exec(actfpath, "initialsync", path, NULL);
+int sync_initialsync(const char *path, const char *actfpath) {
+	return sync_exec(actfpath, "initialsync", path, NULL);
 }
 
-/*
-int fasync_walk_fanotifyset(const char *dirpath, rule_t *rules) {
-	struct dirent *dent;
-	DIR *dir;
-	printf_dd("Debug2: fasync_walk_fanotifyset(\"%s\", rules).\n", dirpath);
-	char path[FILENAME_MAX+1];
-	size_t pathlen = strlen(dirpath);
+int sync_notify_mark(int notify_d, struct options *options, const char *path) {
+	switch(options->notifyengine) {
+		case NE_FANOTIFY: {
+			int fanotify_d = notify_d;
 
-	if(pathlen+2 >= FILENAME_MAX) {
-		printf_e("Error: Too long path \"%s\" (#0)\n", dirpath);
-		return EINVAL;
-	}
-
-	if(!(dir = opendir(dirpath))) {
-		printf_e("Error: Cannot opendir() on directory \"%s\": %s (errno: %i).\n", dirpath, strerror(errno), errno);
-		return errno;
-	}
-
-	memcpy(path, dir, pathlen+1);
-	path[pathlen++] = '/';
-	path[pathlen  ] = 0;		// Just in case
-
-	while((dent = readdir(dir))) {
-		if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, ".."))			continue;
-
-		size_t objnamelen = strlen(dent->d_name);
-
-		if(pathlen + objnamelen + 1>= FILENAME_MAX) {
-			printf_e("Error: Too long path \"%s/%s\" (#1)\n", dirpath, dent->d_name);
-			return EINVAL;
+			if((fanotify_mark(fanotify_d, FAN_MARK_ADD | FAN_MARK_DONT_FOLLOW,
+				FANOTIFY_MARKMASK, AT_FDCWD, path)) == -1)
+			{
+				printf_e("Error: Cannot fanotify_mark() on \"%s\": %s (errno: %i).\n", 
+					path, strerror(errno), errno);
+				return errno;
+			}
+			return 0;
 		}
-		memcpy(&path[pathlen], dent->d_name, objnamelen+1);
-
-		printf_dd("Debug2: obj path <%s>\n", path);
+		case NE_INOTIFY:
+			return -1;
 	}
-
-	return 0;
-}
-*/
-/*
-int fasync_fanotifyset(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf) {
-	printf_dd("Debug2: fasync_fanotifyset(\"%s\", sb, %i, ftwbuf).\n", fpath, typeflag);
-
-	return FTW_CONTINUE;
+	printf_e("Error: unknown notify-engine: %i\n", options->notifyengine);
+	errno = EINVAL;
+	return -1;
 }
 
-int fasync_walk_fanotifyset(const char *dirpath, rule_t *rules) {
-	if(nftw(dirpath, fasync_fanotifyset, MAXFOPEN, FTW_ACTIONRETVAL|FTW_PHYS)) {
-		printf_e("Error: Cannot nftw() on \"%s\": %s (errno: %i).\n", dirpath, strerror(errno), errno);
-		return errno;
-	}
-	return 0;
-}
-*/
-
-int fasync_walk_fanotifyset(int fanotify_d, const char *dirpath, rule_t *rules) {
+int sync_walk_notifymark(int notify_d, struct options *options, const char *dirpath, rule_t *rules) {
 	const char *rootpaths[] = {dirpath, NULL};
 	FTS *tree;
-	printf_dd("Debug2: fasync_walk_fanotifyset(\"%s\", rules).\n", dirpath);
+	printf_dd("Debug2: sync_walk_notifymark(%i, options, \"%s\", rules).\n", notify_d, dirpath);
 
 	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL, NULL);
 
@@ -141,12 +109,12 @@ int fasync_walk_fanotifyset(int fanotify_d, const char *dirpath, rule_t *rules) 
 
 		switch(node->fts_info) {
 			case FTS_DP:	// Duplicates:
-				continue;
-			case FTS_D:	// To sync:
-			case FTS_F:
 			case FTS_DEFAULT:
 			case FTS_SL:
 			case FTS_SLNONE:
+			case FTS_F:
+				continue;
+			case FTS_D:	// To sync:
 			case FTS_DOT:
 				break;
 			case FTS_ERR:	// Error cases:
@@ -189,14 +157,8 @@ int fasync_walk_fanotifyset(int fanotify_d, const char *dirpath, rule_t *rules) 
 			continue;
 		}
 
-		printf_dd("Debug2: fa-marking \"%s\" (depth %u)\n", node->fts_path, node->fts_level);
-		if((fanotify_mark(fanotify_d, FAN_MARK_ADD | FAN_MARK_DONT_FOLLOW,
-			FANOTIFY_MARKMASK, AT_FDCWD, node->fts_accpath)) == -1)
-		{
-			printf_e("Error: Cannot fanotify_mark() on \"%s\": %s (errno: %i).\n", 
-				node->fts_path, strerror(errno), errno);
-			return errno;
-		}
+		printf_dd("Debug2: marking \"%s\" (depth %u)\n", node->fts_path, node->fts_level);
+		sync_notify_mark(notify_d, options, node->fts_accpath);
 
 	}
 	if(errno) {
@@ -208,24 +170,31 @@ int fasync_walk_fanotifyset(int fanotify_d, const char *dirpath, rule_t *rules) 
 		printf_e("Error: Got error while fts_close(): %s (errno: %i).\n", strerror(errno), errno);
 		return errno;
 	}
+
 	return 0;
 }
 
-int fasync_run(const char *path, const char *actfpath, rule_t *rules) {
-	int ret;
+int sync_notify_init(struct options *options) {
+	switch(options->notifyengine) {
+		case NE_FANOTIFY: {
+			int fanotify_d = fanotify_init(FANOTIFY_FLAGS, FANOTIFY_EVFLAGS);
+			if(fanotify_d == -1) {
+				printf_e("Error: cannot fanotify_init(%i, %i): %s (errno: %i).\n", FANOTIFY_FLAGS, FANOTIFY_EVFLAGS, strerror(errno), errno);
+				return -1;
+			}
 
-	int fanotify_d = fanotify_init(FANOTIFY_FLAGS, FANOTIFY_EVFLAGS);
-	if(fanotify_d == -1) {
-		printf_e("Error: cannot fanotify_init(%i, %i): %s (errno: %i).\n", FANOTIFY_FLAGS, FANOTIFY_EVFLAGS, strerror(errno), errno);
-		return errno;
+			return fanotify_d;
+		}
+		case NE_INOTIFY: {
+			return -1;
+		}
 	}
+	printf_e("Error: unknown notify-engine: %i\n", options->notifyengine);
+	errno = EINVAL;
+	return -1;
+}
 
-	ret = fasync_walk_fanotifyset(fanotify_d, path, rules);
-	if(ret) return ret;
-
-	ret = fasync_initialsync(path, actfpath);
-	if(ret) return ret;
-
+int sync_fanotify_loop(int fanotify_d, struct options *options) {
 	struct fanotify_event_metadata buf[BUFSIZ/sizeof(struct fanotify_event_metadata) + 1];
 	int running=1;
 	while(running) {
@@ -237,28 +206,53 @@ int fasync_run(const char *path, const char *actfpath, rule_t *rules) {
 			return errno;
 		}
 		while(FAN_EVENT_OK(metadata, len)) {
-			printf_dd("Debug2: metadata->pid: %i\n", metadata->pid);
+			printf_dd("Debug2: metadata->pid: %i; metadata->fd: %i\n", metadata->pid, metadata->fd);
 			if (metadata->fd != FAN_NOFD) {
 				if (metadata->fd >= 0) {
-					char lpath[PATH_MAX];
-					if (metadata->mask & FAN_CLOSE_WRITE) {
-						printf("FAN_CLOSE_WRITE: ");
-					}
-					sprintf(lpath, "/proc/self/fd/%d", metadata->fd);
-					size_t path_len = readlink(lpath, lpath, sizeof(path) - 1);
-					if (path_len > 0) {
-
-						lpath[path_len] = 0x00;
-						printf("File %s", lpath);
-					}
-					close(metadata->fd);
+					char *fpath = fd2fpath_malloc(metadata->fd);
+					printf_dd("Debug2: Event %i on \"%s\".\n", metadata->mask, fpath);
+					free(fpath);
 				}
-				printf("\n");
 			}
+			close(metadata->fd);
 			metadata = FAN_EVENT_NEXT(metadata, len);
 		}
 	}
-	close(fanotify_d);
+	return 0;
+}
+
+int sync_inotify_loop(int inotify_d, struct options *options) {
+	return 0;
+}
+
+int sync_notify_loop(int notify_d, struct options *options) {
+	switch(options->notifyengine) {
+		case NE_FANOTIFY:
+			return sync_fanotify_loop(notify_d, options);
+		case NE_INOTIFY:
+			return sync_inotify_loop (notify_d, options);
+	}
+	printf_e("Error: unknown notify-engine: %i\n", options->notifyengine);
+	errno = EINVAL;
+	return -1;
+}
+
+int sync_run(struct options *options, rule_t *rules) {
+	int ret;
+
+	int notify_d = sync_notify_init(options);
+	if(notify_d == -1) return errno;
+
+	ret = sync_walk_notifymark(notify_d, options, options->watchdir, rules);
+	if(ret) return ret;
+
+	ret = sync_initialsync(options->watchdir, options->actfpath);
+	if(ret) return ret;
+
+	ret = sync_notify_loop(notify_d, options);
+	if(ret) return ret;
+
+	close(notify_d);
 
 	return 0;
 }

@@ -1,5 +1,5 @@
 /*
-    fasync - file tree sync utility based on fanotify
+    clsync - file tree sync utility based on fanotify and inotify
 
     Copyright (C) 2013  Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
 
@@ -20,14 +20,19 @@
 #include "common.h"
 #include "output.h"
 
+static int *flags;
+
+printf_funct _printf_ddd=NULL;
 printf_funct _printf_dd=NULL;
 printf_funct _printf_d=NULL;
 printf_funct _printf_v=NULL;
+write_funct _write_ddd=NULL;
 write_funct _write_dd=NULL;
 write_funct _write_d=NULL;
 write_funct _write_v=NULL;
 
-int out_init() {
+int out_init(int *flags_init) {
+	flags = flags_init;
 //	static char buf[OUTPUT_BUFSIZE];
 	if(flags[DEBUG]>0) {
 		_printf_d = printf_e;
@@ -36,6 +41,10 @@ int out_init() {
 	if(flags[DEBUG]>1) {
 		_printf_dd = printf_e;
 		_write_dd  = write_e;
+	}
+	if(flags[DEBUG]>2) {
+		_printf_ddd = printf_e;
+		_write_ddd  = write_e;
 	}
 	if(flags[VERBOSE]) {
 		_printf_v = printf_e;

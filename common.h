@@ -1,5 +1,5 @@
 /*
-    fasync - file tree sync utility based on fanotify
+    clsync - file tree sync utility based on fanotify and inotify
 
     Copyright (C) 2013  Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
 
@@ -18,6 +18,7 @@
  */
 
 #define _GNU_SOURCE
+#define _XOPEN_SOURCE 700
 #define _LARGEFILE64_SOURCE
 
 #include <stdio.h>
@@ -55,14 +56,16 @@ enum flags_enum {
 	BACKGROUND	= 'b',
 	PTHREAD		= 'p',
 	HELP		= 'h',
+	DELAY		= 't',
 	DEBUG		= 'd',
 	QUITE		= 'q',
-	VERBOSE		= 'v'
+	VERBOSE		= 'v',
+	OUTLISTSDIR	= 'l',
+	FANOTIFY	= 'f',
+	INOTIFY		= 'i'
 };
 
 typedef enum flags_enum flags_t;
-
-extern int flags[];
 
 enum ruleaction_enum {
 	RULE_END = 0,	// Terminator. To be able to end rules' chain
@@ -77,4 +80,21 @@ struct rule {
 	ruleaction_t	action;
 };
 typedef struct rule rule_t;
+
+struct options {
+	int flags[(1<<8)];
+	char *watchdir;
+	char *actfpath;
+	char *rulfpath;
+	char *listoutdir;
+	int collectdelay;
+	int notifyengine;
+};
+
+enum notifyengine_enum {
+	NE_UNDEFINED = 0,
+	NE_FANOTIFY,
+	NE_INOTIFY
+};
+typedef enum notifyengine_enum notifyenfine_t;
 

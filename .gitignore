@@ -9,4 +9,5 @@ insync-debug
 # other:
 build
 rules
+test*
 

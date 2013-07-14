@@ -1,5 +1,5 @@
 /*
-    fasync - file tree sync utility based on fanotify
+    clsync - file tree sync utility based on fanotify and inotify
 
     Copyright (C) 2013  Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
 
@@ -19,23 +19,26 @@
 
 #include "common.h"
 #include "output.h"
-#include "fasync.h"
+#include "sync.h"
 #include "malloc.h"
 
-int flags[(1<<8)] = {0};
 static struct option long_options[] =
 {
-	{"background",	no_argument,	&flags[BACKGROUND],	BACKGROUND},
-//	{"pthread",	no_argument,	&flags[PTHREAD],	PTHREAD},	// Not implemented, yet
-	{"verbose",	no_argument,	&flags[VERBOSE],	VERBOSE},
-	{"debug",	no_argument,	&flags[DEBUG],		DEBUG},
-	{"quite",	no_argument,	&flags[QUITE],		QUITE},
-	{"help",	no_argument,	NULL,			HELP},
-	{0,		0,		0,			0}
+	{"background",		no_argument,		NULL,	BACKGROUND},
+	{"pthread",		no_argument,		NULL,	PTHREAD},	// Not implemented, yet
+	{"collectdelay",	required_argument,	NULL,	DELAY},
+	{"outlistsdir",		required_argument,	NULL,	OUTLISTSDIR},
+	{"verbose",		no_argument,		NULL,	VERBOSE},
+	{"debug",		no_argument,		NULL,	DEBUG},
+	{"quite",		no_argument,		NULL,	QUITE},
+	{"fanotify",		no_argument,		NULL,	FANOTIFY},
+	{"inotify",		no_argument,		NULL,	INOTIFY},
+	{"help",		no_argument,		NULL,	HELP},
+	{0,			0,			0,	0}
 };
 
 int syntax() {
-	printf("syntax: fasync [flags] <watch dir> <action script> [file with rules regexps]\npossible flags:\n");
+	printf("syntax: clsync [flags] <watch dir> <action script> [file with rules regexps]\npossible flags:\n");
 	int i=0;
 	while(long_options[i].name != NULL) {
 		printf("\t--%-16s-%c\n", long_options[i].name, long_options[i].val);
@@ -44,11 +47,11 @@ int syntax() {
 	exit(0);
 }
 
-char *parse_arguments(int argc, char *argv[], char **actfpath, char **exfpath) {
+int parse_arguments(int argc, char *argv[], struct options *options) {
 	int c;
 	int option_index = 0;
 	while(1) {
-		c = getopt_long (argc, argv, "bpqvdh", long_options, &option_index);
+		c = getopt_long(argc, argv, "bl:t:pqvdhfa", long_options, &option_index);
 	
 		if (c == -1) break;
 		switch (c) {
@@ -56,28 +59,41 @@ char *parse_arguments(int argc, char *argv[], char **actfpath, char **exfpath) {
 			case 'h':
 				syntax();
 				break;
+			case 'l':
+				options->listoutdir   = optarg;
+				break;
+			case 't':
+				options->collectdelay = atoi(optarg);
+				break;
+			case 'f':
+				options->notifyengine = NE_FANOTIFY;
+				break;
+			case 'i':
+				options->notifyengine = NE_INOTIFY;
+				break;
 			default:
-				flags[c]++;
+				options->flags[c]++;
 				break;
 		}
 	}
 	if(optind+1 >= argc)
 		syntax();
 
-	*actfpath = argv[optind+1];
+	options->actfpath = argv[optind+1];
 	if(optind+2 < argc)
-		*exfpath = argv[optind+2];
+		options->rulfpath = argv[optind+2];
 
-	return argv[optind];
+	options->watchdir = argv[optind];
+	return 0;
 }
 
-int parse_rules_fromfile(const char *exfpath, rule_t *rules) {
+int parse_rules_fromfile(const char *rulfpath, rule_t *rules) {
 	char buf[BUFSIZ];
 	char *line_buf=NULL;
-	FILE *f = fopen(exfpath, "r");
+	FILE *f = fopen(rulfpath, "r");
 	
 	if(f == NULL) {
-		printf_e("Error: Cannot open \"%s\" for reading: %s (errno: %i).\n", exfpath, strerror(errno), errno);
+		printf_e("Error: Cannot open \"%s\" for reading: %s (errno: %i).\n", rulfpath, strerror(errno), errno);
 		return errno;
 	}
 
@@ -181,27 +197,30 @@ int becomedaemon() {
 }
 
 int main(int argc, char *argv[]) {
+	struct options options;
 	int ret = 0;
 	rule_t rules[MAXRULES];
-	char *actfpath, *exfpath=NULL;
-	char *dpath = parse_arguments(argc, argv, &actfpath, &exfpath);
-	out_init();
-	if(flags[DEBUG])
+	memset(&options, 0, sizeof(options));
+	options.notifyengine = DEFAULT_NOTIFYENGINE;
+
+	parse_arguments(argc, argv, &options);
+	out_init(options.flags);
+	if(options.flags[DEBUG])
 		debug_print_flags();
 
-	if(exfpath != NULL)
-		ret = parse_rules_fromfile(exfpath, rules);
+	if(options.rulfpath != NULL)
+		ret = parse_rules_fromfile(options.rulfpath, rules);
 
-	if(access(actfpath, X_OK) == -1) {
-		printf_e("Error: \"%s\" is not executable: %s (errno: %i).\n", actfpath, strerror(errno), errno);
+	if(access(options.actfpath, X_OK) == -1) {
+		printf_e("Error: \"%s\" is not executable: %s (errno: %i).\n", options.actfpath, strerror(errno), errno);
 		ret = errno;
 	}
 
-	if(flags[BACKGROUND])
+	if(options.flags[BACKGROUND])
 		ret = becomedaemon();
 
 	if(ret == 0)
-		ret = fasync_run(dpath, actfpath, rules);
+		ret = sync_run(&options, rules);
 
 	int i=0;
 	while((i < MAXRULES) && (rules[i].action != RULE_END))

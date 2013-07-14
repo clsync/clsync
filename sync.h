@@ -18,7 +18,5 @@
  */
 
 
-extern char *xmalloc(size_t size);
-extern char *xcalloc(size_t nmemb, size_t size);
-extern char *xrealloc(char *oldptr, size_t size);
+extern int sync_run(struct options *options, rule_t *rules);
 

@@ -1,0 +1,13 @@
+
+Notify engines:
+
+	It's suppported fanotify and inotify engines. However fanotify was not ready
+	at the moment of the code writting, so I was have to temporary fallback
+	to inotify.
+
+	I've freezed code that uses fanotify until it the fanotify will be ready.
+
+	The reason, why I didn't continue to use fanotify, that it was unable to
+	catch some events, like "directory creation" or "file deletion".
+
+
