@@ -22,6 +22,44 @@
 #include "fileutils.h"
 #include "malloc.h"
 
+static inline int indexes_remove_bywd(indexes_t *indexes_p, int wd) {
+	int ret=0;
+
+	char *fpath = g_hash_table_lookup(indexes_p->wd2fpath_ht, GINT_TO_POINTER(wd));
+
+	ret |= g_hash_table_remove(indexes_p->wd2fpath_ht, GINT_TO_POINTER(wd));
+	if(fpath == NULL) {
+		printf_e("Error: Cannot remove from index \"fpath2wd\" by wd %i.\n", wd);
+		return -1;
+	}
+	ret |= g_hash_table_remove(indexes_p->fpath2wd_ht, fpath);
+
+	return ret;
+}
+
+static inline int indexes_add(indexes_t *indexes_p, int wd, const char *fpath_const, size_t fpathlen) {
+	char *fpath = xmalloc(fpathlen+1);
+	memcpy(fpath, fpath_const, fpathlen+1);
+	g_hash_table_insert(indexes_p->wd2fpath_ht, GINT_TO_POINTER(wd), fpath);
+	g_hash_table_insert(indexes_p->fpath2wd_ht, fpath, GINT_TO_POINTER(wd));
+
+	return 0;
+}
+
+static inline char *indexes_wd2fpath(indexes_t *indexes_p, int wd) {
+	return g_hash_table_lookup(indexes_p->wd2fpath_ht, GINT_TO_POINTER(wd));
+}
+
+static inline int indexes_fpath2wd(indexes_t *indexes_p, const char *fpath) {
+	gpointer gint_p = g_hash_table_lookup(indexes_p->fpath2wd_ht, fpath);
+	if(gint_p == NULL)
+		return -1;
+
+	return GPOINTER_TO_INT(gint_p);
+}
+
+int *state_p = NULL;
+
 int sync_exec(const char *actfpath, ...) {
 	va_list list;
 	va_start(list, actfpath);
@@ -67,51 +105,61 @@ int sync_exec(const char *actfpath, ...) {
 	return 0;
 }
 
-int sync_initialsync(const char *path, const char *actfpath) {
-	return sync_exec(actfpath, "initialsync", path, NULL);
+int sync_initialsync(const char *path, struct options *options_p) {
+	return sync_exec(options_p->actfpath, "initialsync", path, NULL);
 }
 
-int sync_notify_mark(int notify_d, struct options *options, const char *path) {
-	switch(options->notifyengine) {
+int sync_notify_mark(int notify_d, struct options *options_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p) {
+	int wd = indexes_fpath2wd(indexes_p, path);
+	if(wd != -1) {
+		printf_d("Debug: \"%s\" is already marked (wd: %i). Skipping.\n", path, wd);
+		return wd;
+	}
+
+	switch(options_p->notifyengine) {
 		case NE_FANOTIFY: {
 			int fanotify_d = notify_d;
-			int wd;
 
 			if((wd = fanotify_mark(fanotify_d, FAN_MARK_ADD | FAN_MARK_DONT_FOLLOW,
-				FANOTIFY_MARKMASK, AT_FDCWD, path)) == -1)
+				FANOTIFY_MARKMASK, AT_FDCWD, accpath)) == -1)
 			{
 				printf_e("Error: Cannot fanotify_mark() on \"%s\": %s (errno: %i).\n", 
 					path, strerror(errno), errno);
-				return errno;
+				return -1;
 			}
-			return wd;
+			break;
 		}
 		case NE_INOTIFY: {
 			int inotify_d = notify_d;
-			int wd;
 
-			if((wd = inotify_add_watch(inotify_d, path, INOTIFY_MARKMASK)) == -1) {
+			if((wd = inotify_add_watch(inotify_d, accpath, INOTIFY_MARKMASK)) == -1) {
 				printf_e("Error: Cannot inotify_add_watch() on \"%s\": %s (errno: %i).\n", 
 					path, strerror(errno), errno);
-				return errno;
+				return -1;
 			}
-			return wd;
+			break;
+		}
+		default: {
+			printf_e("Error: unknown notify-engine: %i\n", options_p->notifyengine);
+			errno = EINVAL;
+			return -1;
 		}
 	}
-	printf_e("Error: unknown notify-engine: %i\n", options->notifyengine);
-	errno = EINVAL;
-	return -1;
+	indexes_add(indexes_p, wd, path, pathlen);
+
+	return wd;
 }
 
-int sync_walk_notifymark(int notify_d, struct options *options, const char *dirpath, rule_t *rules, GHashTable *wd2fpath_ht) {
+int sync_walk_notifymark(int notify_d, struct options *options_p, const char *dirpath, rule_t *rules_p, indexes_t *indexes_p, printf_funct _printf_e) {
 	const char *rootpaths[] = {dirpath, NULL};
 	FTS *tree;
-	printf_dd("Debug2: sync_walk_notifymark(%i, options, \"%s\", rules).\n", notify_d, dirpath);
+	printf_dd("Debug2: sync_walk_notifymark(%i, options_p, \"%s\", rules_p, _printf_e).\n", notify_d, dirpath);
 
 	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL, NULL);
 
 	if(tree == NULL) {
-		printf_e("Error: Cannot fts_open() on \"%s\": %s (errno: %i).\n", dirpath, strerror(errno), errno);
+		if(_printf_e)
+			_printf_e("Error: Cannot fts_open() on \"%s\": %s (errno: %i).\n", dirpath, strerror(errno), errno);
 		return errno;
 	}
 
@@ -133,27 +181,29 @@ int sync_walk_notifymark(int notify_d, struct options *options, const char *dirp
 			case FTS_NSOK:
 			case FTS_DNR:
 			case FTS_DC:
-				printf_e("Error: Got error while fts_read(): %s (errno: %i; fts_info: %i).\n", strerror(errno), errno, node->fts_info);
+				if(_printf_e)
+					printf_e("Error: Got error while fts_read(): %s (errno: %i; fts_info: %i).\n", strerror(errno), errno, node->fts_info);
 				return errno;
 			default:
-				printf_e("Error: Got unknown fts_info vlaue while fts_read(): %i.\n", node->fts_info);
+				if(_printf_e)
+					printf_e("Error: Got unknown fts_info vlaue while fts_read(): %i.\n", node->fts_info);
 				return EINVAL;
 		}
 
 		int i = 0;
-		rule_t *rule_p = rules;
+		rule_t *rule_p = rules_p;
 		mode_t ftype = node->fts_statp->st_mode & S_IFMT;
 		while(rule_p->action != RULE_END) {
 
 			if(rule_p->objtype && (rule_p->objtype != ftype)) {
-				rule_p = &rules[i++];
+				rule_p = &rules_p[i++];
 				continue;
 			}
 
 			if(!regexec(&rule_p->expr, node->fts_path, 0, NULL, 0))
 				break;
 
-			rule_p = &rules[i++];
+			rule_p = &rules_p[i++];
 
 		}
 
@@ -169,33 +219,31 @@ int sync_walk_notifymark(int notify_d, struct options *options, const char *dirp
 		}
 
 		printf_dd("Debug2: marking \"%s\" (depth %u)\n", node->fts_path, node->fts_level);
-		int wd = sync_notify_mark(notify_d, options, node->fts_accpath);
+		int wd = sync_notify_mark(notify_d, options_p, node->fts_accpath, node->fts_path, node->fts_pathlen, indexes_p);
 		if(wd < 0) {
-			printf_e("Error: Got error while notify-marking \"%s\": %s (errno: %i).\n", node->fts_path, strerror(errno), errno);
+			if(_printf_e)
+				printf_e("Error: Got error while notify-marking \"%s\": %s (errno: %i).\n", node->fts_path, strerror(errno), errno);
 			return errno;
 		}
 		printf_dd("Debug2: watching descriptor is %i.\n", wd);
-
-		char *fpath = xmalloc(node->fts_pathlen+1);
-		memcpy(fpath, node->fts_path, node->fts_pathlen+1);
-		g_hash_table_insert(wd2fpath_ht, GINT_TO_POINTER(wd), fpath);
-
 	}
 	if(errno) {
-		printf_e("Error: Got error while fts_read() and related routines: %s (errno: %i).\n", strerror(errno), errno);
+		if(_printf_e)
+			printf_e("Error: Got error while fts_read() and related routines: %s (errno: %i).\n", strerror(errno), errno);
 		return errno;
 	}
 
 	if(fts_close(tree)) {
-		printf_e("Error: Got error while fts_close(): %s (errno: %i).\n", strerror(errno), errno);
+		if(_printf_e)
+			printf_e("Error: Got error while fts_close(): %s (errno: %i).\n", strerror(errno), errno);
 		return errno;
 	}
 
 	return 0;
 }
 
-int sync_notify_init(struct options *options) {
-	switch(options->notifyengine) {
+int sync_notify_init(struct options *options_p) {
+	switch(options_p->notifyengine) {
 		case NE_FANOTIFY: {
 			int fanotify_d = fanotify_init(FANOTIFY_FLAGS, FANOTIFY_EVFLAGS);
 			if(fanotify_d == -1) {
@@ -215,19 +263,29 @@ int sync_notify_init(struct options *options) {
 			return inotify_d;
 		}
 	}
-	printf_e("Error: unknown notify-engine: %i\n", options->notifyengine);
+	printf_e("Error: unknown notify-engine: %i\n", options_p->notifyengine);
 	errno = EINVAL;
 	return -1;
 }
 
-int sync_dosync(const char *fpath, struct options *options) {
-	return 0;
+int sync_dosync(const char *fpath, uint32_t evmask, struct options *options_p) {
+	int ret;
+
+	char *evmask_str = xmalloc(1<<8);
+	sprintf(evmask_str, "%u", evmask);
+
+	ret = sync_exec(options_p->actfpath, "sync", evmask_str, fpath, NULL);
+
+	free(evmask_str);
+	return ret;
 }
 
-int sync_fanotify_loop(int fanotify_d, struct options *options, GHashTable *wd2fpath_ht) {
+int sync_fanotify_loop(int fanotify_d, struct options *options_p, rule_t *rules_p, indexes_t *indexes_p) {
 	struct fanotify_event_metadata buf[BUFSIZ/sizeof(struct fanotify_event_metadata) + 1];
-	int running=1;
-	while(running) {
+	int state = STATE_RUNNING;
+	state_p = &state;
+
+	while(state != STATE_EXIT) {
 		struct fanotify_event_metadata *metadata;
 		size_t len = read(fanotify_d, (void *)buf, sizeof(buf)-sizeof(*buf));
 		metadata=buf;
@@ -240,7 +298,7 @@ int sync_fanotify_loop(int fanotify_d, struct options *options, GHashTable *wd2f
 			if (metadata->fd != FAN_NOFD) {
 				if (metadata->fd >= 0) {
 					char *fpath = fd2fpath_malloc(metadata->fd);
-					sync_dosync(fpath, options);
+					sync_dosync(fpath, 0, options_p);
 					printf_dd("Debug2: Event %i on \"%s\".\n", metadata->mask, fpath);
 					free(fpath);
 				}
@@ -259,7 +317,13 @@ int sync_inotify_wait(int inotify_d) {
 	return select(FD_SETSIZE, &rfds, NULL, NULL, NULL);
 }
 
-int sync_inotify_handle(int inotify_d, GHashTable *wd2fpath_ht) {
+#define SYNC_INOTIFY_HANDLE_CONTINUE {\
+	ptr += sizeof(struct inotify_event) + event->len;\
+	count++;\
+	continue;\
+}
+
+int sync_inotify_handle(int inotify_d, struct options *options_p, rule_t *rules_p, indexes_t *indexes_p) {
 	char buf[BUFSIZ + 1];
 	size_t r = read(inotify_d, buf, BUFSIZ);
 	if(r <= 0) {
@@ -273,23 +337,65 @@ int sync_inotify_handle(int inotify_d, GHashTable *wd2fpath_ht) {
 	while(ptr < end) {
 		struct inotify_event *event = (struct inotify_event *)ptr;
 
-		char *fpath = g_hash_table_lookup(wd2fpath_ht, GINT_TO_POINTER(event->wd));
-		printf_dd("Debug2: Event %i on \"%s\" (wd: %i; fpath: \"%s\").\n", event->mask, event->name, event->wd, fpath);
+		if(event->mask & IN_IGNORED) {
+			printf_dd("Debug2: Cleaning up info about watch descriptor %i.\n", event->wd);
+			indexes_remove_bywd(indexes_p, event->wd);
+			SYNC_INOTIFY_HANDLE_CONTINUE;
+		}
 
-//		sync_dosync(fpath, options);
+		char *fpath = indexes_wd2fpath(indexes_p, event->wd);
 
-		ptr += sizeof(struct inotify_event) + event->len;
-		count++;
+		if(fpath == NULL) {
+			printf_dd("Debug2: Event %p on stale watch (wd: %i).\n", (void *)(long)event->mask, event->wd);
+			SYNC_INOTIFY_HANDLE_CONTINUE;
+		}
+		printf_dd("Debug2: Event %p on \"%s\" (wd: %i; fpath: \"%s\").\n", (void *)(long)event->mask, event->len>0?event->name:"", event->wd, fpath);
+
+		char *fpathfull = xmalloc(strlen(fpath) + event->len + 2);
+		if(event->len>0)
+			sprintf(fpathfull, "%s/%s", fpath, event->name);
+		else
+			sprintf(fpathfull, "%s", fpath);
+
+		if(event->mask & IN_ISDIR) {
+			if(event->mask & (IN_CREATE|IN_MOVED_TO)) {			// Appeared
+				int ret = sync_walk_notifymark(inotify_d, options_p, fpathfull, rules_p, indexes_p, _printf_dd);
+				if(ret)
+					printf_d("Debug: Seems, that directory \"%s\" disappeared, while trying to mark it.\n", fpathfull);
+			} else 
+			if(event->mask & (IN_DELETE|IN_MOVED_FROM)) {	// Disappered
+				printf_dd("Debug2: Disappeared \"%s\".\n", fpathfull);
+			}
+		}
+
+
+		sync_dosync(fpathfull, event->mask, options_p);
+
+		free(fpathfull);
+		SYNC_INOTIFY_HANDLE_CONTINUE;
 	}
 
 	return count;
 }
 
-int sync_inotify_loop(int inotify_d, struct options *options, GHashTable *wd2fpath_ht) {
+int sync_inotify_loop(int inotify_d, struct options *options_p, rule_t *rules_p, indexes_t *indexes_p) {
+	int state=1;
+	state_p = &state;
 
-	int running=1;
-	while(running) {
+	while(state != STATE_EXIT) {
 		int events = sync_inotify_wait(inotify_d);
+		switch(state) {
+			case STATE_RUNNING:
+				break;
+			case STATE_REHASH:
+				printf_e("Error: Rehash processing is not implemented, yet. Sorry :(.\n");
+				state = STATE_RUNNING;
+				continue;
+			case STATE_TERM:
+				state = STATE_EXIT;
+			case STATE_EXIT:
+				continue;
+		}
 
 		if(events == 0) {
 			printf_dd("Debug2: sync_inotify_wait(%i) timed-out.\n", inotify_d);
@@ -300,7 +406,7 @@ int sync_inotify_loop(int inotify_d, struct options *options, GHashTable *wd2fpa
 			return errno;
 		}
 
-		int count=sync_inotify_handle(inotify_d, wd2fpath_ht);
+		int count=sync_inotify_handle(inotify_d, options_p, rules_p, indexes_p);
 		if(count<=0) {
 			printf_e("Error: Cannot handle with inotify events: %s (errno: %i).\n", strerror(errno), errno);
 			return errno;
@@ -309,39 +415,58 @@ int sync_inotify_loop(int inotify_d, struct options *options, GHashTable *wd2fpa
 	return 0;
 }
 
-int sync_notify_loop(int notify_d, struct options *options, GHashTable *wd2fpath_ht) {
-	switch(options->notifyengine) {
+int sync_notify_loop(int notify_d, struct options *options_p, rule_t *rules_p, indexes_t *indexes_p) {
+	switch(options_p->notifyengine) {
 		case NE_FANOTIFY:
-			return sync_fanotify_loop(notify_d, options, wd2fpath_ht);
+			return sync_fanotify_loop(notify_d, options_p, rules_p, indexes_p);
 		case NE_INOTIFY:
-			return sync_inotify_loop (notify_d, options, wd2fpath_ht);
+			return sync_inotify_loop (notify_d, options_p, rules_p, indexes_p);
 	}
-	printf_e("Error: unknown notify-engine: %i\n", options->notifyengine);
+	printf_e("Error: unknown notify-engine: %i\n", options_p->notifyengine);
 	errno = EINVAL;
 	return -1;
 }
 
-int sync_run(struct options *options, rule_t *rules) {
-	int ret;
-	GHashTable* wd2fpath_ht = g_hash_table_new(g_direct_hash, g_direct_equal);
+void sync_rehash(int signal) {
+	if(state_p)
+		*state_p = STATE_REHASH;
+	return;
+}
 
-	int notify_d = sync_notify_init(options);
+void sync_term(int signal) {
+	if(state_p)
+		*state_p = STATE_TERM;
+
+	return;
+}
+
+int sync_run(struct options *options_p, rule_t *rules_p) {
+	int ret;
+	indexes_t indexes = {NULL};
+	indexes.wd2fpath_ht = g_hash_table_new_full(g_direct_hash, g_direct_equal, 0,    0);
+	indexes.fpath2wd_ht = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
+
+	int notify_d = sync_notify_init(options_p);
 	if(notify_d == -1) return errno;
 
-	ret = sync_walk_notifymark(notify_d, options, options->watchdir, rules, wd2fpath_ht);
+	ret = sync_walk_notifymark(notify_d, options_p, options_p->watchdir, rules_p, &indexes, printf_e);
 	if(ret) return ret;
 
-	ret = sync_initialsync(options->watchdir, options->actfpath);
+	ret = sync_initialsync(options_p->watchdir, options_p);
 	if(ret) return ret;
 
-	ret = sync_notify_loop(notify_d, options, wd2fpath_ht);
+	signal(SIGHUP,	sync_rehash);
+	signal(SIGTERM,	sync_term);
+	signal(SIGINT,	sync_term);
+
+	ret = sync_notify_loop(notify_d, options_p, rules_p, &indexes);
 	if(ret) return ret;
 
 	// TODO: Do cleanup of watching points
 
 	close(notify_d);
-	// TODO: Cleanup fpath's from wd2fpath_ht
-	g_hash_table_destroy(wd2fpath_ht);
+	g_hash_table_destroy(indexes.wd2fpath_ht);
+	g_hash_table_destroy(indexes.fpath2wd_ht);
 
 	return 0;
 }

@@ -100,3 +100,17 @@ enum notifyengine_enum {
 };
 typedef enum notifyengine_enum notifyenfine_t;
 
+enum state_enum {
+	STATE_EXIT 	= 0,
+	STATE_RUNNING,
+	STATE_REHASH,
+	STATE_TERM
+};
+typedef enum state_enum state_t;
+
+struct indexes {
+	GHashTable* wd2fpath_ht;
+	GHashTable* fpath2wd_ht;
+};
+typedef struct indexes indexes_t;
+
