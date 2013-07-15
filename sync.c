@@ -22,6 +22,35 @@
 #include "fileutils.h"
 #include "malloc.h"
 
+static ruleaction_t rules_check(const char *fpath, mode_t st_mode, rule_t *rules_p) {
+	ruleaction_t action = RULE_END;
+
+	int i = 0;
+	rule_t *rule_p = rules_p;
+	mode_t ftype = st_mode & S_IFMT;
+	while(rule_p->action != RULE_END) {
+
+		if(rule_p->objtype && (rule_p->objtype != ftype)) {
+			rule_p = &rules_p[i++];
+			continue;
+		}
+
+		if(!regexec(&rule_p->expr, fpath, 0, NULL, 0))
+			break;
+
+		rule_p = &rules_p[i++];
+
+	}
+
+	action = rule_p->action;
+	if(action == RULE_END)
+		action = RULE_DEFAULT;
+
+	printf_dd("Debug2: matched to rule #%u for \"%s\":\t%i -> %i.\n", rule_p->action==RULE_END?-1:i, fpath, rule_p->action, action);
+
+	return action;
+}
+
 static inline int indexes_remove_bywd(indexes_t *indexes_p, int wd) {
 	int ret=0;
 
@@ -369,28 +398,7 @@ int sync_walk_notifymark(int notify_d, struct options *options_p, const char *di
 				return EINVAL;
 		}
 
-		int i = 0;
-		rule_t *rule_p = rules_p;
-		mode_t ftype = node->fts_statp->st_mode & S_IFMT;
-		while(rule_p->action != RULE_END) {
-
-			if(rule_p->objtype && (rule_p->objtype != ftype)) {
-				rule_p = &rules_p[i++];
-				continue;
-			}
-
-			if(!regexec(&rule_p->expr, node->fts_path, 0, NULL, 0))
-				break;
-
-			rule_p = &rules_p[i++];
-
-		}
-
-		ruleaction_t action = rule_p->action;
-		if(action == RULE_END)
-			action = RULE_DEFAULT;
-
-		printf_dd("Debug2: matched to rule #%u for \"%s\":\t%i -> %i.\n", rule_p->action==RULE_END?-1:i, node->fts_accpath, rule_p->action, action);
+		ruleaction_t action = rules_check(node->fts_path, node->fts_statp->st_mode, rules_p);
 
 		if(action == RULE_REJECT) {
 			fts_set(tree, node, FTS_SKIP);
@@ -552,9 +560,6 @@ int sync_inotify_handle(int inotify_d, struct options *options_p, rule_t *rules_
 	char *end = &buf[r];
 	while(ptr < end) {
 		struct inotify_event *event = (struct inotify_event *)ptr;
-		// TODO:
-		//	- check by rules
-		//	- initialsync on new directory
 		if(event->mask & IN_IGNORED) {
 			printf_dd("Debug2: Cleaning up info about watch descriptor %i.\n", event->wd);
 			indexes_remove_bywd(indexes_p, event->wd);
@@ -574,6 +579,22 @@ int sync_inotify_handle(int inotify_d, struct options *options_p, rule_t *rules_
 			sprintf(fpathfull, "%s/%s", fpath, event->name);
 		else
 			sprintf(fpathfull, "%s", fpath);
+
+		struct stat64 lstat;
+		mode_t st_mode;
+		if(lstat64(fpathfull, &lstat)) {
+			printf_dd("Debug2: Cannot lstat(\"%s\", lstat): %s (errno: %i). Seems, that the object disappeared.\n", fpathfull, strerror(errno), errno);
+			if(event->mask & IN_ISDIR)
+				st_mode = S_IFDIR;
+			else
+				st_mode = S_IFREG;
+		} else
+			st_mode = lstat.st_mode;
+
+		ruleaction_t ruleaction = rules_check(fpathfull, st_mode, rules_p);
+
+		if(ruleaction == RULE_REJECT)
+			SYNC_INOTIFY_HANDLE_CONTINUE;
 
 		if(event->mask & IN_ISDIR) {
 			if(event->mask & (IN_CREATE|IN_MOVED_TO)) {			// Appeared

@@ -128,6 +128,7 @@ int parse_rules_fromfile(const char *rulfpath, rule_t *rules) {
 				case '*':
 					rule->objtype = 0;	// "0" - means "of any type"
 					break;
+#ifdef DETAILED_FTYPE
 				case 's':
 					rule->objtype = S_IFSOCK;
 					break;
@@ -149,6 +150,14 @@ int parse_rules_fromfile(const char *rulfpath, rule_t *rules) {
 				case 'p':
 					rule->objtype = S_IFIFO;
 					break;
+#else
+				case 'f':
+					rule->objtype = S_IFREG;
+					break;
+				case 'd':
+					rule->objtype = S_IFDIR;
+					break;
+#endif
 			}
 
 			line++;

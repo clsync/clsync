@@ -36,7 +36,7 @@ char *fd2fpath_malloc(int fd) {
 	sprintf(fpath, "/proc/self/fd/%i", fd);
 
 	if(lstat64(fpath, &lstat)) {
-		printf_e("Error: Cannot fstat(%i, fstat): %s (errno: %i).\n", fd, strerror(errno), errno);
+		printf_e("Error: Cannot lstat(\"%s\", lstat): %s (errno: %i).\n", fpath, strerror(errno), errno);
 		return NULL;
 	}
 
