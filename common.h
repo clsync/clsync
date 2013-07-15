@@ -21,6 +21,8 @@
 #define _XOPEN_SOURCE 700
 #define _LARGEFILE64_SOURCE
 
+#define ALLOC_PORTION	(1<<10)
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -109,8 +111,24 @@ enum state_enum {
 typedef enum state_enum state_t;
 
 struct indexes {
-	GHashTable* wd2fpath_ht;
-	GHashTable* fpath2wd_ht;
+	GHashTable *wd2fpath_ht;
+	GHashTable *fpath2wd_ht;
 };
 typedef struct indexes indexes_t;
+
+struct threadinfo {
+	pthread_t	pthread;
+};
+typedef struct threadinfo threadinfo_t;
+
+struct threadsinfo {
+#ifdef PTHREAD_MUTEX
+	pthread_mutex_t  _mutex;
+	char		 _mutex_init;
+#endif
+	int		 allocated;
+	int		 used;
+	threadinfo_t 	*threads;
+};
+typedef struct threadsinfo threadsinfo_t;
 

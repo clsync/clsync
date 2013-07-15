@@ -58,24 +58,121 @@ static inline int indexes_fpath2wd(indexes_t *indexes_p, const char *fpath) {
 	return GPOINTER_TO_INT(gint_p);
 }
 
-int *state_p = NULL;
-
-int sync_exec(const char *actfpath, ...) {
-	va_list list;
-	va_start(list, actfpath);
-
-	const char *argv[MAXARGUMENTS] = {NULL};
-	argv[0] = actfpath;
-	int i = 1;
-	do {
-		if(i >= MAXARGUMENTS) {
-			printf_e("Error: Too many arguments (%i >= %i).\n", i, MAXARGUMENTS);
-			return ENOMEM;
+static threadsinfo_t *_sync_exec_getthreadsinfo() {	// TODO: optimize this
+	static threadsinfo_t threadsinfo={0};
+#ifdef PTHREAD_MUTEX
+	if(!threadsinfo._mutex_init) {
+		if(pthread_mutex_init(&threadsinfo._mutex, NULL)) {
+			printf_e("Error: Cannot pthread_mutex_init(): %s (errno: %i).\n", strerror(errno), errno);
+			return NULL;
 		}
-		argv[i] = va_arg(list, const char *const);
+		threadsinfo._mutex_init++;
+	}
+//	pthread_mutex_lock(&threadsinfo._mutex);
+#endif
+	return &threadsinfo;
+}
 
-		printf_dd("Debug2: argv[%i] = %s\n", i, argv[i]);
-	} while(argv[i++] != NULL);
+threadinfo_t *_sync_exec_newthread() {
+	threadsinfo_t *threadsinfo_p = _sync_exec_getthreadsinfo();
+	if(threadsinfo_p == NULL)
+		return NULL;
+
+	if(threadsinfo_p->used >= threadsinfo_p->allocated) {
+		threadsinfo_p->allocated += ALLOC_PORTION;
+		printf_dd("Debug2: Reallocated memory for threadsinfo -> %i.\n", threadsinfo_p->allocated);
+		threadsinfo_p->threads = (threadinfo_t *)xrealloc((char *)threadsinfo_p->threads, sizeof(*threadsinfo_p->threads)*(threadsinfo_p->allocated));
+	}
+
+	return &threadsinfo_p->threads[threadsinfo_p->used++];
+}
+
+int _sync_exec_delthread(int thread_num) {
+	threadsinfo_t *threadsinfo_p = _sync_exec_getthreadsinfo();
+	if(threadsinfo_p == NULL)
+		return errno;
+
+	if(thread_num >= threadsinfo_p->used)
+		return EINVAL;
+
+	threadsinfo_p->used--;
+	if(thread_num != threadsinfo_p->used)
+		memcpy(&threadsinfo_p->threads[thread_num], &threadsinfo_p->threads[threadsinfo_p->used], sizeof(*threadsinfo_p->threads));
+
+	return 0;
+}
+
+int _sync_exec_idle() {
+	threadsinfo_t *threadsinfo_p = _sync_exec_getthreadsinfo();
+	if(threadsinfo_p == NULL)
+		return errno;
+	
+	int i=0;
+	while(i < threadsinfo_p->used) {
+		int ret;
+		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[i];
+
+		int err;
+		switch((err=pthread_tryjoin_np(threadinfo_p->pthread, (void **)&ret))) {
+			case 0:
+				break;
+			case EBUSY:
+				continue;
+			default:
+				printf_e("error: got error while pthread_tryjoin_np(): %s (errno: %i).\n", strerror(err), err);
+				return errno;
+
+		}
+
+		if(ret) {
+			printf_e("error: got error from __sync_exec(): %s (errno: %i).\n", strerror(ret), ret);
+			return ret;
+		}
+
+		if(_sync_exec_delthread(i))
+			return errno;
+	}
+
+	return 0;
+}
+
+int _sync_exec_cleanup() {
+	threadsinfo_t *threadsinfo_p = _sync_exec_getthreadsinfo();
+	if(threadsinfo_p == NULL)
+		return errno;
+
+	// Waiting for threads:
+	while(threadsinfo_p->used) {
+		int ret;
+		ret = pthread_join(threadsinfo_p->threads[--threadsinfo_p->used].pthread, (void **)&ret);
+	}
+
+	// Freeing
+	if(threadsinfo_p->allocated)
+		free(threadsinfo_p->threads);
+
+#ifdef PTHREAD_MUTEX
+	if(threadsinfo_p->_mutex_init)
+		pthread_mutex_destroy(&threadsinfo_p->_mutex);
+#endif
+
+	// Reseting
+	memset(threadsinfo_p, 0, sizeof(*threadsinfo_p));	// Just in case;
+
+	return 0;
+}
+
+int *state_p = NULL;
+/*
+static inline int __sync_exec_exit(int exitcode) {
+	if(pthread_self() && exitcode)
+		exit(exitcode);
+
+	return exitcode;
+}*/
+int __sync_exec(char **argv) {
+	char **ptr;
+	int ret = 0;
 
 	pid_t pid;
 	int status;
@@ -84,24 +181,85 @@ int sync_exec(const char *actfpath, ...) {
 	switch(pid) {
 		case -1: 
 			printf_e("Error: Cannot fork(): %s (errno: %i).\n", strerror(errno), errno);
-			return errno;
+			ret = errno;
+			goto __sync_exec_end;
 		case  0:
-			execvp(actfpath, (char *const *)argv);
-			return errno;
+			execvp(argv[0], (char *const *)argv);
+			ret = errno;
+			goto __sync_exec_end;
 	}
 
 	if(waitpid(pid, &status, 0) != pid) {
 		printf_e("Error: Cannot waitid(): %s (errno: %i).\n", strerror(errno), errno);
-		return errno;
+		ret = errno;
+		goto __sync_exec_end;
 	}
 
 	int exitcode = WEXITSTATUS(status);
 
 	if(exitcode) {
-		printf_e("Error: Got non-zero exitcode while running \"%s\", exitcode is %i.\n", actfpath, exitcode);
-		return exitcode;
+		printf_e("Error: Got non-zero exitcode while running \"%s\", exitcode is %i.\n", argv[0], exitcode);
+		ret = exitcode;
+		goto __sync_exec_end;
 	}
 
+__sync_exec_end:
+	ptr = argv;
+	while(*ptr)
+		free(*(ptr++));
+	free(argv);
+	return ret;
+}
+
+
+#define _sync_exec_getargv(argv) {\
+	va_list arglist;\
+	va_start(arglist, dummy);\
+\
+	int i = 0;\
+	do {\
+		char *arg;\
+		if(i >= MAXARGUMENTS) {\
+			printf_e("Error: Too many arguments (%i >= %i).\n", i, MAXARGUMENTS);\
+			return ENOMEM;\
+		}\
+		arg = (char *)va_arg(arglist, const char *const);\
+		argv[i] = arg!=NULL ? strdup(arg) : NULL;\
+\
+		printf_dd("Debug2: argv[%i] = %s\n", i, argv[i]);\
+	} while(argv[i++] != NULL);\
+	va_end(arglist);\
+}
+
+// TODO: remove "dummy" argument if possible
+#define sync_exec(...) _sync_exec(0, __VA_ARGS__)
+static inline int _sync_exec(int dummy, ...) {
+	printf_dd("Debug2: _sync_exec()\n");
+
+	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
+	memset(argv, 0, sizeof(char *)*MAXARGUMENTS);
+	_sync_exec_getargv(argv);
+
+	return __sync_exec(argv);
+}
+
+// TODO: remove "dummy" argument if possible
+#define sync_exec_thread(...) _sync_exec_thread(0, __VA_ARGS__)
+static inline int _sync_exec_thread(int dummy, ...) {
+	printf_dd("Debug2: _sync_exec_thread()\n");
+
+	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
+	memset(argv, 0, sizeof(char *)*MAXARGUMENTS);
+	_sync_exec_getargv(argv);
+
+	threadinfo_t *threadinfo_p = _sync_exec_newthread();
+	if(threadinfo_p == NULL)
+		return errno;
+
+	if(pthread_create(&threadinfo_p->pthread, NULL, (void *(*)(void *))__sync_exec, argv)) {
+		printf_e("Error: Cannot pthread_create(): %s (errno: %i).\n", strerror(errno), errno);
+		return errno;
+	}
 	return 0;
 }
 
@@ -181,8 +339,12 @@ int sync_walk_notifymark(int notify_d, struct options *options_p, const char *di
 			case FTS_NSOK:
 			case FTS_DNR:
 			case FTS_DC:
-				if(_printf_e)
-					printf_e("Error: Got error while fts_read(): %s (errno: %i; fts_info: %i).\n", strerror(errno), errno, node->fts_info);
+				if(_printf_e) {
+					if(errno == ENOENT)
+						printf_e("Warning: Got error while fts_read(): %s (errno: %i; fts_info: %i).\n", strerror(errno), errno, node->fts_info);
+					else
+						printf_e("Error: Got error while fts_read(): %s (errno: %i; fts_info: %i).\n", strerror(errno), errno, node->fts_info);
+				}
 				return errno;
 			default:
 				if(_printf_e)
@@ -268,16 +430,36 @@ int sync_notify_init(struct options *options_p) {
 	return -1;
 }
 
-int sync_dosync(const char *fpath, uint32_t evmask, struct options *options_p) {
-	int ret;
+static int sync_dosync(const char *fpath, uint32_t evmask, struct options *options_p) {
+//	static FILE *listf = NULL;
+	int ret = 0;
 
 	char *evmask_str = xmalloc(1<<8);
 	sprintf(evmask_str, "%u", evmask);
 
-	ret = sync_exec(options_p->actfpath, "sync", evmask_str, fpath, NULL);
+	if(! options_p->collectdelay) {
+		if(options_p->flags[PTHREAD])
+			ret = sync_exec_thread(options_p->actfpath, "sync", evmask_str, fpath, NULL);
+		else
+			ret = sync_exec       (options_p->actfpath, "sync", evmask_str, fpath, NULL);
+
+		free(evmask_str);
+		return ret;
+	}
+
+	
 
 	free(evmask_str);
 	return ret;
+}
+
+int sync_idle(int notify_d, struct options *options_p, rule_t *rules_p, indexes_t *indexes_p) {
+	int ret;
+
+	ret=_sync_exec_idle();
+	if(ret) return ret;
+
+	return 0;
 }
 
 int sync_fanotify_loop(int fanotify_d, struct options *options_p, rule_t *rules_p, indexes_t *indexes_p) {
@@ -305,6 +487,11 @@ int sync_fanotify_loop(int fanotify_d, struct options *options_p, rule_t *rules_
 			}
 			close(metadata->fd);
 			metadata = FAN_EVENT_NEXT(metadata, len);
+		}
+		int ret;
+		if((ret=sync_idle(fanotify_d, options_p, rules_p, indexes_p))) {
+			printf_e("Error: got error while sync_idle(): %s (errno: %i).\n", strerror(ret), ret);
+			return ret;
 		}
 	}
 	return 0;
@@ -411,6 +598,12 @@ int sync_inotify_loop(int inotify_d, struct options *options_p, rule_t *rules_p,
 			printf_e("Error: Cannot handle with inotify events: %s (errno: %i).\n", strerror(errno), errno);
 			return errno;
 		}
+
+		int ret;
+		if((ret=sync_idle(inotify_d, options_p, rules_p, indexes_p))) {
+			printf_e("Error: got error while sync_idle(): %s (errno: %i).\n", strerror(ret), ret);
+			return ret;
+		}
 	}
 	return 0;
 }
@@ -463,6 +656,8 @@ int sync_run(struct options *options_p, rule_t *rules_p) {
 	if(ret) return ret;
 
 	// TODO: Do cleanup of watching points
+
+	_sync_exec_cleanup();
 
 	close(notify_d);
 	g_hash_table_destroy(indexes.wd2fpath_ht);
