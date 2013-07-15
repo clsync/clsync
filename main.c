@@ -33,6 +33,7 @@ static struct option long_options[] =
 	{"quite",		no_argument,		NULL,	QUITE},
 	{"fanotify",		no_argument,		NULL,	FANOTIFY},
 	{"inotify",		no_argument,		NULL,	INOTIFY},
+	{"label",		no_argument,		NULL,	LABEL},
 	{"help",		no_argument,		NULL,	HELP},
 	{0,			0,			0,	0}
 };
@@ -51,7 +52,7 @@ int parse_arguments(int argc, char *argv[], struct options *options) {
 	int c;
 	int option_index = 0;
 	while(1) {
-		c = getopt_long(argc, argv, "bl:t:pqvdhfa", long_options, &option_index);
+		c = getopt_long(argc, argv, "bd:t:l:pqvDhfa", long_options, &option_index);
 	
 		if (c == -1) break;
 		switch (c) {
@@ -59,8 +60,11 @@ int parse_arguments(int argc, char *argv[], struct options *options) {
 			case 'h':
 				syntax();
 				break;
-			case 'l':
+			case 'd':
 				options->listoutdir   = optarg;
+				break;
+			case 'l':
+				options->label        = optarg;
 				break;
 			case 't':
 				options->collectdelay = (unsigned int)atol(optarg);
@@ -210,7 +214,8 @@ int main(int argc, char *argv[]) {
 	int ret = 0;
 	rule_t rules[MAXRULES];
 	memset(&options, 0, sizeof(options));
-	options.notifyengine = DEFAULT_NOTIFYENGINE;
+	options.notifyengine 	= DEFAULT_NOTIFYENGINE;
+	options.label		= DEFAULT_LABEL;
 
 	parse_arguments(argc, argv, &options);
 	out_init(options.flags);

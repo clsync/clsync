@@ -101,6 +101,12 @@ static inline int indexes_updateevmask(indexes_t *indexes_p, char *fpath, uint32
 	return 0;
 }
 
+static inline int indexes_collectevent(indexes_t *indexes_p, char *fpath, uint32_t evmask) {
+	g_hash_table_replace(indexes_p->fpath2ev_coll_ht, fpath, GINT_TO_POINTER(evmask));
+
+	return 0;
+}
+
 static threadsinfo_t *_sync_exec_getthreadsinfo() {	// TODO: optimize this
 	static threadsinfo_t threadsinfo={0};
 #ifdef PTHREAD_MUTEX
@@ -127,10 +133,12 @@ threadinfo_t *_sync_exec_newthread() {
 		threadsinfo_p->threads = (threadinfo_t *)xrealloc((char *)threadsinfo_p->threads, sizeof(*threadsinfo_p->threads)*(threadsinfo_p->allocated));
 	}
 
+	printf_dd("Debug2: _sync_exec_newthread -> %i\n", threadsinfo_p->used);
 	return &threadsinfo_p->threads[threadsinfo_p->used++];
 }
 
 int _sync_exec_delthread(int thread_num) {
+	printf_dd("Debug2: _sync_exec_delthread(%i)\n", thread_num);
 	threadsinfo_t *threadsinfo_p = _sync_exec_getthreadsinfo();
 	if(threadsinfo_p == NULL)
 		return errno;
@@ -150,6 +158,7 @@ int _sync_exec_idle() {
 	if(threadsinfo_p == NULL)
 		return errno;
 	
+	printf_dd("Debug2: _sync_exec_idle(): There're %i threads.\n", threadsinfo_p->used);
 	int i=0;
 	while(i < threadsinfo_p->used) {
 		int ret;
@@ -162,18 +171,25 @@ int _sync_exec_idle() {
 			case EBUSY:
 				continue;
 			default:
-				printf_e("error: got error while pthread_tryjoin_np(): %s (errno: %i).\n", strerror(err), err);
+				printf_e("Error: Got error while pthread_tryjoin_np(): %s (errno: %i).\n", strerror(err), err);
 				return errno;
 
 		}
 
 		if(ret) {
-			printf_e("error: got error from __sync_exec(): %s (errno: %i).\n", strerror(ret), ret);
+			printf_e("Error: Got error from __sync_exec(): %s (errno: %i).\n", strerror(ret), ret);
 			return ret;
 		}
 
+		if(threadinfo_p->callback)
+			if((err=threadinfo_p->callback(threadinfo_p->argv))) {
+				printf_e("Error: Got error from callback function: %s (errno: %i).\n", strerror(err), err);
+				return err;
+			}
 		if(_sync_exec_delthread(i))
 			return errno;
+
+		i++;
 	}
 
 	return 0;
@@ -185,6 +201,7 @@ int _sync_exec_cleanup() {
 		return errno;
 
 	// Waiting for threads:
+	printf_d("Debug: There're %i opened threads. Waiting.\n", threadsinfo_p->used);
 	while(threadsinfo_p->used) {
 		int ret;
 		ret = pthread_join(threadsinfo_p->threads[--threadsinfo_p->used].pthread, (void **)&ret);
@@ -255,9 +272,9 @@ __sync_exec_end:
 }
 
 
-#define _sync_exec_getargv(argv) {\
+#define _sync_exec_getargv(argv, firstarg) {\
 	va_list arglist;\
-	va_start(arglist, dummy);\
+	va_start(arglist, firstarg);\
 \
 	int i = 0;\
 	do {\
@@ -281,24 +298,27 @@ static inline int _sync_exec(int dummy, ...) {
 
 	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
 	memset(argv, 0, sizeof(char *)*MAXARGUMENTS);
-	_sync_exec_getargv(argv);
+
+	_sync_exec_getargv(argv, dummy);
 
 	return __sync_exec(argv);
 }
 
 // TODO: remove "dummy" argument if possible
-#define sync_exec_thread(...) _sync_exec_thread(0, __VA_ARGS__)
-static inline int _sync_exec_thread(int dummy, ...) {
+static inline int sync_exec_thread(thread_callbackfunct_t callback, ...) {
 	printf_dd("Debug2: _sync_exec_thread()\n");
 
 	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
 	memset(argv, 0, sizeof(char *)*MAXARGUMENTS);
-	_sync_exec_getargv(argv);
+
+	_sync_exec_getargv(argv, callback);
 
 	threadinfo_t *threadinfo_p = _sync_exec_newthread();
 	if(threadinfo_p == NULL)
 		return errno;
 
+	threadinfo_p->callback = callback;
+	threadinfo_p->argv     = argv;
 	if(pthread_create(&threadinfo_p->pthread, NULL, (void *(*)(void *))__sync_exec, argv)) {
 		printf_e("Error: Cannot pthread_create(): %s (errno: %i).\n", strerror(errno), errno);
 		return errno;
@@ -308,9 +328,9 @@ static inline int _sync_exec_thread(int dummy, ...) {
 
 int sync_initialsync(const char *path, options_t *options_p) {
 	if(options_p->flags[PTHREAD])
-		return sync_exec_thread(options_p->actfpath, "initialsync", path, NULL);
+		return sync_exec_thread(NULL, options_p->actfpath, "initialsync", path, NULL);
 	else
-		return sync_exec       (options_p->actfpath, "initialsync", path, NULL);
+		return sync_exec       (      options_p->actfpath, "initialsync", path, NULL);
 }
 
 int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p, initsync_t initsync) {
@@ -465,28 +485,118 @@ int sync_notify_init(options_t *options_p) {
 
 static inline int sync_dosync_exec(options_t *options_p, const char *evmask_str, const char *fpath) {
 	if(options_p->flags[PTHREAD])
-		return sync_exec_thread(options_p->actfpath, "sync", evmask_str, fpath, NULL);
+		return sync_exec_thread(NULL, options_p->actfpath, "sync", options_p->label, evmask_str, fpath, NULL);
 	else
-		return sync_exec       (options_p->actfpath, "sync", evmask_str, fpath, NULL);
+		return sync_exec       (      options_p->actfpath, "sync", options_p->label, evmask_str, fpath, NULL);
+}
+
+static int sync_dosync_now(const char *fpath, uint32_t evmask, options_t *options_p, indexes_t *indexes_p) {
+	int ret;
+	char *evmask_str = xmalloc(1<<8);
+	sprintf(evmask_str, "%u", evmask);
+
+	ret = sync_dosync_exec(options_p, evmask_str, fpath);
+
+	free(evmask_str);
+
+	return ret;
 }
 
 static int sync_dosync(const char *fpath, uint32_t evmask, options_t *options_p, indexes_t *indexes_p) {
 	int ret = 0;
 
-	char *evmask_str = xmalloc(1<<8);
-	sprintf(evmask_str, "%u", evmask);
 
-	if(! options_p->collectdelay) {
-		ret = sync_dosync_exec(options_p, evmask_str, fpath);
+	if(! options_p->collectdelay)
+		return sync_dosync_now(fpath, evmask, options_p, indexes_p);
 
-		free(evmask_str);
-		return ret;
+	indexes_collectevent(indexes_p, strdup(fpath), evmask);
+
+	return ret;
+}
+
+void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evmask_gp, gpointer arg_gp) {
+	char *fpath		  = (char *)fpath_gp;
+	uint32_t evmask		  = (uint32_t)GPOINTER_TO_INT(evmask_gp);
+	int *evcount_p		  =&((struct dosync_arg *)arg_gp)->evcount;
+	FILE *outf		  = ((struct dosync_arg *)arg_gp)->outf;
+	options_t *options_p 	  = ((struct dosync_arg *)arg_gp)->options_p;
+	indexes_t *indexes_p 	  = ((struct dosync_arg *)arg_gp)->indexes_p;
+
+	if(options_p->listoutdir == NULL) {
+		int ret;
+		if((ret=sync_dosync_now(fpath, evmask, options_p, indexes_p))) {
+			printf_e("Error: unable to sync \"%s\" (evmask %i): %s (errno: %i).\n", fpath, evmask, strerror(ret), ret);
+			exit(ret);	// TODO: remove this from here
+		}
 	}
 
-	
+	fprintf(outf, "sync %s %i %s\n", options_p->label, evmask, fpath);
 
-	free(evmask_str);
-	return ret;
+	(*evcount_p)++;
+
+	return;
+}
+
+int sync_idle_dosync_collectedevents_cleanup(char **argv) {
+	if(argv[3] == NULL) {
+		printf_e("Error: Unexpected *argv[] end.");
+		return EINVAL;
+	}
+
+	return unlink(argv[3]);
+}
+
+int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p) {
+	char *buf, *fpath;
+	struct dosync_arg dosync_arg;
+	dosync_arg.evcount	= 0;
+	dosync_arg.options_p 	= options_p;
+	dosync_arg.indexes_p	= indexes_p;
+	dosync_arg.outf		= NULL;
+
+	if(options_p->listoutdir != NULL) {
+		buf   = alloca(BUFSIZ+1);
+		fpath = alloca(PATH_MAX+1);
+
+		int counter = 0;
+		struct stat64 stat64;
+		pid_t pid = getpid();
+		time_t tm = time(NULL);
+		do {
+			snprintf(fpath, PATH_MAX, "%s/.clsync-list.%u.%lu.%u", options_p->listoutdir, pid, (unsigned long)tm, rand());	// To be uniquea
+			lstat64(fpath, &stat64);
+			if(counter++ > COUNTER_LIMIT) {
+				printf_e("Error: Cannot file unused filename for list-file. The last try was \"%s\".\n", fpath);
+				return ELOOP;
+			}
+		} while(errno != ENOENT);	// TODO: find another way to check if the object exists
+		errno=0;
+		dosync_arg.outf = fopen(fpath, "w");
+
+		if(dosync_arg.outf == NULL) {
+			printf_e("Error: Cannot open \"%s\" as file for writing: %s (errno: %i).\n", fpath, strerror(errno), errno);
+			return errno;
+		}
+
+		setbuffer(dosync_arg.outf, buf, BUFSIZ);
+	}
+
+	g_hash_table_foreach(indexes_p->fpath2ev_coll_ht, _sync_idle_dosync_collectedevents, &dosync_arg);
+	g_hash_table_remove_all(indexes_p->fpath2ev_coll_ht);
+
+	if(options_p->listoutdir != NULL) {
+		fclose(dosync_arg.outf);
+
+		if(dosync_arg.evcount > 0) {
+			if(options_p->flags[PTHREAD])
+				return sync_exec_thread(sync_idle_dosync_collectedevents_cleanup, 
+							options_p->actfpath, "synclist", options_p->label, fpath, NULL);
+			else
+				return sync_exec       (options_p->actfpath, "synclist", options_p->label, fpath, NULL);
+		}
+	}
+
+	return 0;
 }
 
 int sync_idle(int notify_d, options_t *options_p, rule_t *rules_p, indexes_t *indexes_p) {
@@ -495,6 +605,7 @@ int sync_idle(int notify_d, options_t *options_p, rule_t *rules_p, indexes_t *in
 	ret=_sync_exec_idle();
 	if(ret) return ret;
 
+	sync_idle_dosync_collectedevents(options_p, indexes_p);
 	return 0;
 }
 
@@ -540,15 +651,11 @@ static inline int sync_inotify_wait(int inotify_d) {
 	return select(FD_SETSIZE, &rfds, NULL, NULL, NULL);
 }
 
-struct sync_inotify_handle_dosync_arg {
-	options_t *options_p;
-	indexes_t   *indexes_p;
-};
 void sync_inotify_handle_dosync(gpointer fpath_gp, gpointer evmask_gp, gpointer arg_gp) {
 	char *fpath		  = (char *)fpath_gp;
 	uint32_t evmask		  = (uint32_t)GPOINTER_TO_INT(evmask_gp);
-	options_t *options_p 	  = ((struct sync_inotify_handle_dosync_arg *)arg_gp)->options_p;
-	indexes_t *indexes_p 	  = ((struct sync_inotify_handle_dosync_arg *)arg_gp)->indexes_p;
+	options_t *options_p 	  = ((struct dosync_arg *)arg_gp)->options_p;
+	indexes_t *indexes_p 	  = ((struct dosync_arg *)arg_gp)->indexes_p;
 
 	sync_dosync(fpath, evmask, options_p, indexes_p);
 
@@ -630,7 +737,7 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, rule_t *rules_p, in
 		SYNC_INOTIFY_HANDLE_CONTINUE;
 	}
 
-	struct sync_inotify_handle_dosync_arg dosync_arg;
+	struct dosync_arg dosync_arg;
 	dosync_arg.options_p 	= options_p;
 	dosync_arg.indexes_p	= indexes_p;
 
@@ -680,6 +787,12 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, rule_t *rules_p, inde
 			return ret;
 		}
 	}
+
+	int ret;
+	if((ret=sync_idle(inotify_d, options_p, rules_p, indexes_p))) {
+		printf_e("Error: got error while sync_idle(): %s (errno: %i).\n", strerror(ret), ret);
+		return ret;
+	}
 	return 0;
 }
 
@@ -715,6 +828,10 @@ int sync_run(options_t *options_p, rule_t *rules_p) {
 	indexes.fpath2wd_ht      = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
 	indexes.fpath2ev_ht      = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
 	indexes.fpath2ev_coll_ht = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
+
+	if(options_p->listoutdir) {
+		srand(time(NULL));
+	}
 
 	int notify_d = sync_notify_init(options_p);
 	if(notify_d == -1) return errno;

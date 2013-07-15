@@ -61,12 +61,13 @@ enum flags_enum {
 	PTHREAD		= 'p',
 	HELP		= 'h',
 	DELAY		= 't',
-	DEBUG		= 'd',
+	DEBUG		= 'D',
 	QUITE		= 'q',
 	VERBOSE		= 'v',
-	OUTLISTSDIR	= 'l',
+	OUTLISTSDIR	= 'd',
 	FANOTIFY	= 'f',
-	INOTIFY		= 'i'
+	INOTIFY		= 'i',
+	LABEL		= 'l'
 };
 
 typedef enum flags_enum flags_t;
@@ -86,7 +87,8 @@ struct rule {
 typedef struct rule rule_t;
 
 struct options {
-	int flags[(1<<8)];
+	int flags[1<<8];
+	char *label;
 	char *watchdir;
 	char *actfpath;
 	char *rulfpath;
@@ -119,8 +121,11 @@ struct indexes {
 };
 typedef struct indexes indexes_t;
 
+typedef int (*thread_callbackfunct_t)(char **argv);
 struct threadinfo {
-	pthread_t	pthread;
+	thread_callbackfunct_t 	  callback;
+	char 			**argv;
+	pthread_t		  pthread;
 };
 typedef struct threadinfo threadinfo_t;
 
@@ -141,4 +146,11 @@ enum initsync_enum {
 	INITSYNC_SKIP
 };
 typedef enum initsync_enum initsync_t;
+
+struct dosync_arg {
+	int evcount;
+	FILE *outf;
+	options_t *options_p;
+	indexes_t *indexes_p;
+};
 
