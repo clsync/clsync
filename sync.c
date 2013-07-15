@@ -306,11 +306,14 @@ static inline int _sync_exec_thread(int dummy, ...) {
 	return 0;
 }
 
-int sync_initialsync(const char *path, struct options *options_p) {
-	return sync_exec(options_p->actfpath, "initialsync", path, NULL);
+int sync_initialsync(const char *path, options_t *options_p) {
+	if(options_p->flags[PTHREAD])
+		return sync_exec_thread(options_p->actfpath, "initialsync", path, NULL);
+	else
+		return sync_exec       (options_p->actfpath, "initialsync", path, NULL);
 }
 
-int sync_notify_mark(int notify_d, struct options *options_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p) {
+int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p, initsync_t initsync) {
 	int wd = indexes_fpath2wd(indexes_p, path);
 	if(wd != -1) {
 		printf_d("Debug: \"%s\" is already marked (wd: %i). Skipping.\n", path, wd);
@@ -348,13 +351,14 @@ int sync_notify_mark(int notify_d, struct options *options_p, const char *accpat
 	}
 	indexes_add(indexes_p, wd, path, pathlen);
 
-	if(sync_initialsync(path, options_p))
-		return -1;
+	if(initsync == INITSYNC_DO)
+		if(sync_initialsync(path, options_p))
+			return -1;
 
 	return wd;
 }
 
-int sync_walk_notifymark(int notify_d, struct options *options_p, const char *dirpath, rule_t *rules_p, indexes_t *indexes_p, printf_funct _printf_e) {
+int sync_walk_notifymark(int notify_d, options_t *options_p, const char *dirpath, rule_t *rules_p, indexes_t *indexes_p, printf_funct _printf_e) {
 	const char *rootpaths[] = {dirpath, NULL};
 	FTS *tree;
 	printf_dd("Debug2: sync_walk_notifymark(%i, options_p, \"%s\", rules_p, _printf_e).\n", notify_d, dirpath);
@@ -367,9 +371,10 @@ int sync_walk_notifymark(int notify_d, struct options *options_p, const char *di
 		return errno;
 	}
 
+	initsync_t initsync = INITSYNC_DO;
+
 	FTSENT *node;
 	while((node = fts_read(tree))) {
-
 		switch(node->fts_info) {
 			case FTS_DP:	// Duplicates:
 			case FTS_DEFAULT:
@@ -406,7 +411,10 @@ int sync_walk_notifymark(int notify_d, struct options *options_p, const char *di
 		}
 
 		printf_dd("Debug2: marking \"%s\" (depth %u)\n", node->fts_path, node->fts_level);
-		int wd = sync_notify_mark(notify_d, options_p, node->fts_accpath, node->fts_path, node->fts_pathlen, indexes_p);
+		int wd = sync_notify_mark(notify_d, options_p, node->fts_accpath, node->fts_path, node->fts_pathlen, indexes_p, node->fts_statp->st_mode&S_IFDIR ? initsync : INITSYNC_SKIP);
+		if(node->fts_statp->st_mode&S_IFDIR)
+			initsync = INITSYNC_SKIP;
+
 		if(wd < 0) {
 			if(_printf_e)
 				printf_e("Error: Got error while notify-marking \"%s\": %s (errno: %i).\n", node->fts_path, strerror(errno), errno);
@@ -429,7 +437,7 @@ int sync_walk_notifymark(int notify_d, struct options *options_p, const char *di
 	return 0;
 }
 
-int sync_notify_init(struct options *options_p) {
+int sync_notify_init(options_t *options_p) {
 	switch(options_p->notifyengine) {
 		case NE_FANOTIFY: {
 			int fanotify_d = fanotify_init(FANOTIFY_FLAGS, FANOTIFY_EVFLAGS);
@@ -455,18 +463,21 @@ int sync_notify_init(struct options *options_p) {
 	return -1;
 }
 
-static int sync_dosync(const char *fpath, uint32_t evmask, struct options *options_p) {
-//	static FILE *listf = NULL;
+static inline int sync_dosync_exec(options_t *options_p, const char *evmask_str, const char *fpath) {
+	if(options_p->flags[PTHREAD])
+		return sync_exec_thread(options_p->actfpath, "sync", evmask_str, fpath, NULL);
+	else
+		return sync_exec       (options_p->actfpath, "sync", evmask_str, fpath, NULL);
+}
+
+static int sync_dosync(const char *fpath, uint32_t evmask, options_t *options_p, indexes_t *indexes_p) {
 	int ret = 0;
 
 	char *evmask_str = xmalloc(1<<8);
 	sprintf(evmask_str, "%u", evmask);
 
 	if(! options_p->collectdelay) {
-		if(options_p->flags[PTHREAD])
-			ret = sync_exec_thread(options_p->actfpath, "sync", evmask_str, fpath, NULL);
-		else
-			ret = sync_exec       (options_p->actfpath, "sync", evmask_str, fpath, NULL);
+		ret = sync_dosync_exec(options_p, evmask_str, fpath);
 
 		free(evmask_str);
 		return ret;
@@ -478,7 +489,7 @@ static int sync_dosync(const char *fpath, uint32_t evmask, struct options *optio
 	return ret;
 }
 
-int sync_idle(int notify_d, struct options *options_p, rule_t *rules_p, indexes_t *indexes_p) {
+int sync_idle(int notify_d, options_t *options_p, rule_t *rules_p, indexes_t *indexes_p) {
 	int ret;
 
 	ret=_sync_exec_idle();
@@ -487,7 +498,7 @@ int sync_idle(int notify_d, struct options *options_p, rule_t *rules_p, indexes_
 	return 0;
 }
 
-int sync_fanotify_loop(int fanotify_d, struct options *options_p, rule_t *rules_p, indexes_t *indexes_p) {
+int sync_fanotify_loop(int fanotify_d, options_t *options_p, rule_t *rules_p, indexes_t *indexes_p) {
 	struct fanotify_event_metadata buf[BUFSIZ/sizeof(struct fanotify_event_metadata) + 1];
 	int state = STATE_RUNNING;
 	state_p = &state;
@@ -505,7 +516,7 @@ int sync_fanotify_loop(int fanotify_d, struct options *options_p, rule_t *rules_
 			if (metadata->fd != FAN_NOFD) {
 				if (metadata->fd >= 0) {
 					char *fpath = fd2fpath_malloc(metadata->fd);
-					sync_dosync(fpath, 0, options_p);
+					sync_dosync(fpath, 0, options_p, indexes_p);
 					printf_dd("Debug2: Event %i on \"%s\".\n", metadata->mask, fpath);
 					free(fpath);
 				}
@@ -529,12 +540,17 @@ static inline int sync_inotify_wait(int inotify_d) {
 	return select(FD_SETSIZE, &rfds, NULL, NULL, NULL);
 }
 
-void sync_inotify_handle_dosync(gpointer fpath_gp, gpointer evmask_gp, gpointer options_gp) {
+struct sync_inotify_handle_dosync_arg {
+	options_t *options_p;
+	indexes_t   *indexes_p;
+};
+void sync_inotify_handle_dosync(gpointer fpath_gp, gpointer evmask_gp, gpointer arg_gp) {
 	char *fpath		  = (char *)fpath_gp;
 	uint32_t evmask		  = (uint32_t)GPOINTER_TO_INT(evmask_gp);
-	struct options *options_p = (struct options *)options_gp;
+	options_t *options_p 	  = ((struct sync_inotify_handle_dosync_arg *)arg_gp)->options_p;
+	indexes_t *indexes_p 	  = ((struct sync_inotify_handle_dosync_arg *)arg_gp)->indexes_p;
 
-	sync_dosync(fpath, evmask, options_p);
+	sync_dosync(fpath, evmask, options_p, indexes_p);
 
 	return;
 }
@@ -545,7 +561,7 @@ void sync_inotify_handle_dosync(gpointer fpath_gp, gpointer evmask_gp, gpointer 
 	continue;\
 }
 
-int sync_inotify_handle(int inotify_d, struct options *options_p, rule_t *rules_p, indexes_t *indexes_p) {
+int sync_inotify_handle(int inotify_d, options_t *options_p, rule_t *rules_p, indexes_t *indexes_p) {
 	char buf[BUFSIZ + 1];
 	size_t r = read(inotify_d, buf, BUFSIZ);
 	if(r <= 0) {
@@ -614,13 +630,17 @@ int sync_inotify_handle(int inotify_d, struct options *options_p, rule_t *rules_
 		SYNC_INOTIFY_HANDLE_CONTINUE;
 	}
 
-	g_hash_table_foreach(indexes_p->fpath2ev_ht, sync_inotify_handle_dosync, options_p);
+	struct sync_inotify_handle_dosync_arg dosync_arg;
+	dosync_arg.options_p 	= options_p;
+	dosync_arg.indexes_p	= indexes_p;
+
+	g_hash_table_foreach(indexes_p->fpath2ev_ht, sync_inotify_handle_dosync, &dosync_arg);
 	g_hash_table_remove_all(indexes_p->fpath2ev_ht);
 
 	return count;
 }
 
-int sync_inotify_loop(int inotify_d, struct options *options_p, rule_t *rules_p, indexes_t *indexes_p) {
+int sync_inotify_loop(int inotify_d, options_t *options_p, rule_t *rules_p, indexes_t *indexes_p) {
 	int state=1;
 	state_p = &state;
 
@@ -663,7 +683,7 @@ int sync_inotify_loop(int inotify_d, struct options *options_p, rule_t *rules_p,
 	return 0;
 }
 
-int sync_notify_loop(int notify_d, struct options *options_p, rule_t *rules_p, indexes_t *indexes_p) {
+int sync_notify_loop(int notify_d, options_t *options_p, rule_t *rules_p, indexes_t *indexes_p) {
 	switch(options_p->notifyengine) {
 		case NE_FANOTIFY:
 			return sync_fanotify_loop(notify_d, options_p, rules_p, indexes_p);
@@ -688,12 +708,13 @@ void sync_term(int signal) {
 	return;
 }
 
-int sync_run(struct options *options_p, rule_t *rules_p) {
+int sync_run(options_t *options_p, rule_t *rules_p) {
 	int ret;
 	indexes_t indexes = {NULL};
-	indexes.wd2fpath_ht = g_hash_table_new_full(g_direct_hash, g_direct_equal, 0,    0);
-	indexes.fpath2wd_ht = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
-	indexes.fpath2ev_ht = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
+	indexes.wd2fpath_ht      = g_hash_table_new_full(g_direct_hash, g_direct_equal, 0,    0);
+	indexes.fpath2wd_ht      = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
+	indexes.fpath2ev_ht      = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
+	indexes.fpath2ev_coll_ht = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
 
 	int notify_d = sync_notify_init(options_p);
 	if(notify_d == -1) return errno;
@@ -716,6 +737,7 @@ int sync_run(struct options *options_p, rule_t *rules_p) {
 	g_hash_table_destroy(indexes.wd2fpath_ht);
 	g_hash_table_destroy(indexes.fpath2wd_ht);
 	g_hash_table_destroy(indexes.fpath2ev_ht);
+	g_hash_table_destroy(indexes.fpath2ev_coll_ht);
 
 	return 0;
 }

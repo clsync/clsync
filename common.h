@@ -94,6 +94,7 @@ struct options {
 	unsigned int collectdelay;
 	int notifyengine;
 };
+typedef struct options options_t;
 
 enum notifyengine_enum {
 	NE_UNDEFINED = 0,
@@ -114,6 +115,7 @@ struct indexes {
 	GHashTable *wd2fpath_ht;
 	GHashTable *fpath2wd_ht;
 	GHashTable *fpath2ev_ht;
+	GHashTable *fpath2ev_coll_ht;
 };
 typedef struct indexes indexes_t;
 
@@ -132,4 +134,11 @@ struct threadsinfo {
 	threadinfo_t 	*threads;
 };
 typedef struct threadsinfo threadsinfo_t;
+
+enum initsync_enum {
+	INITSYNC_UNDEFINED 	= 0,
+	INITSYNC_DO,
+	INITSYNC_SKIP
+};
+typedef enum initsync_enum initsync_t;
 
