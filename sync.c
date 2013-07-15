@@ -58,6 +58,20 @@ static inline int indexes_fpath2wd(indexes_t *indexes_p, const char *fpath) {
 	return GPOINTER_TO_INT(gint_p);
 }
 
+static inline int indexes_fpath2ev(indexes_t *indexes_p, const char *fpath) {
+	gpointer gint_p = g_hash_table_lookup(indexes_p->fpath2ev_ht, fpath);
+	if(gint_p == NULL)
+		return 0;
+
+	return GPOINTER_TO_INT(gint_p);
+}
+
+static inline int indexes_updateevmask(indexes_t *indexes_p, char *fpath, uint32_t evmask) {
+	g_hash_table_replace(indexes_p->fpath2ev_ht, fpath, GINT_TO_POINTER(evmask));
+
+	return 0;
+}
+
 static threadsinfo_t *_sync_exec_getthreadsinfo() {	// TODO: optimize this
 	static threadsinfo_t threadsinfo={0};
 #ifdef PTHREAD_MUTEX
@@ -305,6 +319,9 @@ int sync_notify_mark(int notify_d, struct options *options_p, const char *accpat
 	}
 	indexes_add(indexes_p, wd, path, pathlen);
 
+	if(sync_initialsync(path, options_p))
+		return -1;
+
 	return wd;
 }
 
@@ -497,11 +514,21 @@ int sync_fanotify_loop(int fanotify_d, struct options *options_p, rule_t *rules_
 	return 0;
 }
 
-int sync_inotify_wait(int inotify_d) {
+static inline int sync_inotify_wait(int inotify_d) {
 	fd_set rfds;
 	FD_ZERO(&rfds);
 	FD_SET(inotify_d, &rfds);
 	return select(FD_SETSIZE, &rfds, NULL, NULL, NULL);
+}
+
+void sync_inotify_handle_dosync(gpointer fpath_gp, gpointer evmask_gp, gpointer options_gp) {
+	char *fpath		  = (char *)fpath_gp;
+	uint32_t evmask		  = (uint32_t)GPOINTER_TO_INT(evmask_gp);
+	struct options *options_p = (struct options *)options_gp;
+
+	sync_dosync(fpath, evmask, options_p);
+
+	return;
 }
 
 #define SYNC_INOTIFY_HANDLE_CONTINUE {\
@@ -518,12 +545,16 @@ int sync_inotify_handle(int inotify_d, struct options *options_p, rule_t *rules_
 		return -1;
 	}
 
+	g_hash_table_remove_all(indexes_p->fpath2ev_ht);	// Just in case.
+
 	int count = 0;
 	char *ptr =  buf;
 	char *end = &buf[r];
 	while(ptr < end) {
 		struct inotify_event *event = (struct inotify_event *)ptr;
-
+		// TODO:
+		//	- check by rules
+		//	- initialsync on new directory
 		if(event->mask & IN_IGNORED) {
 			printf_dd("Debug2: Cleaning up info about watch descriptor %i.\n", event->wd);
 			indexes_remove_bywd(indexes_p, event->wd);
@@ -549,18 +580,21 @@ int sync_inotify_handle(int inotify_d, struct options *options_p, rule_t *rules_
 				int ret = sync_walk_notifymark(inotify_d, options_p, fpathfull, rules_p, indexes_p, _printf_dd);
 				if(ret)
 					printf_d("Debug: Seems, that directory \"%s\" disappeared, while trying to mark it.\n", fpathfull);
+				SYNC_INOTIFY_HANDLE_CONTINUE;
 			} else 
 			if(event->mask & (IN_DELETE|IN_MOVED_FROM)) {	// Disappered
 				printf_dd("Debug2: Disappeared \"%s\".\n", fpathfull);
 			}
 		}
 
+		uint32_t evmask_old = indexes_fpath2ev(indexes_p, fpathfull);
+		indexes_updateevmask(indexes_p, fpathfull, event->mask | evmask_old);
 
-		sync_dosync(fpathfull, event->mask, options_p);
-
-		free(fpathfull);
 		SYNC_INOTIFY_HANDLE_CONTINUE;
 	}
+
+	g_hash_table_foreach(indexes_p->fpath2ev_ht, sync_inotify_handle_dosync, options_p);
+	g_hash_table_remove_all(indexes_p->fpath2ev_ht);
 
 	return count;
 }
@@ -638,14 +672,12 @@ int sync_run(struct options *options_p, rule_t *rules_p) {
 	indexes_t indexes = {NULL};
 	indexes.wd2fpath_ht = g_hash_table_new_full(g_direct_hash, g_direct_equal, 0,    0);
 	indexes.fpath2wd_ht = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
+	indexes.fpath2ev_ht = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
 
 	int notify_d = sync_notify_init(options_p);
 	if(notify_d == -1) return errno;
 
 	ret = sync_walk_notifymark(notify_d, options_p, options_p->watchdir, rules_p, &indexes, printf_e);
-	if(ret) return ret;
-
-	ret = sync_initialsync(options_p->watchdir, options_p);
 	if(ret) return ret;
 
 	signal(SIGHUP,	sync_rehash);
@@ -662,6 +694,7 @@ int sync_run(struct options *options_p, rule_t *rules_p) {
 	close(notify_d);
 	g_hash_table_destroy(indexes.wd2fpath_ht);
 	g_hash_table_destroy(indexes.fpath2wd_ht);
+	g_hash_table_destroy(indexes.fpath2ev_ht);
 
 	return 0;
 }

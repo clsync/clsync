@@ -113,6 +113,7 @@ typedef enum state_enum state_t;
 struct indexes {
 	GHashTable *wd2fpath_ht;
 	GHashTable *fpath2wd_ht;
+	GHashTable *fpath2ev_ht;
 };
 typedef struct indexes indexes_t;
 
