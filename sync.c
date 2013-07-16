@@ -331,22 +331,33 @@ int __sync_exec(char **argv) {
 	va_end(arglist);\
 }
 
-// TODO: remove "dummy" argument if possible
-#define sync_exec(...) _sync_exec(0, __VA_ARGS__)
-static inline int _sync_exec(int dummy, ...) {
-	printf_dd("Debug2: _sync_exec()\n");
+static inline int sync_exec(thread_callbackfunct_t callback, ...) {
+	printf_dd("Debug2: sync_exec()\n");
 
 	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
 	memset(argv, 0, sizeof(char *)*MAXARGUMENTS);
 
-	_sync_exec_getargv(argv, dummy, arg);
+	_sync_exec_getargv(argv, callback, arg);
 
-	return __sync_exec(argv);
+	int ret = __sync_exec(argv);
+	if(ret) {
+		printf_e("Error: Got error while __sync_exec(): %s (errno: %i).\n", strerror(ret), ret);
+		return ret;
+	}
+
+	if(callback != NULL) {
+		ret = callback(argv);
+		if(ret) {
+			printf_e("Error: Got error while callback(): %s (errno: %i).\n", strerror(ret), ret);
+			return ret;
+		}
+	}
+
+	return 0;
 }
 
-// TODO: remove "dummy" argument if possible
 static inline int sync_exec_thread(thread_callbackfunct_t callback, ...) {
-	printf_dd("Debug2: _sync_exec_thread()\n");
+	printf_dd("Debug2: sync_exec_thread()\n");
 
 	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
 	memset(argv, 0, sizeof(char *)*MAXARGUMENTS);
@@ -370,7 +381,7 @@ int sync_initialsync(const char *path, options_t *options_p) {
 	if(options_p->flags[PTHREAD])
 		return sync_exec_thread(NULL, options_p->actfpath, "initialsync", path, NULL);
 	else
-		return sync_exec       (      options_p->actfpath, "initialsync", path, NULL);
+		return sync_exec       (NULL, options_p->actfpath, "initialsync", path, NULL);
 }
 
 int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p, initsync_t initsync) {
@@ -533,7 +544,7 @@ static inline int sync_dosync_exec(options_t *options_p, const char *evmask_str,
 	if(options_p->flags[PTHREAD])
 		return sync_exec_thread(NULL, options_p->actfpath, "sync", options_p->label, evmask_str, fpath, NULL);
 	else
-		return sync_exec       (      options_p->actfpath, "sync", options_p->label, evmask_str, fpath, NULL);
+		return sync_exec       (NULL, options_p->actfpath, "sync", options_p->label, evmask_str, fpath, NULL);
 }
 
 static int sync_dosync(const char *fpath, uint32_t evmask, options_t *options_p, indexes_t *indexes_p) {
@@ -735,7 +746,8 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 				return sync_exec_thread(sync_idle_dosync_collectedevents_cleanup, 
 							options_p->actfpath, "synclist", options_p->label, fpath, NULL);
 			else
-				return sync_exec       (options_p->actfpath, "synclist", options_p->label, fpath, NULL);
+				return sync_exec       (sync_idle_dosync_collectedevents_cleanup,
+							options_p->actfpath, "synclist", options_p->label, fpath, NULL);
 		}
 	}
 
