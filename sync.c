@@ -781,11 +781,37 @@ int sync_fanotify_loop(int fanotify_d, options_t *options_p, rule_t *rules_p, in
 	return 0;
 }
 
-static inline int sync_inotify_wait(int inotify_d) {
+static inline int sync_inotify_wait(int inotify_d, options_t *options_p) {
+	static struct timeval tv={0};
+	time_t tm = time(NULL);
+	long mindelayleft = ((unsigned long)~0 >> 1);
+
 	fd_set rfds;
 	FD_ZERO(&rfds);
 	FD_SET(inotify_d, &rfds);
-	return select(FD_SETSIZE, &rfds, NULL, NULL, NULL);
+
+	long queue_id = 0;
+	while(queue_id < QUEUE_MAX) {
+		queueinfo_t *queueinfo = &options_p->_queues[queue_id++];
+
+		if(!queueinfo->stime)
+			continue;
+
+		int qdelay = queueinfo->stime + queueinfo->collectdelay - tm;
+		printf_ddd("Debug3: sync_inotify_wait(): queue #%i: %i %i %i -> %i\n", queue_id-1, queueinfo->stime, queueinfo->collectdelay, tm, qdelay);
+		if(qdelay < -(long)options_p->commondelay)
+			qdelay = -(long)options_p->commondelay;
+
+		mindelayleft = MIN(mindelayleft, qdelay);
+	}
+
+	if(mindelayleft == ((unsigned long)~0 >> 1))
+		tv.tv_sec = mindelayleft;
+	else
+		tv.tv_sec = mindelayleft + options_p->commondelay;
+
+	printf_ddd("Debug3: sync_inotify_wait(): select with timeout %li secs.\n", tv.tv_sec);
+	return select(FD_SETSIZE, &rfds, NULL, NULL, &tv);
 }
 
 void sync_inotify_handle_dosync(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
@@ -876,6 +902,7 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, rule_t *rules_p, in
 			evinfo->fsize  = lstat.st_size;
 			evinfo->wd     = event->wd;
 			isnew++;
+			printf_ddd("Debug3: sync_inotify_handle(): new event: fsize == %i; wd == %i\n", evinfo->fsize, evinfo->wd);
 		}
 		evinfo->evmask |= event->mask;
 
@@ -899,12 +926,20 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, rule_t *rules_p, in
 	return count;
 }
 
+#define SYNC_INOTIFY_LOOP_IDLE {\
+	int ret;\
+	if((ret=sync_idle(inotify_d, options_p, rules_p, indexes_p))) {\
+		printf_e("Error: got error while sync_idle(): %s (errno: %i).\n", strerror(ret), ret);\
+		return ret;\
+	}\
+}
+
 int sync_inotify_loop(int inotify_d, options_t *options_p, rule_t *rules_p, indexes_t *indexes_p) {
 	int state=1;
 	state_p = &state;
 
 	while(state != STATE_EXIT) {
-		int events = sync_inotify_wait(inotify_d);
+		int events = sync_inotify_wait(inotify_d, options_p);
 		switch(state) {
 			case STATE_RUNNING:
 				break;
@@ -920,6 +955,7 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, rule_t *rules_p, inde
 
 		if(events == 0) {
 			printf_dd("Debug2: sync_inotify_wait(%i) timed-out.\n", inotify_d);
+			SYNC_INOTIFY_LOOP_IDLE;
 			continue;	// Timeout
 		}
 		if(events  < 0) {
@@ -932,19 +968,11 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, rule_t *rules_p, inde
 			printf_e("Error: Cannot handle with inotify events: %s (errno: %i).\n", strerror(errno), errno);
 			return errno;
 		}
+//		SYNC_INOTIFY_LOOP_IDLE;
 
-		int ret;
-		if((ret=sync_idle(inotify_d, options_p, rules_p, indexes_p))) {
-			printf_e("Error: got error while sync_idle(): %s (errno: %i).\n", strerror(ret), ret);
-			return ret;
-		}
 	}
 
-	int ret;
-	if((ret=sync_idle(inotify_d, options_p, rules_p, indexes_p))) {
-		printf_e("Error: got error while sync_idle(): %s (errno: %i).\n", strerror(ret), ret);
-		return ret;
-	}
+	SYNC_INOTIFY_LOOP_IDLE;
 	return 0;
 }
 

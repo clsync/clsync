@@ -62,6 +62,7 @@ enum flags_enum {
 	HELP		= 'h',
 	DELAY		= 't',
 	BFILEDELAY	= 'T',
+	COMMONDELAY	= 'w',
 	DEBUG		= 'D',
 	QUITE		= 'q',
 	VERBOSE		= 'v',
@@ -109,6 +110,7 @@ struct options {
 	char *listoutdir;
 	int notifyengine;
 	size_t bfilethreshold;
+	unsigned int commondelay;
 	queueinfo_t _queues[QUEUE_MAX];	// TODO: remove this from here
 };
 typedef struct options options_t;

@@ -27,6 +27,7 @@ static struct option long_options[] =
 	{"background",		no_argument,		NULL,	BACKGROUND},
 	{"pthread",		no_argument,		NULL,	PTHREAD},	// Not implemented, yet
 	{"collectdelay",	required_argument,	NULL,	DELAY},
+	{"commondelay",		required_argument,	NULL,	COMMONDELAY},
 	{"outlistsdir",		required_argument,	NULL,	OUTLISTSDIR},
 	{"bigfilethreshold",	required_argument,	NULL,	BFILETHRESHOLD},
 	{"bigfilecollectdelay",	required_argument,	NULL,	BFILEDELAY},
@@ -223,6 +224,7 @@ int main(int argc, char *argv[]) {
 	rule_t rules[MAXRULES];
 	memset(&options, 0, sizeof(options));
 	options.notifyengine 			   = DEFAULT_NOTIFYENGINE;
+	options.commondelay 			   = DEFAULT_COMMONDELAY;
 	options._queues[QUEUE_NORMAL].collectdelay = DEFAULT_COLLECTDELAY;
 	options._queues[QUEUE_BIGFILE].collectdelay= DEFAULT_BFILECOLLECTDELAY;
 	options.bfilethreshold			   = DEFAULT_BFILETHRESHOLD;
