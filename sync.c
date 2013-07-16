@@ -160,7 +160,7 @@ threadinfo_t *_sync_exec_newthread() {
 }
 
 int _sync_exec_delthread_bynum(int thread_num) {
-	printf_dd("Debug2: _sync_exec_delthread(%i)\n", thread_num);
+	printf_dd("Debug2: _sync_exec_delthread_bynum(%i)\n", thread_num);
 	threadsinfo_t *threadsinfo_p = _sync_exec_getthreadsinfo();
 	if(threadsinfo_p == NULL)
 		return errno;
@@ -170,10 +170,11 @@ int _sync_exec_delthread_bynum(int thread_num) {
 
 	threadsinfo_p->used--;
 	if(thread_num != threadsinfo_p->used) {
-		printf_ddd("Debug3: _sync_exec_delthread(): %i -> %i; left: %i\n", threadsinfo_p->used, thread_num, threadsinfo_p->used);
+		printf_ddd("Debug3: _sync_exec_delthread_bynum(): %i -> %i; left: %i\n", threadsinfo_p->used, thread_num, threadsinfo_p->used);
 		memcpy(&threadsinfo_p->threads[thread_num], &threadsinfo_p->threads[threadsinfo_p->used], sizeof(*threadsinfo_p->threads));
 	}
 
+	printf_ddd("Debug3: _sync_exec_delthread_bynum(%i): there're %i threads left.\n", thread_num, threadsinfo_p->used);
 	return 0;
 }
 
@@ -184,20 +185,16 @@ int _sync_exec_threads_gc() {
 	
 	printf_dd("Debug2: _sync_exec_threads_gc(): There're %i threads.\n", threadsinfo_p->used);
 	int thread_num=0;
-	int thread_num_r;	// TODO: find-out why is thread_num_r required.
-				// I have to do "thread_num = thread_num_r" after pthread_tryjoin_np(),
-				// otherwise "thread_num" is becoming "zero", again :(
 	while(thread_num < threadsinfo_p->used) {
 		int ret=0;
 		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[thread_num];
 
-		thread_num_r=thread_num;
-		printf_ddd("Debug3: _sync_exec_threads_gc(): Trying thread #%i (thread_num_r: %i).\n", thread_num, thread_num_r);
+		printf_ddd("Debug3: _sync_exec_threads_gc(): Trying thread #%i.\n", thread_num);
 		int err;
-		switch((err=pthread_tryjoin_np(threadinfo_p->pthread, (void **)&ret))) {
+
+		switch((err=pthread_tryjoin_np(threadinfo_p->pthread, (void **)&threadinfo_p->exitcode))) {
 			case 0:
-				thread_num = thread_num_r;
-				printf_ddd("Debug3: _sync_exec_threads_gc(): Thread #%i is finished with exitcode %i, deleting (thread_num_r: %i).\n", thread_num, ret, thread_num_r);
+				printf_ddd("Debug3: _sync_exec_threads_gc(): Thread #%i is finished with exitcode %i, deleting.\n", thread_num, ret);
 				break;
 			case EBUSY:
 				printf_ddd("Debug3: _sync_exec_threads_gc(): Thread #%i is busy, skipping.\n", thread_num);
@@ -209,9 +206,9 @@ int _sync_exec_threads_gc() {
 
 		}
 
-		if(ret) {
-			printf_e("Error: Got error from __sync_exec(): %s (errno: %i).\n", strerror(ret), ret);
-			return ret;
+		if(threadinfo_p->exitcode) {
+			printf_e("Error: Got error from __sync_exec(): %s (errno: %i).\n", strerror(threadinfo_p->exitcode), threadinfo_p->exitcode);
+			return threadinfo_p->exitcode;
 		}
 
 		if(threadinfo_p->callback)
@@ -229,10 +226,12 @@ int _sync_exec_threads_gc() {
 			return errno;
 	}
 
+	printf_ddd("Debug3: _sync_exec_threads_gc(): There're %i threads left.\n", threadsinfo_p->used);
 	return 0;
 }
 
 int _sync_exec_idle() {
+	printf_ddd("Debug3: _sync_exec_idle()\n");
 	return _sync_exec_threads_gc();
 }
 
@@ -379,9 +378,9 @@ static inline int sync_exec_thread(thread_callbackfunct_t callback, ...) {
 
 int sync_initialsync(const char *path, options_t *options_p) {
 	if(options_p->flags[PTHREAD])
-		return sync_exec_thread(NULL, options_p->actfpath, "initialsync", path, NULL);
+		return sync_exec_thread(NULL, options_p->actfpath, "initialsync", options_p->label, path, NULL);
 	else
-		return sync_exec       (NULL, options_p->actfpath, "initialsync", path, NULL);
+		return sync_exec       (NULL, options_p->actfpath, "initialsync", options_p->label, path, NULL);
 }
 
 int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p, initsync_t initsync) {
@@ -760,6 +759,7 @@ int sync_idle(int notify_d, options_t *options_p, rule_t *rules_p, indexes_t *in
 	ret=_sync_exec_idle();
 	if(ret) return ret;
 
+	printf_ddd("Debug3: sync_idle(): calling sync_idle_dosync_collectedevents()\n");
 	sync_idle_dosync_collectedevents(options_p, indexes_p);
 	return 0;
 }

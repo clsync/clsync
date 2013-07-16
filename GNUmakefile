@@ -1,6 +1,6 @@
 
 
-CFLAGS += -std=gnu11 -pipe -Wall -O2 -fstack-protector-all
+CFLAGS += -std=gnu11 -pipe -Wall -O2 -ggdb3 -fstack-protector-all
 DEBUGCFLAGS = -pipe -Wall -Werror -ggdb3 -Wno-error=unused-variable -fstack-protector-all
 
 LDFLAGS += $(shell pkg-config --libs glib-2.0) -lpthread

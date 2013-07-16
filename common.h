@@ -150,6 +150,7 @@ struct threadinfo {
 	thread_callbackfunct_t 	  callback;
 	char 			**argv;
 	pthread_t		  pthread;
+	int			  exitcode;
 };
 typedef struct threadinfo threadinfo_t;
 

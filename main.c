@@ -55,7 +55,7 @@ int parse_arguments(int argc, char *argv[], struct options *options) {
 	int c;
 	int option_index = 0;
 	while(1) {
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pqvDhfa", long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhfa", long_options, &option_index);
 	
 		if (c == -1) break;
 		switch (c) {
@@ -69,6 +69,8 @@ int parse_arguments(int argc, char *argv[], struct options *options) {
 			case 'l':
 				options->label        = optarg;
 				break;
+			case 'w':
+				options->commondelay  = (unsigned int)atol(optarg);
 			case 't':
 				options->_queues[QUEUE_NORMAL].collectdelay = (unsigned int)atol(optarg);
 				break;
