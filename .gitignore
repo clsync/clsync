@@ -9,6 +9,12 @@ clsync-debug
 # other:
 build
 rules
-test*
+test0
+test1
+test2
 .gdbcommands
+log*
+from/*
+to/*
+.clsync-list.*
 
