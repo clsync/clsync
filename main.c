@@ -28,6 +28,8 @@ static struct option long_options[] =
 	{"pthread",		no_argument,		NULL,	PTHREAD},	// Not implemented, yet
 	{"collectdelay",	required_argument,	NULL,	DELAY},
 	{"outlistsdir",		required_argument,	NULL,	OUTLISTSDIR},
+	{"bigfilethreshold",	required_argument,	NULL,	BFILETHRESHOLD},
+	{"bigfilecollectdelay",	required_argument,	NULL,	BFILEDELAY},
 	{"verbose",		no_argument,		NULL,	VERBOSE},
 	{"debug",		no_argument,		NULL,	DEBUG},
 	{"quite",		no_argument,		NULL,	QUITE},
@@ -52,7 +54,7 @@ int parse_arguments(int argc, char *argv[], struct options *options) {
 	int c;
 	int option_index = 0;
 	while(1) {
-		c = getopt_long(argc, argv, "bd:t:l:pqvDhfa", long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pqvDhfa", long_options, &option_index);
 	
 		if (c == -1) break;
 		switch (c) {
@@ -67,7 +69,13 @@ int parse_arguments(int argc, char *argv[], struct options *options) {
 				options->label        = optarg;
 				break;
 			case 't':
-				options->collectdelay = (unsigned int)atol(optarg);
+				options->_queues[QUEUE_NORMAL].collectdelay = (unsigned int)atol(optarg);
+				break;
+			case 'T':
+				options->_queues[QUEUE_BIGFILE].collectdelay = (unsigned int)atol(optarg);
+				break;
+			case 'B':
+				options->bfilethreshold = (unsigned long)atol(optarg);
 				break;
 			case 'f':
 				options->notifyengine = NE_FANOTIFY;
@@ -214,9 +222,11 @@ int main(int argc, char *argv[]) {
 	int ret = 0;
 	rule_t rules[MAXRULES];
 	memset(&options, 0, sizeof(options));
-	options.notifyengine 	= DEFAULT_NOTIFYENGINE;
-	options.collectdelay	= DEFAULT_COLLECTDELAY;
-	options.label		= DEFAULT_LABEL;
+	options.notifyengine 			   = DEFAULT_NOTIFYENGINE;
+	options._queues[QUEUE_NORMAL].collectdelay = DEFAULT_COLLECTDELAY;
+	options._queues[QUEUE_BIGFILE].collectdelay= DEFAULT_BFILECOLLECTDELAY;
+	options.bfilethreshold			   = DEFAULT_BFILETHRESHOLD;
+	options.label				   = DEFAULT_LABEL;
 
 	parse_arguments(argc, argv, &options);
 	out_init(options.flags);

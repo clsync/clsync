@@ -61,16 +61,24 @@ enum flags_enum {
 	PTHREAD		= 'p',
 	HELP		= 'h',
 	DELAY		= 't',
+	BFILEDELAY	= 'T',
 	DEBUG		= 'D',
 	QUITE		= 'q',
 	VERBOSE		= 'v',
 	OUTLISTSDIR	= 'd',
 	FANOTIFY	= 'f',
 	INOTIFY		= 'i',
-	LABEL		= 'l'
+	LABEL		= 'l',
+	BFILETHRESHOLD	= 'B',
 };
-
 typedef enum flags_enum flags_t;
+
+enum queue_enum {
+	QUEUE_NORMAL,
+	QUEUE_BIGFILE,
+	QUEUE_MAX
+};
+typedef enum queue_enum queue_id_t;
 
 enum ruleaction_enum {
 	RULE_END = 0,	// Terminator. To be able to end rules' chain
@@ -86,6 +94,12 @@ struct rule {
 };
 typedef struct rule rule_t;
 
+struct queueinfo {
+	unsigned int 	collectdelay;
+	time_t		stime;
+};
+typedef struct queueinfo queueinfo_t;
+
 struct options {
 	int flags[1<<8];
 	char *label;
@@ -93,9 +107,9 @@ struct options {
 	char *actfpath;
 	char *rulfpath;
 	char *listoutdir;
-	unsigned int collectdelay;
 	int notifyengine;
-	time_t _queuestime;	// TODO: remove this from here
+	size_t bfilethreshold;
+	queueinfo_t _queues[QUEUE_MAX];	// TODO: remove this from here
 };
 typedef struct options options_t;
 
@@ -114,11 +128,18 @@ enum state_enum {
 };
 typedef enum state_enum state_t;
 
+struct eventinfo {
+	uint32_t	evmask;
+	int		wd;
+	size_t		fsize;
+};
+typedef struct eventinfo eventinfo_t;
+
 struct indexes {
 	GHashTable *wd2fpath_ht;
 	GHashTable *fpath2wd_ht;
-	GHashTable *fpath2ev_ht;
-	GHashTable *fpath2ev_coll_ht;
+	GHashTable *fpath2ei_ht;
+	GHashTable *fpath2ei_coll_ht[QUEUE_MAX];
 };
 typedef struct indexes indexes_t;
 

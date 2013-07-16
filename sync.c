@@ -76,7 +76,9 @@ static inline int indexes_remove_bywd(indexes_t *indexes_p, int wd) {
 // This function add necessary rows to hash_tables if some watching descriptor opened
 // Return: 0 on success, non-zero on fail
 
-static inline int indexes_add(indexes_t *indexes_p, int wd, const char *fpath_const, size_t fpathlen) {
+static inline int indexes_add_wd(indexes_t *indexes_p, int wd, const char *fpath_const, size_t fpathlen) {
+	printf_ddd("Debug3: indexes_add_wd(indexes_p, %i, \"%s\", %i)\n", wd, fpath_const, fpathlen);
+
 	char *fpath = xmalloc(fpathlen+1);
 	memcpy(fpath, fpath_const, fpathlen+1);
 	g_hash_table_insert(indexes_p->wd2fpath_ht, GINT_TO_POINTER(wd), fpath);
@@ -100,23 +102,21 @@ static inline int indexes_fpath2wd(indexes_t *indexes_p, const char *fpath) {
 	return GPOINTER_TO_INT(gint_p);
 }
 
-static inline int indexes_fpath2ev(indexes_t *indexes_p, const char *fpath) {
-	gpointer gint_p = g_hash_table_lookup(indexes_p->fpath2ev_ht, fpath);
-	if(gint_p == NULL)
-		return 0;
-
-	return GPOINTER_TO_INT(gint_p);
+static inline eventinfo_t *indexes_fpath2ei(indexes_t *indexes_p, const char *fpath) {
+	return (eventinfo_t *)g_hash_table_lookup(indexes_p->fpath2ei_ht, fpath);
 }
 
-static inline int indexes_updateevmask(indexes_t *indexes_p, char *fpath, uint32_t evmask) {
-	g_hash_table_replace(indexes_p->fpath2ev_ht, fpath, GINT_TO_POINTER(evmask));
+static inline int indexes_fpath2ei_add(indexes_t *indexes_p, char *fpath, eventinfo_t *evinfo) {
+	g_hash_table_replace(indexes_p->fpath2ei_ht, fpath, evinfo);
 
 	return 0;
 }
 
-static inline int indexes_collectevent(indexes_t *indexes_p, char *fpath, uint32_t evmask) {
-	g_hash_table_replace(indexes_p->fpath2ev_coll_ht, fpath, GINT_TO_POINTER(evmask));
+static inline int indexes_queueevent(indexes_t *indexes_p, char *fpath, eventinfo_t *evinfo, queue_id_t queue_id) {
 
+	g_hash_table_replace(indexes_p->fpath2ei_coll_ht[queue_id], fpath, evinfo);
+
+	printf_ddd("Debug3: indexes_queueevent(indexes_p, \"%s\", evinfo, %i). It's now %i events collected in queue %i.\n", fpath, queue_id, g_hash_table_size(indexes_p->fpath2ei_coll_ht[queue_id]), queue_id);
 	return 0;
 }
 
@@ -400,7 +400,7 @@ int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, co
 			return -1;
 		}
 	}
-	indexes_add(indexes_p, wd, path, pathlen);
+	indexes_add_wd(indexes_p, wd, path, pathlen);
 
 	if(initsync == INITSYNC_DO)
 		if(sync_initialsync(path, options_p))
@@ -533,10 +533,22 @@ static int sync_dosync(const char *fpath, uint32_t evmask, options_t *options_p,
 	return ret;
 }
 
-static int sync_queuesync(const char *fpath, uint32_t evmask, options_t *options_p, indexes_t *indexes_p) {
-	if(!options_p->_queuestime)
-		options_p->_queuestime = time(NULL);
-	return indexes_collectevent(indexes_p, strdup(fpath), evmask);
+static int sync_queuesync(const char *fpath, eventinfo_t *evinfo, options_t *options_p, indexes_t *indexes_p) {
+	queue_id_t queue_id = QUEUE_NORMAL;
+
+	printf_ddd("Debug3: sync_queuesync(\"%s\", ...): %i %i\n", fpath, evinfo->fsize, options_p->bfilethreshold);
+	if(evinfo->fsize > options_p->bfilethreshold)
+		queue_id = QUEUE_BIGFILE;
+
+	queueinfo_t *queueinfo = &options_p->_queues[queue_id];
+
+	if(!queueinfo->stime)
+		queueinfo->stime = time(NULL);
+
+	eventinfo_t *evinfo_dup = (eventinfo_t *)xmalloc(sizeof(*evinfo_dup));
+	memcpy(evinfo_dup, evinfo, sizeof(*evinfo_dup));
+
+	return indexes_queueevent(indexes_p, strdup(fpath), evinfo_dup, queue_id);
 }
 
 void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evmask_gp, gpointer arg_gp) {
@@ -573,31 +585,27 @@ int sync_idle_dosync_collectedevents_cleanup(char **argv) {
 	return unlink(argv[3]);
 }
 
-int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p) {
+int sync_idle_dosync_collectedevents_procqueue(queue_id_t queue_id, options_t *options_p, indexes_t *indexes_p, time_t tm, struct dosync_arg *dosync_arg) {
 	char *buf, *fpath;
-	struct dosync_arg dosync_arg;
-	dosync_arg.evcount	= 0;
-	dosync_arg.options_p 	= options_p;
-	dosync_arg.indexes_p	= indexes_p;
-	dosync_arg.outf		= NULL;
-	time_t tm = time(NULL);
 
-	if(options_p->_queuestime + options_p->collectdelay > tm) {
-		printf_ddd("Debug3: sync_idle_dosync_collectedevents(): too early (%i + %i > %i).\n", options_p->_queuestime, options_p->collectdelay, tm);
+	queueinfo_t *queueinfo = &options_p->_queues[queue_id];
+
+	if(queueinfo->stime + queueinfo->collectdelay > tm) {
+		printf_ddd("Debug3: sync_idle_dosync_collectedevents_procqueue(%i, ...): too early (%i + %i > %i).\n", queue_id, queueinfo->stime, queueinfo->collectdelay, tm);
 		return 0;
 	}
-	options_p->_queuestime = 0;
+	queueinfo->stime = 0;
 
-	int evcount_real = g_hash_table_size(indexes_p->fpath2ev_coll_ht);
+	int evcount_real = g_hash_table_size(indexes_p->fpath2ei_coll_ht[queue_id]);
 
-	printf_ddd("Debug3: sync_idle_dosync_collectedevents(): evcount_real == %i\n", evcount_real);
+	printf_ddd("Debug3: sync_idle_dosync_collectedevents_procqueue(%i, ...): evcount_real == %i\n", queue_id, evcount_real);
 
 	if(evcount_real<=0) {
-		printf_ddd("Debug3: sync_idle_dosync_collectedevents(): no events, return 0.\n");
+		printf_ddd("Debug3: sync_idle_dosync_collectedevents_procqueue(%i, ...): no events, return 0.\n", queue_id);
 		return 0;
 	}
 
-	if(options_p->listoutdir != NULL) {
+	if((options_p->listoutdir != NULL) && (dosync_arg->outf == NULL)) {
 		buf   = alloca(BUFSIZ+1);
 		fpath = alloca(PATH_MAX+1);
 
@@ -613,35 +621,53 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 			}
 		} while(errno != ENOENT);	// TODO: find another way to check if the object exists
 		errno=0;
-		dosync_arg.outf = fopen(fpath, "w");
+		dosync_arg->outf = fopen(fpath, "w");
 
-		if(dosync_arg.outf == NULL) {
+		if(dosync_arg->outf == NULL) {
 			printf_e("Error: Cannot open \"%s\" as file for writing: %s (errno: %i).\n", fpath, strerror(errno), errno);
 			return errno;
 		}
 
-		setbuffer(dosync_arg.outf, buf, BUFSIZ);
+		setbuffer(dosync_arg->outf, buf, BUFSIZ);
 		printf_ddd("Debug3: Created list-file \"%s\"\n", fpath);
 	}
 
-	g_hash_table_foreach(indexes_p->fpath2ev_coll_ht, _sync_idle_dosync_collectedevents, &dosync_arg);
-	g_hash_table_remove_all(indexes_p->fpath2ev_coll_ht);
-
-	if(evcount_real != dosync_arg.evcount) {
-		printf_e("Error: Not all events were been proceeded (%i != %i).", evcount_real, dosync_arg.evcount);
-		return EINVAL;
-	}
+	g_hash_table_foreach(indexes_p->fpath2ei_coll_ht[queue_id], _sync_idle_dosync_collectedevents, dosync_arg);
+	g_hash_table_remove_all(indexes_p->fpath2ei_coll_ht[queue_id]);
 
 	if(options_p->listoutdir != NULL) {
-		fclose(dosync_arg.outf);
+		fclose(dosync_arg->outf);
 
-		if(dosync_arg.evcount > 0) {
+		if(dosync_arg->evcount > 0) {
 			if(options_p->flags[PTHREAD])
 				return sync_exec_thread(sync_idle_dosync_collectedevents_cleanup, 
 							options_p->actfpath, "synclist", options_p->label, fpath, NULL);
 			else
 				return sync_exec       (options_p->actfpath, "synclist", options_p->label, fpath, NULL);
 		}
+	}
+
+	return 0;
+}
+
+int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p) {
+	struct dosync_arg dosync_arg;
+	dosync_arg.evcount	= 0;
+	dosync_arg.options_p 	= options_p;
+	dosync_arg.indexes_p	= indexes_p;
+	dosync_arg.outf		= NULL;
+	time_t tm = time(NULL);
+
+	int queue_id=0;
+	while(queue_id < QUEUE_MAX) {
+		int ret;
+		ret = sync_idle_dosync_collectedevents_procqueue(queue_id, options_p, indexes_p, tm, &dosync_arg);
+		if(ret) {
+			printf_e("Error: Got error while processing queue #%i\n: %s (errno: %i).\n", queue_id, strerror(ret), ret);
+			return ret;
+		}
+
+		queue_id++;
 	}
 
 	return 0;
@@ -699,13 +725,13 @@ static inline int sync_inotify_wait(int inotify_d) {
 	return select(FD_SETSIZE, &rfds, NULL, NULL, NULL);
 }
 
-void sync_inotify_handle_dosync(gpointer fpath_gp, gpointer evmask_gp, gpointer arg_gp) {
+void sync_inotify_handle_dosync(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
 	char *fpath		  = (char *)fpath_gp;
-	uint32_t evmask		  = (uint32_t)GPOINTER_TO_INT(evmask_gp);
+	eventinfo_t *evinfo	  = (eventinfo_t *)evinfo_gp;
 	options_t *options_p 	  = ((struct dosync_arg *)arg_gp)->options_p;
 	indexes_t *indexes_p 	  = ((struct dosync_arg *)arg_gp)->indexes_p;
 
-	sync_queuesync(fpath, evmask, options_p, indexes_p);
+	sync_queuesync(fpath, evinfo, options_p, indexes_p);
 
 	return;
 }
@@ -724,7 +750,7 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, rule_t *rules_p, in
 		return -1;
 	}
 
-	g_hash_table_remove_all(indexes_p->fpath2ev_ht);	// Just in case.
+	g_hash_table_remove_all(indexes_p->fpath2ei_ht);	// Just in case.
 
 	int count = 0;
 	char *ptr =  buf;
@@ -779,8 +805,21 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, rule_t *rules_p, in
 			}
 		}
 
-		uint32_t evmask_old = indexes_fpath2ev(indexes_p, fpathfull);
-		indexes_updateevmask(indexes_p, fpathfull, event->mask | evmask_old);
+		int isnew = 0;
+		eventinfo_t *evinfo = indexes_fpath2ei(indexes_p, fpathfull);
+		if(evinfo == NULL) {
+			evinfo = (eventinfo_t *)xmalloc(sizeof(*evinfo));
+			memset(evinfo, 0, sizeof(*evinfo));
+			evinfo->fsize  = lstat.st_size;
+			evinfo->wd     = event->wd;
+			isnew++;
+		}
+		evinfo->evmask |= event->mask;
+
+		if(isnew)
+			indexes_fpath2ei_add(indexes_p, fpathfull, evinfo);
+		else
+			free(fpathfull);
 
 		SYNC_INOTIFY_HANDLE_CONTINUE;
 	}
@@ -789,8 +828,10 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, rule_t *rules_p, in
 	dosync_arg.options_p 	= options_p;
 	dosync_arg.indexes_p	= indexes_p;
 
-	g_hash_table_foreach(indexes_p->fpath2ev_ht, sync_inotify_handle_dosync, &dosync_arg);
-	g_hash_table_remove_all(indexes_p->fpath2ev_ht);
+	printf_ddd("Debug3: sync_inotify_handle(): collected %i events per this time.\n", g_hash_table_size(indexes_p->fpath2ei_ht));
+
+	g_hash_table_foreach(indexes_p->fpath2ei_ht, sync_inotify_handle_dosync, &dosync_arg);
+	g_hash_table_remove_all(indexes_p->fpath2ei_ht);
 
 	return count;
 }
@@ -870,16 +911,17 @@ void sync_term(int signal) {
 }
 
 int sync_run(options_t *options_p, rule_t *rules_p) {
-	int ret;
+	int ret, i;
 	indexes_t indexes = {NULL};
 	indexes.wd2fpath_ht      = g_hash_table_new_full(g_direct_hash, g_direct_equal, 0,    0);
 	indexes.fpath2wd_ht      = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
-	indexes.fpath2ev_ht      = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
-	indexes.fpath2ev_coll_ht = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
+	indexes.fpath2ei_ht      = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, free);
+	i=0;
+	while(i<QUEUE_MAX)
+		indexes.fpath2ei_coll_ht[i++] = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, free);
 
-	if(options_p->listoutdir) {
+	if(options_p->listoutdir)
 		srand(time(NULL));
-	}
 
 	int notify_d = sync_notify_init(options_p);
 	if(notify_d == -1) return errno;
@@ -901,8 +943,10 @@ int sync_run(options_t *options_p, rule_t *rules_p) {
 	close(notify_d);
 	g_hash_table_destroy(indexes.wd2fpath_ht);
 	g_hash_table_destroy(indexes.fpath2wd_ht);
-	g_hash_table_destroy(indexes.fpath2ev_ht);
-	g_hash_table_destroy(indexes.fpath2ev_coll_ht);
+	g_hash_table_destroy(indexes.fpath2ei_ht);
+	i=0;
+	while(i<QUEUE_MAX)
+		g_hash_table_destroy(indexes.fpath2ei_coll_ht[i++]);
 
 	return 0;
 }
