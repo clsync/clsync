@@ -886,14 +886,18 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, rule_t *rules_p, in
 
 		struct stat64 lstat;
 		mode_t st_mode;
+		size_t st_size;
 		if(lstat64(fpathfull, &lstat)) {
 			printf_dd("Debug2: Cannot lstat(\"%s\", lstat): %s (errno: %i). Seems, that the object disappeared.\n", fpathfull, strerror(errno), errno);
 			if(event->mask & IN_ISDIR)
 				st_mode = S_IFDIR;
 			else
 				st_mode = S_IFREG;
-		} else
+			st_size = 0;
+		} else {
 			st_mode = lstat.st_mode;
+			st_size = lstat.st_size;
+		}
 
 		ruleaction_t ruleaction = rules_check(fpathfull, st_mode, rules_p);
 
@@ -917,7 +921,7 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, rule_t *rules_p, in
 		if(evinfo == NULL) {
 			evinfo = (eventinfo_t *)xmalloc(sizeof(*evinfo));
 			memset(evinfo, 0, sizeof(*evinfo));
-			evinfo->fsize  = lstat.st_size;
+			evinfo->fsize  = st_size;
 			evinfo->wd     = event->wd;
 			isnew++;
 			printf_ddd("Debug3: sync_inotify_handle(): new event: fsize == %i; wd == %i\n", evinfo->fsize, evinfo->wd);
