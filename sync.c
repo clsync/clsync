@@ -210,6 +210,12 @@ int _sync_exec_threads_gc() {
 				printf_e("Error: Got error from callback function: %s (errno: %i).\n", strerror(err), err);
 				return err;
 			}
+
+		char **ptr = threadinfo_p->argv;
+		while(*ptr)
+			free(*(ptr++));
+		free(threadinfo_p->argv);
+
 		if(_sync_exec_delthread_bynum(thread_num))
 			return errno;
 	}
@@ -229,8 +235,17 @@ int _sync_exec_cleanup() {
 	// Waiting for threads:
 	printf_d("Debug: There're %i opened threads. Waiting.\n", threadsinfo_p->used);
 	while(threadsinfo_p->used) {
-		int ret;
-		ret = pthread_join(threadsinfo_p->threads[--threadsinfo_p->used].pthread, (void **)&ret);
+		int ret, err;
+		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[--threadsinfo_p->used];
+		pthread_join(threadinfo_p->pthread, (void **)&ret);
+		if(threadinfo_p->callback)
+			if((err=threadinfo_p->callback(threadinfo_p->argv)))
+				printf_e("Warning: Got error from callback function: %s (errno: %i).\n", strerror(err), err);
+
+		char **ptr = threadinfo_p->argv;
+		while(*ptr)
+			free(*(ptr++));
+		free(threadinfo_p->argv);
 	}
 
 	// Freeing
@@ -257,7 +272,6 @@ static inline int __sync_exec_exit(int exitcode) {
 	return exitcode;
 }*/
 int __sync_exec(char **argv) {
-	char **ptr;
 	int ret = 0;
 
 	pid_t pid;
@@ -267,38 +281,29 @@ int __sync_exec(char **argv) {
 	switch(pid) {
 		case -1: 
 			printf_e("Error: Cannot fork(): %s (errno: %i).\n", strerror(errno), errno);
-			ret = errno;
-			goto __sync_exec_end;
+			return errno;
 		case  0:
 			execvp(argv[0], (char *const *)argv);
-			ret = errno;
-			goto __sync_exec_end;
+			return errno;
 	}
 
 	if(waitpid(pid, &status, 0) != pid) {
 		printf_e("Error: Cannot waitid(): %s (errno: %i).\n", strerror(errno), errno);
-		ret = errno;
-		goto __sync_exec_end;
+		return errno;
 	}
 
 	int exitcode = WEXITSTATUS(status);
 
 	if(exitcode) {
 		printf_e("Error: Got non-zero exitcode while running \"%s\", exitcode is %i.\n", argv[0], exitcode);
-		ret = exitcode;
-		goto __sync_exec_end;
+		return exitcode;
 	}
 
-__sync_exec_end:
-	ptr = argv;
-	while(*ptr)
-		free(*(ptr++));
-	free(argv);
 	return ret;
 }
 
 
-#define _sync_exec_getargv(argv, firstarg) {\
+#define _sync_exec_getargv(argv, firstarg, COPYARG) {\
 	va_list arglist;\
 	va_start(arglist, firstarg);\
 \
@@ -310,7 +315,7 @@ __sync_exec_end:
 			return ENOMEM;\
 		}\
 		arg = (char *)va_arg(arglist, const char *const);\
-		argv[i] = arg!=NULL ? strdup(arg) : NULL;\
+		argv[i] = arg!=NULL ? COPYARG : NULL;\
 \
 		printf_dd("Debug2: argv[%i] = %s\n", i, argv[i]);\
 	} while(argv[i++] != NULL);\
@@ -325,7 +330,7 @@ static inline int _sync_exec(int dummy, ...) {
 	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
 	memset(argv, 0, sizeof(char *)*MAXARGUMENTS);
 
-	_sync_exec_getargv(argv, dummy);
+	_sync_exec_getargv(argv, dummy, arg);
 
 	return __sync_exec(argv);
 }
@@ -337,7 +342,7 @@ static inline int sync_exec_thread(thread_callbackfunct_t callback, ...) {
 	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
 	memset(argv, 0, sizeof(char *)*MAXARGUMENTS);
 
-	_sync_exec_getargv(argv, callback);
+	_sync_exec_getargv(argv, callback, strdup(arg));
 
 	threadinfo_t *threadinfo_p = _sync_exec_newthread();
 	if(threadinfo_p == NULL)
@@ -516,7 +521,7 @@ static inline int sync_dosync_exec(options_t *options_p, const char *evmask_str,
 		return sync_exec       (      options_p->actfpath, "sync", options_p->label, evmask_str, fpath, NULL);
 }
 
-static int sync_dosync_now(const char *fpath, uint32_t evmask, options_t *options_p, indexes_t *indexes_p) {
+static int sync_dosync(const char *fpath, uint32_t evmask, options_t *options_p, indexes_t *indexes_p) {
 	int ret;
 	char *evmask_str = xmalloc(1<<8);
 	sprintf(evmask_str, "%u", evmask);
@@ -528,16 +533,10 @@ static int sync_dosync_now(const char *fpath, uint32_t evmask, options_t *option
 	return ret;
 }
 
-static int sync_dosync(const char *fpath, uint32_t evmask, options_t *options_p, indexes_t *indexes_p) {
-	int ret = 0;
-
-
-	if(! options_p->collectdelay)
-		return sync_dosync_now(fpath, evmask, options_p, indexes_p);
-
-	indexes_collectevent(indexes_p, strdup(fpath), evmask);
-
-	return ret;
+static int sync_queuesync(const char *fpath, uint32_t evmask, options_t *options_p, indexes_t *indexes_p) {
+	if(!options_p->_queuestime)
+		options_p->_queuestime = time(NULL);
+	return indexes_collectevent(indexes_p, strdup(fpath), evmask);
 }
 
 void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evmask_gp, gpointer arg_gp) {
@@ -549,8 +548,9 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evmask_gp, gp
 	indexes_t *indexes_p 	  = ((struct dosync_arg *)arg_gp)->indexes_p;
 
 	if(options_p->listoutdir == NULL) {
+		printf_ddd("Debug3: _sync_idle_dosync_collectedevents(): calling sync_dosync()\n");
 		int ret;
-		if((ret=sync_dosync_now(fpath, evmask, options_p, indexes_p))) {
+		if((ret=sync_dosync(fpath, evmask, options_p, indexes_p))) {
 			printf_e("Error: unable to sync \"%s\" (evmask %i): %s (errno: %i).\n", fpath, evmask, strerror(ret), ret);
 			exit(ret);	// TODO: remove this from here
 		}
@@ -569,6 +569,7 @@ int sync_idle_dosync_collectedevents_cleanup(char **argv) {
 		return EINVAL;
 	}
 
+	printf_ddd("Debug3: unlink()-ing \"%s\"\n", argv[3]);
 	return unlink(argv[3]);
 }
 
@@ -579,6 +580,22 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 	dosync_arg.options_p 	= options_p;
 	dosync_arg.indexes_p	= indexes_p;
 	dosync_arg.outf		= NULL;
+	time_t tm = time(NULL);
+
+	if(options_p->_queuestime + options_p->collectdelay > tm) {
+		printf_ddd("Debug3: sync_idle_dosync_collectedevents(): too early (%i + %i > %i).\n", options_p->_queuestime, options_p->collectdelay, tm);
+		return 0;
+	}
+	options_p->_queuestime = 0;
+
+	int evcount_real = g_hash_table_size(indexes_p->fpath2ev_coll_ht);
+
+	printf_ddd("Debug3: sync_idle_dosync_collectedevents(): evcount_real == %i\n", evcount_real);
+
+	if(evcount_real<=0) {
+		printf_ddd("Debug3: sync_idle_dosync_collectedevents(): no events, return 0.\n");
+		return 0;
+	}
 
 	if(options_p->listoutdir != NULL) {
 		buf   = alloca(BUFSIZ+1);
@@ -587,7 +604,6 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 		int counter = 0;
 		struct stat64 stat64;
 		pid_t pid = getpid();
-		time_t tm = time(NULL);
 		do {
 			snprintf(fpath, PATH_MAX, "%s/.clsync-list.%u.%lu.%u", options_p->listoutdir, pid, (unsigned long)tm, rand());	// To be uniquea
 			lstat64(fpath, &stat64);
@@ -605,10 +621,16 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 		}
 
 		setbuffer(dosync_arg.outf, buf, BUFSIZ);
+		printf_ddd("Debug3: Created list-file \"%s\"\n", fpath);
 	}
 
 	g_hash_table_foreach(indexes_p->fpath2ev_coll_ht, _sync_idle_dosync_collectedevents, &dosync_arg);
 	g_hash_table_remove_all(indexes_p->fpath2ev_coll_ht);
+
+	if(evcount_real != dosync_arg.evcount) {
+		printf_e("Error: Not all events were been proceeded (%i != %i).", evcount_real, dosync_arg.evcount);
+		return EINVAL;
+	}
 
 	if(options_p->listoutdir != NULL) {
 		fclose(dosync_arg.outf);
@@ -653,7 +675,7 @@ int sync_fanotify_loop(int fanotify_d, options_t *options_p, rule_t *rules_p, in
 			if (metadata->fd != FAN_NOFD) {
 				if (metadata->fd >= 0) {
 					char *fpath = fd2fpath_malloc(metadata->fd);
-					sync_dosync(fpath, 0, options_p, indexes_p);
+					sync_queuesync(fpath, 0, options_p, indexes_p);
 					printf_dd("Debug2: Event %i on \"%s\".\n", metadata->mask, fpath);
 					free(fpath);
 				}
@@ -683,7 +705,7 @@ void sync_inotify_handle_dosync(gpointer fpath_gp, gpointer evmask_gp, gpointer 
 	options_t *options_p 	  = ((struct dosync_arg *)arg_gp)->options_p;
 	indexes_t *indexes_p 	  = ((struct dosync_arg *)arg_gp)->indexes_p;
 
-	sync_dosync(fpath, evmask, options_p, indexes_p);
+	sync_queuesync(fpath, evmask, options_p, indexes_p);
 
 	return;
 }

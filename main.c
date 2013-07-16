@@ -215,6 +215,7 @@ int main(int argc, char *argv[]) {
 	rule_t rules[MAXRULES];
 	memset(&options, 0, sizeof(options));
 	options.notifyengine 	= DEFAULT_NOTIFYENGINE;
+	options.collectdelay	= DEFAULT_COLLECTDELAY;
 	options.label		= DEFAULT_LABEL;
 
 	parse_arguments(argc, argv, &options);

@@ -95,6 +95,7 @@ struct options {
 	char *listoutdir;
 	unsigned int collectdelay;
 	int notifyengine;
+	time_t _queuestime;	// TODO: remove this from here
 };
 typedef struct options options_t;
 
