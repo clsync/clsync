@@ -120,6 +120,15 @@ static inline int indexes_queueevent(indexes_t *indexes_p, char *fpath, eventinf
 	return 0;
 }
 
+static inline int indexes_removefromqueue(indexes_t *indexes_p, char *fpath, queue_id_t queue_id) {
+//	printf_ddd("Debug3: indexes_removefromqueue(indexes_p, \"%s\", %i).\n", fpath, queue_id);
+
+	g_hash_table_remove(indexes_p->fpath2ei_coll_ht[queue_id], fpath);
+
+	printf_ddd("Debug3: indexes_removefromqueue(indexes_p, \"%s\", %i). It's now %i events collected in queue %i.\n", fpath, queue_id, g_hash_table_size(indexes_p->fpath2ei_coll_ht[queue_id]), queue_id);
+	return 0;
+}
+
 static threadsinfo_t *_sync_exec_getthreadsinfo() {	// TODO: optimize this
 	static threadsinfo_t threadsinfo={0};
 #ifdef PTHREAD_MUTEX
@@ -551,26 +560,53 @@ static int sync_queuesync(const char *fpath, eventinfo_t *evinfo, options_t *opt
 	return indexes_queueevent(indexes_p, strdup(fpath), evinfo_dup, queue_id);
 }
 
-void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evmask_gp, gpointer arg_gp) {
+void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
 	char *fpath		  = (char *)fpath_gp;
-	uint32_t evmask		  = (uint32_t)GPOINTER_TO_INT(evmask_gp);
+	eventinfo_t *evinfo	  = (eventinfo_t *)evinfo_gp;
 	int *evcount_p		  =&((struct dosync_arg *)arg_gp)->evcount;
-	FILE *outf		  = ((struct dosync_arg *)arg_gp)->outf;
+//	FILE *outf		  = ((struct dosync_arg *)arg_gp)->outf;
 	options_t *options_p 	  = ((struct dosync_arg *)arg_gp)->options_p;
 	indexes_t *indexes_p 	  = ((struct dosync_arg *)arg_gp)->indexes_p;
+	queue_id_t queue_id	  = (queue_id_t)((struct dosync_arg *)arg_gp)->data;
+
+	printf_ddd("Debug3: _sync_idle_dosync_collectedevents(): queue_id == %i.\n", queue_id);
 
 	if(options_p->listoutdir == NULL) {
 		printf_ddd("Debug3: _sync_idle_dosync_collectedevents(): calling sync_dosync()\n");
 		int ret;
-		if((ret=sync_dosync(fpath, evmask, options_p, indexes_p))) {
-			printf_e("Error: unable to sync \"%s\" (evmask %i): %s (errno: %i).\n", fpath, evmask, strerror(ret), ret);
+		if((ret=sync_dosync(fpath, evinfo->evmask, options_p, indexes_p))) {
+			printf_e("Error: unable to sync \"%s\" (evmask %i): %s (errno: %i).\n", fpath, evinfo->evmask, strerror(ret), ret);
 			exit(ret);	// TODO: remove this from here
 		}
 	}
 
-	fprintf(outf, "sync %s %i %s\n", options_p->label, evmask, fpath);
+	int isnew = 0;
+	eventinfo_t *evinfo_idx = indexes_fpath2ei(indexes_p, fpath);
 
-	(*evcount_p)++;
+	int _queue_id = 0;
+	while(_queue_id < QUEUE_MAX) {
+		if(_queue_id == queue_id) {
+			_queue_id++;
+			continue;
+		}
+		indexes_removefromqueue(indexes_p, fpath, _queue_id);
+		if(!g_hash_table_size(indexes_p->fpath2ei_coll_ht[_queue_id]))
+			options_p->_queues[_queue_id].stime = 0;
+		_queue_id++;
+	}
+
+	if(evinfo_idx == NULL) {
+		evinfo_idx = (eventinfo_t *)xmalloc(sizeof(*evinfo_idx));
+		memset(evinfo_idx, 0, sizeof(*evinfo_idx));
+		isnew++;
+		(*evcount_p)++;
+	}
+	evinfo_idx->evmask |= evinfo->evmask;
+
+	if(isnew)
+		indexes_fpath2ei_add(indexes_p, strdup(fpath), evinfo_idx);
+	else
+		free(fpath);
 
 	return;
 }
@@ -585,8 +621,8 @@ int sync_idle_dosync_collectedevents_cleanup(char **argv) {
 	return unlink(argv[3]);
 }
 
-int sync_idle_dosync_collectedevents_procqueue(queue_id_t queue_id, options_t *options_p, indexes_t *indexes_p, time_t tm, struct dosync_arg *dosync_arg) {
-	char *buf, *fpath;
+int sync_idle_dosync_collectedevents_aggrqueue(queue_id_t queue_id, options_t *options_p, indexes_t *indexes_p, time_t tm, struct dosync_arg *dosync_arg) {
+//	char *buf, *fpath;
 
 	queueinfo_t *queueinfo = &options_p->_queues[queue_id];
 
@@ -605,7 +641,59 @@ int sync_idle_dosync_collectedevents_procqueue(queue_id_t queue_id, options_t *o
 		return 0;
 	}
 
-	if((options_p->listoutdir != NULL) && (dosync_arg->outf == NULL)) {
+	g_hash_table_foreach(indexes_p->fpath2ei_coll_ht[queue_id], _sync_idle_dosync_collectedevents, dosync_arg);
+	g_hash_table_remove_all(indexes_p->fpath2ei_coll_ht[queue_id]);
+
+
+	return 0;
+}
+
+void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
+	char *fpath		  = (char *)fpath_gp;
+	eventinfo_t *evinfo	  = (eventinfo_t *)evinfo_gp;
+//	int *evcount_p		  =&((struct dosync_arg *)arg_gp)->evcount;
+	FILE *outf		  = ((struct dosync_arg *)arg_gp)->outf;
+	options_t *options_p 	  = ((struct dosync_arg *)arg_gp)->options_p;
+//	indexes_t *indexes_p 	  = ((struct dosync_arg *)arg_gp)->indexes_p;
+
+	fprintf(outf, "sync %s %i %s\n", options_p->label, evinfo->evmask, fpath);
+
+	return;
+}
+
+int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p) {
+	char *buf, *fpath;
+	struct dosync_arg dosync_arg;
+	dosync_arg.evcount	= 0;
+	dosync_arg.options_p 	= options_p;
+	dosync_arg.indexes_p	= indexes_p;
+	dosync_arg.outf		= NULL;
+	time_t tm = time(NULL);
+
+	if(options_p->listoutdir != NULL)
+		g_hash_table_remove_all(indexes_p->fpath2ei_ht);	// Just in case.
+
+	int queue_id=0;
+	while(queue_id < QUEUE_MAX) {
+		int ret;
+		queue_id_t *queue_id_p = (queue_id_t *)&dosync_arg.data;
+		*queue_id_p = queue_id;
+		ret = sync_idle_dosync_collectedevents_aggrqueue(queue_id, options_p, indexes_p, tm, &dosync_arg);
+		if(ret) {
+			printf_e("Error: Got error while processing queue #%i\n: %s (errno: %i).\n", queue_id, strerror(ret), ret);
+			g_hash_table_remove_all(indexes_p->fpath2ei_ht);
+			return ret;
+		}
+
+		queue_id++;
+	}
+
+	if(!dosync_arg.evcount) {
+		printf_ddd("Debug3: sync_idle_dosync_collectedevents(): Summary events' count is zero. Return 0.\n");
+		return 0;
+	}
+
+	if(options_p->listoutdir != NULL) {
 		buf   = alloca(BUFSIZ+1);
 		fpath = alloca(PATH_MAX+1);
 
@@ -621,53 +709,28 @@ int sync_idle_dosync_collectedevents_procqueue(queue_id_t queue_id, options_t *o
 			}
 		} while(errno != ENOENT);	// TODO: find another way to check if the object exists
 		errno=0;
-		dosync_arg->outf = fopen(fpath, "w");
+		dosync_arg.outf = fopen(fpath, "w");
 
-		if(dosync_arg->outf == NULL) {
+		if(dosync_arg.outf == NULL) {
 			printf_e("Error: Cannot open \"%s\" as file for writing: %s (errno: %i).\n", fpath, strerror(errno), errno);
 			return errno;
 		}
 
-		setbuffer(dosync_arg->outf, buf, BUFSIZ);
+		setbuffer(dosync_arg.outf, buf, BUFSIZ);
 		printf_ddd("Debug3: Created list-file \"%s\"\n", fpath);
-	}
 
-	g_hash_table_foreach(indexes_p->fpath2ei_coll_ht[queue_id], _sync_idle_dosync_collectedevents, dosync_arg);
-	g_hash_table_remove_all(indexes_p->fpath2ei_coll_ht[queue_id]);
+		g_hash_table_foreach(indexes_p->fpath2ei_ht, sync_idle_dosync_collectedevents_listpush, &dosync_arg);
+		g_hash_table_remove_all(indexes_p->fpath2ei_ht);
 
-	if(options_p->listoutdir != NULL) {
-		fclose(dosync_arg->outf);
+		fclose(dosync_arg.outf);
 
-		if(dosync_arg->evcount > 0) {
+		if(dosync_arg.evcount > 0) {
 			if(options_p->flags[PTHREAD])
 				return sync_exec_thread(sync_idle_dosync_collectedevents_cleanup, 
 							options_p->actfpath, "synclist", options_p->label, fpath, NULL);
 			else
 				return sync_exec       (options_p->actfpath, "synclist", options_p->label, fpath, NULL);
 		}
-	}
-
-	return 0;
-}
-
-int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p) {
-	struct dosync_arg dosync_arg;
-	dosync_arg.evcount	= 0;
-	dosync_arg.options_p 	= options_p;
-	dosync_arg.indexes_p	= indexes_p;
-	dosync_arg.outf		= NULL;
-	time_t tm = time(NULL);
-
-	int queue_id=0;
-	while(queue_id < QUEUE_MAX) {
-		int ret;
-		ret = sync_idle_dosync_collectedevents_procqueue(queue_id, options_p, indexes_p, tm, &dosync_arg);
-		if(ret) {
-			printf_e("Error: Got error while processing queue #%i\n: %s (errno: %i).\n", queue_id, strerror(ret), ret);
-			return ret;
-		}
-
-		queue_id++;
 	}
 
 	return 0;

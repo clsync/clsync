@@ -174,5 +174,6 @@ struct dosync_arg {
 	FILE *outf;
 	options_t *options_p;
 	indexes_t *indexes_p;
+	void *data;
 };
 
