@@ -45,7 +45,7 @@ int syntax() {
 	printf("syntax: clsync [flags] <watch dir> <action script> [file with rules regexps]\npossible flags:\n");
 	int i=0;
 	while(long_options[i].name != NULL) {
-		printf("\t--%-16s-%c\n", long_options[i].name, long_options[i].val);
+		printf("\t--%-24s-%c\n", long_options[i].name, long_options[i].val);
 		i++;
 	}
 	exit(0);
