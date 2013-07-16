@@ -431,21 +431,24 @@ int sync_walk_notifymark(int notify_d, options_t *options_p, const char *dirpath
 		return errno;
 	}
 
-	initsync_t initsync = INITSYNC_DO;
+//	initsync_t initsync = INITSYNC_DO;
 
 	FTSENT *node;
 	while((node = fts_read(tree))) {
 		switch(node->fts_info) {
-			case FTS_DP:	// Duplicates:
+			// Duplicates:
+			case FTS_DP:
 			case FTS_DEFAULT:
 			case FTS_SL:
 			case FTS_SLNONE:
 			case FTS_F:
 				continue;
-			case FTS_D:	// To sync:
+			// To sync:
+			case FTS_D:
 			case FTS_DOT:
 				break;
-			case FTS_ERR:	// Error cases:
+			// Error cases:
+			case FTS_ERR:
 			case FTS_NS:
 			case FTS_NSOK:
 			case FTS_DNR:
@@ -471,9 +474,9 @@ int sync_walk_notifymark(int notify_d, options_t *options_p, const char *dirpath
 		}
 
 		printf_dd("Debug2: marking \"%s\" (depth %u)\n", node->fts_path, node->fts_level);
-		int wd = sync_notify_mark(notify_d, options_p, node->fts_accpath, node->fts_path, node->fts_pathlen, indexes_p, node->fts_statp->st_mode&S_IFDIR ? initsync : INITSYNC_SKIP);
-		if(node->fts_statp->st_mode&S_IFDIR)
-			initsync = INITSYNC_SKIP;
+		int wd = sync_notify_mark(notify_d, options_p, node->fts_accpath, node->fts_path, node->fts_pathlen, indexes_p, INITSYNC_SKIP);//, node->fts_statp->st_mode&S_IFDIR ? initsync : INITSYNC_SKIP);
+//		if(node->fts_statp->st_mode&S_IFDIR)
+//			initsync = INITSYNC_SKIP;
 
 		if(wd < 0) {
 			if(_printf_e)
@@ -493,6 +496,9 @@ int sync_walk_notifymark(int notify_d, options_t *options_p, const char *dirpath
 			printf_e("Error: Got error while fts_close(): %s (errno: %i).\n", strerror(errno), errno);
 		return errno;
 	}
+
+	if(sync_initialsync(dirpath, options_p))
+		return -1;
 
 	return 0;
 }
