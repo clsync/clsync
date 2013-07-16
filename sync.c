@@ -22,6 +22,10 @@
 #include "fileutils.h"
 #include "malloc.h"
 
+
+// This function checks file path by rules' expressions (from file)
+// Return: action for the "file path"
+
 static ruleaction_t rules_check(const char *fpath, mode_t st_mode, rule_t *rules_p) {
 	ruleaction_t action = RULE_END;
 
@@ -51,6 +55,9 @@ static ruleaction_t rules_check(const char *fpath, mode_t st_mode, rule_t *rules
 	return action;
 }
 
+// This function removes necessary rows from hash_tables if some watching descriptor closed
+// Return: 0 on success, non-zero on fail
+
 static inline int indexes_remove_bywd(indexes_t *indexes_p, int wd) {
 	int ret=0;
 
@@ -66,6 +73,9 @@ static inline int indexes_remove_bywd(indexes_t *indexes_p, int wd) {
 	return ret;
 }
 
+// This function add necessary rows to hash_tables if some watching descriptor opened
+// Return: 0 on success, non-zero on fail
+
 static inline int indexes_add(indexes_t *indexes_p, int wd, const char *fpath_const, size_t fpathlen) {
 	char *fpath = xmalloc(fpathlen+1);
 	memcpy(fpath, fpath_const, fpathlen+1);
@@ -74,6 +84,9 @@ static inline int indexes_add(indexes_t *indexes_p, int wd, const char *fpath_co
 
 	return 0;
 }
+
+// This function is lookup file path by watching descriptor from hash_tables
+// Return: file path on success, NULL on fail
 
 static inline char *indexes_wd2fpath(indexes_t *indexes_p, int wd) {
 	return g_hash_table_lookup(indexes_p->wd2fpath_ht, GINT_TO_POINTER(wd));
@@ -133,11 +146,11 @@ threadinfo_t *_sync_exec_newthread() {
 		threadsinfo_p->threads = (threadinfo_t *)xrealloc((char *)threadsinfo_p->threads, sizeof(*threadsinfo_p->threads)*(threadsinfo_p->allocated));
 	}
 
-	printf_dd("Debug2: _sync_exec_newthread -> %i\n", threadsinfo_p->used);
+	printf_dd("Debug2: _sync_exec_newthread -> thread_num: %i; used: %i\n", threadsinfo_p->used, threadsinfo_p->used+1);
 	return &threadsinfo_p->threads[threadsinfo_p->used++];
 }
 
-int _sync_exec_delthread(int thread_num) {
+int _sync_exec_delthread_bynum(int thread_num) {
 	printf_dd("Debug2: _sync_exec_delthread(%i)\n", thread_num);
 	threadsinfo_t *threadsinfo_p = _sync_exec_getthreadsinfo();
 	if(threadsinfo_p == NULL)
@@ -147,28 +160,39 @@ int _sync_exec_delthread(int thread_num) {
 		return EINVAL;
 
 	threadsinfo_p->used--;
-	if(thread_num != threadsinfo_p->used)
+	if(thread_num != threadsinfo_p->used) {
+		printf_ddd("Debug3: _sync_exec_delthread(): %i -> %i; left: %i\n", threadsinfo_p->used, thread_num, threadsinfo_p->used);
 		memcpy(&threadsinfo_p->threads[thread_num], &threadsinfo_p->threads[threadsinfo_p->used], sizeof(*threadsinfo_p->threads));
+	}
 
 	return 0;
 }
 
-int _sync_exec_idle() {
+int _sync_exec_threads_gc() {
 	threadsinfo_t *threadsinfo_p = _sync_exec_getthreadsinfo();
 	if(threadsinfo_p == NULL)
 		return errno;
 	
-	printf_dd("Debug2: _sync_exec_idle(): There're %i threads.\n", threadsinfo_p->used);
-	int i=0;
-	while(i < threadsinfo_p->used) {
-		int ret;
-		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[i];
+	printf_dd("Debug2: _sync_exec_threads_gc(): There're %i threads.\n", threadsinfo_p->used);
+	int thread_num=0;
+	int thread_num_r;	// TODO: find-out why is thread_num_r required.
+				// I have to do "thread_num = thread_num_r" after pthread_tryjoin_np(),
+				// otherwise "thread_num" is becoming "zero", again :(
+	while(thread_num < threadsinfo_p->used) {
+		int ret=0;
+		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[thread_num];
 
+		thread_num_r=thread_num;
+		printf_ddd("Debug3: _sync_exec_threads_gc(): Trying thread #%i (thread_num_r: %i).\n", thread_num, thread_num_r);
 		int err;
 		switch((err=pthread_tryjoin_np(threadinfo_p->pthread, (void **)&ret))) {
 			case 0:
+				thread_num = thread_num_r;
+				printf_ddd("Debug3: _sync_exec_threads_gc(): Thread #%i is finished with exitcode %i, deleting (thread_num_r: %i).\n", thread_num, ret, thread_num_r);
 				break;
 			case EBUSY:
+				printf_ddd("Debug3: _sync_exec_threads_gc(): Thread #%i is busy, skipping.\n", thread_num);
+				thread_num++;
 				continue;
 			default:
 				printf_e("Error: Got error while pthread_tryjoin_np(): %s (errno: %i).\n", strerror(err), err);
@@ -186,13 +210,15 @@ int _sync_exec_idle() {
 				printf_e("Error: Got error from callback function: %s (errno: %i).\n", strerror(err), err);
 				return err;
 			}
-		if(_sync_exec_delthread(i))
+		if(_sync_exec_delthread_bynum(thread_num))
 			return errno;
-
-		i++;
 	}
 
 	return 0;
+}
+
+int _sync_exec_idle() {
+	return _sync_exec_threads_gc();
 }
 
 int _sync_exec_cleanup() {
