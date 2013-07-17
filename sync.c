@@ -23,7 +23,7 @@
 #include "malloc.h"
 
 
-// This function checks file path by rules' expressions (from file)
+// Checks file path by rules' expressions (from file)
 // Return: action for the "file path"
 
 static ruleaction_t rules_check(const char *fpath, mode_t st_mode, rule_t *rules_p) {
@@ -55,7 +55,7 @@ static ruleaction_t rules_check(const char *fpath, mode_t st_mode, rule_t *rules
 	return action;
 }
 
-// This function removes necessary rows from hash_tables if some watching descriptor closed
+// Removes necessary rows from hash_tables if some watching descriptor closed
 // Return: 0 on success, non-zero on fail
 
 static inline int indexes_remove_bywd(indexes_t *indexes_p, int wd) {
@@ -73,7 +73,7 @@ static inline int indexes_remove_bywd(indexes_t *indexes_p, int wd) {
 	return ret;
 }
 
-// This function add necessary rows to hash_tables if some watching descriptor opened
+// Adds necessary rows to hash_tables if some watching descriptor opened
 // Return: 0 on success, non-zero on fail
 
 static inline int indexes_add_wd(indexes_t *indexes_p, int wd, const char *fpath_const, size_t fpathlen) {
@@ -87,12 +87,14 @@ static inline int indexes_add_wd(indexes_t *indexes_p, int wd, const char *fpath
 	return 0;
 }
 
-// This function is lookup file path by watching descriptor from hash_tables
+// Lookups file path by watching descriptor from hash_tables
 // Return: file path on success, NULL on fail
 
 static inline char *indexes_wd2fpath(indexes_t *indexes_p, int wd) {
 	return g_hash_table_lookup(indexes_p->wd2fpath_ht, GINT_TO_POINTER(wd));
 }
+
+//
 
 static inline int indexes_fpath2wd(indexes_t *indexes_p, const char *fpath) {
 	gpointer gint_p = g_hash_table_lookup(indexes_p->fpath2wd_ht, fpath);
