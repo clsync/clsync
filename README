@@ -195,6 +195,18 @@ Example of usage, that works on my PC is in directory "example". Just run
 "example/testdir/from". All modifications should appear (with some delay) in
 directory "example/testdir/to" ;)
 
+
+Installing:
+
+First of all, you should install dependencies to compile clsync. As you can
+see from GNUmakefile clsync depends only on "glib-2.0", so on debian-like
+systems you should execute something like "apt-get install libglib2.0-dev".
+
+Next step is compiling. To compile usually it's enough to execute "make".
+
+Next step in installing. To install usually it's enough to execute
+"su -c 'PREFIX=/usr/bin make install'".
+
                  _____________________________________________                
 
 4.) Known issues

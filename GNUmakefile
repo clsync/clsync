@@ -1,4 +1,5 @@
 
+PREFIX ?= /usr/local/bin
 
 CFLAGS += -pipe -Wall -O2 -ggdb3 -fstack-protector-all
 DEBUGCFLAGS = -pipe -Wall -Werror -ggdb3 -Wno-error=unused-variable -fstack-protector-all
@@ -34,5 +35,11 @@ onoldsystem:
 
 clean:
 	rm -f $(binary) $(binarydebug) $(objs)
+
+install:
+	install -m 755 -o root -s clsync "$(PREFIX)"/
+
+deinstall:
+	rm -f "$(PREFIX)"/clsync
 
 
