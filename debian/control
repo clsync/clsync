@@ -1,0 +1,15 @@
+Source: clsync
+Section: unknown
+Priority: extra
+Maintainer: Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
+Build-Depends: debhelper (>= 8.0.0)
+Standards-Version: 3.9.4
+Homepage: http://ut.mephi.ru/oss
+Vcs-Git: git://git.mephi.ru/clsync
+#Vcs-Browser: http://git.debian.org/?p=collab-maint/clsync.git;a=summary
+
+Package: clsync
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: <insert up to 60 chars description>
+ <insert long description, indented with spaces>

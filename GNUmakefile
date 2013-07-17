@@ -1,5 +1,8 @@
 
-PREFIX ?= /usr/local
+PREFIX ?= /usr
+ifneq ($(DESTDIR),)
+PREFIX = $(DESTDIR)/$(PREFIX)
+endif
 
 CFLAGS += -pipe -Wall -O2 -ggdb3 -fstack-protector-all
 DEBUGCFLAGS = -pipe -Wall -Werror -ggdb3 -Wno-error=unused-variable -fstack-protector-all
