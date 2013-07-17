@@ -393,6 +393,7 @@ int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, co
 	}
 
 	switch(options_p->notifyengine) {
+#ifdef FANOTIFY_SUPPORT
 		case NE_FANOTIFY: {
 			int fanotify_d = notify_d;
 
@@ -405,6 +406,7 @@ int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, co
 			}
 			break;
 		}
+#endif
 		case NE_INOTIFY: {
 			int inotify_d = notify_d;
 
@@ -517,6 +519,7 @@ int sync_walk_notifymark(int notify_d, options_t *options_p, const char *dirpath
 
 int sync_notify_init(options_t *options_p) {
 	switch(options_p->notifyengine) {
+#ifdef FANOTIFY_SUPPORT
 		case NE_FANOTIFY: {
 			int fanotify_d = fanotify_init(FANOTIFY_FLAGS, FANOTIFY_EVFLAGS);
 			if(fanotify_d == -1) {
@@ -526,6 +529,7 @@ int sync_notify_init(options_t *options_p) {
 
 			return fanotify_d;
 		}
+#endif
 		case NE_INOTIFY: {
 			int inotify_d = inotify_init1(INOTIFY_FLAGS);
 			if(inotify_d == -1) {
@@ -766,6 +770,7 @@ int sync_idle(int notify_d, options_t *options_p, rule_t *rules_p, indexes_t *in
 	return 0;
 }
 
+#ifdef FANOTIFY_SUPPORT
 int sync_fanotify_loop(int fanotify_d, options_t *options_p, rule_t *rules_p, indexes_t *indexes_p) {
 	struct fanotify_event_metadata buf[BUFSIZ/sizeof(struct fanotify_event_metadata) + 1];
 	int state = STATE_RUNNING;
@@ -800,6 +805,7 @@ int sync_fanotify_loop(int fanotify_d, options_t *options_p, rule_t *rules_p, in
 	}
 	return 0;
 }
+#endif
 
 static inline int sync_inotify_wait(int inotify_d, options_t *options_p) {
 	static struct timeval tv={0};
@@ -1002,8 +1008,10 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, rule_t *rules_p, inde
 
 int sync_notify_loop(int notify_d, options_t *options_p, rule_t *rules_p, indexes_t *indexes_p) {
 	switch(options_p->notifyengine) {
+#ifdef FANOTIFY_SUPPORT
 		case NE_FANOTIFY:
 			return sync_fanotify_loop(notify_d, options_p, rules_p, indexes_p);
+#endif
 		case NE_INOTIFY:
 			return sync_inotify_loop (notify_d, options_p, rules_p, indexes_p);
 	}

@@ -42,7 +42,9 @@
 #include <signal.h>
 #include <wait.h>
 #include <fts.h>
+#ifdef FANOTIFY_SUPPORT
 #include <sys/fanotify.h>
+#endif
 #include <sys/inotify.h>
 #include <dirent.h>
 #include <glib.h>
@@ -67,7 +69,9 @@ enum flags_enum {
 	QUITE		= 'q',
 	VERBOSE		= 'v',
 	OUTLISTSDIR	= 'd',
+#ifdef FANOTIFY_SUPPORT
 	FANOTIFY	= 'f',
+#endif
 	INOTIFY		= 'i',
 	LABEL		= 'l',
 	BFILETHRESHOLD	= 'B',
@@ -117,7 +121,9 @@ typedef struct options options_t;
 
 enum notifyengine_enum {
 	NE_UNDEFINED = 0,
+#ifdef FANOTIFY_SUPPORT
 	NE_FANOTIFY,
+#endif
 	NE_INOTIFY
 };
 typedef enum notifyengine_enum notifyenfine_t;

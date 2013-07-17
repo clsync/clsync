@@ -201,9 +201,7 @@ directory "example/testdir/to" ;)
 
     1.) Doesn't compiles on old systems
 
-	In this case you should fix this things:
-	    - Remove all fanotify code from "sync.c", "main.c" and "common.c"
-	    - Replace "gnu11" with "gnu99" in "GNUmakefile"
+	In this case you should compile with command "make onoldsystem"
 
     2.) Exits with error "Error: Cannot inotify_add_watch() on [...]"
 

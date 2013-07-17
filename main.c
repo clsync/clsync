@@ -34,7 +34,9 @@ static struct option long_options[] =
 	{"verbose",		no_argument,		NULL,	VERBOSE},
 	{"debug",		no_argument,		NULL,	DEBUG},
 	{"quite",		no_argument,		NULL,	QUITE},
+#ifdef FANOTIFY_SUPPORT
 	{"fanotify",		no_argument,		NULL,	FANOTIFY},
+#endif
 	{"inotify",		no_argument,		NULL,	INOTIFY},
 	{"label",		no_argument,		NULL,	LABEL},
 	{"help",		no_argument,		NULL,	HELP},
@@ -55,7 +57,11 @@ int parse_arguments(int argc, char *argv[], struct options *options) {
 	int c;
 	int option_index = 0;
 	while(1) {
+#ifdef FANOTIFY_SUPPORT
 		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhfa", long_options, &option_index);
+#else
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDha", long_options, &option_index);
+#endif
 	
 		if (c == -1) break;
 		switch (c) {
@@ -80,9 +86,11 @@ int parse_arguments(int argc, char *argv[], struct options *options) {
 			case 'B':
 				options->bfilethreshold = (unsigned long)atol(optarg);
 				break;
+#ifdef FANOTIFY_SUPPORT
 			case 'f':
 				options->notifyengine = NE_FANOTIFY;
 				break;
+#endif
 			case 'i':
 				options->notifyengine = NE_INOTIFY;
 				break;
@@ -237,9 +245,11 @@ int main(int argc, char *argv[]) {
 	if(options.flags[DEBUG])
 		debug_print_flags();
 
+#ifdef FANOTIFY_SUPPORT
 	if(options.notifyengine != NE_INOTIFY) {
 		printf_e("Warning: fanotify is not fully supported, yet!\n");
 	}
+#endif
 
 	if(options.rulfpath != NULL)
 		ret = parse_rules_fromfile(options.rulfpath, rules);
