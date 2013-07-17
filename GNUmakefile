@@ -35,6 +35,7 @@ onoldsystem:
 
 clean:
 	rm -f $(binary) $(binarydebug) $(objs)
+	rm -rf example/testdir example/rules
 
 install:
 	install -m 755 -o root -s clsync "$(PREFIX)"/bin/
