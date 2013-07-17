@@ -72,7 +72,9 @@ program, like "directory creation" or "file deletion". So I switched to
 
 3.) How to use
 
-Well, let's see:
+First of all, I recommend you to look into the "man" ;).
+
+However, well, let's see:
 
 d[13:25:13] [xaionaro@linux ~/clsync]$ ./clsync 
 syntax: clsync [options] <watch dir> <action script> [file with rules regexps]
@@ -107,10 +109,10 @@ events' lists
 * --bigfilethreshold - file size theshold to mark file as big (def: 134217728)
 * --bigfilecollectdelay - delay to collect events for big files (def: 1800)
   --verbose	- increases verbosity (doesn't do anything at the moment)
-  --debug	- increases debug output
+  --debug	- increases debugging output
   --quite	- don't output errors
-  --fanotify	- use "fanotify" engine instead of "inotify"
-  --inotify	- use "inotify" engine instead of "fanotify" (def)
+  --fanotify	- use "fanotify" subsystem instead of "inotify"
+  -inotify	- use "inotify" subsystem instead of "fanotify" (def)
 * --label	- set label of current clsync instance
   --help	- output the same info as above
 
@@ -129,7 +131,7 @@ sync by list it's required a directory for temporary files (with lists of
 events). So you're aggregation a lot of actions per collect-delay period,
 it's need to provide it and set the path to it to this parameter.
 
---fanotify - Enables "fanotify" engine instead of "inotify". However
+--fanotify - Enables "fanotify" subsystem instead of "inotify". However
 developing of "fanotify" support was been frozen at the start of this program
 life, so "fanotify" doesn't work at the moment. Don't use it :)
 
@@ -157,17 +159,18 @@ The clsync with run "action script" every time, when it will want to notify
 about requirement of sync. So the "action script" should do this syncing by
 this notifications.
 
-The clsync can run "action script" with the ways:
+The clsync can run "action script" with three ways:
     a.) action_script initialsync label dirpath
     b.) action_script sync label evmask path
     c.) action_script synclist label listpath
 
 In all three cases, clsync passes parameter "label" (the label of current, 
 instance, see "--label").
-In case "a", clsync asks "action script" to recursivly sync the dir "dirpath".
-In case 'b', clsync asks "action script" to non-recursivly sync the file/dir
+In case "a", clsync asks "action script" to recursively sync the dir
+"dirpath".
+In case 'b', clsync asks "action script" to non-recursively sync the file/dir
 "path" due to event of mask "evmask".
-In case "c", clsync asks "action script" to non-recursivly sync files/dirs
+In case "c", clsync asks "action script" to non-recursively sync files/dirs
 from list in file "listpath".
 
 Format of list-files:
@@ -205,7 +208,7 @@ systems you should execute something like "apt-get install libglib2.0-dev".
 Next step is compiling. To compile usually it's enough to execute "make".
 
 Next step in installing. To install usually it's enough to execute
-"su -c 'PREFIX=/usr/bin make install'".
+"su -c 'PREFIX=/usr make install'".
 
                  _____________________________________________                
 

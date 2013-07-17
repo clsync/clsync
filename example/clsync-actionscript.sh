@@ -11,7 +11,9 @@ ARG1="$4"
 function initialsync() {
 	DIR="$1"
 
-	rsync -avp --delete "$DIR"/ "$TO"/
+#	rsync -avp --delete "$DIR"/ "$TO"/
+	#echo "$DIR" | awk -F '/' '{OFS="/"; $1=""; startdir="'"$FROM"'"; print substr($0, length(startdir)+1)}' | tee testdir/log0 | rsync -vlptgorD --delete-before --include-from=- --exclude='*' "$FROM"/ "$TO"/
+	echo "$DIR" | awk -F '/' '{OFS="/"; $1=""; startdir="'"$FROM"'"; print substr($0, length(startdir)+1)}' | tee testdir/log0 | rsync -vlptgorD --delete-before --files-from=- "$FROM"/ "$TO"/
 
 	return $?
 }
@@ -19,7 +21,7 @@ function initialsync() {
 function synclist() {
 	LISTFILE="$1"
 
-	awk -F '/' '{OFS="/"; $1=""; startdir="'"$FROM"'"; print substr($0, length(startdir)+1)}' < "$LISTFILE" | tee testdir/log0 | rsync -vlptgodD --delete-before --include-from=- --exclude='*' "$FROM"/ "$TO"/
+	awk -F '/' '{OFS="/"; $1=""; startdir="'"$FROM"'"; print substr($0, length(startdir)+1)}' < "$LISTFILE" | tee testdir/log1 | rsync -vlptgodD --delete-before --include-from=- --exclude='*' "$FROM"/ "$TO"/
 	
 	return $?
 }

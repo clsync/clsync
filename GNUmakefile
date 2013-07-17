@@ -1,5 +1,5 @@
 
-PREFIX ?= /usr/local/bin
+PREFIX ?= /usr/local
 
 CFLAGS += -pipe -Wall -O2 -ggdb3 -fstack-protector-all
 DEBUGCFLAGS = -pipe -Wall -Werror -ggdb3 -Wno-error=unused-variable -fstack-protector-all
@@ -37,9 +37,11 @@ clean:
 	rm -f $(binary) $(binarydebug) $(objs)
 
 install:
-	install -m 755 -o root -s clsync "$(PREFIX)"/
+	install -m 755 -o root -s clsync "$(PREFIX)"/bin/
+	install -m 755 -o root man/man1/clsync.1 "$(PREFIX)"/share/man/man1/
+	gzip "$(PREFIX)"/share/man/man1/clsync.1
 
 deinstall:
-	rm -f "$(PREFIX)"/clsync
+	rm -f "$(PREFIX)"/bin/clsync "$(PREFIX)"/share/man/man1/clsync.1.gz
 
 
