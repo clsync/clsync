@@ -40,6 +40,7 @@ static struct option long_options[] =
 	{"inotify",		no_argument,		NULL,	INOTIFY},
 	{"label",		no_argument,		NULL,	LABEL},
 	{"help",		no_argument,		NULL,	HELP},
+	{"version",		no_argument,		NULL,	VERSION},
 	{0,			0,			0,	0}
 };
 
@@ -53,14 +54,19 @@ int syntax() {
 	exit(0);
 }
 
+int version() {
+	printf("clsync v%i.%i\n\t"AUTHOR"\n", VERSION_MAJ, VERSION_MIN);
+	exit(0);
+}
+
 int parse_arguments(int argc, char *argv[], struct options *options) {
 	int c;
 	int option_index = 0;
 	while(1) {
 #ifdef FANOTIFY_SUPPORT
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhfa", long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhaVf", long_options, &option_index);
 #else
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDha", long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhaV",  long_options, &option_index);
 #endif
 	
 		if (c == -1) break;
@@ -94,6 +100,8 @@ int parse_arguments(int argc, char *argv[], struct options *options) {
 			case 'i':
 				options->notifyengine = NE_INOTIFY;
 				break;
+			case 'V':
+				version();
 			default:
 				options->flags[c]++;
 				break;

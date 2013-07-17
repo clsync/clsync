@@ -23,6 +23,11 @@
 
 #define ALLOC_PORTION	(1<<10)
 
+#define AUTHOR "Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C"
+
+#define VERSION_MAJ	0
+#define VERSION_MIN	0
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -75,6 +80,7 @@ enum flags_enum {
 	INOTIFY		= 'i',
 	LABEL		= 'l',
 	BFILETHRESHOLD	= 'B',
+	VERSION		= 'V',
 };
 typedef enum flags_enum flags_t;
 

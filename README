@@ -93,6 +93,7 @@ possible options:
         --inotify                 -i
         --label                   -l
         --help                    -h
+        --version                 -V
 
 "watch dir"	- what dir to recursively watch for events
 "action script"	- path to script, that will be executed to process events
@@ -110,11 +111,12 @@ events' lists
 * --bigfilecollectdelay - delay to collect events for big files (def: 1800)
   --verbose	- increases verbosity (doesn't do anything at the moment)
   --debug	- increases debugging output
-  --quite	- don't output errors
-  --fanotify	- use "fanotify" subsystem instead of "inotify"
-  -inotify	- use "inotify" subsystem instead of "fanotify" (def)
-* --label	- set label of current clsync instance
-  --help	- output the same info as above
+  --quite	- suppresses errors output
+  --fanotify	- uses "fanotify" subsystem instead of "inotify"
+  -inotify	- uses "inotify" subsystem instead of "fanotify" (def)
+* --label	- sets label of current clsync instance
+  --help	- outputs the same info as above
+  --version	- outputs version of clsync
 
 
 Now, let me explain few things:
