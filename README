@@ -75,8 +75,8 @@ program, like "directory creation" or "file deletion". So I switched to
 Well, let's see:
 
 d[13:25:13] [xaionaro@linux ~/clsync]$ ./clsync 
-syntax: clsync [flags] <watch dir> <action script> [file with rules regexps]
-possible flags:
+syntax: clsync [options] <watch dir> <action script> [file with rules regexps]
+possible options:
         --background              -b
         --pthread                 -p
         --collectdelay            -t

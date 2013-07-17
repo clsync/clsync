@@ -42,7 +42,7 @@ static struct option long_options[] =
 };
 
 int syntax() {
-	printf("syntax: clsync [flags] <watch dir> <action script> [file with rules regexps]\npossible flags:\n");
+	printf("syntax: clsync [flags] <watch dir> <action script> [file with rules regexps]\npossible options:\n");
 	int i=0;
 	while(long_options[i].name != NULL) {
 		printf("\t--%-24s-%c\n", long_options[i].name, long_options[i].val);
