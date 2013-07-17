@@ -531,7 +531,11 @@ int sync_notify_init(options_t *options_p) {
 		}
 #endif
 		case NE_INOTIFY: {
+#ifdef OLDSYSTEM
+			int inotify_d = inotify_init();
+#else
 			int inotify_d = inotify_init1(INOTIFY_FLAGS);
+#endif
 			if(inotify_d == -1) {
 				printf_e("Error: cannot inotify_init(%i): %s (errno: %i).\n", INOTIFY_FLAGS, strerror(errno), errno);
 				return -1;

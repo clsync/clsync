@@ -8,7 +8,7 @@ CFLAGS += -pipe -Wall -O2 -ggdb3 -fstack-protector-all
 DEBUGCFLAGS = -pipe -Wall -Werror -ggdb3 -Wno-error=unused-variable -fstack-protector-all
 
 NORMSYSTEMCFLAGS = -std=gnu11
-OLDSYSTEMCFLAGS = -std=gnu99
+OLDSYSTEMCFLAGS = -std=gnu99 -DOLDSYSTEM
 
 LDFLAGS += $(shell pkg-config --libs glib-2.0) -lpthread
 INC += $(shell pkg-config --cflags glib-2.0)
