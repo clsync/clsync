@@ -236,7 +236,7 @@ Next step in installing. To install usually it's enough to execute
 "su -c 'make install'".
 
 Also, debian-users can use my repository to install the clsync:
-deb [arth=amd64] http://mirror.mephi.ru/debian-mephi/ unstable main
+deb [arch=amd64] http://mirror.mephi.ru/debian-mephi/ unstable main
 
                  _____________________________________________                
 
