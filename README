@@ -169,21 +169,22 @@ The clsync with run "action script" every time, when it will want to notify
 about requirement of sync. So the "action script" should do this syncing by
 this notifications.
 
-The clsync can run "action script" with three ways:
+The clsync can run "action script" with four ways:
     a.) action_script initialsync label dirpath
     b.) action_script sync label evmask path
     c.) action_script synclist label listpath
     d.) action_script rsynclist label rsynclistpath
 
-In all three cases, clsync passes parameter "label" (the label of current, 
+In all four cases, clsync passes parameter "label" (the label of current, 
 instance, see "--label").
 In case "a", clsync asks "action script" to recursively sync the dir
 "dirpath".
 In case 'b', clsync asks "action script" to non-recursively sync the file/dir
 "path" due to event of mask "evmask".
 In case "c", clsync asks "action script" to non-recursively sync files/dirs
+from list in file "listpath".
 In case "d", clsync asks "action script" to run "rsync" with parameters
-'-aH --delete-before --include-from="rsynclistpath" --exclude "*"'
+'-aH --delete-before --include-from="rsynclistpath" --exclude "*"'.
 
 Format of list-files:
 
