@@ -6,12 +6,13 @@ revision.h
 *.o
 
 # linked:
-clsync
-clsync-debug
+/clsync
+/clsync-debug
 
 # other:
 build
-rules
+testdir/rules
+/rules
 test
 test0
 test1
