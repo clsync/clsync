@@ -3,6 +3,7 @@ Version: 0.0-1
 Architecture: amd64
 Maintainer: Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
 Installed-Size: 30
+Recommends: rsync
 Section: admin
 Priority: optional
 Homepage: http://ut.mephi.ru/oss
