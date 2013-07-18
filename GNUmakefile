@@ -47,6 +47,7 @@ clean:
 install:
 	install -m 755 -o root -s clsync "$(PREFIX)"/bin/
 	install -m 755 -o root man/man1/clsync.1 "$(PREFIX)"/share/man/man1/
+	rm -f "$(PREFIX)"/share/man/man1/clsync.1.gz
 	gzip "$(PREFIX)"/share/man/man1/clsync.1
 
 deinstall:
