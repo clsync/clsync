@@ -46,14 +46,15 @@ The best known (for me) replacement for this utility is "lsyncd", however:
 for example:
 	    - It's more difficult to maintain the code with ordinary sysadmin.
 	    - It really eats 100% CPU sometimes.
-	    - It required LUA libs, that cannot be easily installed to few.
+	    - It requires LUA libs, that cannot be easily installed to few
 of our systems.
-	- It a little buggy. That may be easily fixed for our cases, but LUA:(
-	- It doesn't support pthread or something like that to serve huge
-directories with a lot of containers right.
+	- It's a little buggy. That may be easily fixed for our cases,
+but LUA. :(
+	- It doesn't support pthread or something like that. It's necessary
+to serve huge directories with a lot of containers right.
 	- It cannot run rsync for a pack of files. It runs rsync for every
 event. :(
-	- Too complex in configuration for our situation.
+	- Sometimes, it's too complex in configuration for our situation.
 	- It can't set another event-collecting delay for big files. We don't
 want to sync big files (>1GiB) so often as ordinary files.
 
@@ -66,8 +67,8 @@ good and useful utility, just it's not appropriate for us.
 
 It's said, that fanotify is much better, than inotify. So I started to write 
 this program with using of fanotify. However I encountered the problem, that
-fanotify was unable to catch some important events atthe moment of writing the
-program, like "directory creation" or "file deletion". So I switched to
+fanotify was unable to catch some important events at the moment of writing
+the program, like "directory creation" or "file deletion". So I switched to
 "inotify", leaving the code for "fanotify" in the safety... So, don't use
 "fanotify" in this utility ;).
 
@@ -220,7 +221,10 @@ systems you should execute something like "apt-get install libglib2.0-dev".
 Next step is compiling. To compile usually it's enough to execute "make".
 
 Next step in installing. To install usually it's enough to execute
-"su -c 'PREFIX=/usr make install'".
+"su -c 'make install'".
+
+Also, debian-users can use my repository to install the clsync:
+deb [arth=amd64] http://mirror.mephi.ru/debian-mephi/ unstable main
 
                  _____________________________________________                
 
