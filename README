@@ -54,8 +54,12 @@ of our systems.
 directories with a lot of containers right.
 	- It cannot run rsync for a pack of files. It runs rsync for every
 event. :(
+	- Too complex in configuration for our situation.
 	- It can't set another event-collecting delay for big files. We don't
 want to sync big files (>1GiB) so often as ordinary files.
+
+Sorry, if I'm wrong. Let me know if it is, please :). "lsyncd" - is really
+good and useful utility, just it's not appropriate for us.
 
                  _____________________________________________                
 
@@ -84,6 +88,8 @@ possible options:
         --collectdelay            -t
         --commondelay             -w
         --outlistsdir             -d
+        --rsync                   -R
+        --dontunlinklists         -U
         --bigfilethreshold        -B
         --bigfilecollectdelay     -T
         --verbose                 -v
@@ -107,13 +113,15 @@ Options with "*" requires an argument:
 * --commondelay	- delay in addition for all queues (def: 15)
 * --outlistsdir	- path to directory, where clsync should temporary save his
 events' lists
+  --rsync	- forces to generate list-files for "--include-from" of rsync
+  --dontunlinklists - forces to do not delete list-files
 * --bigfilethreshold - file size theshold to mark file as big (def: 134217728)
 * --bigfilecollectdelay - delay to collect events for big files (def: 1800)
   --verbose	- increases verbosity (doesn't do anything at the moment)
   --debug	- increases debugging output
   --quite	- suppresses errors output
   --fanotify	- uses "fanotify" subsystem instead of "inotify"
-  -inotify	- uses "inotify" subsystem instead of "fanotify" (def)
+  --inotify	- uses "inotify" subsystem instead of "fanotify" (def)
 * --label	- sets label of current clsync instance
   --help	- outputs the same info as above
   --version	- outputs version of clsync
