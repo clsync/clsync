@@ -45,9 +45,8 @@ The best known (for me) replacement for this utility is "lsyncd", however:
 	- It's code is >½ on LUA. There a lot of problems connected with it,
 for example:
 	    - It's more difficult to maintain the code with ordinary sysadmin.
-	    - It really eats 100% CPU sometimes, however author of "lsyncd"
-ensures, that "LUA" is fast enough.
-	    - It required LUA libs, that cannot be easily installed to few
+	    - It really eats 100% CPU sometimes.
+	    - It required LUA libs, that cannot be easily installed to few.
 of our systems.
 	- It a little buggy. That may be easily fixed for our cases, but LUA:(
 	- It doesn't support pthread or something like that to serve huge
