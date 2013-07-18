@@ -204,6 +204,18 @@ Event mask is bitmask sum of events of the file/dir, that were been aggregated
 for collect-delay. You can learn that bits in "/usr/include/linux/inotify.h".
 
 
+Rules file:
+
+Filter riles can be placed into rules-file with one rule per line.
+
+Rule format: [+|-][fd*]regexp
+
+"+" - means include; "-" - means exclude;
+"f" - means file;    "d" - means directory; "*" - means all.
+
+For example: -*/[Tt]estdir
+
+
 Example:
 
 Example of usage, that works on my PC is in directory "example". Just run

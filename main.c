@@ -242,10 +242,21 @@ int becomedaemon() {
 	return 0;
 }
 
+int main_rehash(options_t *options_p) {
+	printf_ddd("Debug3: main_rehash()\n");
+	int ret=0;
+
+	if(options_p->rulfpath != NULL)
+		ret = parse_rules_fromfile(options_p->rulfpath, options_p->rules);
+	else
+		options_p->rules[0].action = RULE_END;
+
+	return ret;
+}
+
 int main(int argc, char *argv[]) {
 	struct options options;
 	int ret = 0;
-	rule_t rules[MAXRULES];
 	memset(&options, 0, sizeof(options));
 	options.notifyengine 			   = DEFAULT_NOTIFYENGINE;
 	options.commondelay 			   = DEFAULT_COMMONDELAY;
@@ -270,10 +281,7 @@ int main(int argc, char *argv[]) {
 	}
 #endif
 
-	if(options.rulfpath != NULL)
-		ret = parse_rules_fromfile(options.rulfpath, rules);
-	else
-		rules[0].action = RULE_END;
+	main_rehash(&options);
 
 	if(access(options.actfpath, X_OK) == -1) {
 		printf_e("Error: \"%s\" is not executable: %s (errno: %i).\n", options.actfpath, strerror(errno), errno);
@@ -285,11 +293,11 @@ int main(int argc, char *argv[]) {
 
 	options.watchdirlen = strlen(options.watchdir);
 	if(ret == 0)
-		ret = sync_run(&options, rules);
+		ret = sync_run(&options);
 
 	int i=0;
-	while((i < MAXRULES) && (rules[i].action != RULE_END))
-		regfree(&rules[i++].expr);
+	while((i < MAXRULES) && (options.rules[i].action != RULE_END))
+		regfree(&options.rules[i++].expr);
 
 	out_flush();
 	printf_d("Debug: finished, exitcode: %i.\n", ret);

@@ -18,5 +18,5 @@
  */
 
 
-extern int sync_run(struct options *options, rule_t *rules);
+extern int sync_run(struct options *options);
 

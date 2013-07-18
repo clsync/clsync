@@ -114,6 +114,7 @@ struct queueinfo {
 typedef struct queueinfo queueinfo_t;
 
 struct options {
+	rule_t rules[MAXRULES];
 	int flags[1<<8];
 	char *label;
 	char *watchdir;

@@ -37,6 +37,12 @@ on FS events in directory
 with using
 .BR inotify (7)
 Linux kernel subsystem.
+
+In
+.I rules-file
+may be placed extended regex-rules to filter what files and
+directories to sync.
+
 .SH OPTIONS
 
 .B -b, --background
@@ -317,6 +323,26 @@ it's passed bitmask of events with the file or directory (see
 
 .RE
 
+.SH RULES
+Filter riles can be placed into
+.I rules-file
+with one rule per line.
+
+Rule format:
+.I [+|-][fd*]regexp
+
+.I +
+- means include;
+.I -
+- means exclude;
+.I f
+- means file;
+.I d
+- means directory;
+.I *
+- means all.
+
+For example: -*/[Tt]estdir
 
 .SH DIAGNOSTICS
 The following diagnostics may be issued on stderr:

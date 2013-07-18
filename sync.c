@@ -18,6 +18,7 @@
  */
 
 #include "common.h"
+#include "main.h"
 #include "output.h"
 #include "fileutils.h"
 #include "malloc.h"
@@ -460,10 +461,11 @@ int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, co
 	return wd;
 }
 
-int sync_walk_notifymark(int notify_d, options_t *options_p, const char *dirpath, rule_t *rules_p, indexes_t *indexes_p, printf_funct _printf_e) {
+int sync_walk_notifymark(int notify_d, options_t *options_p, const char *dirpath, indexes_t *indexes_p, printf_funct _printf_e) {
 	const char *rootpaths[] = {dirpath, NULL};
 	FTS *tree;
-	printf_dd("Debug2: sync_walk_notifymark(%i, options_p, \"%s\", rules_p, _printf_e).\n", notify_d, dirpath);
+	rule_t *rules_p = options_p->rules;
+	printf_dd("Debug2: sync_walk_notifymark(%i, options_p, \"%s\", _printf_e).\n", notify_d, dirpath);
 
 	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL, NULL);
 
@@ -832,7 +834,7 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 	return 0;
 }
 
-int sync_idle(int notify_d, options_t *options_p, rule_t *rules_p, indexes_t *indexes_p) {
+int sync_idle(int notify_d, options_t *options_p, indexes_t *indexes_p) {
 	int ret;
 
 	ret=_sync_exec_idle(options_p);
@@ -844,7 +846,7 @@ int sync_idle(int notify_d, options_t *options_p, rule_t *rules_p, indexes_t *in
 }
 
 #ifdef FANOTIFY_SUPPORT
-int sync_fanotify_loop(int fanotify_d, options_t *options_p, rule_t *rules_p, indexes_t *indexes_p) {
+int sync_fanotify_loop(int fanotify_d, options_t *options_p, indexes_t *indexes_p) {
 	struct fanotify_event_metadata buf[BUFSIZ/sizeof(struct fanotify_event_metadata) + 1];
 	int state = STATE_RUNNING;
 	state_p = &state;
@@ -871,7 +873,7 @@ int sync_fanotify_loop(int fanotify_d, options_t *options_p, rule_t *rules_p, in
 			metadata = FAN_EVENT_NEXT(metadata, len);
 		}
 		int ret;
-		if((ret=sync_idle(fanotify_d, options_p, rules_p, indexes_p))) {
+		if((ret=sync_idle(fanotify_d, options_p, indexes_p))) {
 			printf_e("Error: got error while sync_idle(): %s (errno: %i).\n", strerror(ret), ret);
 			return ret;
 		}
@@ -942,7 +944,7 @@ void sync_inotify_handle_dosync(gpointer fpath_gp, gpointer evinfo_gp, gpointer 
 	continue;\
 }
 
-int sync_inotify_handle(int inotify_d, options_t *options_p, rule_t *rules_p, indexes_t *indexes_p) {
+int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_p) {
 	char buf[BUFSIZ + 1];
 	size_t r = read(inotify_d, buf, BUFSIZ);
 	if(r <= 0) {
@@ -992,14 +994,14 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, rule_t *rules_p, in
 			st_size = lstat.st_size;
 		}
 
-		ruleaction_t ruleaction = rules_check(fpathfull, st_mode, rules_p);
+		ruleaction_t ruleaction = rules_check(fpathfull, st_mode, options_p->rules);
 
 		if(ruleaction == RULE_REJECT)
 			SYNC_INOTIFY_HANDLE_CONTINUE;
 
 		if(event->mask & IN_ISDIR) {
 			if(event->mask & (IN_CREATE|IN_MOVED_TO)) {			// Appeared
-				int ret = sync_walk_notifymark(inotify_d, options_p, fpathfull, rules_p, indexes_p, _printf_dd);
+				int ret = sync_walk_notifymark(inotify_d, options_p, fpathfull, indexes_p, _printf_dd);
 				if(ret)
 					printf_d("Debug: Seems, that directory \"%s\" disappeared, while trying to mark it.\n", fpathfull);
 				SYNC_INOTIFY_HANDLE_CONTINUE;
@@ -1043,13 +1045,13 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, rule_t *rules_p, in
 
 #define SYNC_INOTIFY_LOOP_IDLE {\
 	int ret;\
-	if((ret=sync_idle(inotify_d, options_p, rules_p, indexes_p))) {\
+	if((ret=sync_idle(inotify_d, options_p, indexes_p))) {\
 		printf_e("Error: got error while sync_idle(): %s (errno: %i).\n", strerror(ret), ret);\
 		return ret;\
 	}\
 }
 
-int sync_inotify_loop(int inotify_d, options_t *options_p, rule_t *rules_p, indexes_t *indexes_p) {
+int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p) {
 	int state=1;
 	state_p = &state;
 
@@ -1059,7 +1061,8 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, rule_t *rules_p, inde
 			case STATE_RUNNING:
 				break;
 			case STATE_REHASH:
-				printf_e("Error: Rehash processing is not implemented, yet. Sorry :(.\n");
+				printf_d("Debug: sync_inotify_loop(): rehashing.\n");
+				main_rehash(options_p);
 				state = STATE_RUNNING;
 				continue;
 			case STATE_TERM:
@@ -1078,7 +1081,7 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, rule_t *rules_p, inde
 			return errno;
 		}
 
-		int count=sync_inotify_handle(inotify_d, options_p, rules_p, indexes_p);
+		int count=sync_inotify_handle(inotify_d, options_p, indexes_p);
 		if(count<=0) {
 			printf_e("Error: Cannot handle with inotify events: %s (errno: %i).\n", strerror(errno), errno);
 			return errno;
@@ -1091,14 +1094,14 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, rule_t *rules_p, inde
 	return 0;
 }
 
-int sync_notify_loop(int notify_d, options_t *options_p, rule_t *rules_p, indexes_t *indexes_p) {
+int sync_notify_loop(int notify_d, options_t *options_p, indexes_t *indexes_p) {
 	switch(options_p->notifyengine) {
 #ifdef FANOTIFY_SUPPORT
 		case NE_FANOTIFY:
-			return sync_fanotify_loop(notify_d, options_p, rules_p, indexes_p);
+			return sync_fanotify_loop(notify_d, options_p, indexes_p);
 #endif
 		case NE_INOTIFY:
-			return sync_inotify_loop (notify_d, options_p, rules_p, indexes_p);
+			return sync_inotify_loop (notify_d, options_p, indexes_p);
 	}
 	printf_e("Error: unknown notify-engine: %i\n", options_p->notifyengine);
 	errno = EINVAL;
@@ -1118,7 +1121,7 @@ void sync_term(int signal) {
 	return;
 }
 
-int sync_run(options_t *options_p, rule_t *rules_p) {
+int sync_run(options_t *options_p) {
 	int ret, i;
 	indexes_t indexes = {NULL};
 	indexes.wd2fpath_ht      = g_hash_table_new_full(g_direct_hash, g_direct_equal, 0,    0);
@@ -1134,14 +1137,14 @@ int sync_run(options_t *options_p, rule_t *rules_p) {
 	int notify_d = sync_notify_init(options_p);
 	if(notify_d == -1) return errno;
 
-	ret = sync_walk_notifymark(notify_d, options_p, options_p->watchdir, rules_p, &indexes, printf_e);
+	ret = sync_walk_notifymark(notify_d, options_p, options_p->watchdir, &indexes, printf_e);
 	if(ret) return ret;
 
 	signal(SIGHUP,	sync_rehash);
 	signal(SIGTERM,	sync_term);
 	signal(SIGINT,	sync_term);
 
-	ret = sync_notify_loop(notify_d, options_p, rules_p, &indexes);
+	ret = sync_notify_loop(notify_d, options_p, &indexes);
 	if(ret) return ret;
 
 	// TODO: Do cleanup of watching points
