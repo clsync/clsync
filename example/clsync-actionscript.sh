@@ -38,6 +38,12 @@ function sync() {
 	return $?
 }
 
+function rsynclist() {
+	LISTFILE="$1"
+
+	rsync -avH --delete-before --include-from="$LISTFILE" --exclude='*' "$FROM"/ "$TO"/
+}
+
 case "$ACTION" in
 	initialsync)
 		initialsync "$ARG0" "$ARG1"
@@ -47,6 +53,9 @@ case "$ACTION" in
 		;;
 	sync)
 		sync "$ARG0" "$ARG1"
+		;;
+	rsynclist)
+		rsynclist "$ARG0" "$ARG1"
 		;;
 esac
 

@@ -63,6 +63,8 @@
 #define MAX(a,b) (a>b?a:b)
 #endif
 
+#define COLLECTDELAY_INSTANT ((unsigned int)~0)
+
 enum flags_enum {
 	BACKGROUND	= 'b',
 	PTHREAD		= 'p',
@@ -74,6 +76,8 @@ enum flags_enum {
 	QUITE		= 'q',
 	VERBOSE		= 'v',
 	OUTLISTSDIR	= 'd',
+	RSYNC		= 'R',
+	DONTUNLINK	= 'U',
 #ifdef FANOTIFY_SUPPORT
 	FANOTIFY	= 'f',
 #endif
@@ -87,6 +91,7 @@ typedef enum flags_enum flags_t;
 enum queue_enum {
 	QUEUE_NORMAL,
 	QUEUE_BIGFILE,
+	QUEUE_INSTANT,
 	QUEUE_MAX
 };
 typedef enum queue_enum queue_id_t;
@@ -115,6 +120,7 @@ struct options {
 	int flags[1<<8];
 	char *label;
 	char *watchdir;
+	size_t watchdirlen;
 	char *actfpath;
 	char *rulfpath;
 	char *listoutdir;
@@ -142,10 +148,15 @@ enum state_enum {
 };
 typedef enum state_enum state_t;
 
+enum eventinfo_flags {
+	EVIF_RECURSIVELY	= 0x00000001
+};
+
 struct eventinfo {
 	uint32_t	evmask;
 	int		wd;
 	size_t		fsize;
+	uint32_t	flags;
 };
 typedef struct eventinfo eventinfo_t;
 
@@ -157,7 +168,7 @@ struct indexes {
 };
 typedef struct indexes indexes_t;
 
-typedef int (*thread_callbackfunct_t)(char **argv);
+typedef int (*thread_callbackfunct_t)(options_t *options_p, char **argv);
 struct threadinfo {
 	thread_callbackfunct_t 	  callback;
 	char 			**argv;

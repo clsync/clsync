@@ -103,6 +103,32 @@ Is not set by default.
 .RE
 
 .PP
+.B -R, --rsync
+.RS 8
+Forces
+.B clsync
+to use "rsynclist" action instead of "initialsync" and "synclist" (see 
+.B ACTION SCRIPT
+). This option can be used only with
+.I --outlistsdir
+option.
+
+Is not set by default.
+.RE
+
+.PP
+.B -U, --dontunlinklists
+.RS 8
+Forces
+.B clsync
+to do not delete list-files after
+.I action-script
+has finished.
+
+Is not set by default.
+.RE
+
+.PP
 .B -B, --bigfilethreshold
 .I filesize-threshold
 .RS 8
@@ -202,7 +228,7 @@ is only a convenient way to run syncing script.
 .B clsync
 can run
 .I action-script
-with three ways:
+with four ways:
 
 case
 .B a
@@ -227,7 +253,7 @@ sync
 
 In this case,
 .I action-script
-supposed to non-recursively sync file or directory by
+is supposed to non-recursively sync file or directory by
 .I path
 \*S. With
 .I evmask
@@ -244,7 +270,7 @@ synclist
 
 In this case,
 .I action-script
-supposed to non-recursively sync files and directories from list in a file by
+is supposed to non-recursively sync files and directories from list in a file by
 path
 .I listpath
 \*S(see below). With
@@ -253,7 +279,22 @@ it's passed bitmask of events with the file or directory (see
 "/usr/include/linux/inotify.h").
 .RE
 
-As can be notices, in all three cases it's
+case
+.B d
+.RS
+.I action-script
+rsynclist
+.I label rsynclistpath
+
+In this case,
+.I action-script
+is supposed to run "rsync" application with parameters "-aH --delete-before
+--include-from
+.I rsynclistpath
+--exclude '*'"
+.RE
+
+As can be noticed, in all four cases it's
 .I label
 passed (see 
 .I --label
@@ -261,7 +302,7 @@ option).
 
 The
 .I listfile
-contains one or more line of next format:
+contains one or more lines separated by NL (without CR) of next format:
 .RS
 sync
 .I label evmask path

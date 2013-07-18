@@ -9,5 +9,5 @@ cat > rules <<EOF
 +*.*
 EOF
 
-../clsync -d ./testdir/listdir -w 2 -p -t 5 ./testdir/from ./clsync-actionscript.sh rules
+../clsync -R -d ./testdir/listdir -w 2 -p -t 5 ./testdir/from ./clsync-actionscript.sh rules
 

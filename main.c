@@ -29,6 +29,8 @@ static struct option long_options[] =
 	{"collectdelay",	required_argument,	NULL,	DELAY},
 	{"commondelay",		required_argument,	NULL,	COMMONDELAY},
 	{"outlistsdir",		required_argument,	NULL,	OUTLISTSDIR},
+	{"rsync",		no_argument,		NULL,	RSYNC},
+	{"dontunlinklists",	no_argument,		NULL,	DONTUNLINK},
 	{"bigfilethreshold",	required_argument,	NULL,	BFILETHRESHOLD},
 	{"bigfilecollectdelay",	required_argument,	NULL,	BFILEDELAY},
 	{"verbose",		no_argument,		NULL,	VERBOSE},
@@ -64,9 +66,9 @@ int parse_arguments(int argc, char *argv[], struct options *options) {
 	int option_index = 0;
 	while(1) {
 #ifdef FANOTIFY_SUPPORT
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhaVf", long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhaVRUf", long_options, &option_index);
 #else
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhaV",  long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhaVRU",  long_options, &option_index);
 #endif
 	
 		if (c == -1) break;
@@ -245,11 +247,16 @@ int main(int argc, char *argv[]) {
 	options.commondelay 			   = DEFAULT_COMMONDELAY;
 	options._queues[QUEUE_NORMAL].collectdelay = DEFAULT_COLLECTDELAY;
 	options._queues[QUEUE_BIGFILE].collectdelay= DEFAULT_BFILECOLLECTDELAY;
+	options._queues[QUEUE_INSTANT].collectdelay= COLLECTDELAY_INSTANT;
 	options.bfilethreshold			   = DEFAULT_BFILETHRESHOLD;
 	options.label				   = DEFAULT_LABEL;
 
 	parse_arguments(argc, argv, &options);
 	out_init(options.flags);
+	if(options.flags[RSYNC] && (options.listoutdir == NULL)) {
+		printf_e("Error: Option \"--rsync\" cannot be used without \"--outlistsdir\".\n");
+		return EINVAL;
+	}
 	if(options.flags[DEBUG])
 		debug_print_flags();
 
@@ -261,6 +268,8 @@ int main(int argc, char *argv[]) {
 
 	if(options.rulfpath != NULL)
 		ret = parse_rules_fromfile(options.rulfpath, rules);
+	else
+		rules[0].action = RULE_END;
 
 	if(access(options.actfpath, X_OK) == -1) {
 		printf_e("Error: \"%s\" is not executable: %s (errno: %i).\n", options.actfpath, strerror(errno), errno);
@@ -270,6 +279,7 @@ int main(int argc, char *argv[]) {
 	if(options.flags[BACKGROUND])
 		ret = becomedaemon();
 
+	options.watchdirlen = strlen(options.watchdir);
 	if(ret == 0)
 		ret = sync_run(&options, rules);
 
