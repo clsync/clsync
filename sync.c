@@ -422,6 +422,9 @@ int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, co
 			if((wd = fanotify_mark(fanotify_d, FAN_MARK_ADD | FAN_MARK_DONT_FOLLOW,
 				FANOTIFY_MARKMASK, AT_FDCWD, accpath)) == -1)
 			{
+				if(errno == ENOENT)
+					return -2;
+
 				printf_e("Error: Cannot fanotify_mark() on \"%s\": %s (errno: %i).\n", 
 					path, strerror(errno), errno);
 				return -1;
@@ -433,6 +436,9 @@ int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, co
 			int inotify_d = notify_d;
 
 			if((wd = inotify_add_watch(inotify_d, accpath, INOTIFY_MARKMASK)) == -1) {
+				if(errno == ENOENT)
+					return -2;
+
 				printf_e("Error: Cannot inotify_add_watch() on \"%s\": %s (errno: %i).\n", 
 					path, strerror(errno), errno);
 				return -1;
@@ -514,7 +520,7 @@ int sync_walk_notifymark(int notify_d, options_t *options_p, const char *dirpath
 //		if(node->fts_statp->st_mode&S_IFDIR)
 //			initsync = INITSYNC_SKIP;
 
-		if(wd < 0) {
+		if(wd == -1) {
 			if(_printf_e)
 				printf_e("Error: Got error while notify-marking \"%s\": %s (errno: %i).\n", node->fts_path, strerror(errno), errno);
 			return errno;
