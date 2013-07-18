@@ -27,6 +27,7 @@
 
 #define VERSION_MAJ	0
 #define VERSION_MIN	0
+#include "revision.h"
 
 #include <stdio.h>
 #include <stdlib.h>

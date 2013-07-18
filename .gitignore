@@ -1,4 +1,7 @@
 
+# dynamical headers:
+revision.h
+
 # objects:
 *.o
 

@@ -24,17 +24,20 @@ binary=clsync
 
 binarydebug=$(binary)-debug
 
-all: $(objs)
+all: updaterevision $(objs)
 	$(CC) $(NORMSYSTEMCFLAGS) $(CFLAGS) $(LDFLAGS) $(objs) -o $(binary)
 
 %.o: %.c
 	$(CC) $(NORMSYSTEMCFLAGS) $(CFLAGS) $(INC) $< -c -o $@
 
-debug:
+debug: updaterevision
 	$(CC) $(NORMSYSTEMCFLAGS) -DFANOTIFY_SUPPORT $(DEBUGCFLAGS) $(INC) $(LDFLAGS) *.c -o $(binarydebug)
 
-onoldsystem:
+onoldsystem: updaterevision
 	$(CC) $(OLDSYSTEMCFLAGS) $(CFLAGS) $(INC) $(LDFLAGS) *.c -o $(binary)
+
+updaterevision:
+	(echo -n '#define REVISION '; git log | grep -c ^commit) > revision.h
 
 clean:
 	rm -f $(binary) $(binarydebug) $(objs)
