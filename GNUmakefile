@@ -38,6 +38,7 @@ onoldsystem: updaterevision
 
 updaterevision:
 	(echo -n '#define REVISION '; git log | grep -c ^commit) > revision.h
+	touch main.c
 
 clean:
 	rm -f $(binary) $(binarydebug) $(objs)

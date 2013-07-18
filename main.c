@@ -22,6 +22,10 @@
 #include "sync.h"
 #include "malloc.h"
 
+#define VERSION_MAJ	0
+#define VERSION_MIN	0
+#include "revision.h"
+
 static struct option long_options[] =
 {
 	{"background",		no_argument,		NULL,	BACKGROUND},
