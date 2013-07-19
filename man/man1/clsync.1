@@ -125,7 +125,7 @@ Is not set by default.
 .RE
 
 .PP
-.B -I, --rsyncinclimit
+.B -L, --rsyncinclimit
 .I rsync-includes-line-limit
 .RS 8
 Sets soft limit for lines count in files by path
@@ -142,11 +142,11 @@ Default value is "20000".
 .RE
 
 .PP
-.B -E, --rsyncpreferexclude
+.B -I, --rsyncpreferinclude
 .RS 8
 Forces
 .B clsync
-to prefer excludes instead of a lot of includes for rsync on recursive
+to prefer a "lot of includes" method instead of a "excludes+includes" for rsync on recursive
 syncing.
 
 See
@@ -154,6 +154,8 @@ See
 of
 .B ACTION SCRIPT
 \S*.
+
+This option is not recommended.
 
 Is not set by default.
 .RE
@@ -337,8 +339,8 @@ is supposed to run "rsync" application with parameters:
 --exclude '*'
 
 if option
-.I --rsyncpreferexclude
-is disabled.
+.I --rsyncpreferinclude
+is enabled.
 
 And with parameters:
 
@@ -349,8 +351,8 @@ And with parameters:
 --exclude '*'
 
 if option
-.I --rsyncpreferexclude
-is enabled.
+.I --rsyncpreferinclude
+is disabled.
 .RE
 
 As can be noticed, in all four cases it's

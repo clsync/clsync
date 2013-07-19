@@ -35,7 +35,7 @@ static struct option long_options[] =
 	{"outlistsdir",		required_argument,	NULL,	OUTLISTSDIR},
 	{"rsync",		no_argument,		NULL,	RSYNC},
 	{"rsyncinclimit",	required_argument,	NULL,	RSYNCINCLIMIT},
-	{"rsyncpreferexclude",	no_argument,		NULL,	RSYNC_PREFEREXCLUDE},
+	{"rsyncpreferinclude",	no_argument,		NULL,	RSYNC_PREFERINCLUDE},
 	{"dontunlinklists",	no_argument,		NULL,	DONTUNLINK},
 	{"bigfilethreshold",	required_argument,	NULL,	BFILETHRESHOLD},
 	{"bigfilecollectdelay",	required_argument,	NULL,	BFILEDELAY},
@@ -72,9 +72,9 @@ int parse_arguments(int argc, char *argv[], struct options *options) {
 	int option_index = 0;
 	while(1) {
 #ifdef FANOTIFY_SUPPORT
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhaVRUI:Ef", long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhaVRUL:If", long_options, &option_index);
 #else
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhaVRUI:E",  long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhaVRUL:I",  long_options, &option_index);
 #endif
 	
 		if (c == -1) break;
@@ -108,7 +108,7 @@ int parse_arguments(int argc, char *argv[], struct options *options) {
 			case 'i':
 				options->notifyengine = NE_INOTIFY;
 				break;
-			case 'I':
+			case 'L':
 				options->rsyncinclimit = (unsigned int)atol(optarg);
 				break;
 			case 'V':
@@ -289,10 +289,9 @@ int main(int argc, char *argv[]) {
 		printf_e("Error: Option \"--rsync\" cannot be used without \"--outlistsdir\".\n");
 		return EINVAL;
 	}
-	if(options.flags[RSYNC_PREFEREXCLUDE] && (!options.flags[RSYNC])) {
-		printf_e("Error: Option \"--rsyncpreferexclude\" cannot be used without \"--rsync\".\n");
-		return EINVAL;
-	}
+	if(options.flags[RSYNC_PREFERINCLUDE] && (!options.flags[RSYNC]))
+		printf_e("Warning: Option \"--rsyncpreferinclude\" is useless without \"--rsync\".\n");
+
 	if(options.flags[DEBUG])
 		debug_print_flags();
 

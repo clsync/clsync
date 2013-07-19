@@ -401,7 +401,7 @@ static inline int sync_exec_thread(options_t *options_p, thread_callbackfunct_t 
 
 static int sync_queuesync(const char *fpath, eventinfo_t *evinfo, options_t *options_p, indexes_t *indexes_p, queue_id_t queue_id) {
 
-	printf_ddd("Debug3: sync_queuesync(\"%s\", ...): %i %i\n", fpath, evinfo->fsize, options_p->bfilethreshold);
+	printf_ddd("Debug3: sync_queuesync(\"%s\", ...): fsize == %lu; tres == %lu, queue_id == \n", fpath, evinfo->fsize, options_p->bfilethreshold, queue_id);
 	if(queue_id == QUEUE_AUTO)
 		queue_id = (evinfo->fsize > options_p->bfilethreshold) ? QUEUE_BIGFILE : QUEUE_NORMAL;
 
@@ -470,7 +470,7 @@ int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, index
 
 		if(action == RULE_REJECT) {
 			fts_set(tree, node, FTS_SKIP);
-			if(options_p->flags[RSYNC_PREFEREXCLUDE]) {
+			if(!options_p->flags[RSYNC_PREFERINCLUDE]) {
 				if(queue_id == QUEUE_AUTO) {
 					int i=0;
 					while(i<QUEUE_MAX)
@@ -492,7 +492,7 @@ int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, index
 				break;
 		}
 
-		if(!options_p->flags[RSYNC_PREFEREXCLUDE]) {
+		if(options_p->flags[RSYNC_PREFERINCLUDE]) {
 			printf_ddd("Debug2: sync_initialsync_rsync_walk(): queueing \"%s\" (depth: %i) with int-flags %p\n", node->fts_path, node->fts_level, (void *)(unsigned long)evinfo.flags);
 			int ret = sync_queuesync(node->fts_path, &evinfo, options_p, indexes_p, queue_id);
 
@@ -531,10 +531,11 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 	}
 
 	// RSYNC case:
-	initsync = initsync==INITSYNC_FIRST ? QUEUE_INSTANT : QUEUE_AUTO;
+//	queue_id_t queue_id = initsync==INITSYNC_FIRST ? QUEUE_INSTANT : QUEUE_AUTO;
+	queue_id_t queue_id = initsync==INITSYNC_FIRST ? QUEUE_INSTANT : QUEUE_NORMAL;
 
-	if(options_p->flags[RSYNC_PREFEREXCLUDE]) {
-		queueinfo_t *queueinfo = &options_p->_queues[QUEUE_INSTANT];
+	if(!options_p->flags[RSYNC_PREFERINCLUDE]) {
+		queueinfo_t *queueinfo = &options_p->_queues[queue_id];
 
 		if(!queueinfo->stime)
 			queueinfo->stime = time(NULL); // Useful for debugging
@@ -545,18 +546,21 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 		evinfo->flags |= EVIF_RECURSIVELY;
 
 		// Searching for excludes
-		int ret = sync_initialsync_rsync_walk(options_p, path, indexes_p, initsync);
+		int ret = sync_initialsync_rsync_walk(options_p, path, indexes_p, queue_id);
 		if(ret) {
 			printf_e("Error: Cannot get exclude what to exclude: %s (errno: %i)\n", strerror(ret), ret);
 			return ret;
 		}
 
 		printf_ddd("Debug3: sync_initialsync(): queueing \"%s\" with int-flags %p\n", path, (void *)(unsigned long)evinfo->flags);
-		return indexes_queueevent(indexes_p, strdup(path), evinfo, initsync);
+
+		
+
+		return indexes_queueevent(indexes_p, strdup(path), evinfo, queue_id);
 	}
 
 	// Searching for includes
-	return sync_initialsync_rsync_walk(options_p, path, indexes_p, initsync);
+	return sync_initialsync_rsync_walk(options_p, path, indexes_p, queue_id);
 }
 
 int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p) {
@@ -810,23 +814,30 @@ int sync_idle_dosync_collectedevents_cleanup(options_t *options_p, char **argv) 
 		return EINVAL;
 	}
 
-	int ret0, ret1;
+	int ret0;
 	printf_ddd("Debug3: unlink()-ing \"%s\"\n", argv[3]);
 	ret0 = unlink(argv[3]);
 
-	if(!options_p->flags[RSYNC_PREFEREXCLUDE])
-		return ret0;
+	if(options_p->flags[RSYNC]) {
+		int ret1;
 
-	if(argv[4] == NULL) 
-		return ret0;
+		// There's no exclude file-list if "--rsyncpreferinclude" is enabled, so return
+		if(options_p->flags[RSYNC_PREFERINCLUDE])
+			return ret0;
 
-	if(*argv[4] == 0x00)
-		return ret0;
+		if(argv[4] == NULL) 
+			return ret0;
 
-	printf_ddd("Debug3: unlink()-ing \"%s\"\n", argv[4]);
-	ret1 = unlink(argv[4]);	// remove exclude list, too
+		if(*argv[4] == 0x00)
+			return ret0;
 
-	return ret0 == 0 ? ret1 : ret0;
+		printf_ddd("Debug3: unlink()-ing \"%s\"\n", argv[4]);
+		ret1 = unlink(argv[4]);	// remove exclude list, too
+
+		return ret0 == 0 ? ret1 : ret0;
+	}
+
+	return ret0;
 }
 
 int sync_idle_dosync_collectedevents_aggrqueue(queue_id_t queue_id, options_t *options_p, indexes_t *indexes_p, struct dosync_arg *dosync_arg) {
@@ -853,7 +864,7 @@ int sync_idle_dosync_collectedevents_aggrqueue(queue_id_t queue_id, options_t *o
 	g_hash_table_foreach(indexes_p->fpath2ei_coll_ht[queue_id], _sync_idle_dosync_collectedevents, dosync_arg);
 	g_hash_table_remove_all(indexes_p->fpath2ei_coll_ht[queue_id]);
 
-	if(options_p->flags[RSYNC_PREFEREXCLUDE]) {
+	if(!options_p->flags[RSYNC_PREFERINCLUDE]) {
 		g_hash_table_foreach(indexes_p->exc_fpath_coll_ht[queue_id], _sync_idle_dosync_collectedexcludes, dosync_arg);
 		g_hash_table_remove_all(indexes_p->exc_fpath_coll_ht[queue_id]);
 	}
@@ -1045,10 +1056,12 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 	dosync_arg.indexes_p	= indexes_p;
 	dosync_arg.outf		= NULL;
 
+	char isrsyncpreferexclude = options_p->flags[RSYNC] && (!options_p->flags[RSYNC_PREFERINCLUDE]);
+
 	if(options_p->listoutdir != NULL) {
 		// Just in case:
 		g_hash_table_remove_all(indexes_p->fpath2ei_ht);
-		if(options_p->flags[RSYNC_PREFEREXCLUDE])
+		if(isrsyncpreferexclude)
 			g_hash_table_remove_all(indexes_p->exc_fpath_ht);
 	}
 
@@ -1061,7 +1074,7 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 		if(ret) {
 			printf_e("Error: Got error while processing queue #%i\n: %s (errno: %i).\n", queue_id, strerror(ret), ret);
 			g_hash_table_remove_all(indexes_p->fpath2ei_ht);
-			if(options_p->flags[RSYNC_PREFEREXCLUDE])
+			if(isrsyncpreferexclude)
 				g_hash_table_remove_all(indexes_p->exc_fpath_ht);
 			return ret;
 		}
@@ -1078,7 +1091,7 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 		int ret;
 
 		*(dosync_arg.excf_path) = 0x00;
-		if(options_p->flags[RSYNC_PREFEREXCLUDE]) {
+		if(isrsyncpreferexclude) {
 			if((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "exclist"))) {
 				printf_e("Error: Cannot create list-file: %s (errno: %i)\n", strerror(ret), ret);
 				return ret;
@@ -1160,13 +1173,6 @@ static inline int sync_inotify_wait(int inotify_d, options_t *options_p, indexes
 	time_t tm = time(NULL);
 	long mindelayleft = ((unsigned long)~0 >> 1);
 
-	// Check for events in QUEUE_INSTANT
-	int count;
-	if((count=g_hash_table_size(indexes_p->fpath2ei_coll_ht[QUEUE_INSTANT])>0)) {
-		printf_ddd("Debug3: sync_inotify_wait(): There're %i events in QUEUE_INSTANT. Don't waiting.\n", count);
-		return 0;
-	}
-
 	fd_set rfds;
 	FD_ZERO(&rfds);
 	FD_SET(inotify_d, &rfds);
@@ -1175,13 +1181,13 @@ static inline int sync_inotify_wait(int inotify_d, options_t *options_p, indexes
 	while(queue_id < QUEUE_MAX) {
 		queueinfo_t *queueinfo = &options_p->_queues[queue_id++];
 
-		// Events in QUEUE_INSTANT is not supposed to be delayed
-		// So there may be incorrect data for this calculations
-		if(queue_id == QUEUE_INSTANT)
-			continue;
-
 		if(!queueinfo->stime)
 			continue;
+
+		if(queueinfo->collectdelay == COLLECTDELAY_INSTANT) {
+			printf_ddd("Debug3: sync_inotify_wait(): There're events in instant queue (#%i), don't waiting.\n", queue_id-1);
+			return 0;
+		}
 
 		int qdelay = queueinfo->stime + queueinfo->collectdelay - tm;
 		printf_ddd("Debug3: sync_inotify_wait(): queue #%i: %i %i %i -> %i\n", queue_id-1, queueinfo->stime, queueinfo->collectdelay, tm, qdelay);
@@ -1348,7 +1354,7 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 		}
 
 		if(events == 0) {
-			printf_dd("Debug2: sync_inotify_wait(%i) timed-out.\n", inotify_d);
+			printf_dd("Debug2: sync_inotify_wait(%i, options_p, indexes_p) timed-out.\n", inotify_d);
 			SYNC_INOTIFY_LOOP_IDLE;
 			continue;	// Timeout
 		}
