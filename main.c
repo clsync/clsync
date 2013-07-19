@@ -242,9 +242,19 @@ int becomedaemon() {
 	return 0;
 }
 
+int main_cleanup(options_t *options_p) {
+	int i=0;
+	while((i < MAXRULES) && (options_p->rules[i].action != RULE_END))
+		regfree(&options_p->rules[i++].expr);
+
+	return 0;
+}
+
 int main_rehash(options_t *options_p) {
 	printf_ddd("Debug3: main_rehash()\n");
 	int ret=0;
+
+	main_cleanup(options_p);
 
 	if(options_p->rulfpath != NULL)
 		ret = parse_rules_fromfile(options_p->rulfpath, options_p->rules);
@@ -295,9 +305,7 @@ int main(int argc, char *argv[]) {
 	if(ret == 0)
 		ret = sync_run(&options);
 
-	int i=0;
-	while((i < MAXRULES) && (options.rules[i].action != RULE_END))
-		regfree(&options.rules[i++].expr);
+	main_cleanup(&options);
 
 	out_flush();
 	printf_d("Debug: finished, exitcode: %i.\n", ret);
