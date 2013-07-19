@@ -30,30 +30,30 @@ clsync \- live sync tool, written on GNU C
 .B ]
 .SH DESCRIPTION
 .B clsync
-executes with appropriate arguments 
+executes
 .I action-script
-on FS events in directory
+with appropriate arguments on FS events in directory
 .I watch-dir
-with using
+using the
 .BR inotify (7)
 Linux kernel subsystem.
 
-In
+Extended regex-rules to filter what files and
+directories to sync may be placed in
 .I rules-file
-may be placed extended regex-rules to filter what files and
-directories to sync.
+
 
 .SH OPTIONS
 
 .B -b, --background
 .RS 8
-Daemonize. It will force clsync to fork() on start.
+Daemonize, forcing clsync to fork() on start.
 
 .PP
 .RE
 .B -p, --pthread
 .RS 8
-Use the
+Use
 .BR pthreads (7)
 to parallelize syncing processes.
 .RE
@@ -130,12 +130,12 @@ Is not set by default.
 .RS 8
 Sets soft limit for lines count in files by path
 .I rsync-listpath
-\*S. Unfortunatelly, rsync works very slow with huge "--include-from" files.
+\*S. Unfortunatelly, rsync works very slowly with huge "--include-from" files.
 So,
 .B clsync
 splits that list with approximately
 .I rsync-includes-line-limit
-lines per list if it's to big, and executes by one rsync instance per list
+lines per list if it's too big, and executes by one rsync instance per list
 part.
 
 Default value is "20000".
@@ -161,9 +161,7 @@ Is not set by default.
 .PP
 .B -U, --dontunlinklists
 .RS 8
-Forces
-.B clsync
-to do not delete list-files after
+Do not delete list-files after
 .I action-script
 has finished.
 
@@ -175,8 +173,8 @@ Is not set by default.
 .I filesize-threshold
 .RS 8
 Sets file size threshold (in bytes) that separates ordinary files from
-"big files". Events about "big files" are proceeding in another queue with
-separate collecting delay. It supposed to be used as means for unloading of IO
+"big files". Events about "big files" are processed in another queue with
+separate collecting delay. This is supposed to be used as means for unloading IO
 resources.
 
 Default value is "134217728" ["128 MiB"].
@@ -188,7 +186,7 @@ Default value is "134217728" ["128 MiB"].
 .RS 8
 Sets the delay (in seconds) to collect events about "big files" (see
 .I filesize-threshold
-meaning). Total maximum delay for "big files" will be 
+). Total maximum delay for "big files" will be 
 .I bigfiles-delay
 +
 .I additional-delay
@@ -207,7 +205,7 @@ This option is supposed to increase verbosity. But at the moment there's no
 .PP
 .B -d, --debug
 .RS 8
-Increases debugging output. Maximal debugging output will be with
+Increases debugging output. Maximum debugging output will be with
 three or more "d" flags, for example: -ddd
 .RE
 
@@ -237,7 +235,7 @@ Is set by default.
 .B -l, --label
 .I label
 .RS 8
-Sets a label for instance of clsync. The
+Sets a label for this instance of clsync. The
 .I label
 will be passed to
 .I action-script
@@ -263,14 +261,14 @@ Outputs clsync version and exits with exitcode "0".
 .B clsync
 executes
 .I action-script
-that supposed to do actually sync. So, the
+that supposed to take care of the actual syncing process. Therefore
 .B clsync
-is only a convenient way to run syncing script.
+is only a convenient way to run a syncing script.
 
 .B clsync
 can run
 .I action-script
-with four ways:
+in four ways:
 
 case
 .B a
@@ -281,7 +279,7 @@ initialsync
 
 In this case,
 .I action-script
-supposed to recursive sync data from directory by path
+is supposed to recursively sync data from directory by path
 .I dirpath
 with manual excluding extra files.
 .RE
@@ -353,11 +351,11 @@ if option
 is enabled.
 .RE
 
-As can be noticed, in all four cases it's
+As can be noticed, in all four cases clsync's
 .I label
-passed (see 
+is passed (see 
 .I --label
-option).
+).
 
 The
 .I listfile
