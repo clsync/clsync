@@ -134,6 +134,20 @@ static inline int indexes_removefromqueue(indexes_t *indexes_p, char *fpath, que
 	return 0;
 }
 
+static inline int indexes_addexclude(indexes_t *indexes_p, char *fpath, queue_id_t queue_id) {
+	g_hash_table_replace(indexes_p->exc_fpath_coll_ht[queue_id], fpath, GINT_TO_POINTER(1));
+
+	printf_ddd("Debug3: indexes_addexclude(indexes_p, \"%s\", %i). It's now %i events collected in queue %i.\n", fpath, queue_id, g_hash_table_size(indexes_p->exc_fpath_coll_ht[queue_id]), queue_id);
+	return 0;
+}
+
+static inline int indexes_addexclude_aggr(indexes_t *indexes_p, char *fpath) {
+	g_hash_table_replace(indexes_p->exc_fpath_ht, fpath, GINT_TO_POINTER(1));
+
+	printf_ddd("Debug3: indexes_addexclude_aggr(indexes_p, \"%s\"). It's now %i events collected.\n", fpath, g_hash_table_size(indexes_p->exc_fpath_ht));
+	return 0;
+}
+
 static threadsinfo_t *_sync_exec_getthreadsinfo() {	// TODO: optimize this
 	static threadsinfo_t threadsinfo={0};
 #ifdef PTHREAD_MUTEX
@@ -335,6 +349,8 @@ int __sync_exec(char **argv) {
 	va_end(arglist);\
 }
 
+#define SYNC_EXEC(...) (options_p->flags[PTHREAD]?sync_exec_thread:sync_exec)(__VA_ARGS__)
+
 static inline int sync_exec(options_t *options_p, thread_callbackfunct_t callback, ...) {
 	printf_dd("Debug2: sync_exec()\n");
 
@@ -454,6 +470,14 @@ int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, index
 
 		if(action == RULE_REJECT) {
 			fts_set(tree, node, FTS_SKIP);
+			if(options_p->flags[RSYNC_PREFEREXCLUDE]) {
+				if(queue_id == QUEUE_AUTO) {
+					int i=0;
+					while(i<QUEUE_MAX)
+						indexes_addexclude(indexes_p, strdup(node->fts_path), i++);
+				} else
+					indexes_addexclude(indexes_p, strdup(node->fts_path), queue_id);
+			}
 			continue;
 		}
 
@@ -468,12 +492,14 @@ int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, index
 				break;
 		}
 
-		printf_ddd("Debug2: sync_initialsync_rsync_walk(): queueing \"%s\" (depth: %i) with int-flags %p\n", node->fts_path, node->fts_level, (void *)(unsigned long)evinfo.flags);
-		int ret = sync_queuesync(node->fts_path, &evinfo, options_p, indexes_p, queue_id);
+		if(!options_p->flags[RSYNC_PREFEREXCLUDE]) {
+			printf_ddd("Debug2: sync_initialsync_rsync_walk(): queueing \"%s\" (depth: %i) with int-flags %p\n", node->fts_path, node->fts_level, (void *)(unsigned long)evinfo.flags);
+			int ret = sync_queuesync(node->fts_path, &evinfo, options_p, indexes_p, queue_id);
 
-		if(ret) {
-			printf_e("Error: Got error while queueing \"%s\": %s (errno: %i).\n", node->fts_path, strerror(errno), errno);
-			return errno;
+			if(ret) {
+				printf_e("Error: Got error while queueing \"%s\": %s (errno: %i).\n", node->fts_path, strerror(errno), errno);
+				return errno;
+			}
 		}
 	}
 	if(errno) {
@@ -495,15 +521,42 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 	if(!options_p->flags[RSYNC]) {
 		// non-RSYNC case:
 		printf_ddd("Debug3: sync_initialsync(): syncing \"%s\"\n", path);
-
+/*
 		if(options_p->flags[PTHREAD])
 			return sync_exec_thread(options_p, NULL, options_p->actfpath, "initialsync", options_p->label, path, NULL);
 		else
-			return sync_exec       (options_p, NULL, options_p->actfpath, "initialsync", options_p->label, path, NULL);
+			return sync_exec       (options_p, NULL, options_p->actfpath, "initialsync", options_p->label, path, NULL);*/
+
+		return SYNC_EXEC(options_p, NULL, options_p->actfpath, "initialsync", options_p->label, path, NULL);
 	}
 
 	// RSYNC case:
-	return sync_initialsync_rsync_walk(options_p, path, indexes_p, initsync==INITSYNC_FIRST ? QUEUE_INSTANT : QUEUE_AUTO);
+	initsync = initsync==INITSYNC_FIRST ? QUEUE_INSTANT : QUEUE_AUTO;
+
+	if(options_p->flags[RSYNC_PREFEREXCLUDE]) {
+		queueinfo_t *queueinfo = &options_p->_queues[QUEUE_INSTANT];
+
+		if(!queueinfo->stime)
+			queueinfo->stime = time(NULL); // Useful for debugging
+
+
+		eventinfo_t *evinfo = (eventinfo_t *)xmalloc(sizeof(*evinfo));
+		memset(evinfo, 0, sizeof(*evinfo));
+		evinfo->flags |= EVIF_RECURSIVELY;
+
+		// Searching for excludes
+		int ret = sync_initialsync_rsync_walk(options_p, path, indexes_p, initsync);
+		if(ret) {
+			printf_e("Error: Cannot get exclude what to exclude: %s (errno: %i)\n", strerror(ret), ret);
+			return ret;
+		}
+
+		printf_ddd("Debug3: sync_initialsync(): queueing \"%s\" with int-flags %p\n", path, (void *)(unsigned long)evinfo->flags);
+		return indexes_queueevent(indexes_p, strdup(path), evinfo, initsync);
+	}
+
+	// Searching for includes
+	return sync_initialsync_rsync_walk(options_p, path, indexes_p, initsync);
 }
 
 int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p) {
@@ -551,11 +604,7 @@ int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, co
 		}
 	}
 	indexes_add_wd(indexes_p, wd, path, pathlen);
-/*
-	if(initsync == INITSYNC_DO)
-		if(sync_initialsync(path, options_p, indexes_p, initsync))
-			return -1;
-*/
+
 	return wd;
 }
 
@@ -669,10 +718,12 @@ int sync_notify_init(options_t *options_p) {
 }
 
 static inline int sync_dosync_exec(options_t *options_p, const char *evmask_str, const char *fpath) {
+/*
 	if(options_p->flags[PTHREAD])
 		return sync_exec_thread(options_p, NULL, options_p->actfpath, "sync", options_p->label, evmask_str, fpath, NULL);
 	else
-		return sync_exec       (options_p, NULL, options_p->actfpath, "sync", options_p->label, evmask_str, fpath, NULL);
+		return sync_exec       (options_p, NULL, options_p->actfpath, "sync", options_p->label, evmask_str, fpath, NULL);*/
+	return SYNC_EXEC(options_p, NULL, options_p->actfpath, "sync", options_p->label, evmask_str, fpath, NULL);
 }
 
 static int sync_dosync(const char *fpath, uint32_t evmask, options_t *options_p, indexes_t *indexes_p) {
@@ -685,6 +736,17 @@ static int sync_dosync(const char *fpath, uint32_t evmask, options_t *options_p,
 	free(evmask_str);
 
 	return ret;
+}
+
+void _sync_idle_dosync_collectedexcludes(gpointer fpath_gp, gpointer dummy, gpointer arg_gp) {
+	char *fpath		  = (char *)fpath_gp;
+	indexes_t *indexes_p 	  = ((struct dosync_arg *)arg_gp)->indexes_p;
+
+	printf_ddd("Debug3: _sync_idle_dosync_collectedexcludes(): \"%s\".\n", fpath);
+
+	indexes_addexclude_aggr(indexes_p, strdup(fpath));
+
+	return;
 }
 
 void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
@@ -748,8 +810,23 @@ int sync_idle_dosync_collectedevents_cleanup(options_t *options_p, char **argv) 
 		return EINVAL;
 	}
 
+	int ret0, ret1;
 	printf_ddd("Debug3: unlink()-ing \"%s\"\n", argv[3]);
-	return unlink(argv[3]);
+	ret0 = unlink(argv[3]);
+
+	if(!options_p->flags[RSYNC_PREFEREXCLUDE])
+		return ret0;
+
+	if(argv[4] == NULL) 
+		return ret0;
+
+	if(*argv[4] == 0x00)
+		return ret0;
+
+	printf_ddd("Debug3: unlink()-ing \"%s\"\n", argv[4]);
+	ret1 = unlink(argv[4]);	// remove exclude list, too
+
+	return ret0 == 0 ? ret1 : ret0;
 }
 
 int sync_idle_dosync_collectedevents_aggrqueue(queue_id_t queue_id, options_t *options_p, indexes_t *indexes_p, struct dosync_arg *dosync_arg) {
@@ -776,21 +853,22 @@ int sync_idle_dosync_collectedevents_aggrqueue(queue_id_t queue_id, options_t *o
 	g_hash_table_foreach(indexes_p->fpath2ei_coll_ht[queue_id], _sync_idle_dosync_collectedevents, dosync_arg);
 	g_hash_table_remove_all(indexes_p->fpath2ei_coll_ht[queue_id]);
 
+	if(options_p->flags[RSYNC_PREFEREXCLUDE]) {
+		g_hash_table_foreach(indexes_p->exc_fpath_coll_ht[queue_id], _sync_idle_dosync_collectedexcludes, dosync_arg);
+		g_hash_table_remove_all(indexes_p->exc_fpath_coll_ht[queue_id]);
+	}
 
 	return 0;
 }
 
-int sync_idle_dosync_collectedevents_listcreate(struct dosync_arg *dosync_arg_p) {
-	printf_ddd("Debug3: Creating list file\n");
-	struct stat64 stat64;
-	char *fpath = dosync_arg_p->outf_path;
-	options_t *options_p = dosync_arg_p->options_p;
+int sync_idle_dosync_collectedevents_uniqfname(options_t *options_p, char *fpath, char *name) {
 	pid_t pid = getpid();
 	time_t tm = time(NULL);
+	struct stat64 stat64;
 
 	int counter = 0;
 	do {
-		snprintf(fpath, PATH_MAX, "%s/.clsync-list.%u.%lu.%u", options_p->listoutdir, pid, (unsigned long)tm, rand());	// To be uniquea
+		snprintf(fpath, PATH_MAX, "%s/.clsync-%s.%u.%lu.%u", options_p->listoutdir, name, pid, (unsigned long)tm, rand());	// To be unique
 		lstat64(fpath, &stat64);
 		if(counter++ > COUNTER_LIMIT) {
 			printf_e("Error: Cannot file unused filename for list-file. The last try was \"%s\".\n", fpath);
@@ -798,6 +876,21 @@ int sync_idle_dosync_collectedevents_listcreate(struct dosync_arg *dosync_arg_p)
 		}
 	} while(errno != ENOENT);	// TODO: find another way to check if the object exists
 	errno=0;
+
+	return 0;
+}
+
+int sync_idle_dosync_collectedevents_listcreate(struct dosync_arg *dosync_arg_p, char *name) {
+	printf_ddd("Debug3: Creating %s file\n", name);
+	char *fpath = dosync_arg_p->outf_path;
+	options_t *options_p = dosync_arg_p->options_p;
+
+	int ret;
+	if((ret=sync_idle_dosync_collectedevents_uniqfname(options_p, fpath, name))) {
+		printf_e("Error: sync_idle_dosync_collectedevents_listcreate: Cannot get unique file name.\n");
+		return ret;
+	}
+
 	dosync_arg_p->outf = fopen(fpath, "w");
 
 	if(dosync_arg_p->outf == NULL) {
@@ -806,25 +899,69 @@ int sync_idle_dosync_collectedevents_listcreate(struct dosync_arg *dosync_arg_p)
 	}
 
 	setbuffer(dosync_arg_p->outf, dosync_arg_p->buf, BUFSIZ);
-	printf_ddd("Debug3: Created list-file \"%s\"\n", fpath);
+	printf_ddd("Debug3: Created exclude list-file \"%s\"\n", fpath);
 	dosync_arg_p->linescount = 0;
 
 	return 0;
 }
 
-int sync_idle_dosync_collectedevents_listcommit(struct dosync_arg *dosync_arg_p) {
+gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
+	struct dosync_arg *dosync_arg_p = (struct dosync_arg *)arg_gp;
+	char *fpath		  = (char *)fpath_gp;
+	FILE *excf		  = dosync_arg_p->outf;
+	options_t *options_p 	  = dosync_arg_p->options_p;
+	printf_ddd("Debug3: sync_idle_dosync_collectedevents_rsync_exclistpush(): \"%s\"\n", fpath);
+
+	// RSYNC case
+	// TODO:
+	// - Deduplicate output records
+	size_t fpathlen = strlen(fpath);
+	char *fpath_rel_p = xmalloc(fpathlen+1);
+	char *fpath_rel = fpath_rel_p;
+
+	memcpy(fpath_rel, &fpath[options_p->watchdirlen], fpathlen+1 - options_p->watchdirlen);
+
+	printf_ddd("Debug3: Adding to exclude-file: \"%s\"\n", fpath_rel);
+	fprintf(excf, "%s\n", fpath_rel);
+
+	free(fpath_rel_p);
+	return TRUE;
+}
+
+int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p) {
 	printf_ddd("Debug3: Commiting the file\n");
 	options_t *options_p = dosync_arg_p->options_p;
 	fclose(dosync_arg_p->outf);
 	dosync_arg_p->outf = NULL;
 
 	if(dosync_arg_p->evcount > 0) {
+/*
 		if(options_p->flags[PTHREAD])
-			return sync_exec_thread(options_p, sync_idle_dosync_collectedevents_cleanup, 
-						options_p->actfpath, options_p->flags[RSYNC]?"rsynclist":"synclist", options_p->label, dosync_arg_p->outf_path, NULL);
+			return sync_exec_thread(options_p,
+						sync_idle_dosync_collectedevents_cleanup,
+						options_p->actfpath,
+						options_p->flags[RSYNC]?"rsynclist":"synclist",
+						options_p->label,
+						dosync_arg_p->outf_path,
+						*(dosync_arg_p->outf_path)?dosync_arg_p->outf_path:NULL,
+						NULL);
 		else
-			return sync_exec       (options_p, sync_idle_dosync_collectedevents_cleanup,
-						options_p->actfpath, options_p->flags[RSYNC]?"rsynclist":"synclist", options_p->label, dosync_arg_p->outf_path, NULL);
+			return sync_exec       (options_p,
+						sync_idle_dosync_collectedevents_cleanup,
+						options_p->actfpath,
+						options_p->flags[RSYNC]?"rsynclist":"synclist", 
+						options_p->label,
+						dosync_arg_p->outf_path,
+						*(dosync_arg_p->outf_path)?dosync_arg_p->outf_path:NULL,
+						NULL);*/
+		return SYNC_EXEC(options_p,
+			sync_idle_dosync_collectedevents_cleanup,
+			options_p->actfpath,
+			options_p->flags[RSYNC]?"rsynclist":"synclist", 
+			options_p->label,
+			dosync_arg_p->outf_path,
+			*(dosync_arg_p->excf_path)?dosync_arg_p->excf_path:NULL,
+			NULL);
 	}
 
 	return 0;
@@ -854,11 +991,11 @@ gboolean sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer e
 
 	if(*linescount_p >= options_p->rsyncinclimit) {
 		int ret;
-		if((ret=sync_idle_dosync_collectedevents_listcommit(dosync_arg_p))) {
+		if((ret=sync_idle_dosync_collectedevents_commitpart(dosync_arg_p))) {
 			printf_e("Error: sync_idle_dosync_collectedevents_listpush(): Cannot commit list-file \"%s\": %s (errno: %i)\n", dosync_arg_p->outf_path, strerror(ret), ret);
 			exit(ret);	// TODO: replace with kill(0, ...);
 		}
-		if((ret=sync_idle_dosync_collectedevents_listcreate(dosync_arg_p))) {
+		if((ret=sync_idle_dosync_collectedevents_listcreate(dosync_arg_p, "list"))) {
 			printf_e("Error: sync_idle_dosync_collectedevents_listpush(): Cannot create new list-file: %s (errno: %i)\n", strerror(ret), ret);
 			exit(ret);	// TODO: replace with kill(0, ...);
 		}
@@ -908,8 +1045,12 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 	dosync_arg.indexes_p	= indexes_p;
 	dosync_arg.outf		= NULL;
 
-	if(options_p->listoutdir != NULL)
-		g_hash_table_remove_all(indexes_p->fpath2ei_ht);	// Just in case.
+	if(options_p->listoutdir != NULL) {
+		// Just in case:
+		g_hash_table_remove_all(indexes_p->fpath2ei_ht);
+		if(options_p->flags[RSYNC_PREFEREXCLUDE])
+			g_hash_table_remove_all(indexes_p->exc_fpath_ht);
+	}
 
 	int queue_id=0;
 	while(queue_id < QUEUE_MAX) {
@@ -920,6 +1061,8 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 		if(ret) {
 			printf_e("Error: Got error while processing queue #%i\n: %s (errno: %i).\n", queue_id, strerror(ret), ret);
 			g_hash_table_remove_all(indexes_p->fpath2ei_ht);
+			if(options_p->flags[RSYNC_PREFEREXCLUDE])
+				g_hash_table_remove_all(indexes_p->exc_fpath_ht);
 			return ret;
 		}
 
@@ -934,18 +1077,29 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 	if(options_p->listoutdir != NULL) {
 		int ret;
 
-		if((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg))) {
+		*(dosync_arg.excf_path) = 0x00;
+		if(options_p->flags[RSYNC_PREFEREXCLUDE]) {
+			if((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "exclist"))) {
+				printf_e("Error: Cannot create list-file: %s (errno: %i)\n", strerror(ret), ret);
+				return ret;
+			}
+
+			g_hash_table_foreach_remove(indexes_p->exc_fpath_ht, sync_idle_dosync_collectedevents_rsync_exclistpush, &dosync_arg);
+			fclose(dosync_arg.outf);
+			strcpy(dosync_arg.excf_path, dosync_arg.outf_path);	// TODO: remove this strcpy()
+		}
+
+		if((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "list"))) {
 			printf_e("Error: Cannot create list-file: %s (errno: %i)\n", strerror(ret), ret);
 			return ret;
 		}
 
 		g_hash_table_foreach_remove(indexes_p->fpath2ei_ht, sync_idle_dosync_collectedevents_listpush, &dosync_arg);
 
-		if((ret=sync_idle_dosync_collectedevents_listcommit(&dosync_arg))) {
+		if((ret=sync_idle_dosync_collectedevents_commitpart(&dosync_arg))) {
 			printf_e("Error: Cannot submit to sync the list \"%s\": %s (errno: %i)\n", dosync_arg.outf_path, strerror(ret), ret);
 			return ret;
 		}
-
 	}
 
 	return 0;
@@ -1249,9 +1403,13 @@ int sync_run(options_t *options_p) {
 	indexes.wd2fpath_ht      = g_hash_table_new_full(g_direct_hash, g_direct_equal, 0,    0);
 	indexes.fpath2wd_ht      = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
 	indexes.fpath2ei_ht      = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, free);
+	indexes.exc_fpath_ht     = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
 	i=0;
-	while(i<QUEUE_MAX)
-		indexes.fpath2ei_coll_ht[i++] = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, free);
+	while(i<QUEUE_MAX) {
+		indexes.fpath2ei_coll_ht[i]  = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, free);
+		indexes.exc_fpath_coll_ht[i] = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
+		i++;
+	}
 
 	if(options_p->listoutdir)
 		srand(time(NULL));
@@ -1277,9 +1435,13 @@ int sync_run(options_t *options_p) {
 	g_hash_table_destroy(indexes.wd2fpath_ht);
 	g_hash_table_destroy(indexes.fpath2wd_ht);
 	g_hash_table_destroy(indexes.fpath2ei_ht);
+	g_hash_table_destroy(indexes.exc_fpath_ht);
 	i=0;
-	while(i<QUEUE_MAX)
-		g_hash_table_destroy(indexes.fpath2ei_coll_ht[i++]);
+	while(i<QUEUE_MAX) {
+		g_hash_table_destroy(indexes.fpath2ei_coll_ht[i]);
+		g_hash_table_destroy(indexes.exc_fpath_coll_ht[i]);
+		i++;
+	}
 
 	return 0;
 }

@@ -125,11 +125,11 @@ Is not set by default.
 .RE
 
 .PP
-.B -R, --rsyncinclimit
+.B -I, --rsyncinclimit
 .I rsync-includes-line-limit
 .RS 8
 Sets soft limit for lines count in files by path
-.I rsynclistpath
+.I rsync-listpath
 \*S. Unfortunatelly, rsync works very slow with huge "--include-from" files.
 So,
 .B clsync
@@ -138,7 +138,24 @@ splits that list with approximately
 lines per list if it's to big, and executes by one rsync instance per list
 part.
 
-Default value is "100000".
+Default value is "20000".
+.RE
+
+.PP
+.B -E, --rsyncpreferexclude
+.RS 8
+Forces
+.B clsync
+to prefer excludes instead of a lot of includes for rsync on recursive
+syncing.
+
+See
+.B case d
+of
+.B ACTION SCRIPT
+\S*.
+
+Is not set by default.
 .RE
 
 .PP
@@ -309,14 +326,31 @@ case
 .RS
 .I action-script
 rsynclist
-.I label rsynclistpath
+.I label rsync-listpath [rsync-exclude-listpath]
 
 In this case,
 .I action-script
-is supposed to run "rsync" application with parameters "-aH --delete-before
+is supposed to run "rsync" application with parameters: 
+
+-aH --delete-before --include-from
+.I rsync-listpath
+--exclude '*'
+
+if option
+.I --rsyncpreferexclude
+is disabled.
+
+And with parameters:
+
+-aH --delete-before --exclude-from
+.I rsync-exclude-listpath
 --include-from
-.I rsynclistpath
---exclude '*'"
+.I rsync-listpath
+--exclude '*'
+
+if option
+.I --rsyncpreferexclude
+is enabled.
 .RE
 
 As can be noticed, in all four cases it's

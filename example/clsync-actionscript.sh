@@ -10,17 +10,22 @@ ARG1="$4"
 
 function rsynclist() {
 	LISTFILE="$1"
+	EXCLISTFILE="$2"
+
+	excludefrom=''
+	if [ "$EXCLISTFILE" != "" ]; then
+		sort < "$EXCLISTFILE" | uniq > "$EXCLISTFILE"-uniq
+		excludefrom="--exclude-from=${EXCLISTFILE}-uniq"
+	fi
 
 	sort < "$LISTFILE" | uniq > "$LISTFILE"-uniq
-
-	rsync -avH --delete-before --include-from="${LISTFILE}-uniq" --exclude='*' "$FROM"/ "$TO"/
-
-	rm -f -- "${LISTFILE}-uniq"
+	rsync -avH --delete-before "$excludefrom" --include-from="${LISTFILE}-uniq" --exclude='*' "$FROM"/ "$TO"/
+	rm -f -- "${LISTFILE}-uniq" "${EXCLISTFILE}-uniq"
 }
 
 case "$ACTION" in
 	rsynclist)
-		rsynclist "$ARG0"
+		rsynclist "$ARG0" "$ARG1"
 		;;
 esac
 

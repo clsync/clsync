@@ -79,6 +79,7 @@ enum flags_enum {
 	OUTLISTSDIR	= 'd',
 	RSYNC		= 'R',
 	RSYNCINCLIMIT	= 'I',
+	RSYNC_PREFEREXCLUDE= 'E',
 	DONTUNLINK	= 'U',
 #ifdef FANOTIFY_SUPPORT
 	FANOTIFY	= 'f',
@@ -169,6 +170,8 @@ struct indexes {
 	GHashTable *wd2fpath_ht;
 	GHashTable *fpath2wd_ht;
 	GHashTable *fpath2ei_ht;
+	GHashTable *exc_fpath_ht;
+	GHashTable *exc_fpath_coll_ht[QUEUE_MAX];
 	GHashTable *fpath2ei_coll_ht[QUEUE_MAX];
 };
 typedef struct indexes indexes_t;
@@ -201,6 +204,7 @@ typedef enum initsync_enum initsync_t;
 
 struct dosync_arg {
 	int evcount;
+	char excf_path[PATH_MAX+1];
 	char outf_path[PATH_MAX+1];
 	FILE *outf;
 	options_t *options_p;
