@@ -34,6 +34,7 @@ static struct option long_options[] =
 	{"commondelay",		required_argument,	NULL,	COMMONDELAY},
 	{"outlistsdir",		required_argument,	NULL,	OUTLISTSDIR},
 	{"rsync",		no_argument,		NULL,	RSYNC},
+	{"rsyncinclimit",	required_argument,	NULL,	RSYNCINCLIMIT},
 	{"dontunlinklists",	no_argument,		NULL,	DONTUNLINK},
 	{"bigfilethreshold",	required_argument,	NULL,	BFILETHRESHOLD},
 	{"bigfilecollectdelay",	required_argument,	NULL,	BFILEDELAY},
@@ -70,9 +71,9 @@ int parse_arguments(int argc, char *argv[], struct options *options) {
 	int option_index = 0;
 	while(1) {
 #ifdef FANOTIFY_SUPPORT
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhaVRUf", long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhaVRUI:f", long_options, &option_index);
 #else
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhaVRU",  long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhaVRUI:",  long_options, &option_index);
 #endif
 	
 		if (c == -1) break;
@@ -106,8 +107,12 @@ int parse_arguments(int argc, char *argv[], struct options *options) {
 			case 'i':
 				options->notifyengine = NE_INOTIFY;
 				break;
+			case 'I':
+				options->rsyncinclimit = (unsigned int)atol(optarg);
+				break;
 			case 'V':
 				version();
+				break;
 			default:
 				options->flags[c]++;
 				break;
@@ -266,7 +271,7 @@ int main_rehash(options_t *options_p) {
 
 int main(int argc, char *argv[]) {
 	struct options options;
-	int ret = 0;
+	int ret = 0, nret;
 	memset(&options, 0, sizeof(options));
 	options.notifyengine 			   = DEFAULT_NOTIFYENGINE;
 	options.commondelay 			   = DEFAULT_COMMONDELAY;
@@ -275,6 +280,7 @@ int main(int argc, char *argv[]) {
 	options._queues[QUEUE_INSTANT].collectdelay= COLLECTDELAY_INSTANT;
 	options.bfilethreshold			   = DEFAULT_BFILETHRESHOLD;
 	options.label				   = DEFAULT_LABEL;
+	options.rsyncinclimit			   = DEFAULT_RSYNC_INCLUDELINESLIMIT;
 
 	parse_arguments(argc, argv, &options);
 	out_init(options.flags);
@@ -291,15 +297,20 @@ int main(int argc, char *argv[]) {
 	}
 #endif
 
-	main_rehash(&options);
+	nret=main_rehash(&options);
+	if(nret)
+		ret = nret;
 
 	if(access(options.actfpath, X_OK) == -1) {
 		printf_e("Error: \"%s\" is not executable: %s (errno: %i).\n", options.actfpath, strerror(errno), errno);
 		ret = errno;
 	}
 
-	if(options.flags[BACKGROUND])
-		ret = becomedaemon();
+	if(options.flags[BACKGROUND]) {
+		nret = becomedaemon();
+		if(nret)
+			ret = nret;
+	}
 
 	options.watchdirlen = strlen(options.watchdir);
 	if(ret == 0)

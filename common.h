@@ -78,6 +78,7 @@ enum flags_enum {
 	VERBOSE		= 'v',
 	OUTLISTSDIR	= 'd',
 	RSYNC		= 'R',
+	RSYNCINCLIMIT	= 'I',
 	DONTUNLINK	= 'U',
 #ifdef FANOTIFY_SUPPORT
 	FANOTIFY	= 'f',
@@ -90,11 +91,11 @@ enum flags_enum {
 typedef enum flags_enum flags_t;
 
 enum queue_enum {
-	QUEUE_AUTO	= 0,
 	QUEUE_NORMAL,
 	QUEUE_BIGFILE,
 	QUEUE_INSTANT,
-	QUEUE_MAX
+	QUEUE_MAX,
+	QUEUE_AUTO
 };
 typedef enum queue_enum queue_id_t;
 
@@ -131,6 +132,7 @@ struct options {
 	size_t bfilethreshold;
 	unsigned int commondelay;
 	queueinfo_t _queues[QUEUE_MAX];	// TODO: remove this from here
+	unsigned int rsyncinclimit;
 };
 typedef struct options options_t;
 
@@ -199,9 +201,12 @@ typedef enum initsync_enum initsync_t;
 
 struct dosync_arg {
 	int evcount;
+	char outf_path[PATH_MAX+1];
 	FILE *outf;
 	options_t *options_p;
 	indexes_t *indexes_p;
 	void *data;
+	int linescount;
+	char buf[BUFSIZ+1];
 };
 

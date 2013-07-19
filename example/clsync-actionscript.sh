@@ -11,7 +11,11 @@ ARG1="$4"
 function rsynclist() {
 	LISTFILE="$1"
 
-	rsync -avH --delete-before --include-from="$LISTFILE" --exclude='*' "$FROM"/ "$TO"/
+	sort < "$LISTFILE" | uniq > "$LISTFILE"-uniq
+
+	rsync -avH --delete-before --include-from="${LISTFILE}-uniq" --exclude='*' "$FROM"/ "$TO"/
+
+	rm -f -- "${LISTFILE}-uniq"
 }
 
 case "$ACTION" in

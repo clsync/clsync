@@ -125,6 +125,23 @@ Is not set by default.
 .RE
 
 .PP
+.B -R, --rsyncinclimit
+.I rsync-includes-line-limit
+.RS 8
+Sets soft limit for lines count in files by path
+.I rsynclistpath
+\*S. Unfortunatelly, rsync works very slow with huge "--include-from" files.
+So,
+.B clsync
+splits that list with approximately
+.I rsync-includes-line-limit
+lines per list if it's to big, and executes by one rsync instance per list
+part.
+
+Default value is "100000".
+.RE
+
+.PP
 .B -U, --dontunlinklists
 .RS 8
 Forces

@@ -22,7 +22,8 @@ log*
 from/*
 to/*
 .clsync-list.*
-debian/clsync/DEBIAN
+debian/clsync
 debian/clsync.debhelper.log
 debian/clsync.substvars
+example/rules
 
