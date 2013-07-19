@@ -60,6 +60,10 @@
 #define MAX(a,b) (a>b?a:b)
 #endif
 
+#ifndef IN_CREATE_SELF
+#define IN_CREATE_SELF IN_CREATE
+#endif
+
 #define COLLECTDELAY_INSTANT ((unsigned int)~0)
 
 enum flags_enum {
@@ -86,6 +90,7 @@ enum flags_enum {
 typedef enum flags_enum flags_t;
 
 enum queue_enum {
+	QUEUE_AUTO	= 0,
 	QUEUE_NORMAL,
 	QUEUE_BIGFILE,
 	QUEUE_INSTANT,
@@ -187,9 +192,8 @@ struct threadsinfo {
 typedef struct threadsinfo threadsinfo_t;
 
 enum initsync_enum {
-	INITSYNC_UNDEFINED 	= 0,
-	INITSYNC_DO,
-	INITSYNC_SKIP
+	INITSYNC_NORMAL	= 0,
+	INITSYNC_FIRST,
 };
 typedef enum initsync_enum initsync_t;
 

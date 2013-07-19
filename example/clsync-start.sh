@@ -5,7 +5,7 @@ make -C .. all
 mkdir -p testdir/{from,to,listdir}
 
 cat > rules <<EOF
--d/testdir/[Dd]ont[Ss]ync\$
+-d/[Dd]ont[Ss]ync\$
 +*.*
 EOF
 
