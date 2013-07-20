@@ -144,7 +144,14 @@ static inline int indexes_addexclude(indexes_t *indexes_p, char *fpath, queue_id
 static inline int indexes_addexclude_aggr(indexes_t *indexes_p, char *fpath) {
 	g_hash_table_replace(indexes_p->exc_fpath_ht, fpath, GINT_TO_POINTER(1));
 
-	printf_ddd("Debug3: indexes_addexclude_aggr(indexes_p, \"%s\"). It's now %i events collected.\n", fpath, g_hash_table_size(indexes_p->exc_fpath_ht));
+	printf_ddd("Debug3: indexes_addexclude_aggr(indexes_p, \"%s\").\n", fpath);
+	return 0;
+}
+
+static inline int indexes_outaggr_add(indexes_t *indexes_p, char *outline) {
+	g_hash_table_replace(indexes_p->out_lines_aggr_ht, outline, GINT_TO_POINTER(1));
+
+	printf_ddd("Debug3: indexes_outaggr_aggr(indexes_p, \"%s\").\n", outline);
 	return 0;
 }
 
@@ -916,11 +923,25 @@ int sync_idle_dosync_collectedevents_listcreate(struct dosync_arg *dosync_arg_p,
 	return 0;
 }
 
+gboolean sync_idle_dosync_collectedevents_aggrout(gpointer outline_gp, gpointer evinfo_gp, gpointer arg_gp) {
+	struct dosync_arg *dosync_arg_p = (struct dosync_arg *)arg_gp;
+	char *outline		  = (char *)outline_gp;
+	FILE *outf		  = dosync_arg_p->outf;
+//	options_t *options_p 	  = dosync_arg_p->options_p;
+//	indexes_t *indexes_p	  = dosync_arg_p->indexes_p;
+	printf_ddd("Debug3: sync_idle_dosync_collectedevents_aggrout(): \"%s\"\n", outline);
+
+	fprintf(outf, "%s\n", outline);
+
+	return TRUE;
+}
+
 gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
 	struct dosync_arg *dosync_arg_p = (struct dosync_arg *)arg_gp;
 	char *fpath		  = (char *)fpath_gp;
 	FILE *excf		  = dosync_arg_p->outf;
 	options_t *options_p 	  = dosync_arg_p->options_p;
+//	indexes_t *indexes_p	  = dosync_arg_p->indexes_p;
 	printf_ddd("Debug3: sync_idle_dosync_collectedevents_rsync_exclistpush(): \"%s\"\n", fpath);
 
 	// RSYNC case
@@ -935,7 +956,6 @@ gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, g
 	printf_ddd("Debug3: Adding to exclude-file: \"%s\"\n", fpath_rel);
 	fprintf(excf, "%s\n", fpath_rel);
 
-	free(fpath_rel_p);
 	return TRUE;
 }
 
@@ -986,7 +1006,7 @@ gboolean sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer e
 	FILE *outf		  = dosync_arg_p->outf;
 	options_t *options_p 	  = dosync_arg_p->options_p;
 	int *linescount_p	  =&dosync_arg_p->linescount;
-//	indexes_t *indexes_p 	  = dosync_arg_p->indexes_p;
+	indexes_t *indexes_p 	  = dosync_arg_p->indexes_p;
 	printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): \"%s\" with int-flags %p\n", fpath, (void *)(unsigned long)evinfo->flags);
 
 	if(!options_p->flags[RSYNC]) {
@@ -1032,7 +1052,8 @@ gboolean sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer e
 		if(*fpath_rel == 0x00)
 			break;
 		printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): Non-recursively \"%s\": Adding to rsynclist: \"%s\".\n", fpath, fpath_rel);
-		fprintf(outf, "%s\n", fpath_rel);
+		indexes_outaggr_add(indexes_p, strdup(fpath_rel_p));
+//		fprintf(outf, "%s\n", fpath_rel);
 		(*linescount_p)++;
 		end = strrchr(fpath_rel, '/');
 		if(end == NULL)
@@ -1097,7 +1118,9 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 				return ret;
 			}
 
+			g_hash_table_remove_all(indexes_p->out_lines_aggr_ht);
 			g_hash_table_foreach_remove(indexes_p->exc_fpath_ht, sync_idle_dosync_collectedevents_rsync_exclistpush, &dosync_arg);
+			g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, sync_idle_dosync_collectedevents_aggrout, &dosync_arg);
 			fclose(dosync_arg.outf);
 			strcpy(dosync_arg.excf_path, dosync_arg.outf_path);	// TODO: remove this strcpy()
 		}
@@ -1107,7 +1130,9 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 			return ret;
 		}
 
+		g_hash_table_remove_all(indexes_p->out_lines_aggr_ht);
 		g_hash_table_foreach_remove(indexes_p->fpath2ei_ht, sync_idle_dosync_collectedevents_listpush, &dosync_arg);
+		g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, sync_idle_dosync_collectedevents_aggrout, &dosync_arg);
 
 		if((ret=sync_idle_dosync_collectedevents_commitpart(&dosync_arg))) {
 			printf_e("Error: Cannot submit to sync the list \"%s\": %s (errno: %i)\n", dosync_arg.outf_path, strerror(ret), ret);
@@ -1410,6 +1435,7 @@ int sync_run(options_t *options_p) {
 	indexes.fpath2wd_ht      = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
 	indexes.fpath2ei_ht      = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, free);
 	indexes.exc_fpath_ht     = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
+	indexes.out_lines_aggr_ht= g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
 	i=0;
 	while(i<QUEUE_MAX) {
 		indexes.fpath2ei_coll_ht[i]  = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, free);
@@ -1442,6 +1468,7 @@ int sync_run(options_t *options_p) {
 	g_hash_table_destroy(indexes.fpath2wd_ht);
 	g_hash_table_destroy(indexes.fpath2ei_ht);
 	g_hash_table_destroy(indexes.exc_fpath_ht);
+	g_hash_table_destroy(indexes.out_lines_aggr_ht);
 	i=0;
 	while(i<QUEUE_MAX) {
 		g_hash_table_destroy(indexes.fpath2ei_coll_ht[i]);

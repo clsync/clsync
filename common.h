@@ -173,6 +173,7 @@ struct indexes {
 	GHashTable *exc_fpath_ht;
 	GHashTable *exc_fpath_coll_ht[QUEUE_MAX];
 	GHashTable *fpath2ei_coll_ht[QUEUE_MAX];
+	GHashTable *out_lines_aggr_ht;
 };
 typedef struct indexes indexes_t;
 

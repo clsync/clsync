@@ -14,13 +14,10 @@ function rsynclist() {
 
 	excludefrom=''
 	if [ "$EXCLISTFILE" != "" ]; then
-		sort < "$EXCLISTFILE" | uniq > "$EXCLISTFILE"-uniq
-		excludefrom="--exclude-from=${EXCLISTFILE}-uniq"
+		excludefrom="--exclude-from=${EXCLISTFILE}"
 	fi
 
-	sort < "$LISTFILE" | uniq > "$LISTFILE"-uniq
-	rsync -avH --delete-before "$excludefrom" --include-from="${LISTFILE}-uniq" --exclude='*' "$FROM"/ "$TO"/
-	rm -f -- "${LISTFILE}-uniq" "${EXCLISTFILE}-uniq"
+	rsync -avH --delete-before "$excludefrom" --include-from="${LISTFILE}" --exclude='*' "$FROM"/ "$TO"/
 }
 
 case "$ACTION" in
