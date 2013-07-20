@@ -8,8 +8,9 @@ Contents
 3.) Installing
 4.) How to use
 5.) Example of usage
-6.) Known issues
-7.) Support
+6.) Recommended configuration
+7.) Known issues
+8.) Support
 
                  _____________________________________________                
 
@@ -104,7 +105,8 @@ deb [arch=amd64] http://mirror.mephi.ru/debian-mephi/ unstable main
 4.) How to use
 --------------
 
-How to use is described in "man" ;). What is not described, you can ask me personally (see "Support").
+How to use is described in "man" ;). What is not described, you can ask me
+personally (see "Support").
 
                  _____________________________________________                
 
@@ -120,7 +122,31 @@ directory "example/testdir/to" ;)
                  _____________________________________________                
 
 
-6.) Known issues
+6.) Recommended configuration
+--------------------
+
+First of all, recommended and not recommended options are notices in the
+manpage.
+
+However let's describe 3 situations:
+
+- You're backing-up over very slow channel:
+clsync -l backup -R -d /dev/shm -t 600 -T 3600 -B $[1024 * 1024 * 16] /home/user /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules
+
+This will minimize network traffic. And pthread-ing is removed due to rarely
+updating.
+
+- You're syncing ordinary web-server over 1Gbs channel:
+clsync -l mirror -p -R -d /dev/shm /var/www /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules
+
+- You're syncing only few files from huge file tree (with a great lot of
+excludes):
+clsync -l mirror -p -R -d /dev/shm -I /home/user /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules
+
+                 _____________________________________________                
+
+
+7.) Known issues
 
     1.) Doesn't compiles on old systems
 
@@ -133,7 +159,7 @@ directory "example/testdir/to" ;)
 
                  _____________________________________________                
 
-7.) Support
+8.) Support
 
 
     To get support, you can contact with me this ways:
