@@ -945,8 +945,6 @@ gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, g
 	printf_ddd("Debug3: sync_idle_dosync_collectedevents_rsync_exclistpush(): \"%s\"\n", fpath);
 
 	// RSYNC case
-	// TODO:
-	// - Deduplicate output records
 	size_t fpathlen = strlen(fpath);
 	char *fpath_rel_p = xmalloc(fpathlen+1);
 	char *fpath_rel = fpath_rel_p;
@@ -1017,9 +1015,6 @@ gboolean sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer e
 	}
 
 	// RSYNC case
-	// TODO:
-	// - Deduplicate output records
-
 	if(*linescount_p >= options_p->rsyncinclimit) {
 		int ret;
 		if((ret=sync_idle_dosync_collectedevents_commitpart(dosync_arg_p))) {
