@@ -1,16 +1,21 @@
 
-Contents:
+Contents
+--------
 
 0.) Name
 1.) Motivation
 2.) inotify vs fanotify
-3.) How to use
-4.) Known issues
-5.) Support
+3.) Installing
+4.) How to use
+5.) Example of usage
+6.) Known issues
+7.) Support
 
                  _____________________________________________                
 
+
 0.) Name
+--------
 
 Why "clsync"? The first name of the utility was "insync" (due to inotify), but
 then I suggested to use "fanotify" instead of "inotify" and utility was been
@@ -26,6 +31,7 @@ written on "LUA" and may be used for the same purposes.
 
 
 1.) Motivation
+--------------
 
 This utility was been writted for two purposes:
 	- for making failover clusters
@@ -63,7 +69,9 @@ good and useful utility, just it's not appropriate for us.
 
                  _____________________________________________                
 
+
 2.) inotify vs fanotify:
+------------------------
 
 It's said, that fanotify is much better, than inotify. So I started to write 
 this program with using of fanotify. However I encountered the problem, that
@@ -74,157 +82,9 @@ the program, like "directory creation" or "file deletion". So I switched to
 
                  _____________________________________________                
 
-3.) How to use
 
-First of all, I recommend you to look into the "man" ;).
-
-However, well, let's see:
-
-d[13:25:13] [xaionaro@linux ~/clsync]$ ./clsync 
-syntax: clsync [options] <watch dir> <action script> [file with rules regexps]
-possible options:
-        --background              -b
-        --pthread                 -p
-        --collectdelay            -t
-        --commondelay             -w
-        --outlistsdir             -d
-        --rsync                   -R
-        --dontunlinklists         -U
-        --bigfilethreshold        -B
-        --bigfilecollectdelay     -T
-        --verbose                 -v
-        --debug                   -D
-        --quite                   -q
-        --fanotify                -f
-        --inotify                 -i
-        --label                   -l
-        --help                    -h
-        --version                 -V
-
-"watch dir"	- what dir to recursively watch for events
-"action script"	- path to script, that will be executed to process events
-"file with rules regexps" - file with regexps of what files/dirs to watch
-
-Options with "*" requires an argument:
-
-  --background	- daemonize
-  --pthread	- use multi-threading
-* --collectdelay - delay to collect events for ordinary files/dirs (def: 30)
-* --commondelay	- delay in addition for all queues (def: 15)
-* --outlistsdir	- path to directory, where clsync should temporary save his
-events' lists
-  --rsync	- forces to generate list-files for "--include-from" of rsync
-  --dontunlinklists - forces to do not delete list-files
-* --bigfilethreshold - file size theshold to mark file as big (def: 134217728)
-* --bigfilecollectdelay - delay to collect events for big files (def: 1800)
-  --verbose	- increases verbosity (doesn't do anything at the moment)
-  --debug	- increases debugging output
-  --quite	- suppresses errors output
-  --fanotify	- uses "fanotify" subsystem instead of "inotify"
-  --inotify	- uses "inotify" subsystem instead of "fanotify" (def)
-* --label	- sets label of current clsync instance
-  --help	- outputs the same info as above
-  --version	- outputs version of clsync
-
-
-Now, let me explain few things:
-
---pthread - Should be used to watch huge file trees with high dynamics to
-remove huge delays to update something due to updating something another
-
---collectdelay - Is way to aggregate events for ordinary files/dirs. Than this
-value greater, the aggrigation will be more effective, but the sync delay will
-be higher
-
---outlistsdir - Enables "sync by list" notification of "action script", but to
-sync by list it's required a directory for temporary files (with lists of 
-events). So you're aggregation a lot of actions per collect-delay period,
-it's need to provide it and set the path to it to this parameter.
-
---fanotify - Enables "fanotify" subsystem instead of "inotify". However
-developing of "fanotify" support was been frozen at the start of this program
-life, so "fanotify" doesn't work at the moment. Don't use it :)
-
---label - May be useful, if you're going to serve different clsync instances
-by one action script
-
-
-Multi-threading:
-
-As I said, pthread is recommended for file trees with high dynamics to
-minimize side-effected delays. However threading code is much more complex,
-so the sum of bugs there will be much higher. If you will find some of them,
-please mail me, I'll fix it :)
-
-
-Delays' calculcation:
-
-Ordinary file/dir maximum sync delay = collectdelay + commondelay
-Big files maximum sync delay = bigfilecollectdelay + commondelay
-
-
-Action script:
-
-The clsync with run "action script" every time, when it will want to notify
-about requirement of sync. So the "action script" should do this syncing by
-this notifications.
-
-The clsync can run "action script" with four ways:
-    a.) action_script initialsync label dirpath
-    b.) action_script sync label evmask path
-    c.) action_script synclist label listpath
-    d.) action_script rsynclist label rsynclistpath
-
-In all four cases, clsync passes parameter "label" (the label of current, 
-instance, see "--label").
-In case "a", clsync asks "action script" to recursively sync the dir
-"dirpath".
-In case 'b', clsync asks "action script" to non-recursively sync the file/dir
-"path" due to event of mask "evmask".
-In case "c", clsync asks "action script" to non-recursively sync files/dirs
-from list in file "listpath".
-In case "d", clsync asks "action script" to run "rsync" with parameters
-'-aH --delete-before --include-from="rsynclistpath" --exclude "*"'.
-
-Format of list-files:
-
-List-files "consists" from lines (delimited by NL, without CR) of next format:
-sync label evmask path
-
-"sync" is always "sync" at the moment. It's supposed to be supported different
-commands in this list, but at the moment there's only "sync" supported.
-"label" is "label" (see "--label").
-"evmask" is mask of the event, why the file/dir should be updated (see below).
-"path" is the path of file/dir that should be updated.
-
-
-Event mask:
-
-Event mask is bitmask sum of events of the file/dir, that were been aggregated
-for collect-delay. You can learn that bits in "/usr/include/linux/inotify.h".
-
-
-Rules file:
-
-Filter riles can be placed into rules-file with one rule per line.
-
-Rule format: [+|-][fd*]regexp
-
-"+" - means include; "-" - means exclude;
-"f" - means file;    "d" - means directory; "*" - means all.
-
-For example: -*/[Tt]estdir
-
-
-Example:
-
-Example of usage, that works on my PC is in directory "example". Just run
-"clsync-start.sh" and try to create/modify/delete files/dirs in
-"example/testdir/from". All modifications should appear (with some delay) in
-directory "example/testdir/to" ;)
-
-
-Installing:
+3.) Installing
+--------------
 
 First of all, you should install dependencies to compile clsync. As you can
 see from GNUmakefile clsync depends only on "glib-2.0", so on debian-like
@@ -240,7 +100,27 @@ deb [arch=amd64] http://mirror.mephi.ru/debian-mephi/ unstable main
 
                  _____________________________________________                
 
-4.) Known issues
+
+4.) How to use
+--------------
+
+How to use is described in "man" ;). What is not described, you can ask me personally (see "Support").
+
+                 _____________________________________________                
+
+
+5.) Example of usage
+--------------------
+
+Example of usage, that works on my PC is in directory "example". Just run
+"clsync-start.sh" and try to create/modify/delete files/dirs in
+"example/testdir/from". All modifications should appear (with some delay) in
+directory "example/testdir/to" ;)
+
+                 _____________________________________________                
+
+
+6.) Known issues
 
     1.) Doesn't compiles on old systems
 
@@ -253,7 +133,7 @@ deb [arch=amd64] http://mirror.mephi.ru/debian-mephi/ unstable main
 
                  _____________________________________________                
 
-5.) Support
+7.) Support
 
 
     To get support, you can contact with me this ways:
