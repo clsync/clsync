@@ -41,7 +41,7 @@ updaterevision:
 	touch main.c
 
 clean:
-	rm -f $(binary) $(binarydebug) $(objs)
+	rm -f $(binary) $(binarydebug) $(objs) revision.h
 	rm -rf example/testdir example/rules
 
 install:
