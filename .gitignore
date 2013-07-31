@@ -24,5 +24,6 @@ debian/clsync
 debian/clsync/*
 debian/clsync.debhelper.log
 debian/clsync.substvars
+debian/files
 example/rules
 testdir
