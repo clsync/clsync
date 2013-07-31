@@ -1,5 +1,5 @@
-clsync (0.0-1) unstable; urgency=low
+clsync (0.0-release) unstable; urgency=low
 
   * Initial release
 
- -- Dmitry Yu Okunev <xai@mephi.ru>  Wed, 17 Jul 2013 21:25:45 +0400
+ -- Artyom A Anikeev <anikeev@ut.mephi.ru>  Wed, 17 Jul 2013 21:25:45 +0400
