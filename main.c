@@ -63,7 +63,7 @@ int syntax() {
 }
 
 int version() {
-	printf("clsync v%i.%i.%i\n\t"AUTHOR"\n", VERSION_MAJ, VERSION_MIN, REVISION);
+	printf("clsync v%i.%i"REVISION"\n\t"AUTHOR"\n", VERSION_MAJ, VERSION_MIN);
 	exit(0);
 }
 

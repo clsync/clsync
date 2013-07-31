@@ -37,7 +37,7 @@ onoldsystem: updaterevision
 	$(CC) $(OLDSYSTEMCFLAGS) $(CFLAGS) $(INC) $(LDFLAGS) *.c -o $(binary)
 
 updaterevision:
-	(echo -n '#define REVISION '; git log | grep -c ^commit) > revision.h
+	(echo -n '#define REVISION "'; [ -d .git ] && (echo -n '.'; git log 2>/dev/null | grep -c ^commit | tr -d "\n") || echo -n '-release'; echo '"') > revision.h
 	touch main.c
 
 clean:
@@ -57,5 +57,4 @@ deinstall:
 dpkg: clean
 	tar --exclude "debian" --exclude-vcs -C .. -cJvf ../clsync_0.0.orig.tar.xz clsync
 	dpkg-buildpackage -rfakeroot
-
 
