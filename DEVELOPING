@@ -49,8 +49,9 @@ appropriate arguments to queue the syncing.
 When the execution will back to sync_inotify_loop() code it will proceed to
 sync_idle().
 
-sync_idle() executes _sync_exec_idle() to cleanup previous executions() with
-execvp() and sync_idle_dosync_collectedevents() to process new events.
+sync_idle() executes _sync_exec_idle() to cleanup after previous executions
+of sync_exec_thread() and executes sync_idle_dosync_collectedevents() to
+process new events.
 
 
 sync_idle_dosync_collectedevents() prepares a lists of exclusion and inclusion
