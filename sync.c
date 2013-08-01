@@ -958,7 +958,7 @@ gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, g
 }
 
 int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p) {
-	printf_ddd("Debug3: Commiting the file\n");
+	printf_ddd("Debug3: Committing the file\n");
 	options_t *options_p = dosync_arg_p->options_p;
 	fclose(dosync_arg_p->outf);
 	dosync_arg_p->outf = NULL;
