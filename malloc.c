@@ -31,7 +31,7 @@ char *xmalloc(size_t size) {
 		exit(errno);
 	}
 
-	memset(ret, size, 0);	// Just in case
+	memset(ret, 0, size);	// Just in case
 	return ret;
 }
 
@@ -46,7 +46,7 @@ char *xcalloc(size_t nmemb, size_t size) {
 		exit(errno);
 	}
 
-	memset(ret, nmemb*size, 0);	// Just in case
+	memset(ret, 0, nmemb*size);	// Just in case
 	return ret;
 }
 
