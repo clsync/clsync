@@ -4,54 +4,54 @@
 .SH NAME
 clsync \- live sync tool, written on GNU C
 .SH SYNOPSIS
-.B clsync [-bpvDqfih] 
-.B [-t
-.I ordinary-delay
+.B clsync [\-bpvDqfih] 
+.B [\-t
+.I ordinary\-delay
 .B ]
-.B [-w
-.I additional-delay
+.B [\-w
+.I additional\-delay
 .B ]
-.B [-d
-.I tmpdir-path
+.B [\-d
+.I tmpdir\-path
 .B ]
-.B [-B
-.I filesize-theshold
+.B [\-B
+.I filesize\-theshold
 .B ]
-.B [-t
-.I bigfiles-delay
+.B [\-t
+.I bigfiles\-delay
 .B ]
-.B [-l
+.B [\-l
 .I label
 .B ]
-.I watch-dir
-.I action-script
+.I watch\-dir
+.I action\-script
 .B [
-.I rules-file
+.I rules\-file
 .B ]
 .SH DESCRIPTION
 .B clsync
 executes
-.I action-script
+.I action\-script
 with appropriate arguments on FS events in directory
-.I watch-dir
+.I watch\-dir
 using the
 .BR inotify (7)
 Linux kernel subsystem.
 
-Extended regex-rules to filter what files and
+Extended regex\-rules to filter what files and
 directories to sync may be placed in
-.I rules-file
+.I rules\-file
 
 
 .SH OPTIONS
 
-.B -b, --background
+.B \-b, \-\-background
 .RS 8
 Daemonize, forcing clsync to fork() on start.
 
 .PP
 .RE
-.B -p, --pthread
+.B \-p, \-\-pthread
 .RS 8
 Use
 .BR pthreads (7)
@@ -59,23 +59,23 @@ to parallelize syncing processes.
 .RE
 
 .PP
-.B -t, --collectdelay
-.I ordinary-delay
+.B \-t, \-\-collectdelay
+.I ordinary\-delay
 .RS 8
 Sets the delay (in seconds) to collect events about ordinary files and
 directories. Total maximum delay for ordinary files and
 directories will be
-.I ordinary-delay
+.I ordinary\-delay
 +
-.I additional-delay
+.I additional\-delay
 seconds.
 
 Default value is "30".
 .RE
 
 .PP
-.B -w, --commondelay
-.I additional-delay
+.B \-w, \-\-commondelay
+.I additional\-delay
 .RS 8
 Sets the additional delay (in seconds) to collect events about any file
 or directory.
@@ -84,39 +84,39 @@ Default value is "15".
 .RE
 
 .PP
-.B -d, --outlistsdir
-.I tmpdir-path
+.B \-d, \-\-outlistsdir
+.I tmpdir\-path
 .RS 8
-Sets directory path to output temporary events-lists files.
+Sets directory path to output temporary events\-lists files.
 
 If this option is enabled,
 .B clsync
 will execute
-.I action-script
+.I action\-script
 only once per aggregated events list with passing path to a file with the
 list (action "synclist").
 Otherwise,
 .B clsync
 will execute
-.I action-script
+.I action\-script
 per every file in aggregated events list (action "sync").
 
 See
 .B ACTION SCRIPT
-\S*.
+\*S.
 
 Is not set by default.
 .RE
 
 .PP
-.B -R, --rsync
+.B \-R, \-\-rsync
 .RS 8
 Forces
 .B clsync
 to use "rsynclist" action instead of "initialsync" and "synclist" (see 
 .B ACTION SCRIPT
 ). This option can be used only with
-.I --outlistsdir
+.I \-\-outlistsdir
 option.
 
 Recommended option.
@@ -125,16 +125,16 @@ Is not set by default.
 .RE
 
 .PP
-.B -L, --rsyncinclimit
-.I rsync-includes-line-limit
+.B \-L, \-\-rsyncinclimit
+.I rsync\-includes\-line\-limit
 .RS 8
 Sets soft limit for lines count in files by path
-.I rsync-listpath
-\*S. Unfortunatelly, rsync works very slowly with huge "--include-from" files.
+.I rsync\-listpath
+\*S. Unfortunately, rsync works very slowly with huge "\-\-include\-from" files.
 So,
 .B clsync
 splits that list with approximately
-.I rsync-includes-line-limit
+.I rsync\-includes\-line\-limit
 lines per list if it's too big, and executes by one rsync instance per list
 part.
 
@@ -142,7 +142,7 @@ Default value is "20000".
 .RE
 
 .PP
-.B -I, --rsyncpreferinclude
+.B \-I, \-\-rsyncpreferinclude
 .RS 8
 Forces
 .B clsync
@@ -153,7 +153,7 @@ See
 .B case d
 of
 .B ACTION SCRIPT
-\S*.
+\*S.
 
 This option is not recommended.
 
@@ -161,18 +161,18 @@ Is not set by default.
 .RE
 
 .PP
-.B -U, --dontunlinklists
+.B \-U, \-\-dontunlinklists
 .RS 8
-Do not delete list-files after
-.I action-script
+Do not delete list\-files after
+.I action\-script
 has finished.
 
 Is not set by default.
 .RE
 
 .PP
-.B -B, --bigfilethreshold
-.I filesize-threshold
+.B \-B, \-\-bigfilethreshold
+.I filesize\-threshold
 .RS 8
 Sets file size threshold (in bytes) that separates ordinary files from
 "big files". Events about "big files" are processed in another queue with
@@ -183,50 +183,50 @@ Default value is "134217728" ["128 MiB"].
 .RE
 
 .PP
-.B -T, --bigfilescollectdelay
-.I bigfiles-delay
+.B \-T, \-\-bigfilescollectdelay
+.I bigfiles\-delay
 .RS 8
 Sets the delay (in seconds) to collect events about "big files" (see
-.I filesize-threshold
+.I filesize\-threshold
 ). Total maximum delay for "big files" will be 
-.I bigfiles-delay
+.I bigfiles\-delay
 +
-.I additional-delay
+.I additional\-delay
 seconds.
 
 Default value is "1800".
 .RE
 
 .PP
-.B -v, --verbose
+.B \-v, \-\-verbose
 .RS 8
 This option is supposed to increase verbosity. But at the moment there's no
 "verbose output" in the code, so the option does nothing. :)
 .RE
 
 .PP
-.B -d, --debug
+.B \-d, \-\-debug
 .RS 8
 Increases debugging output. Maximum debugging output will be with
-three or more "d" flags, for example: -ddd
+three or more "d" flags, for example: \-ddd
 .RE
 
 .PP
-.B -q, --quite
+.B \-q, \-\-quite
 .RS 8
 Suppresses error messages.
 .RE
 
 .PP
-.B -f, --fanotify
+.B \-f, \-\-fanotify
 .RS 8
 Switches monitor subsystem to "fanotify" [it's described for
-future-compatibility].
+future\-compatibility].
 .I Don't_use_this_option!
 .RE
 
 .PP
-.B -i, --inotify
+.B \-i, \-\-inotify
 .RS 8
 Switches monitor subsystem to "inotify".
 
@@ -234,53 +234,52 @@ Is set by default.
 .RE
 
 .PP
-.B -l, --label
+.B \-l, \-\-label
 .I label
 .RS 8
 Sets a label for this instance of clsync. The
 .I label
 will be passed to
-.I action-script
+.I action\-script
 every execution.
 
 Default value is "nolabel".
 .RE
 
 .PP
-.B -h, --help
+.B \-h, \-\-help
 .RS 8
 Outputs options list and exits with exitcode "0".
 .RE
 
 .PP
-.B -V, --version
+.B \-V, \-\-version
 .RS 8
 Outputs clsync version and exits with exitcode "0".
 .RE
 
-.Nm
 .SH ACTION SCRIPT
 .B clsync
 executes
-.I action-script
+.I action\-script
 that supposed to take care of the actual syncing process. Therefore
 .B clsync
 is only a convenient way to run a syncing script.
 
 .B clsync
 can run
-.I action-script
+.I action\-script
 in four ways:
 
 case
 .B a
 .RS
-.I action-script
+.I action\-script
 initialsync
 .I label dirpath
 
 In this case,
-.I action-script
+.I action\-script
 is supposed to recursively sync data from directory by path
 .I dirpath
 with manual excluding extra files.
@@ -289,13 +288,13 @@ with manual excluding extra files.
 case
 .B b
 .RS
-.I action-script
+.I action\-script
 sync
 .I label evmask path
 
 In this case,
-.I action-script
-is supposed to non-recursively sync file or directory by
+.I action\-script
+is supposed to non\-recursively sync file or directory by
 .I path
 \*S. With
 .I evmask
@@ -306,13 +305,13 @@ it's passed bitmask of events with the file or directory (see
 case
 .B c
 .RS
-.I action-script
+.I action\-script
 synclist
 .I label listpath
 
 In this case,
-.I action-script
-is supposed to non-recursively sync files and directories from list in a file by
+.I action\-script
+is supposed to non\-recursively sync files and directories from list in a file by
 path
 .I listpath
 \*S(see below). With
@@ -324,39 +323,39 @@ it's passed bitmask of events with the file or directory (see
 case
 .B d
 .RS
-.I action-script
+.I action\-script
 rsynclist
-.I label rsync-listpath [rsync-exclude-listpath]
+.I label rsync\-listpath [rsync\-exclude\-listpath]
 
 In this case,
-.I action-script
+.I action\-script
 is supposed to run "rsync" application with parameters: 
 
--aH --delete-before --include-from
-.I rsync-listpath
---exclude '*'
+\-aH \-\-delete\-before \-\-include\-from
+.I rsync\-listpath
+\-\-exclude '*'
 
 if option
-.I --rsyncpreferinclude
+.I \-\-rsyncpreferinclude
 is enabled.
 
 And with parameters:
 
--aH --delete-before --exclude-from
-.I rsync-exclude-listpath
---include-from
-.I rsync-listpath
---exclude '*'
+\-aH \-\-delete\-before \-\-exclude\-from
+.I rsync\-exclude\-listpath
+\-\-include\-from
+.I rsync\-listpath
+\-\-exclude '*'
 
 if option
-.I --rsyncpreferinclude
+.I \-\-rsyncpreferinclude
 is disabled.
 .RE
 
 As can be noticed, in all four cases clsync's
 .I label
 is passed (see 
-.I --label
+.I \-\-label
 ).
 
 The
@@ -378,24 +377,24 @@ it's passed bitmask of events with the file or directory (see
 
 .SH RULES
 Filter riles can be placed into
-.I rules-file
+.I rules\-file
 with one rule per line.
 
 Rule format:
-.I [+|-][fd*]regexp
+.I [+|\-][fd*]regexp
 
 .I +
-- means include;
-.I -
-- means exclude;
+\- means include;
+.I \-
+\- means exclude;
 .I f
-- means file;
+\- means file;
 .I d
-- means directory;
+\- means directory;
 .I *
-- means all.
+\- means all.
 
-For example: -*/[Tt]estdir
+For example: \-*/[Tt]estdir
 
 .SH DIAGNOSTICS
 The following diagnostics may be issued on stderr:
