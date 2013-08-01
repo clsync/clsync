@@ -167,13 +167,13 @@ struct eventinfo {
 typedef struct eventinfo eventinfo_t;
 
 struct indexes {
-	GHashTable *wd2fpath_ht;
-	GHashTable *fpath2wd_ht;
-	GHashTable *fpath2ei_ht;
-	GHashTable *exc_fpath_ht;
-	GHashTable *exc_fpath_coll_ht[QUEUE_MAX];
-	GHashTable *fpath2ei_coll_ht[QUEUE_MAX];
-	GHashTable *out_lines_aggr_ht;
+	GHashTable *wd2fpath_ht;			// watching descriptor -> file path
+	GHashTable *fpath2wd_ht;			// file path -> watching descriptor
+	GHashTable *fpath2ei_ht;			// file path -> event information
+	GHashTable *exc_fpath_ht;			// excluded file path
+	GHashTable *exc_fpath_coll_ht[QUEUE_MAX];	// excluded file path aggregation hashtable for every queue
+	GHashTable *fpath2ei_coll_ht[QUEUE_MAX];	// "file path -> event information" aggregation hashtable for every queue
+	GHashTable *out_lines_aggr_ht;			// output lines aggregation hashtable
 };
 typedef struct indexes indexes_t;
 
