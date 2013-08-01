@@ -1,0 +1,86 @@
+
+This documentation may be outdated. Sorry if it's so :(
+
+
+Here's very short description of how the program works:
+
+
+Program execution starts with main() function in "main.c".
+In turn, main() sets default configuration and executes:
+ - parse_arguments() to parse "argv"
+ - main_rehash() to parse file with filter-rules
+ - becomedaemon() to fork() to daemonize
+ - and sync_run() of "sync.c" to proceed to syncing process
+
+First of all, sync_run prepares hashtables and other things to be used in
+future.. and then sync_run() executes:
+ - sync_notify_init() to initialize file system monitoring kernel interface
+ - sync_mark_walk() to mark all directories in the monitoring interface
+ - sync_notify_loop() to run infinite loop of checking and processing of
+the program
+
+sync_notify_loop() runs sync_fanotify_loop() or sync_inotify_loop() depending
+on selected FS monitoring kernel interface ("inotify" or "fanotify"). However,
+at the moment fanotify is not supported, so we will suppose, that the
+sync_inotify_loop() is used.
+
+sync_inotify_loop() waits for events with sync_inotify_wait(), handling
+them with sync_inotify_handle() and executes sync_idle() to process
+background things.
+
+Waiting and handling the events is proceeded with using of 3 queues:
+1.) for normal files and directories
+2.) for big files
+3.) for immidiate syncing
+
+To be able to do that, the events are separated and stored in 3 hashtables
+(indexes_p->fpath2ei_coll_ht[queue_id]).
+
+sync_inotify_handle() is:
+ - managing watch descriptors
+ - executes rules_check() to filter events, then aggregating them into
+"indexes_p->fpath2ei_ht"
+ - marking and syncing newly created directories
+ - executing sync_inotify_handle_dosync() for every event to queue the syncing
+
+sync_inotify_handle_dosync() is just executes sync_queuesync() with
+appropriate arguments to queue the syncing.
+
+When the execution will back to sync_inotify_loop() code it will proceed to
+sync_idle().
+
+sync_idle() executes _sync_exec_idle() to cleanup previous executions() with
+execvp() and sync_idle_dosync_collectedevents() to process new events.
+
+
+sync_idle_dosync_collectedevents() prepares a lists of exclusion and inclusion
+to be synced and executes sync_idle_dosync_collectedevents_commitpart() to
+commit the lists. In turn, sync_idle_dosync_collectedevents_commitpart()
+executes sync_exec_thread() or sync_exec() depending on "argv" arguments.
+
+sync_exec_thread and sync_exec executes __sync_exec that calls execvp to run
+external syncer process.
+
+
+The external syncer process is supposed to be rsync or any script that is able
+to handle with the task.
+
+
+
+Traces:
+
+syncing:
+
+main() -> 
+sync_run() -> 
+sync_notify_loop() -> 
+sync_inotify_loop() ->
+sync_idle() -> 
+sync_idle_dosync_collectedevents() -> 
+sync_idle_dosync_collectedevents_commitpart() -> 
+SYNC_EXEC() ->
+(sync_exec_thread|sync_exec)() -> 
+__sync_exec() ->
+execvp()
+
+
