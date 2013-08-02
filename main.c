@@ -273,6 +273,7 @@ int main_rehash(options_t *options_p) {
 int main(int argc, char *argv[]) {
 	struct options options;
 	int ret = 0, nret;
+	struct stat64 stat64;
 	memset(&options, 0, sizeof(options));
 	options.notifyengine 			   = DEFAULT_NOTIFYENGINE;
 	options.commondelay 			   = DEFAULT_COMMONDELAY;
@@ -301,14 +302,26 @@ int main(int argc, char *argv[]) {
 	}
 #endif
 
-	nret=main_rehash(&options);
-	if(nret)
-		ret = nret;
-
 	if(access(options.actfpath, X_OK) == -1) {
 		printf_e("Error: \"%s\" is not executable: %s (errno: %i).\n", options.actfpath, strerror(errno), errno);
 		ret = errno;
 	}
+
+	lstat64(options.watchdir, &stat64);
+	if((stat64.st_mode & S_IFMT) == S_IFLNK) {
+		// TODO: Fix the problem with symlinks as watch dir.
+		//
+		// The proplems exists due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
+		// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
+		// it disables filters, because exclude-list will be empty.
+
+		printf_e("Error: Watch dir cannot be symlink, but \"%s\" is a symlink.\n", options.watchdir);
+		ret = EINVAL;
+	}
+
+	nret=main_rehash(&options);
+	if(nret)
+		ret = nret;
 
 	if(options.flags[BACKGROUND]) {
 		nret = becomedaemon();
