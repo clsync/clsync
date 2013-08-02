@@ -262,6 +262,7 @@ int _sync_exec_idle(options_t *options_p) {
 }
 
 int _sync_exec_cleanup(options_t *options_p) {
+	printf_ddd("Debug3: _sync_exec_cleanup()\n");
 	threadsinfo_t *threadsinfo_p = _sync_exec_getthreadsinfo();
 	if(threadsinfo_p == NULL)
 		return errno;
@@ -269,9 +270,10 @@ int _sync_exec_cleanup(options_t *options_p) {
 	// Waiting for threads:
 	printf_d("Debug: There're %i opened threads. Waiting.\n", threadsinfo_p->used);
 	while(threadsinfo_p->used) {
-		int ret, err;
+		int err;
 		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[--threadsinfo_p->used];
-		pthread_join(threadinfo_p->pthread, (void **)&ret);
+		pthread_join(threadinfo_p->pthread, (void **)&threadinfo_p->exitcode);
+		printf_dd("Debug2: thread #%i exitcode: %i\n", threadsinfo_p->used, threadinfo_p->exitcode);
 		if(threadinfo_p->callback)
 			if((err=threadinfo_p->callback(options_p, threadinfo_p->argv)))
 				printf_e("Warning: Got error from callback function: %s (errno: %i).\n", strerror(err), err);
@@ -281,6 +283,7 @@ int _sync_exec_cleanup(options_t *options_p) {
 			free(*(ptr++));
 		free(threadinfo_p->argv);
 	}
+	printf_ddd("Debug3: _sync_exec_cleanup(): All threads are closed.\n");
 
 	// Freeing
 	if(threadsinfo_p->allocated)
@@ -294,6 +297,7 @@ int _sync_exec_cleanup(options_t *options_p) {
 	// Reseting
 	memset(threadsinfo_p, 0, sizeof(*threadsinfo_p));	// Just in case;
 
+	printf_ddd("Debug3: _sync_exec_cleanup(): done.\n");
 	return 0;
 }
 
@@ -917,7 +921,7 @@ int sync_idle_dosync_collectedevents_listcreate(struct dosync_arg *dosync_arg_p,
 	}
 
 	setbuffer(dosync_arg_p->outf, dosync_arg_p->buf, BUFSIZ);
-	printf_ddd("Debug3: Created exclude list-file \"%s\"\n", fpath);
+	printf_ddd("Debug3: Created list-file \"%s\"\n", fpath);
 	dosync_arg_p->linescount = 0;
 
 	return 0;
@@ -1426,11 +1430,11 @@ void sync_term(int signal) {
 int sync_run(options_t *options_p) {
 	int ret, i;
 	indexes_t indexes = {NULL};
-	indexes.wd2fpath_ht      = g_hash_table_new_full(g_direct_hash, g_direct_equal, 0,    0);
-	indexes.fpath2wd_ht      = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
-	indexes.fpath2ei_ht      = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, free);
-	indexes.exc_fpath_ht     = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
-	indexes.out_lines_aggr_ht= g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
+	indexes.wd2fpath_ht      = g_hash_table_new_full(g_direct_hash,	g_direct_equal,	0,    0);
+	indexes.fpath2wd_ht      = g_hash_table_new_full(g_str_hash,	g_str_equal,	free, 0);
+	indexes.fpath2ei_ht      = g_hash_table_new_full(g_str_hash,	g_str_equal,	free, free);
+	indexes.exc_fpath_ht     = g_hash_table_new_full(g_str_hash,	g_str_equal,	free, 0);
+	indexes.out_lines_aggr_ht= g_hash_table_new_full(g_str_hash,	g_str_equal,	free, 0);
 	i=0;
 	while(i<QUEUE_MAX) {
 		indexes.fpath2ei_coll_ht[i]  = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, free);
@@ -1458,7 +1462,10 @@ int sync_run(options_t *options_p) {
 
 	_sync_exec_cleanup(options_p);
 
+	printf_ddd("sync_run(): Closing notify_d\n");
 	close(notify_d);
+
+	printf_ddd("sync_run(): Closing hash tables\n");
 	g_hash_table_destroy(indexes.wd2fpath_ht);
 	g_hash_table_destroy(indexes.fpath2wd_ht);
 	g_hash_table_destroy(indexes.fpath2ei_ht);

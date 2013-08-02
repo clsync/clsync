@@ -2,10 +2,11 @@
 DESTDIR ?= 
 PREFIX ?= /usr
 
-CFLAGS += -pipe -Wall -O2 -ggdb3 -fstack-protector-all --param ssp-buffer-size=4 -D_FORTIFY_SOURCE=2
-DEBUGCFLAGS = -pipe -Wall -Werror -ggdb3 -Wno-error=unused-variable -fstack-protector-all --param ssp-buffer-size=4 -D_FORTIFY_SOURCE=2
+CSECFLAGS = -fstack-protector-all --param ssp-buffer-size=4 -D_FORTIFY_SOURCE=2 -fstack-check
+CFLAGS += -pipe -Wall -O2 $(CSECFLAGS)
+DEBUGCFLAGS = -pipe -Wall -Werror -ggdb3 -Wno-error=unused-variable $(CSECFLAGS)
 
-NORMSYSTEMCFLAGS = -std=gnu11
+NORMSYSTEMCFLAGS = -std=gnu11 -march=native
 OLDSYSTEMCFLAGS = -std=gnu99 -DOLDSYSTEM
 
 LDFLAGS += $(shell pkg-config --libs glib-2.0) -lpthread -Xlinker -zrelro
