@@ -45,9 +45,11 @@ clean:
 	rm -rf example/testdir example/rules
 
 install:
-	mkdir -p "$(INSTDIR)/bin" "$(INSTDIR)/share/man/man1"
+	mkdir -p "$(INSTDIR)/bin" "$(INSTDIR)/share/man/man1" "$(INSTDIR)/share/doc/clsync"
+	cp -Rp example "$(INSTDIR)/share/doc/clsync"
+	chown -R 0:0 "$(INSTDIR)/share/doc/clsync"
 	install -m 755 -o root -s clsync "$(INSTDIR)"/bin/
-	install -m 755 -o root man/man1/clsync.1 "$(INSTDIR)"/share/man/man1/
+	install -m 644 -o root man/man1/clsync.1 "$(INSTDIR)"/share/man/man1/
 	rm -f "$(INSTDIR)"/share/man/man1/clsync.1.gz
 	gzip "$(INSTDIR)"/share/man/man1/clsync.1
 

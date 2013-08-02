@@ -1,4 +1,8 @@
-.\" Sorry, this's my first manpage :)
+.\" Sorry for my English 
+.\" --Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
+.\"
+.\" Thanks to oldlaptop [https://github.com/oldlaptop] for spell and
+.\" grammar correction of this page.
 .\"
 .TH CLSYNC 1 "JULY 2013" Linux "User Manuals"
 .SH NAME
@@ -403,6 +407,13 @@ Error: Cannot inotify_add_watch() on [...]
 .RS
 Not enough watching descriptors of inotify is allowed. It can be fixed
 by increasing value of "sysctl fs.inotify.max_user_watches"
+.RE
+.SH EXAMPLES
+Working example you can try out in "example/" or 
+"/usr/share/doc/clsync/example/" directory. Copy this directory somewhere
+(e.g. into "/tmp"). And try to run "clsync-start.sh" in there. Any
+files/directories modifications in "example/testdir/from" will be synced to
+"example/testdir/to" with few seconds delay.
 .RE
 .SH AUTHOR
 Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
