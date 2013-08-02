@@ -6,7 +6,7 @@
 .\"
 .TH CLSYNC 1 "JULY 2013" Linux "User Manuals"
 .SH NAME
-clsync \- live sync tool, written on GNU C
+clsync \- live sync tool, written in GNU C
 .SH SYNOPSIS
 .B clsync [\-bpvDqfih] 
 .B [\-t
@@ -97,13 +97,13 @@ If this option is enabled,
 .B clsync
 will execute
 .I action\-script
-only once per aggregated events list with passing path to a file with the
-list (action "synclist").
+once for each aggregated event list, passing the path to a file containing this list
+(action "synclist").
 Otherwise,
 .B clsync
 will execute
 .I action\-script
-per every file in aggregated events list (action "sync").
+for every file in the aggregated event list (action "sync").
 
 See
 .B ACTION SCRIPT
@@ -179,8 +179,8 @@ Is not set by default.
 .I filesize\-threshold
 .RS 8
 Sets file size threshold (in bytes) that separates ordinary files from
-"big files". Events about "big files" are processed in another queue with
-separate collecting delay. This is supposed to be used as means for unloading IO
+"big files". Events about "big files" are processed in another queue with a
+separate collecting delay. This is supposed to be used as a means of unloading IO
 resources.
 
 Default value is "134217728" ["128 MiB"].
@@ -211,8 +211,9 @@ This option is supposed to increase verbosity. But at the moment there's no
 .PP
 .B \-d, \-\-debug
 .RS 8
-Increases debugging output. Maximum debugging output will be with
-three or more "d" flags, for example: \-ddd
+Increases debugging output. This may be supplied multiple times for more
+debugging information, up to a maximum of three "d" flags (more will do nothing),
+for example: \-ddd
 .RE
 
 .PP
