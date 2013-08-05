@@ -1,0 +1,2 @@
+1. Remove pthreads metainfo GC
+2. Replace g_hash_table* with "hsearch" and so on.
