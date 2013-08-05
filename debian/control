@@ -12,7 +12,7 @@ Package: clsync
 Recommends: rsync
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: live sync tool based on inotify, written on GNU C
+Description: live sync tool based on inotify, written in GNU C
  Clsync recursively watches for source directory and executes external
  program to sync the changes. Clsync is adapted to used together with rsync.
  This utility is much more lightweight than competitors and supports such
