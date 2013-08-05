@@ -18,6 +18,8 @@ function rsynclist() {
 	fi
 
 	rsync -avH --delete-before "$excludefrom" --include-from="${LISTFILE}" --exclude='*' "$FROM"/ "$TO"/
+
+	return 0
 }
 
 case "$ACTION" in
