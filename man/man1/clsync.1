@@ -209,11 +209,11 @@ This option is supposed to increase verbosity. But at the moment there's no
 .RE
 
 .PP
-.B \-d, \-\-debug
+.B \-D, \-\-debug
 .RS 8
 Increases debugging output. This may be supplied multiple times for more
 debugging information, up to a maximum of three "d" flags (more will do nothing),
-for example: \-ddd
+for example: \-DDD
 .RE
 
 .PP
@@ -410,8 +410,8 @@ if you're excluding with regex in clsync's rules a lot of thousands files.
 They will be passed to rsync's exclude list one by one.
 
 To diagnose it, you can use "-U" option and look into 
-.I rsync\-exclude\-listpath file
-(see
+.I rsync\-exclude\-listpath
+file (see
 .B ACTION SCRIPT
 case 
 .B d
