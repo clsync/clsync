@@ -10,6 +10,7 @@ revision.h
 /clsync-debug
 
 # other:
+test.c
 build
 test
 test0
