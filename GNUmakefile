@@ -2,9 +2,9 @@
 DESTDIR ?= 
 PREFIX  ?= /usr
 
-CSECFLAGS ?= -fstack-protector-all -Wall --param ssp-buffer-size=4 -D_FORTIFY_SOURCE=2 -fstack-check
+CSECFLAGS ?= -fstack-protector-all -Wall --param ssp-buffer-size=4 -D_FORTIFY_SOURCE=2 -fstack-check -DPARANOID
 CFLAGS := -pipe -O2 $(CSECFLAGS) $(CFLAGS) 
-DEBUGCFLAGS ?= -pipe -Wall -Werror -ggdb3 -Wno-error=unused-variable $(CSECFLAGS)
+DEBUGCFLAGS ?= -pipe -Wall -Werror -ggdb3 -Wno-error=unused-variable $(CSECFLAGS) -D_DEBUG
 
 CARCHFLAGS ?= -march=native
 

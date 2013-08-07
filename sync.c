@@ -22,6 +22,7 @@
 #include "output.h"
 #include "fileutils.h"
 #include "malloc.h"
+#include "sync.h"
 
 
 // Checks file path by rules' expressions (from file)
@@ -155,7 +156,7 @@ static inline int indexes_outaggr_add(indexes_t *indexes_p, char *outline) {
 	return 0;
 }
 
-static threadsinfo_t *_sync_exec_getthreadsinfo() {	// TODO: optimize this
+static threadsinfo_t *thread_getinfo() {	// TODO: optimize this
 	static threadsinfo_t threadsinfo={0};
 #ifdef PTHREAD_MUTEX
 	if(!threadsinfo._mutex_init) {
@@ -170,8 +171,8 @@ static threadsinfo_t *_sync_exec_getthreadsinfo() {	// TODO: optimize this
 	return &threadsinfo;
 }
 
-threadinfo_t *_sync_exec_newthread() {
-	threadsinfo_t *threadsinfo_p = _sync_exec_getthreadsinfo();
+threadinfo_t *thread_new() {
+	threadsinfo_t *threadsinfo_p = thread_getinfo();
 	if(threadsinfo_p == NULL)
 		return NULL;
 
@@ -181,53 +182,82 @@ threadinfo_t *_sync_exec_newthread() {
 		threadsinfo_p->threads = (threadinfo_t *)xrealloc((char *)threadsinfo_p->threads, sizeof(*threadsinfo_p->threads)*(threadsinfo_p->allocated));
 	}
 
-	printf_dd("Debug2: _sync_exec_newthread -> thread_num: %i; used: %i\n", threadsinfo_p->used, threadsinfo_p->used+1);
-	return &threadsinfo_p->threads[threadsinfo_p->used++];
+	int thread_num = threadsinfo_p->used++;
+	threadinfo_t *threadinfo_p = &threadsinfo_p->threads[thread_num];
+
+#ifdef PARANOID
+	memset(threadinfo_p, 0, sizeof(&threadinfo_p));
+#endif
+	threadinfo_p->thread_num = thread_num;
+	threadinfo_p->state	 = STATE_RUNNING;
+
+	printf_dd("Debug2: thread_new -> thread_num: %i; used: %i\n", thread_num, threadsinfo_p->used);
+	return threadinfo_p;
 }
 
-int _sync_exec_delthread_bynum(int thread_num) {
-	printf_dd("Debug2: _sync_exec_delthread_bynum(%i)\n", thread_num);
-	threadsinfo_t *threadsinfo_p = _sync_exec_getthreadsinfo();
+int thread_del_bynum(int thread_num) {
+	printf_dd("Debug2: thread_del_bynum(%i)\n", thread_num);
+	threadsinfo_t *threadsinfo_p = thread_getinfo();
 	if(threadsinfo_p == NULL)
 		return errno;
 
 	if(thread_num >= threadsinfo_p->used)
 		return EINVAL;
 
-	threadsinfo_p->used--;
-	if(thread_num != threadsinfo_p->used) {
-		printf_ddd("Debug3: _sync_exec_delthread_bynum(): %i -> %i; left: %i\n", threadsinfo_p->used, thread_num, threadsinfo_p->used);
-		memcpy(&threadsinfo_p->threads[thread_num], &threadsinfo_p->threads[threadsinfo_p->used], sizeof(*threadsinfo_p->threads));
+	threadinfo_t *threadinfo_p = &threadsinfo_p->threads[thread_num];
+
+	char **ptr = threadinfo_p->argv;
+	if(ptr != NULL) {
+		while(*ptr)
+			free(*(ptr++));
+		free(threadinfo_p->argv);
 	}
 
-	printf_ddd("Debug3: _sync_exec_delthread_bynum(%i): there're %i threads left.\n", thread_num, threadsinfo_p->used);
+	threadsinfo_p->used--;
+	if(thread_num != threadsinfo_p->used) {
+		printf_ddd("Debug3: thread_del_bynum(): %i -> %i; left: %i\n", threadsinfo_p->used, thread_num, threadsinfo_p->used);
+		memcpy(threadinfo_p, &threadsinfo_p->threads[threadsinfo_p->used], sizeof(*threadinfo_p));
+	}
+
+	printf_ddd("Debug3: thread_del_bynum(%i): there're %i threads left.\n", thread_num, threadsinfo_p->used);
 	return 0;
 }
 
-int _sync_exec_threads_gc(options_t *options_p) {
-	threadsinfo_t *threadsinfo_p = _sync_exec_getthreadsinfo();
+int thread_gc(options_t *options_p) {
+	int thread_num;
+	threadsinfo_t *threadsinfo_p = thread_getinfo();
 	if(threadsinfo_p == NULL)
 		return errno;
-	
-	printf_dd("Debug2: _sync_exec_threads_gc(): There're %i threads.\n", threadsinfo_p->used);
-	int thread_num=0;
-	while(thread_num < threadsinfo_p->used) {
-		int ret=0;
+
+	printf_dd("Debug2: thread_gc(): There're %i threads.\n", threadsinfo_p->used);
+	thread_num=-1;
+	while(++thread_num < threadsinfo_p->used) {
+		int err;
 		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[thread_num];
 
-		printf_ddd("Debug3: _sync_exec_threads_gc(): Trying thread #%i.\n", thread_num);
-		int err;
+		printf_ddd("Debug3: thread_gc(): Trying thread #%i.\n", thread_num);
 
+#ifndef PARANOID
+		if(threadinfo_p->state != STATE_TERM) {
+			printf_ddd("Debug3: thread_gc(): Thread #%i is busy, skipping.\n", thread_num);
+//			thread_num++;
+			continue;
+		}
+		
+		printf_ddd("Debug3: thread_gc(): Thread #%i is finished with exitcode %i, deleting.\n", thread_num, threadinfo_p->exitcode);
+		switch((err=pthread_join(threadinfo_p->pthread, (void **)&threadinfo_p->exitcode))) {
+#else
 		switch((err=pthread_tryjoin_np(threadinfo_p->pthread, (void **)&threadinfo_p->exitcode))) {
-			case 0:
-				printf_ddd("Debug3: _sync_exec_threads_gc(): Thread #%i is finished with exitcode %i, deleting.\n", thread_num, ret);
-				break;
 			case EBUSY:
-				printf_ddd("Debug3: _sync_exec_threads_gc(): Thread #%i is busy, skipping.\n", thread_num);
-				thread_num++;
+				printf_ddd("Debug3: thread_gc(): Thread #%i is busy, skipping.\n", thread_num);
+//				thread_num++;
 				continue;
+#endif
+			case 0:
+				printf_ddd("Debug3: thread_gc(): Thread #%i is finished with exitcode %i, deleting.\n", thread_num, threadinfo_p->exitcode);
+				break;
 			default:
-				printf_e("Error: Got error while pthread_tryjoin_np(): %s (errno: %i).\n", strerror(err), err);
+				printf_e("Error: Got error while pthread_join() or pthread_tryjoin_np(): %s (errno: %i).\n", strerror(err), err);
 				return errno;
 
 		}
@@ -243,27 +273,17 @@ int _sync_exec_threads_gc(options_t *options_p) {
 				return err;
 			}
 
-		char **ptr = threadinfo_p->argv;
-		while(*ptr)
-			free(*(ptr++));
-		free(threadinfo_p->argv);
-
-		if(_sync_exec_delthread_bynum(thread_num))
+		if(thread_del_bynum(thread_num))
 			return errno;
 	}
 
-	printf_ddd("Debug3: _sync_exec_threads_gc(): There're %i threads left.\n", threadsinfo_p->used);
+	printf_ddd("Debug3: thread_gc(): There're %i threads left.\n", threadsinfo_p->used);
 	return 0;
-}
-
-int _sync_exec_idle(options_t *options_p) {
-	printf_ddd("Debug3: _sync_exec_idle()\n");
-	return _sync_exec_threads_gc(options_p);
 }
 
 int _sync_exec_cleanup(options_t *options_p) {
 	printf_ddd("Debug3: _sync_exec_cleanup()\n");
-	threadsinfo_t *threadsinfo_p = _sync_exec_getthreadsinfo();
+	threadsinfo_t *threadsinfo_p = thread_getinfo();
 	if(threadsinfo_p == NULL)
 		return errno;
 
@@ -294,8 +314,10 @@ int _sync_exec_cleanup(options_t *options_p) {
 		pthread_mutex_destroy(&threadsinfo_p->_mutex);
 #endif
 
+#ifdef PARANOID
 	// Reseting
 	memset(threadsinfo_p, 0, sizeof(*threadsinfo_p));	// Just in case;
+#endif
 
 	printf_ddd("Debug3: _sync_exec_cleanup(): done.\n");
 	return 0;
@@ -389,6 +411,24 @@ l_sync_exec_end:
 	return ret;
 }
 
+static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode) {
+	threadinfo_p->state    = STATE_TERM;
+	threadinfo_p->exitcode = exitcode;
+
+	// Notifying the parent-thread, that it's type to collect garbage threads
+	return kill(getpid(), SIGUSR_PTHREAD_GC);
+}
+
+int __sync_exec_thread(threadinfo_t *threadinfo_p) {
+	char **argv			= threadinfo_p->argv;
+
+	int ret = __sync_exec(argv);
+
+	thread_exit(threadinfo_p, ret);
+
+	return ret;
+}
+
 static inline int sync_exec_thread(options_t *options_p, thread_callbackfunct_t callback, ...) {
 	printf_dd("Debug2: sync_exec_thread()\n");
 
@@ -397,13 +437,14 @@ static inline int sync_exec_thread(options_t *options_p, thread_callbackfunct_t 
 
 	_sync_exec_getargv(argv, callback, strdup(arg));
 
-	threadinfo_t *threadinfo_p = _sync_exec_newthread();
+	threadinfo_t *threadinfo_p = thread_new();
 	if(threadinfo_p == NULL)
 		return errno;
 
 	threadinfo_p->callback = callback;
 	threadinfo_p->argv     = argv;
-	if(pthread_create(&threadinfo_p->pthread, NULL, (void *(*)(void *))__sync_exec, argv)) {
+
+	if(pthread_create(&threadinfo_p->pthread, NULL, (void *(*)(void *))__sync_exec_thread, threadinfo_p)) {
 		printf_e("Error: Cannot pthread_create(): %s (errno: %i).\n", strerror(errno), errno);
 		return errno;
 	}
@@ -539,6 +580,10 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 			return sync_exec       (options_p, NULL, options_p->actfpath, "initialsync", options_p->label, path, NULL);*/
 
 		return SYNC_EXEC(options_p, NULL, options_p->actfpath, "initialsync", options_p->label, path, NULL);
+
+#ifdef DOXYGEN
+		sync_exec(NULL, NULL); sync_exec_thread(NULL, NULL);
+#endif
 	}
 
 	// RSYNC case:
@@ -739,6 +784,11 @@ static inline int sync_dosync_exec(options_t *options_p, const char *evmask_str,
 	else
 		return sync_exec       (options_p, NULL, options_p->actfpath, "sync", options_p->label, evmask_str, fpath, NULL);*/
 	return SYNC_EXEC(options_p, NULL, options_p->actfpath, "sync", options_p->label, evmask_str, fpath, NULL);
+
+#ifdef DOXYGEN
+	sync_exec(NULL, NULL); sync_exec_thread(NULL, NULL);
+#endif
+
 }
 
 static int sync_dosync(const char *fpath, uint32_t evmask, options_t *options_p, indexes_t *indexes_p) {
@@ -998,6 +1048,10 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 	}
 
 	return 0;
+
+#ifdef DOXYGEN
+	sync_exec(NULL, NULL); sync_exec_thread(NULL, NULL);
+#endif
 }
 
 gboolean sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
@@ -1097,12 +1151,13 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 
 	char isrsyncpreferexclude = options_p->flags[RSYNC] && (!options_p->flags[RSYNC_PREFERINCLUDE]);
 
+#ifdef PARANOID
 	if(options_p->listoutdir != NULL) {
-		// Just in case:
 		g_hash_table_remove_all(indexes_p->fpath2ei_ht);
 		if(isrsyncpreferexclude)
 			g_hash_table_remove_all(indexes_p->exc_fpath_ht);
 	}
+#endif
 
 	int queue_id=0;
 	while(queue_id < QUEUE_MAX) {
@@ -1136,7 +1191,9 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 				return ret;
 			}
 
+#ifdef PARANOID
 			g_hash_table_remove_all(indexes_p->out_lines_aggr_ht);
+#endif
 			g_hash_table_foreach_remove(indexes_p->exc_fpath_ht, sync_idle_dosync_collectedevents_rsync_exclistpush, &dosync_arg);
 			g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, sync_idle_dosync_collectedevents_aggrout, &dosync_arg);
 			fclose(dosync_arg.outf);
@@ -1148,7 +1205,9 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 			return ret;
 		}
 
+#ifdef PARANOID
 		g_hash_table_remove_all(indexes_p->out_lines_aggr_ht);
+#endif
 		g_hash_table_foreach_remove(indexes_p->fpath2ei_ht, sync_idle_dosync_collectedevents_listpush, &dosync_arg);
 		g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, sync_idle_dosync_collectedevents_aggrout, &dosync_arg);
 
@@ -1162,10 +1221,11 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 }
 
 int sync_idle(int notify_d, options_t *options_p, indexes_t *indexes_p) {
-	int ret;
 
-	ret=_sync_exec_idle(options_p);
+#ifdef PARANOID
+	int ret=thread_gc(options_p);
 	if(ret) return ret;
+#endif
 
 	printf_ddd("Debug3: sync_idle(): calling sync_idle_dosync_collectedevents()\n");
 
@@ -1211,7 +1271,7 @@ int sync_fanotify_loop(int fanotify_d, options_t *options_p, indexes_t *indexes_
 }
 #endif
 
-static inline int sync_inotify_wait(int inotify_d, options_t *options_p, indexes_t *indexes_p) {
+int sync_inotify_wait(int inotify_d, options_t *options_p, indexes_t *indexes_p) {
 	static struct timeval tv={0};
 	time_t tm = time(NULL);
 	long mindelayleft = ((unsigned long)~0 >> 1);
@@ -1274,7 +1334,9 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 		return -1;
 	}
 
-	g_hash_table_remove_all(indexes_p->fpath2ei_ht);	// Just in case.
+#ifdef PARANOID
+	g_hash_table_remove_all(indexes_p->fpath2ei_ht);
+#endif
 
 	int count = 0;
 	char *ptr =  buf;
@@ -1383,6 +1445,10 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 	while(state != STATE_EXIT) {
 		int events = sync_inotify_wait(inotify_d, options_p, indexes_p);
 		switch(state) {
+			case STATE_PTHREAD_GC:
+				thread_gc(options_p);
+				state = STATE_RUNNING;
+				continue;
 			case STATE_RUNNING:
 				break;
 			case STATE_REHASH:
@@ -1417,6 +1483,10 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 
 	SYNC_INOTIFY_LOOP_IDLE;
 	return 0;
+
+#ifdef DOXYGEN
+	sync_idle(0, NULL, NULL);
+#endif
 }
 
 int sync_notify_loop(int notify_d, options_t *options_p, indexes_t *indexes_p) {
@@ -1433,13 +1503,21 @@ int sync_notify_loop(int notify_d, options_t *options_p, indexes_t *indexes_p) {
 	return -1;
 }
 
-void sync_rehash(int signal) {
+void sync_sig_pthread_gc(int signal) {
 	if(state_p)
-		*state_p = STATE_REHASH;
+		*state_p = STATE_PTHREAD_GC;
+
 	return;
 }
 
-void sync_term(int signal) {
+void sync_sig_rehash(int signal) {
+	if(state_p)
+		*state_p = STATE_REHASH;
+
+	return;
+}
+
+void sync_sig_term(int signal) {
 	if(state_p)
 		*state_p = STATE_TERM;
 
@@ -1470,9 +1548,11 @@ int sync_run(options_t *options_p) {
 	ret = sync_mark_walk(notify_d, options_p, options_p->watchdir, &indexes, INITSYNC_FIRST);
 	if(ret) return ret;
 
-	signal(SIGHUP,	sync_rehash);
-	signal(SIGTERM,	sync_term);
-	signal(SIGINT,	sync_term);
+	signal(SIGHUP,	sync_sig_rehash);
+	signal(SIGTERM,	sync_sig_term);
+	signal(SIGINT,	sync_sig_term);
+
+	signal(SIGUSR_PTHREAD_GC, sync_sig_pthread_gc);
 
 	ret = sync_notify_loop(notify_d, options_p, &indexes);
 	if(ret) return ret;

@@ -107,6 +107,11 @@ enum ruleaction_enum {
 };
 typedef enum ruleaction_enum ruleaction_t;
 
+// signals (man 7 signal)
+enum sigusr_enum {
+	SIGUSR_PTHREAD_GC = 10
+};
+
 struct rule {
 	regex_t		expr;
 	mode_t		objtype;
@@ -150,7 +155,8 @@ enum state_enum {
 	STATE_EXIT 	= 0,
 	STATE_RUNNING,
 	STATE_REHASH,
-	STATE_TERM
+	STATE_TERM,
+	STATE_PTHREAD_GC
 };
 typedef enum state_enum state_t;
 
@@ -179,10 +185,12 @@ typedef struct indexes indexes_t;
 
 typedef int (*thread_callbackfunct_t)(options_t *options_p, char **argv);
 struct threadinfo {
+	int			  thread_num;
 	thread_callbackfunct_t 	  callback;
 	char 			**argv;
 	pthread_t		  pthread;
 	int			  exitcode;
+	state_t			  state;
 };
 typedef struct threadinfo threadinfo_t;
 

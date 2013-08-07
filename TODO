@@ -1,2 +1,5 @@
 1. Remove pthreads metainfo GC
 2. Replace g_hash_table* with "tsearch" and so on.
+3. Remove all code with "#ifdef DOXYGEN"
+4. Find-out is "pthread_tryjoin_np()" really required? Can we remove all this
+	"threadsinfo" mechanism?

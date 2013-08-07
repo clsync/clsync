@@ -2,6 +2,16 @@
 This documentation may be outdated. Sorry if it's so :(
 
 
+First of all, I recommend you to read the manpage 
+with "man ./man/man1/clsync.1".
+
+After that, I recommend you to run command "make doc" and look at images 
+"./doc/html/main_8c_a0ddf1224851353fc92bfbff6f499fa97_cgraph.png" and
+"./doc/html/sync_8c_a17e305f0a75e2fe51192f250ef9c4d80_icgraph.png"
+
+The syncing is proceeding on "__sync_exec()" on this image. ;)
+
+
 Here's very short description of how the program works:
 
 
