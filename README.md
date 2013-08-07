@@ -3,15 +3,15 @@ clsync
 Contents
 --------
 
- 1. Name
- 2. Motivation
- 3. inotify vs fanotify
- 4. Installing
- 5. How to use
- 6. Example of usage
- 7. Recommended configuration
- 8. Known issues
- 9. Support
+1.  Name
+2.  Motivation
+3.  inotify vs fanotify
+4.  Installing
+5.  How to use
+6.  Example of usage
+7.  Recommended configuration
+8.  Known issues
+9.  Support
 10. Developing
 
 
@@ -135,17 +135,11 @@ excludes):
 ```clsync -l mirror -p -R -d /dev/shm -I /home/user /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules```
 
 
-8. Known issues
----------------
+8. Known building issues
+------------------------
 
 1. Doesn't compiles on old systems
-
-In this case you should compile with command "make onoldsystem"
-
-2. Exits with error "Error: Cannot inotify_add_watch() on [...]"
-
-In this case you should increase "fs.inotify.max_user_watches" value,
-for example with command: sysctl fs.inotify.max_user_watches=26214400
+ - In this case you should compile with command "make onoldsystem"
 
 9. Support
 ----------
@@ -155,7 +149,7 @@ To get support, you can contact with me this ways:
 - e-mail: <xai@mephi.ru>, <dyokunev@ut.mephi.ru>, <xaionaro@gmail.com>; PGP pubkey: 0x8E30679C
 
 10. Developing
--------------
+--------------
 
 I started to write "DEVELOPING" file. You can look there if you wish. ;)
 
