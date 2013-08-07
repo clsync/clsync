@@ -620,6 +620,7 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 }
 
 int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p) {
+	printf_ddd("Debug3: sync_notify_mark(..., \"%s\", %i,...)\n", path, pathlen);
 	int wd = indexes_fpath2wd(indexes_p, path);
 	if(wd != -1) {
 		printf_d("Debug: \"%s\" is already marked (wd: %i). Skipping.\n", path, wd);
@@ -870,6 +871,30 @@ int sync_idle_dosync_collectedevents_cleanup(options_t *options_p, char **argv) 
 	if(options_p->flags[DONTUNLINK]) 
 		return 0;
 
+	if(options_p->flags[RSYNC] >= 2) {
+		int ret0, ret1;
+		if(argv[4] == NULL) {
+			printf_e("Error: Unexpected *argv[] end.");
+			return EINVAL;
+		}
+
+		printf_ddd("Debug3: unlink()-ing \"%s\"\n", argv[4]);
+		ret0 = unlink(argv[4]);
+
+		if(options_p->flags[RSYNC_PREFERINCLUDE])
+			return ret0;
+
+		if(argv[6] == NULL) {
+			printf_e("Error: Unexpected *argv[] end.");
+			return EINVAL;
+		}
+
+		printf_ddd("Debug3: unlink()-ing \"%s\"\n", argv[6]);
+		ret1 = unlink(argv[6]);
+
+		return ret0 == 0 ? ret1 : ret0;
+	}
+
 	if(argv[3] == NULL) {
 		printf_e("Error: Unexpected *argv[] end.");
 		return EINVAL;
@@ -1012,8 +1037,8 @@ gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, g
 }
 
 int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p) {
-	printf_ddd("Debug3: Committing the file\n");
 	options_t *options_p = dosync_arg_p->options_p;
+	printf_ddd("Debug3: Committing the file (flags[RSYNC] == %i)\n", options_p->flags[RSYNC]);
 	fclose(dosync_arg_p->outf);
 	dosync_arg_p->outf = NULL;
 
@@ -1037,6 +1062,24 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 						dosync_arg_p->outf_path,
 						*(dosync_arg_p->outf_path)?dosync_arg_p->outf_path:NULL,
 						NULL);*/
+		printf_ddd("Debug3: %s [%s] (%p) -> %s [%s]\n", options_p->watchdir, options_p->watchdirwslash, options_p->watchdirwslash, 
+								options_p->destdir?options_p->destdir:"", options_p->destdirwslash?options_p->destdirwslash:"");
+
+		if(options_p->flags[RSYNC] >= 2)
+			return SYNC_EXEC(options_p,
+				sync_idle_dosync_collectedevents_cleanup,
+				options_p->actfpath,
+				"-avH", 
+				"--delete-before",
+				*(dosync_arg_p->excf_path) ? "--exclude-from"		: "--include-from",
+				*(dosync_arg_p->excf_path) ? dosync_arg_p->excf_path	: dosync_arg_p->outf_path,
+				*(dosync_arg_p->excf_path) ? "--include-from"		: "--exclude=*",
+				*(dosync_arg_p->excf_path) ? dosync_arg_p->outf_path	: options_p->watchdirwslash,
+				*(dosync_arg_p->excf_path) ? "--exclude=*"		: options_p->destdirwslash,
+				*(dosync_arg_p->excf_path) ? options_p->watchdirwslash	: NULL,
+				*(dosync_arg_p->excf_path) ? options_p->destdirwslash	: NULL,
+				NULL);
+
 		return SYNC_EXEC(options_p,
 			sync_idle_dosync_collectedevents_cleanup,
 			options_p->actfpath,
@@ -1105,11 +1148,21 @@ gboolean sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer e
 		outf = dosync_arg_p->outf;
 	}
 
-	size_t fpathlen = strlen(fpath);
-	char *fpath_rel_p = xmalloc(fpathlen+1);
+	size_t fpath_len = strlen(fpath);
+	size_t fpath_rel_len = fpath_len - options_p->watchdirlen;
+	char *fpath_rel_p = xmalloc(fpath_len+1);
 	char *fpath_rel = fpath_rel_p;
 
-	memcpy(fpath_rel, &fpath[options_p->watchdirlen], fpathlen+1 - options_p->watchdirlen);
+	memcpy(fpath_rel, &fpath[options_p->watchdirlen], fpath_rel_len+1);
+
+
+#ifdef VERYPARANOID
+	// Removing "/" on the end
+	printf_ddd("Debug3: \"%s\" (len: %i) --%i--> ", fpath_rel, fpath_rel_len, fpath_rel[fpath_rel_len - 1] == '/');
+	if(fpath_rel[fpath_rel_len - 1] == '/')
+		fpath_rel[--fpath_rel_len] = 0x00;
+	printf_ddd("\"%s\" (len: %i)\n", fpath_rel, fpath_rel_len);
+#endif
 
 	char *end=fpath_rel;
 
@@ -1446,7 +1499,10 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 		int events = sync_inotify_wait(inotify_d, options_p, indexes_p);
 		switch(state) {
 			case STATE_PTHREAD_GC:
-				thread_gc(options_p);
+				if(thread_gc(options_p)) {
+					state=STATE_EXIT;
+					break;
+				}
 				state = STATE_RUNNING;
 				continue;
 			case STATE_RUNNING:

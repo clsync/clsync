@@ -1,4 +1,5 @@
-
+clsync
+======
 Contents
 --------
 
@@ -129,20 +130,23 @@ directory "example/testdir/to" ;)
 First of all, recommended and not recommended options are notices in the
 manpage.
 
-However let's describe 3 situations:
+However let's describe 4 situations:
+
+- The simpliest usage (syncing from "/tmp/fromdir" to "/tmp/todir" with delay about 30 seconds):
+```clsync -RR -d /dev/shm /tmp/fromdir $(which rsync) /dev/zero /tmp/todir```
 
 - You're backing-up over very slow channel:
-clsync -l backup -R -d /dev/shm -t 600 -T 3600 -B $[1024 * 1024 * 16] /home/user /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules
+```clsync -l backup -R -d /dev/shm -t 600 -T 3600 -B $[1024 * 1024 * 16] /home/user /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules```
 
 This will minimize network traffic. And pthread-ing is removed due to rarely
 updating.
 
 - You're syncing ordinary web-server over 1Gbs channel:
-clsync -l mirror -p -R -d /dev/shm /var/www /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules
+```clsync -l mirror -p -R -d /dev/shm /var/www /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules```
 
 - You're syncing only few files from huge file tree (with a great lot of
 excludes):
-clsync -l mirror -p -R -d /dev/shm -I /home/user /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules
+```clsync -l mirror -p -R -d /dev/shm -I /home/user /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules```
 
                  _____________________________________________                
 

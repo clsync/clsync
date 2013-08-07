@@ -32,6 +32,9 @@ clsync \- live sync tool, written in GNU C
 .B [
 .I rules\-file
 .B ]
+.B [
+.I dest-dir
+.B ]
 .SH DESCRIPTION
 .B clsync
 executes
@@ -84,7 +87,7 @@ Default value is "30".
 Sets the additional delay (in seconds) to collect events about any file
 or directory.
 
-Default value is "15".
+Default value is "0".
 .RE
 
 .PP
@@ -124,6 +127,13 @@ to use "rsynclist" action instead of "initialsync" and "synclist" (see
 option.
 
 Recommended option.
+
+You can use "-RR" to run "rsync" directly, bypassing intermediate script
+(see
+.B ACTION SCRIPT
+case
+.B e
+)
 
 Is not set by default.
 .RE
@@ -289,7 +299,7 @@ is only a convenient way to run a syncing script.
 .B clsync
 can run
 .I action\-script
-in four ways:
+in five ways:
 
 case
 .B a
@@ -372,7 +382,26 @@ if option
 is disabled.
 .RE
 
-As can be noticed, in all four cases clsync's
+case
+.B e
+.RS
+.I action\-script
+\-avH \-\-delete\-before [\-\-exclude\-from
+.I rsync\-exclude\-listpath
+]
+\-\-include\-from
+.I rsync\-listpath
+\-\-exclude '*'
+.I watch-dir/ dest-dir/
+
+In this case,
+.I action\-script
+is supposed to be a path to
+.B rsync
+binary.
+.RE
+
+As can be noticed, in the first four cases clsync's
 .I label
 is passed (see 
 .I \-\-label

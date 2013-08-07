@@ -131,7 +131,15 @@ struct options {
 	int flags[1<<8];
 	char *label;
 	char *watchdir;
+	char *destdir;
+	char *watchdirwslash;
+	char *destdirwslash;
 	size_t watchdirlen;
+	size_t destdirlen;
+	size_t watchdirsize;
+	size_t destdirsize;
+	size_t watchdirwslashsize;
+	size_t destdirwslashsize;
 	char *actfpath;
 	char *rulfpath;
 	char *listoutdir;

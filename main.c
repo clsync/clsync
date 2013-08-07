@@ -54,7 +54,7 @@ static struct option long_options[] =
 };
 
 int syntax() {
-	printf("syntax: clsync [flags] <watch dir> <action script> [file with rules regexps]\npossible options:\n");
+	printf("syntax: clsync [flags] <watch dir> <action script> [file with rules regexps] [destination directory]\npossible options:\n");
 	int i=0;
 	while(long_options[i].name != NULL) {
 		printf("\t--%-24s-%c\n", long_options[i].name, long_options[i].val);
@@ -68,7 +68,7 @@ int version() {
 	exit(0);
 }
 
-int parse_arguments(int argc, char *argv[], struct options *options) {
+int parse_arguments(int argc, char *argv[], struct options *options_p) {
 	int c;
 	int option_index = 0;
 	while(1) {
@@ -85,49 +85,59 @@ int parse_arguments(int argc, char *argv[], struct options *options) {
 				syntax();
 				break;
 			case 'd':
-				options->listoutdir   = optarg;
+				options_p->listoutdir   = optarg;
 				break;
 			case 'l':
-				options->label        = optarg;
+				options_p->label        = optarg;
 				break;
 			case 'w':
-				options->commondelay  = (unsigned int)atol(optarg);
+				options_p->commondelay  = (unsigned int)atol(optarg);
 			case 't':
-				options->_queues[QUEUE_NORMAL].collectdelay = (unsigned int)atol(optarg);
+				options_p->_queues[QUEUE_NORMAL].collectdelay = (unsigned int)atol(optarg);
 				break;
 			case 'T':
-				options->_queues[QUEUE_BIGFILE].collectdelay = (unsigned int)atol(optarg);
+				options_p->_queues[QUEUE_BIGFILE].collectdelay = (unsigned int)atol(optarg);
 				break;
 			case 'B':
-				options->bfilethreshold = (unsigned long)atol(optarg);
+				options_p->bfilethreshold = (unsigned long)atol(optarg);
 				break;
 #ifdef FANOTIFY_SUPPORT
 			case 'f':
-				options->notifyengine = NE_FANOTIFY;
+				options_p->notifyengine = NE_FANOTIFY;
 				break;
 #endif
 			case 'i':
-				options->notifyengine = NE_INOTIFY;
+				options_p->notifyengine = NE_INOTIFY;
 				break;
 			case 'L':
-				options->rsyncinclimit = (unsigned int)atol(optarg);
+				options_p->rsyncinclimit = (unsigned int)atol(optarg);
 				break;
 			case 'V':
 				version();
 				break;
 			default:
-				options->flags[c]++;
+				options_p->flags[c]++;
 				break;
 		}
 	}
 	if(optind+1 >= argc)
 		syntax();
 
-	options->actfpath = argv[optind+1];
-	if(optind+2 < argc)
-		options->rulfpath = argv[optind+2];
+	options_p->actfpath = argv[optind+1];
 
-	options->watchdir = argv[optind];
+	if(optind+2 < argc) {
+		options_p->rulfpath = argv[optind+2];
+		if(!strcmp(options_p->rulfpath, ""))
+			options_p->rulfpath = NULL;
+	}
+
+	if(optind+3 < argc) {
+		options_p->destdir    = argv[optind+3];
+		options_p->destdirlen = strlen(options_p->destdir);
+	}
+
+	options_p->watchdir    = argv[optind];
+	options_p->watchdirlen = strlen(options_p->watchdir);
 	return 0;
 }
 
@@ -137,6 +147,9 @@ int parse_rules_fromfile(const char *rulfpath, rule_t *rules) {
 	FILE *f = fopen(rulfpath, "r");
 	
 	if(f == NULL) {
+#ifdef PARANOID
+		rules->action = RULE_END;
+#endif
 		printf_e("Error: Cannot open \"%s\" for reading: %s (errno: %i).\n", rulfpath, strerror(errno), errno);
 		return errno;
 	}
@@ -254,6 +267,8 @@ int main_cleanup(options_t *options_p) {
 	while((i < MAXRULES) && (options_p->rules[i].action != RULE_END))
 		regfree(&options_p->rules[i++].expr);
 
+	printf_ddd("Debug3: main_cleanup(): %i %i %i %i\n", options_p->watchdirsize, options_p->watchdirwslashsize, options_p->destdirsize, options_p->destdirwslashsize);
+
 	return 0;
 }
 
@@ -274,7 +289,7 @@ int main_rehash(options_t *options_p) {
 int main(int argc, char *argv[]) {
 	struct options options;
 	int ret = 0, nret;
-	struct stat64 stat64;
+	struct stat64 stat64={0};
 	memset(&options, 0, sizeof(options));
 	options.notifyengine 			   = DEFAULT_NOTIFYENGINE;
 	options.commondelay 			   = DEFAULT_COMMONDELAY;
@@ -287,9 +302,52 @@ int main(int argc, char *argv[]) {
 
 	parse_arguments(argc, argv, &options);
 	out_init(options.flags);
+	if((options.flags[RSYNC]>1) && (options.destdir == NULL)) {
+		printf_e("Error: Option \"-RR\" cannot be used without specifing \"destination directory\".\n");
+		ret = EINVAL;
+	}
+
+	{
+		size_t size = options.watchdirlen + 2;
+		char *newwatchdir = xmalloc(size);
+		memcpy( newwatchdir, options.watchdir, options.watchdirlen);
+
+		if(options.watchdir[options.watchdirlen - 1] == '/') {
+			options.watchdirsize   = size;
+			options.watchdirwslash = options.watchdir;
+			options.watchdir       = newwatchdir;
+			options.watchdirlen--;
+			newwatchdir[options.watchdirlen] = 0x00;
+		} else {
+			options.watchdirwslash     = newwatchdir;
+			options.watchdirwslashsize = size;
+			memcpy(&options.watchdirwslash[options.watchdirlen], "/", 2);
+		}
+	}
+
+	if(options.destdir != NULL) {
+		size_t size = options.destdirlen  + 2;
+		char *newdestdir  = xmalloc(size);
+		memcpy( newdestdir,  options.destdir,  options.destdirlen);
+
+		if(options.destdir[options.destdirlen - 1] == '/') {
+			options.destdirsize   = size;
+			options.destdirwslash = options.destdir;
+			options.destdir       = newdestdir;
+			options.destdirlen--;
+			newdestdir[options.destdirlen] = 0x00;
+		} else {
+			options.destdirwslash     = newdestdir;
+			options.destdirwslashsize = size;
+			memcpy(&options.destdirwslash[options.destdirlen], "/", 2);
+		}
+	}
+
+	printf_ddd("Debug3: %s [%s] (%p) -> %s [%s]\n", options.watchdir, options.watchdirwslash, options.watchdirwslash, options.destdir?options.destdir:"", options.destdirwslash?options.destdirwslash:"");
+
 	if(options.flags[RSYNC] && (options.listoutdir == NULL)) {
 		printf_e("Error: Option \"--rsync\" cannot be used without \"--outlistsdir\".\n");
-		return EINVAL;
+		ret = EINVAL;
 	}
 	if(options.flags[RSYNC_PREFERINCLUDE] && (!options.flags[RSYNC]))
 		printf_e("Warning: Option \"--rsyncpreferinclude\" is useless without \"--rsync\".\n");
@@ -330,11 +388,22 @@ int main(int argc, char *argv[]) {
 			ret = nret;
 	}
 
-	options.watchdirlen = strlen(options.watchdir);
 	if(ret == 0)
 		ret = sync_run(&options);
 
 	main_cleanup(&options);
+
+	if(options.watchdirsize)
+		free(options.watchdir);
+
+	if(options.watchdirwslashsize)
+		free(options.watchdirwslash);
+
+	if(options.destdirsize)
+		free(options.destdir);
+
+	if(options.destdirwslashsize)
+		free(options.destdirwslash);
 
 	out_flush();
 	printf_d("Debug: finished, exitcode: %i.\n", ret);
