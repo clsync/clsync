@@ -27,6 +27,8 @@ binary=clsync
 
 binarydebug=$(binary)-debug
 
+binarytest=$(binary)-test
+
 .PHONY: doc
 
 all: updaterevision $(objs)
@@ -36,7 +38,10 @@ all: updaterevision $(objs)
 	$(CC) $(NORMSYSTEMCFLAGS) $(CFLAGS) $(INC) $< -c -o $@
 
 debug: updaterevision
-	$(CC) $(NORMSYSTEMCFLAGS) -DFANOTIFY_SUPPORT $(DEBUGCFLAGS) $(INC) $(LDFLAGS) *.c -o $(binarydebug)
+	$(CC) $(NORMSYSTEMCFLAGS) -DFANOTIFY_SUPPORT $(DEBUGCFLAGS) $(INC) $(LDFLAGS) $(shell ls *.c | grep -v "test.c") -o $(binarydebug)
+
+test: updaterevision
+	$(CC) $(NORMSYSTEMCFLAGS) -DFANOTIFY_SUPPORT $(DEBUGCFLAGS) $(INC) $(LDFLAGS) $(shell ls *.c | grep -v "main.c") -o $(binarytest)
 
 onoldsystem: updaterevision
 	$(CC) $(OLDSYSTEMCFLAGS) $(CFLAGS) $(INC) $(LDFLAGS) *.c -o $(binary)
@@ -46,7 +51,7 @@ updaterevision:
 	touch main.c
 
 clean:
-	rm -f $(binary) $(binarydebug) $(objs) revision.h
+	rm -f $(binary) $(binarydebug) $(binarytest) $(objs) revision.h
 	rm -rf example/testdir example/rules doc
 
 distclean: clean
