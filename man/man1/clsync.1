@@ -97,8 +97,8 @@ If this option is enabled,
 .B clsync
 will execute
 .I action\-script
-once for each aggregated event list, passing the path to a file containing this list
-(action "synclist").
+once for each aggregated event list, passing the path to a file containing
+this list (action "synclist").
 Otherwise,
 .B clsync
 will execute
@@ -134,8 +134,8 @@ Is not set by default.
 .RS 8
 Sets soft limit for lines count in files by path
 .I rsync\-listpath
-\*S. Unfortunately, rsync works very slowly with huge "\-\-include\-from" files.
-So,
+\*S. Unfortunately, rsync works very slowly with huge "\-\-include\-from"
+files. So,
 .B clsync
 splits that list with approximately
 .I rsync\-includes\-line\-limit
@@ -150,8 +150,8 @@ Default value is "20000".
 .RS 8
 Forces
 .B clsync
-to prefer a "lot of includes" method instead of a "excludes+includes" for rsync on recursive
-syncing.
+to prefer a "lot of includes" method instead of a "excludes+includes" for
+rsync on recursive syncing.
 
 See
 .B case d
@@ -171,6 +171,21 @@ Do not delete list\-files after
 .I action\-script
 has finished.
 
+This may be used for debugging purposes.
+
+Is not set by default.
+.RE
+
+.PP
+.B \-F, \-\-fullinitialsync
+.RS 8
+Ignore filter rules from
+.I rules-file
+on initial sync.
+
+This may be useful, e.g. if it's required to sync "/var/log/" tree but not
+sync every change from there.
+
 Is not set by default.
 .RE
 
@@ -180,8 +195,8 @@ Is not set by default.
 .RS 8
 Sets file size threshold (in bytes) that separates ordinary files from
 "big files". Events about "big files" are processed in another queue with a
-separate collecting delay. This is supposed to be used as a means of unloading IO
-resources.
+separate collecting delay. This is supposed to be used as a means of unloading
+IO resources.
 
 Default value is "134217728" ["128 MiB"].
 .RE

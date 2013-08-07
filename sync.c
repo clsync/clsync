@@ -520,7 +520,7 @@ int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, index
 
 		ruleaction_t action = rules_check(node->fts_path, node->fts_statp->st_mode, rules_p);
 
-		if(action == RULE_REJECT) {
+		if((action == RULE_REJECT) && !(STATE_STARTING(state_p) && options_p->flags[INITFULL])) {
 			fts_set(tree, node, FTS_SKIP);
 			if(!options_p->flags[RSYNC_PREFERINCLUDE]) {
 				if(queue_id == QUEUE_AUTO) {
@@ -567,8 +567,8 @@ int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, index
 	return 0;
 }
 
-int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_p, initsync_t initsync) {
-	printf_ddd("Debug3: sync_initialsync(\"%s\", options_p, indexes_p, %i)\n", path, initsync);
+int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_p) {
+	printf_ddd("Debug3: sync_initialsync(\"%s\", options_p, indexes_p)\n", path);
 
 	if(!options_p->flags[RSYNC]) {
 		// non-RSYNC case:
@@ -588,7 +588,7 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 
 	// RSYNC case:
 //	queue_id_t queue_id = initsync==INITSYNC_FIRST ? QUEUE_INSTANT : QUEUE_AUTO;
-	queue_id_t queue_id = initsync==INITSYNC_FIRST ? QUEUE_INSTANT : QUEUE_NORMAL;
+	queue_id_t queue_id = STATE_STARTING(state_p) ? QUEUE_INSTANT : QUEUE_NORMAL;
 
 	if(!options_p->flags[RSYNC_PREFERINCLUDE]) {
 		queueinfo_t *queueinfo = &options_p->_queues[queue_id];
@@ -668,12 +668,12 @@ int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, co
 	return wd;
 }
 
-int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, indexes_t *indexes_p, initsync_t initsync) {
+int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, indexes_t *indexes_p) {
 	const char *rootpaths[] = {dirpath, NULL};
 	FTS *tree;
 	rule_t *rules_p = options_p->rules;
-	printf_dd("Debug2: sync_mark_walk(%i, options_p, \"%s\", indexes_p, %i).\n", notify_d, dirpath, initsync);
-	printf_funct my_printf_e = (initsync == INITSYNC_FIRST) ? printf_e : _printf_dd;
+	printf_dd("Debug2: sync_mark_walk(%i, options_p, \"%s\", indexes_p).\n", notify_d, dirpath);
+	printf_funct my_printf_e = STATE_STARTING(state_p) ? printf_e : _printf_dd;
 
 	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL, NULL);
 
@@ -739,7 +739,7 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 		return errno;
 	}
 
-	if(sync_initialsync(dirpath, options_p, indexes_p, initsync))
+	if(sync_initialsync(dirpath, options_p, indexes_p))
 		return -1;
 
 	return 0;
@@ -1387,7 +1387,7 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 
 		if(event->mask & IN_ISDIR) {
 			if(event->mask & (IN_CREATE|IN_MOVED_TO)) {			// Appeared
-				int ret = sync_mark_walk(inotify_d, options_p, fpathfull, indexes_p, INITSYNC_NORMAL);
+				int ret = sync_mark_walk(inotify_d, options_p, fpathfull, indexes_p);
 				if(ret)
 					printf_d("Debug: Seems, that directory \"%s\" disappeared, while trying to mark it.\n", fpathfull);
 				free(fpathfull);
@@ -1545,7 +1545,7 @@ int sync_run(options_t *options_p) {
 	int notify_d = sync_notify_init(options_p);
 	if(notify_d == -1) return errno;
 
-	ret = sync_mark_walk(notify_d, options_p, options_p->watchdir, &indexes, INITSYNC_FIRST);
+	ret = sync_mark_walk(notify_d, options_p, options_p->watchdir, &indexes);
 	if(ret) return ret;
 
 	signal(SIGHUP,	sync_sig_rehash);

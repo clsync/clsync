@@ -81,6 +81,7 @@ enum flags_enum {
 	RSYNCINCLIMIT	= 'L',
 	RSYNC_PREFERINCLUDE= 'I',
 	DONTUNLINK	= 'U',
+	INITFULL	= 'F',
 #ifdef FANOTIFY_SUPPORT
 	FANOTIFY	= 'f',
 #endif
@@ -151,6 +152,7 @@ enum notifyengine_enum {
 };
 typedef enum notifyengine_enum notifyenfine_t;
 
+#define STATE_STARTING(state_p) (state_p == NULL)
 enum state_enum {
 	STATE_EXIT 	= 0,
 	STATE_RUNNING,
@@ -204,12 +206,6 @@ struct threadsinfo {
 	threadinfo_t 	*threads;
 };
 typedef struct threadsinfo threadsinfo_t;
-
-enum initsync_enum {
-	INITSYNC_NORMAL	= 0,
-	INITSYNC_FIRST,
-};
-typedef enum initsync_enum initsync_t;
 
 struct dosync_arg {
 	int evcount;

@@ -37,6 +37,7 @@ static struct option long_options[] =
 	{"rsyncinclimit",	required_argument,	NULL,	RSYNCINCLIMIT},
 	{"rsyncpreferinclude",	no_argument,		NULL,	RSYNC_PREFERINCLUDE},
 	{"dontunlinklists",	no_argument,		NULL,	DONTUNLINK},
+	{"fullinitialsync",	no_argument,		NULL,	INITFULL},
 	{"bigfilethreshold",	required_argument,	NULL,	BFILETHRESHOLD},
 	{"bigfilecollectdelay",	required_argument,	NULL,	BFILEDELAY},
 	{"verbose",		no_argument,		NULL,	VERBOSE},
@@ -72,9 +73,9 @@ int parse_arguments(int argc, char *argv[], struct options *options) {
 	int option_index = 0;
 	while(1) {
 #ifdef FANOTIFY_SUPPORT
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhaVRUL:If", long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:If", long_options, &option_index);
 #else
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDhaVRUL:I",  long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:I",  long_options, &option_index);
 #endif
 	
 		if (c == -1) break;
