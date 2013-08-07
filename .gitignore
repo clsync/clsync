@@ -29,3 +29,4 @@ debian/files
 debian/*.ex
 example/rules
 testdir
+doc

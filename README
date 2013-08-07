@@ -11,6 +11,7 @@ Contents
 6.) Recommended configuration
 7.) Known issues
 8.) Support
+9.) Developing
 
                  _____________________________________________                
 
@@ -167,6 +168,15 @@ clsync -l mirror -p -R -d /dev/shm -I /home/user /home/clsync/bin/clsync-actions
 	- IRC: SSL+UTF-8 irc.campus.mephi.ru:6695#mephi,xaionaro,xai
 	- e-mail: <xai@mephi.ru>, <dyokunev@ut.mephi.ru>, <xaionaro@gmail.com>
 		PGP pubkey: 0x8E30679C
+
+                 _____________________________________________                
+
+9.) Developing
+-----------
+
+    I started to write "DEVELOPING" file. You can look there if you wish. ;)
+
+    I'll be glad to receive code contribution :)
 
                  _____________________________________________                
 
