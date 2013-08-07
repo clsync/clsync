@@ -281,8 +281,8 @@ int thread_gc(options_t *options_p) {
 	return 0;
 }
 
-int _sync_exec_cleanup(options_t *options_p) {
-	printf_ddd("Debug3: _sync_exec_cleanup()\n");
+int thread_cleanup(options_t *options_p) {
+	printf_ddd("Debug3: thread_cleanup()\n");
 	threadsinfo_t *threadsinfo_p = thread_getinfo();
 	if(threadsinfo_p == NULL)
 		return errno;
@@ -303,7 +303,7 @@ int _sync_exec_cleanup(options_t *options_p) {
 			free(*(ptr++));
 		free(threadinfo_p->argv);
 	}
-	printf_ddd("Debug3: _sync_exec_cleanup(): All threads are closed.\n");
+	printf_ddd("Debug3: thread_cleanup(): All threads are closed.\n");
 
 	// Freeing
 	if(threadsinfo_p->allocated)
@@ -319,7 +319,7 @@ int _sync_exec_cleanup(options_t *options_p) {
 	memset(threadsinfo_p, 0, sizeof(*threadsinfo_p));	// Just in case;
 #endif
 
-	printf_ddd("Debug3: _sync_exec_cleanup(): done.\n");
+	printf_ddd("Debug3: thread_cleanup(): done.\n");
 	return 0;
 }
 
@@ -1559,7 +1559,7 @@ int sync_run(options_t *options_p) {
 
 	// TODO: Do cleanup of watching points
 
-	_sync_exec_cleanup(options_p);
+	thread_cleanup(options_p);
 
 	printf_ddd("sync_run(): Closing notify_d\n");
 	close(notify_d);
