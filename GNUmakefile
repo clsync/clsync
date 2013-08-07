@@ -25,7 +25,9 @@ binary=clsync
 
 binarydebug=$(binary)-debug
 
-all: updaterevision $(objs)
+.PHONY: doc
+
+all: updaterevision $(objs) doc
 	$(CC) $(NORMSYSTEMCFLAGS) $(CFLAGS) $(LDFLAGS) $(objs) -o $(binary)
 
 %.o: %.c
@@ -43,7 +45,13 @@ updaterevision:
 
 clean:
 	rm -f $(binary) $(binarydebug) $(objs) revision.h
-	rm -rf example/testdir example/rules
+	rm -rf example/testdir example/rules doc
+
+distclean: clean
+
+doc:
+	mkdir -p doc
+	doxygen .doxygen
 
 install:
 	mkdir -p "$(INSTDIR)/bin" "$(INSTDIR)/share/man/man1" "$(INSTDIR)/share/doc/clsync"
