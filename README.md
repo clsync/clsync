@@ -3,19 +3,19 @@ clsync
 Contents
 --------
 
-0. Name
-1. Motivation
-2. inotify vs fanotify
-3. Installing
-4. How to use
-5. Example of usage
-6. Recommended configuration
-7. Known issues
-8. Support
-9. Developing
+ 1. Name
+ 2. Motivation
+ 3. inotify vs fanotify
+ 4. Installing
+ 5. How to use
+ 6. Example of usage
+ 7. Recommended configuration
+ 8. Known issues
+ 9. Support
+10. Developing
 
 
-0. Name
+1. Name
 -------
 
 Why "clsync"? The first name of the utility was "insync" (due to inotify), but
@@ -29,12 +29,12 @@ by "lsyncd" project ("https://github.com/axkibe/lsyncd"). So I called it
 written on "LUA" and may be used for the same purposes.
 
 
-1. Motivation
+2. Motivation
 -------------
 
 This utility was been writted for two purposes:
-	- for making failover clusters
-	- for making backups of them
+- for making failover clusters
+- for making backups of them
 
 To do failover cluster I've tried a lot of different solutions, like "simple 
 rsync by cron", "glusterfs", "ocfs2 over drbd", "common mirrorable external 
@@ -47,27 +47,27 @@ To do backups we also tried a lot of different solution, and again I was have
 to write own utility for this purpose.
 
 The best known (for me) replacement for this utility is "lsyncd", however:
-	- It's code is >½ on LUA. There a lot of problems connected with it,
+- It's code is >½ on LUA. There a lot of problems connected with it,
 for example:
-	    - It's more difficult to maintain the code with ordinary sysadmin.
-	    - It really eats 100% CPU sometimes.
-	    - It requires LUA libs, that cannot be easily installed to few
+    - It's more difficult to maintain the code with ordinary sysadmin.
+    - It really eats 100% CPU sometimes.
+    - It requires LUA libs, that cannot be easily installed to few
 of our systems.
-	- It's a little buggy. That may be easily fixed for our cases,
+- It's a little buggy. That may be easily fixed for our cases,
 but LUA. :(
-	- It doesn't support pthread or something like that. It's necessary
+- It doesn't support pthread or something like that. It's necessary
 to serve huge directories with a lot of containers right.
-	- It cannot run rsync for a pack of files. It runs rsync for every
+- It cannot run rsync for a pack of files. It runs rsync for every
 event. :(
-	- Sometimes, it's too complex in configuration for our situation.
-	- It can't set another event-collecting delay for big files. We don't
+- Sometimes, it's too complex in configuration for our situation.
+- It can't set another event-collecting delay for big files. We don't
 want to sync big files (>1GiB) so often as ordinary files.
 
 Sorry, if I'm wrong. Let me know if it is, please :). "lsyncd" - is really
 good and useful utility, just it's not appropriate for us.
 
 
-2. inotify vs fanotify:
+3. inotify vs fanotify:
 -----------------------
 
 It's said, that fanotify is much better, than inotify. So I started to write 
@@ -78,7 +78,7 @@ the program, like "directory creation" or "file deletion". So I switched to
 "fanotify" in this utility ;).
 
 
-3. Installing
+4. Installing
 -------------
 
 First of all, you should install dependencies to compile clsync. As you can
@@ -94,14 +94,14 @@ Also, debian-users can use my repository to install the clsync:
 deb [arch=amd64] http://mirror.mephi.ru/debian-mephi/ unstable main
 
 
-4. How to use
+5. How to use
 -------------
 
 How to use is described in "man" ;). What is not described, you can ask me
 personally (see "Support").
 
 
-5. Example of usage
+6. Example of usage
 -------------------
 
 Example of usage, that works on my PC is in directory "example". Just run
@@ -110,7 +110,7 @@ Example of usage, that works on my PC is in directory "example". Just run
 directory "example/testdir/to" ;)
 
 
-6. Recommended configuration
+7. Recommended configuration
 ----------------------------
 
 First of all, recommended and not recommended options are notices in the
@@ -135,32 +135,31 @@ excludes):
 ```clsync -l mirror -p -R -d /dev/shm -I /home/user /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules```
 
 
-7. Known issues
+8. Known issues
 ---------------
 
-    1.) Doesn't compiles on old systems
+1. Doesn't compiles on old systems
 
-	In this case you should compile with command "make onoldsystem"
+In this case you should compile with command "make onoldsystem"
 
-    2.) Exits with error "Error: Cannot inotify_add_watch() on [...]"
+2. Exits with error "Error: Cannot inotify_add_watch() on [...]"
 
-	In this case you should increase "fs.inotify.max_user_watches" value,
-	for example with command: sysctl fs.inotify.max_user_watches=26214400
+In this case you should increase "fs.inotify.max_user_watches" value,
+for example with command: sysctl fs.inotify.max_user_watches=26214400
 
-8. Support
+9. Support
 ----------
 
-    To get support, you can contact with me this ways:
-	- IRC: SSL+UTF-8 irc.campus.mephi.ru:6695#mephi,xaionaro,xai
-	- e-mail: <xai@mephi.ru>, <dyokunev@ut.mephi.ru>, <xaionaro@gmail.com>
-		PGP pubkey: 0x8E30679C
+To get support, you can contact with me this ways:
+- IRC: SSL+UTF-8 irc.campus.mephi.ru:6695#mephi,xaionaro,xai
+- e-mail: <xai@mephi.ru>, <dyokunev@ut.mephi.ru>, <xaionaro@gmail.com>; PGP pubkey: 0x8E30679C
 
-9. Developing
+10. Developing
 -------------
 
-    I started to write "DEVELOPING" file. You can look there if you wish. ;)
+I started to write "DEVELOPING" file. You can look there if you wish. ;)
 
-    I'll be glad to receive code contribution :)
+I'll be glad to receive code contribution :)
 
 
 
