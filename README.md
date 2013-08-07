@@ -3,22 +3,20 @@ clsync
 Contents
 --------
 
-0.) Name
-1.) Motivation
-2.) inotify vs fanotify
-3.) Installing
-4.) How to use
-5.) Example of usage
-6.) Recommended configuration
-7.) Known issues
-8.) Support
-9.) Developing
-
-                 _____________________________________________                
+0. Name
+1. Motivation
+2. inotify vs fanotify
+3. Installing
+4. How to use
+5. Example of usage
+6. Recommended configuration
+7. Known issues
+8. Support
+9. Developing
 
 
-0.) Name
---------
+0. Name
+-------
 
 Why "clsync"? The first name of the utility was "insync" (due to inotify), but
 then I suggested to use "fanotify" instead of "inotify" and utility was been
@@ -30,11 +28,9 @@ by "lsyncd" project ("https://github.com/axkibe/lsyncd"). So I called it
 "clsync", that should be interpreted as "lsync, but on c" due to "lsyncd" that
 written on "LUA" and may be used for the same purposes.
 
-                 _____________________________________________                
 
-
-1.) Motivation
---------------
+1. Motivation
+-------------
 
 This utility was been writted for two purposes:
 	- for making failover clusters
@@ -70,11 +66,9 @@ want to sync big files (>1GiB) so often as ordinary files.
 Sorry, if I'm wrong. Let me know if it is, please :). "lsyncd" - is really
 good and useful utility, just it's not appropriate for us.
 
-                 _____________________________________________                
 
-
-2.) inotify vs fanotify:
-------------------------
+2. inotify vs fanotify:
+-----------------------
 
 It's said, that fanotify is much better, than inotify. So I started to write 
 this program with using of fanotify. However I encountered the problem, that
@@ -83,11 +77,9 @@ the program, like "directory creation" or "file deletion". So I switched to
 "inotify", leaving the code for "fanotify" in the safety... So, don't use
 "fanotify" in this utility ;).
 
-                 _____________________________________________                
 
-
-3.) Installing
---------------
+3. Installing
+-------------
 
 First of all, you should install dependencies to compile clsync. As you can
 see from GNUmakefile clsync depends only on "glib-2.0", so on debian-like
@@ -101,31 +93,25 @@ Next step in installing. To install usually it's enough to execute
 Also, debian-users can use my repository to install the clsync:
 deb [arch=amd64] http://mirror.mephi.ru/debian-mephi/ unstable main
 
-                 _____________________________________________                
 
-
-4.) How to use
---------------
+4. How to use
+-------------
 
 How to use is described in "man" ;). What is not described, you can ask me
 personally (see "Support").
 
-                 _____________________________________________                
 
-
-5.) Example of usage
---------------------
+5. Example of usage
+-------------------
 
 Example of usage, that works on my PC is in directory "example". Just run
 "clsync-start.sh" and try to create/modify/delete files/dirs in
 "example/testdir/from". All modifications should appear (with some delay) in
 directory "example/testdir/to" ;)
 
-                 _____________________________________________                
 
-
-6.) Recommended configuration
------------------------------
+6. Recommended configuration
+----------------------------
 
 First of all, recommended and not recommended options are notices in the
 manpage.
@@ -148,11 +134,9 @@ updating.
 excludes):
 ```clsync -l mirror -p -R -d /dev/shm -I /home/user /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules```
 
-                 _____________________________________________                
 
-
-7.) Known issues
-----------------
+7. Known issues
+---------------
 
     1.) Doesn't compiles on old systems
 
@@ -163,26 +147,22 @@ excludes):
 	In this case you should increase "fs.inotify.max_user_watches" value,
 	for example with command: sysctl fs.inotify.max_user_watches=26214400
 
-                 _____________________________________________                
-
-8.) Support
------------
+8. Support
+----------
 
     To get support, you can contact with me this ways:
 	- IRC: SSL+UTF-8 irc.campus.mephi.ru:6695#mephi,xaionaro,xai
 	- e-mail: <xai@mephi.ru>, <dyokunev@ut.mephi.ru>, <xaionaro@gmail.com>
 		PGP pubkey: 0x8E30679C
 
-                 _____________________________________________                
-
-9.) Developing
------------
+9. Developing
+-------------
 
     I started to write "DEVELOPING" file. You can look there if you wish. ;)
 
     I'll be glad to receive code contribution :)
 
-                 _____________________________________________                
+
 
 				-- Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
 
