@@ -140,7 +140,7 @@ So,
 splits that list with approximately
 .I rsync\-includes\-line\-limit
 lines per list if it's too big, and executes by one rsync instance per list
-part.
+part. Use value "0" to disable the limit.
 
 Default value is "20000".
 .RE
@@ -402,6 +402,29 @@ Rule format:
 For example: \-*/[Tt]estdir
 
 .SH DIAGNOSTICS
+
+Initial rsync process works very slow on clsync start
+.RS
+Probably there's too huge exclude list is passed to rsync. This can happened
+if you're excluding with regex in clsync's rules a lot of thousands files.
+They will be passed to rsync's exclude list one by one.
+
+To diagnose it, you can use "-U" option and look into 
+.I rsync\-exclude\-listpath file
+(see
+.B ACTION SCRIPT
+case 
+.B d
+)
+
+To prevent this, it's recommended to write such rules for rsync directly 
+(not via clsync).
+
+For example, often problem is with PHP's session files. You shouldn't exclude
+them in clsync's rules with "-f/sess_.*", but you should exclude it in rsync
+directly (e.g with «--exclude "sess_*"»).
+.RE
+
 The following diagnostics may be issued on stderr:
 
 Error: Cannot inotify_add_watch() on [...]
