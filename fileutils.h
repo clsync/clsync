@@ -19,3 +19,5 @@
 
 extern char *fd2fpath_malloc(int fd);
 
+extern int fileutils_copy(char *path_from, char *path_to);
+

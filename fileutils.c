@@ -56,4 +56,59 @@ char *fd2fpath_malloc(int fd) {
 	return fpath;
 }
 
+/**
+ * @brief 			Copies file
+ * 
+ * @param[in] 	path_from 	Source file path
+ * @param[in] 	path_to		Destination file path
+ *
+ * @retval	zero 		Successfully copied
+ * @retval	non-zero 	Got error, while copying
+ * 
+ */
+
+int fileutils_copy(char *path_from, char *path_to) {
+	char buf[BUFSIZ];
+	FILE *from, *to;
+
+	from = fopen(path_from, "r");
+	if(from == NULL) {
+		printf_e("Error: fileutils_copy(\"%s\", \"%s\"): Cannot open file \"%s\" for reading: %s (errno: %i)\n", 
+			path_from, path_to, path_from, strerror(errno), errno);
+		return errno;
+	}
+
+	to   = fopen(path_to,   "w");
+	if(to == NULL) {
+		printf_e("Error: fileutils_copy(\"%s\", \"%s\"): Cannot open file \"%s\" for writing: %s (errno: %i)\n", 
+			path_from, path_to, path_to, strerror(errno), errno);
+		return errno;
+	}
+
+	while(!feof(from)) {
+		int err;
+		size_t r, w;
+
+		r =  fread(buf, 1, BUFSIZ, from);
+		if((err=ferror(from))) {
+			printf_e("Error: fileutils_copy(\"%s\", \"%s\"): Cannot read from file \"%s\": %s (errno: %i)\n",
+				path_from, path_to, path_from, strerror(errno), errno);
+			return errno;	// CHECK: Is the "errno" should be used in fread() case?
+		}
+
+		w = fwrite(buf, 1, r,      to);
+		if((err=ferror(to))) {
+			printf_e("Error: fileutils_copy(\"%s\", \"%s\"): Cannot write to file \"%s\": %s (errno: %i)\n",
+				path_from, path_to, path_to, strerror(errno), errno);
+			return errno;	// CHECK: is the "errno" should be used in fwrite() case?
+		}
+		if(r != w) {
+			printf_e("Error: fileutils_copy(\"%s\", \"%s\"): Got error while writing to file \"%s\" (%u != %u): %s (errno: %i)\n",
+				path_from, path_to, path_to, r, w, strerror(errno), errno);
+			return errno;	// CHECK: is the "errno" should be used in case "r != w"?
+		}
+	}
+
+	return 0;
+}
 

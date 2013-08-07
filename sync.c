@@ -1019,12 +1019,31 @@ gboolean sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer e
 	}
 
 	// RSYNC case
-	if(*linescount_p >= options_p->rsyncinclimit) {
+	if(options_p->rsyncinclimit && (*linescount_p >= options_p->rsyncinclimit)) {
 		int ret;
+
+		// TODO: optimize this out {
+		char newexc_path[PATH_MAX+1];
+		if((ret=sync_idle_dosync_collectedevents_uniqfname(options_p, newexc_path, "exclist"))) {
+			printf_e("Error: sync_idle_dosync_collectedevents_listcreate: Cannot get unique file name.\n");
+			exit(ret);
+		}
+		if((ret=fileutils_copy(dosync_arg_p->excf_path, newexc_path))) {
+			printf_e("Error: sync_idle_dosync_collectedevents_listcreate: Cannot copy file \"%s\" to \"%s\".\n", dosync_arg_p->excf_path, newexc_path);
+			exit(ret);
+		}
+		// }
+		// That's required to copy excludes' list file for every rsync execution.
+		// The problem appears do to unlink()-ing the excludes' list file on callback function 
+		// "sync_idle_dosync_collectedevents_cleanup()" of every execution.
+
 		if((ret=sync_idle_dosync_collectedevents_commitpart(dosync_arg_p))) {
 			printf_e("Error: sync_idle_dosync_collectedevents_listpush(): Cannot commit list-file \"%s\": %s (errno: %i)\n", dosync_arg_p->outf_path, strerror(ret), ret);
 			exit(ret);	// TODO: replace with kill(0, ...);
 		}
+
+		strcpy(dosync_arg_p->excf_path, newexc_path);		// TODO: optimize this out
+
 		if((ret=sync_idle_dosync_collectedevents_listcreate(dosync_arg_p, "list"))) {
 			printf_e("Error: sync_idle_dosync_collectedevents_listpush(): Cannot create new list-file: %s (errno: %i)\n", strerror(ret), ret);
 			exit(ret);	// TODO: replace with kill(0, ...);
