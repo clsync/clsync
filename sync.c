@@ -25,6 +25,15 @@
 #include "sync.h"
 
 
+int exitcode_process(options_t *options_p, int exitcode) {
+	if(exitcode && !((options_p->flags[RSYNC]>=2) && (exitcode == 24))) {
+		printf_e("Error: Got non-zero exitcode %i from __sync_exec().\n", exitcode);
+		return exitcode;
+	}
+
+	return 0;
+}
+
 // Checks file path by rules' expressions (from file)
 // Return: action for the "file path"
 
@@ -244,7 +253,6 @@ int thread_gc(options_t *options_p) {
 			continue;
 		}
 		
-		printf_ddd("Debug3: thread_gc(): Thread #%i is finished with exitcode %i, deleting.\n", thread_num, threadinfo_p->exitcode);
 		switch((err=pthread_join(threadinfo_p->pthread, (void **)&threadinfo_p->exitcode))) {
 #else
 		switch((err=pthread_tryjoin_np(threadinfo_p->pthread, (void **)&threadinfo_p->exitcode))) {
@@ -266,9 +274,9 @@ int thread_gc(options_t *options_p) {
 		// (threadinfo_p->exitcode == 24) in case of "(options_p->flags[RSYNC]>=2)" means, that some files vanished from source
 		//	before rsync completed but this's normal, so we need to ignore this error
 
-		if(threadinfo_p->exitcode && !((options_p->flags[RSYNC]>=2) && (threadinfo_p->exitcode == 24))) {
-			printf_e("Error: Got error from __sync_exec(): %s (errno: %i).\n", strerror(threadinfo_p->exitcode), threadinfo_p->exitcode);
-			return threadinfo_p->exitcode;
+		if((err=exitcode_process(options_p, threadinfo_p->exitcode))) {
+			printf_e("Error: Got error from exitcode_process(): %s (errno: %i).\n", strerror(err), err);
+			return err;
 		}
 
 		if(threadinfo_p->callback)
@@ -329,16 +337,8 @@ int thread_cleanup(options_t *options_p) {
 }
 
 int *state_p = NULL;
-/*
-static inline int __sync_exec_exit(int exitcode) {
-	if(pthread_self() && exitcode)
-		exit(exitcode);
 
-	return exitcode;
-}*/
-int __sync_exec(char **argv) {
-	int ret = 0;
-
+int exec_argv(char **argv) {
 	pid_t pid;
 	int status;
 
@@ -359,13 +359,12 @@ int __sync_exec(char **argv) {
 
 	int exitcode = WEXITSTATUS(status);
 
-	if(exitcode) {
-		printf_e("Error: Got non-zero exitcode while running \"%s\", exitcode is %i.\n", argv[0], exitcode);
-		return exitcode;
-	}
-
-	return ret;
+	return exitcode;
 }
+
+// === SYNC_EXEC() === {
+
+#define SYNC_EXEC(...) (options_p->flags[PTHREAD]?sync_exec_thread:sync_exec)(__VA_ARGS__)
 
 
 #define _sync_exec_getargv(argv, firstarg, COPYARG) {\
@@ -387,8 +386,6 @@ int __sync_exec(char **argv) {
 	va_end(arglist);\
 }
 
-#define SYNC_EXEC(...) (options_p->flags[PTHREAD]?sync_exec_thread:sync_exec)(__VA_ARGS__)
-
 static inline int sync_exec(options_t *options_p, thread_callbackfunct_t callback, ...) {
 	printf_dd("Debug2: sync_exec()\n");
 
@@ -397,9 +394,11 @@ static inline int sync_exec(options_t *options_p, thread_callbackfunct_t callbac
 
 	_sync_exec_getargv(argv, callback, arg);
 
-	int ret = __sync_exec(argv);
-	if(ret) {
-		printf_e("Error: Got error while __sync_exec(): %s (errno: %i).\n", strerror(ret), ret);
+	int exitcode = exec_argv(argv);
+
+	int ret;
+	if((ret=exitcode_process(options_p, exitcode))) {
+		printf_e("Error: Got error while sync_exec(): %s (errno: %i).\n", strerror(ret), ret);
 		goto l_sync_exec_end;
 	}
 
@@ -427,11 +426,11 @@ static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode) {
 int __sync_exec_thread(threadinfo_t *threadinfo_p) {
 	char **argv			= threadinfo_p->argv;
 
-	int ret = __sync_exec(argv);
+	int exitcode = exec_argv(argv);
 
-	thread_exit(threadinfo_p, ret);
+	thread_exit(threadinfo_p, exitcode);
 
-	return ret;
+	return exitcode;
 }
 
 static inline int sync_exec_thread(options_t *options_p, thread_callbackfunct_t callback, ...) {
@@ -456,6 +455,8 @@ static inline int sync_exec_thread(options_t *options_p, thread_callbackfunct_t 
 	return 0;
 }
 
+// } === SYNC_EXEC() ===
+
 static int sync_queuesync(const char *fpath, eventinfo_t *evinfo, options_t *options_p, indexes_t *indexes_p, queue_id_t queue_id) {
 
 	printf_ddd("Debug3: sync_queuesync(\"%s\", ...): fsize == %lu; tres == %lu, queue_id == \n", fpath, evinfo->fsize, options_p->bfilethreshold, queue_id);
@@ -479,7 +480,6 @@ int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, index
 	FTS *tree;
 	rule_t *rules_p = options_p->rules;
 	printf_dd("Debug2: sync_initialsync_rsync_walk(options_p, \"%s\", indexes_p, %i).\n", dirpath, queue_id);
-//	queueinfo_t *queueinfo = &options_p->_queues[QUEUE_INSTANT];
 
 	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL, NULL);
 

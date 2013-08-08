@@ -7,9 +7,9 @@ with "man ./man/man1/clsync.1".
 
 After that, I recommend you to run command "make doc" and look at images 
 "./doc/html/main_8c_a0ddf1224851353fc92bfbff6f499fa97_cgraph.png" and
-"./doc/html/sync_8c_a17e305f0a75e2fe51192f250ef9c4d80_icgraph.png"
+"./doc/html/sync_8c_a6ca5ff1b7289deddcc1f23d9383982e6_icgraph.png"
 
-The syncing is proceeding on "__sync_exec()" on this image. ;)
+The syncing is proceeding on "exec_argv()" on this image. ;)
 
 
 Here's very short description of how the program works:
@@ -69,7 +69,7 @@ to be synced and executes sync_idle_dosync_collectedevents_commitpart() to
 commit the lists. In turn, sync_idle_dosync_collectedevents_commitpart()
 executes sync_exec_thread() or sync_exec() depending on "argv" arguments.
 
-sync_exec_thread and sync_exec executes __sync_exec that calls execvp to run
+sync_exec_thread and sync_exec executes exec_argv that calls execvp to run
 external syncer process.
 
 
@@ -91,7 +91,7 @@ sync_idle_dosync_collectedevents() ->
 sync_idle_dosync_collectedevents_commitpart() -> 
 SYNC_EXEC() ->
 (sync_exec_thread|sync_exec)() -> 
-__sync_exec() ->
+exec_argv() ->
 execvp()
 
 
