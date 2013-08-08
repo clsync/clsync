@@ -484,7 +484,10 @@ by increasing value of "sysctl fs.inotify.max_user_watches"
 Error: Got non-zero exitcode [...]
 .RS
 .I action-script
-returned non-zero exitcode. Probably, you should process exitcodes in it.
+returned non-zero exitcode. Probably, you should process exitcodes in it or
+your syncer process didn't worked well. This may happend, for example if out
+of space.
+
 To confirm the problem, you can try to add "return 0" or "exit 0" into
 your script.
 .RE
