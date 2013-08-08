@@ -292,6 +292,7 @@ int thread_cleanup(options_t *options_p) {
 	while(threadsinfo_p->used) {
 		int err;
 		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[--threadsinfo_p->used];
+		pthread_kill(threadinfo_p->pthread, SIGTERM);
 		pthread_join(threadinfo_p->pthread, (void **)&threadinfo_p->exitcode);
 		printf_dd("Debug2: thread #%i exitcode: %i\n", threadsinfo_p->used, threadinfo_p->exitcode);
 		if(threadinfo_p->callback)
