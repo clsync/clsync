@@ -399,6 +399,10 @@ In this case,
 is supposed to be a path to
 .B rsync
 binary.
+
+Error code "24" from
+.I action-script
+will be ignored in this case.
 .RE
 
 As can be noticed, in the first four cases clsync's
@@ -476,6 +480,15 @@ Error: Cannot inotify_add_watch() on [...]
 Not enough watching descriptors of inotify is allowed. It can be fixed
 by increasing value of "sysctl fs.inotify.max_user_watches"
 .RE
+
+Error: Got error from __sync_exec(): [...]
+.RS
+.I action-script
+returned non-zero exitcode. Probably, you should process exitcodes in it.
+To confirm the problem, you can try to add "return 0" or "exit 0" into
+your script.
+.RE
+
 .SH EXAMPLES
 Working example you can try out in "example/" or 
 "/usr/share/doc/clsync/example/" directory. Copy this directory somewhere

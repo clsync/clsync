@@ -262,7 +262,11 @@ int thread_gc(options_t *options_p) {
 
 		}
 
-		if(threadinfo_p->exitcode) {
+		// (options_p->flags[RSYNC]>=2)  --  means, that "-RR" option is set
+		// (threadinfo_p->exitcode == 24) in case of "(options_p->flags[RSYNC]>=2)" means, that some files vanished from source
+		//	before rsync completed but this's normal, so we need to ignore this error
+
+		if(threadinfo_p->exitcode && !((options_p->flags[RSYNC]>=2) && (threadinfo_p->exitcode == 24))) {
 			printf_e("Error: Got error from __sync_exec(): %s (errno: %i).\n", strerror(threadinfo_p->exitcode), threadinfo_p->exitcode);
 			return threadinfo_p->exitcode;
 		}
