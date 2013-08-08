@@ -1288,7 +1288,9 @@ int sync_idle(int notify_d, options_t *options_p, indexes_t *indexes_p) {
 	printf_ddd("Debug3: sync_idle(): calling sync_idle_dosync_collectedevents()\n");
 
 	// TODO: make a separate thread on sync_idle_dosync_collectedevents();
-	sync_idle_dosync_collectedevents(options_p, indexes_p);
+	ret = sync_idle_dosync_collectedevents(options_p, indexes_p);
+	if(ret) return ret;
+
 	return 0;
 }
 
