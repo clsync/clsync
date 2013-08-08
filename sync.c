@@ -237,7 +237,7 @@ int thread_gc(options_t *options_p) {
 
 		printf_ddd("Debug3: thread_gc(): Trying thread #%i.\n", thread_num);
 
-#ifndef PARANOID
+#ifndef VERYPARANOID
 		if(threadinfo_p->state != STATE_TERM) {
 			printf_ddd("Debug3: thread_gc(): Thread #%i is busy, skipping.\n", thread_num);
 //			thread_num++;
