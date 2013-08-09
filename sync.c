@@ -688,7 +688,7 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 	printf_dd("Debug2: sync_mark_walk(%i, options_p, \"%s\", indexes_p).\n", notify_d, dirpath);
 	printf_funct my_printf_e = STATE_STARTING(state_p) ? printf_e : _printf_dd;
 
-	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL, NULL);
+	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL|FTS_NOSTAT, NULL);
 
 	if(tree == NULL) {
 		my_printf_e("Error: Cannot fts_open() on \"%s\": %s (errno: %i).\n", dirpath, strerror(errno), errno);
@@ -697,6 +697,7 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 
 	FTSENT *node;
 	while((node = fts_read(tree))) {
+		printf_dd("Debug3: walking: \"%s\" (depth %u): fts_info == %i\n", node->fts_path, node->fts_level, node->fts_info);
 		switch(node->fts_info) {
 			// Duplicates:
 			case FTS_DP:
@@ -704,6 +705,7 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 			case FTS_SL:
 			case FTS_SLNONE:
 			case FTS_F:
+			case FTS_NSOK:
 				continue;
 			// To mark:
 			case FTS_D:
@@ -712,7 +714,6 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 			// Error cases:
 			case FTS_ERR:
 			case FTS_NS:
-			case FTS_NSOK:
 			case FTS_DNR:
 			case FTS_DC:
 				if(errno == ENOENT) {
@@ -727,7 +728,7 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 				return EINVAL;
 		}
 
-		ruleaction_t action = rules_check(node->fts_path, node->fts_statp->st_mode, rules_p);
+		ruleaction_t action = rules_check(node->fts_path, S_IFDIR, rules_p);
 
 		if(action == RULE_REJECT) {
 			fts_set(tree, node, FTS_SKIP);
