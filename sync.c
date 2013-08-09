@@ -481,6 +481,11 @@ int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, index
 	rule_t *rules_p = options_p->rules;
 	printf_dd("Debug2: sync_initialsync_rsync_walk(options_p, \"%s\", indexes_p, %i).\n", dirpath, queue_id);
 
+	char skip_rules = (STATE_STARTING(state_p) && options_p->flags[INITFULL]);
+
+	if((!options_p->flags[RSYNC_PREFERINCLUDE]) && skip_rules)
+		return 0;
+
 	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL, NULL);
 
 	if(tree == NULL) {
@@ -523,19 +528,21 @@ int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, index
 				return EINVAL;
 		}
 
-		ruleaction_t action = rules_check(node->fts_path, node->fts_statp->st_mode, rules_p);
+		if(!skip_rules) {
+			ruleaction_t action = rules_check(node->fts_path, node->fts_statp->st_mode, rules_p);
 
-		if((action == RULE_REJECT) && !(STATE_STARTING(state_p) && options_p->flags[INITFULL])) {
-			fts_set(tree, node, FTS_SKIP);
-			if(!options_p->flags[RSYNC_PREFERINCLUDE]) {
-				if(queue_id == QUEUE_AUTO) {
-					int i=0;
-					while(i<QUEUE_MAX)
-						indexes_addexclude(indexes_p, strdup(node->fts_path), i++);
-				} else
-					indexes_addexclude(indexes_p, strdup(node->fts_path), queue_id);
+			if(action == RULE_REJECT) {
+				fts_set(tree, node, FTS_SKIP);
+				if(!options_p->flags[RSYNC_PREFERINCLUDE]) {
+					if(queue_id == QUEUE_AUTO) {
+						int i=0;
+						while(i<QUEUE_MAX)
+							indexes_addexclude(indexes_p, strdup(node->fts_path), i++);
+					} else
+						indexes_addexclude(indexes_p, strdup(node->fts_path), queue_id);
+				}
+				continue;
 			}
-			continue;
 		}
 
 		evinfo.fsize = node->fts_statp->st_size;
