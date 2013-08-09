@@ -1413,105 +1413,114 @@ void sync_inotify_handle_dosync(gpointer fpath_gp, gpointer evinfo_gp, gpointer 
 }
 
 int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_p) {
-	char buf[BUFSIZ + 1];
-	size_t r = read(inotify_d, buf, BUFSIZ);
-	if(r <= 0) {
-		printf_e("Error: Got error while reading events from inotify with read(): %s (errno: %i).\n", strerror(errno), errno);
-		return -1;
-	}
+	static struct timeval tv={0};
+	int count = 0;
+
+	fd_set rfds;
+	FD_ZERO(&rfds);
+	FD_SET(inotify_d, &rfds);
+
+	while(select(FD_SETSIZE, &rfds, NULL, NULL, &tv)) {
+
+		char buf[BUFSIZ + 1];
+		size_t r = read(inotify_d, buf, BUFSIZ);
+		if(r <= 0) {
+			printf_e("Error: Got error while reading events from inotify with read(): %s (errno: %i).\n", strerror(errno), errno);
+			return -1;
+		}
 
 #ifdef PARANOID
-	g_hash_table_remove_all(indexes_p->fpath2ei_ht);
+		g_hash_table_remove_all(indexes_p->fpath2ei_ht);
 #endif
 
-	int count = 0;
-	char *ptr =  buf;
-	char *end = &buf[r];
-	while(ptr < end) {
-		struct inotify_event *event = (struct inotify_event *)ptr;
-		if(event->mask & IN_IGNORED) {
-			printf_dd("Debug2: Cleaning up info about watch descriptor %i.\n", event->wd);
-			indexes_remove_bywd(indexes_p, event->wd);
-			SYNC_INOTIFY_HANDLE_CONTINUE;
-		}
+		char *ptr =  buf;
+		char *end = &buf[r];
+		while(ptr < end) {
+			struct inotify_event *event = (struct inotify_event *)ptr;
+			if(event->mask & IN_IGNORED) {
+				printf_dd("Debug2: Cleaning up info about watch descriptor %i.\n", event->wd);
+				indexes_remove_bywd(indexes_p, event->wd);
+				SYNC_INOTIFY_HANDLE_CONTINUE;
+			}
 
-		char *fpath = indexes_wd2fpath(indexes_p, event->wd);
+			char *fpath = indexes_wd2fpath(indexes_p, event->wd);
 
-		if(fpath == NULL) {
-			printf_dd("Debug2: Event %p on stale watch (wd: %i).\n", (void *)(long)event->mask, event->wd);
-			SYNC_INOTIFY_HANDLE_CONTINUE;
-		}
-		printf_dd("Debug2: Event %p on \"%s\" (wd: %i; fpath: \"%s\").\n", (void *)(long)event->mask, event->len>0?event->name:"", event->wd, fpath);
+			if(fpath == NULL) {
+				printf_dd("Debug2: Event %p on stale watch (wd: %i).\n", (void *)(long)event->mask, event->wd);
+				SYNC_INOTIFY_HANDLE_CONTINUE;
+			}
+			printf_dd("Debug2: Event %p on \"%s\" (wd: %i; fpath: \"%s\").\n", (void *)(long)event->mask, event->len>0?event->name:"", event->wd, fpath);
 
-		char *fpathfull = xmalloc(strlen(fpath) + event->len + 2);
-		if(event->len>0)
-			sprintf(fpathfull, "%s/%s", fpath, event->name);
-		else
-			sprintf(fpathfull, "%s", fpath);
-
-		struct stat64 lstat;
-		mode_t st_mode;
-		size_t st_size;
-		if(lstat64(fpathfull, &lstat)) {
-			printf_dd("Debug2: Cannot lstat(\"%s\", lstat): %s (errno: %i). Seems, that the object disappeared.\n", fpathfull, strerror(errno), errno);
-			if(event->mask & IN_ISDIR)
-				st_mode = S_IFDIR;
+			char *fpathfull = xmalloc(strlen(fpath) + event->len + 2);
+			if(event->len>0)
+				sprintf(fpathfull, "%s/%s", fpath, event->name);
 			else
-				st_mode = S_IFREG;
-			st_size = 0;
-		} else {
-			st_mode = lstat.st_mode;
-			st_size = lstat.st_size;
-		}
+				sprintf(fpathfull, "%s", fpath);
 
-		ruleaction_t ruleaction = rules_check(fpathfull, st_mode, options_p->rules);
+			struct stat64 lstat;
+			mode_t st_mode;
+			size_t st_size;
+			if(lstat64(fpathfull, &lstat)) {
+				printf_dd("Debug2: Cannot lstat(\"%s\", lstat): %s (errno: %i). Seems, that the object disappeared.\n", fpathfull, strerror(errno), errno);
+				if(event->mask & IN_ISDIR)
+					st_mode = S_IFDIR;
+				else
+					st_mode = S_IFREG;
+				st_size = 0;
+			} else {
+				st_mode = lstat.st_mode;
+				st_size = lstat.st_size;
+			}
 
-		if(ruleaction == RULE_REJECT) {
-			free(fpathfull);
-			SYNC_INOTIFY_HANDLE_CONTINUE;
-		}
+			ruleaction_t ruleaction = rules_check(fpathfull, st_mode, options_p->rules);
 
-		if(event->mask & IN_ISDIR) {
-			if(event->mask & (IN_CREATE|IN_MOVED_TO)) {			// Appeared
-				int ret = sync_mark_walk(inotify_d, options_p, fpathfull, indexes_p);
-				if(ret)
-					printf_d("Debug: Seems, that directory \"%s\" disappeared, while trying to mark it.\n", fpathfull);
+			if(ruleaction == RULE_REJECT) {
 				free(fpathfull);
 				SYNC_INOTIFY_HANDLE_CONTINUE;
-			} else 
-			if(event->mask & (IN_DELETE|IN_MOVED_FROM)) {	// Disappered
-				printf_dd("Debug2: Disappeared \"%s\".\n", fpathfull);
 			}
+
+			if(event->mask & IN_ISDIR) {
+				if(event->mask & (IN_CREATE|IN_MOVED_TO)) {			// Appeared
+					int ret = sync_mark_walk(inotify_d, options_p, fpathfull, indexes_p);
+					if(ret)
+						printf_d("Debug: Seems, that directory \"%s\" disappeared, while trying to mark it.\n", fpathfull);
+					free(fpathfull);
+					SYNC_INOTIFY_HANDLE_CONTINUE;
+				} else 
+				if(event->mask & (IN_DELETE|IN_MOVED_FROM)) {	// Disappered
+					printf_dd("Debug2: Disappeared \"%s\".\n", fpathfull);
+				}
+			}
+
+			int isnew = 0;
+			eventinfo_t *evinfo = indexes_fpath2ei(indexes_p, fpathfull);
+			if(evinfo == NULL) {
+				evinfo = (eventinfo_t *)xmalloc(sizeof(*evinfo));
+				memset(evinfo, 0, sizeof(*evinfo));
+				evinfo->fsize  = st_size;
+				evinfo->wd     = event->wd;
+				isnew++;
+				printf_ddd("Debug3: sync_inotify_handle(): new event: fsize == %i; wd == %i\n", evinfo->fsize, evinfo->wd);
+			}
+			evinfo->evmask |= event->mask;
+
+			if(isnew)
+				indexes_fpath2ei_add(indexes_p, fpathfull, evinfo);
+			else
+				free(fpathfull);
+
+			SYNC_INOTIFY_HANDLE_CONTINUE;
 		}
 
-		int isnew = 0;
-		eventinfo_t *evinfo = indexes_fpath2ei(indexes_p, fpathfull);
-		if(evinfo == NULL) {
-			evinfo = (eventinfo_t *)xmalloc(sizeof(*evinfo));
-			memset(evinfo, 0, sizeof(*evinfo));
-			evinfo->fsize  = st_size;
-			evinfo->wd     = event->wd;
-			isnew++;
-			printf_ddd("Debug3: sync_inotify_handle(): new event: fsize == %i; wd == %i\n", evinfo->fsize, evinfo->wd);
-		}
-		evinfo->evmask |= event->mask;
+		struct dosync_arg dosync_arg;
+		dosync_arg.options_p 	= options_p;
+		dosync_arg.indexes_p	= indexes_p;
 
-		if(isnew)
-			indexes_fpath2ei_add(indexes_p, fpathfull, evinfo);
-		else
-			free(fpathfull);
+		printf_ddd("Debug3: sync_inotify_handle(): collected %i events per this time.\n", g_hash_table_size(indexes_p->fpath2ei_ht));
 
-		SYNC_INOTIFY_HANDLE_CONTINUE;
+		g_hash_table_foreach(indexes_p->fpath2ei_ht, sync_inotify_handle_dosync, &dosync_arg);
+		g_hash_table_remove_all(indexes_p->fpath2ei_ht);
 	}
-
-	struct dosync_arg dosync_arg;
-	dosync_arg.options_p 	= options_p;
-	dosync_arg.indexes_p	= indexes_p;
-
-	printf_ddd("Debug3: sync_inotify_handle(): collected %i events per this time.\n", g_hash_table_size(indexes_p->fpath2ei_ht));
-
-	g_hash_table_foreach(indexes_p->fpath2ei_ht, sync_inotify_handle_dosync, &dosync_arg);
-	g_hash_table_remove_all(indexes_p->fpath2ei_ht);
 
 	return count;
 }
