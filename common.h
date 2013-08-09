@@ -72,7 +72,7 @@ enum flags_enum {
 	HELP		= 'h',
 	DELAY		= 't',
 	BFILEDELAY	= 'T',
-	COMMONDELAY	= 'w',
+	SYNCDELAY	= 'w',
 	DEBUG		= 'D',
 	QUITE		= 'q',
 	VERBOSE		= 'v',
@@ -145,9 +145,10 @@ struct options {
 	char *listoutdir;
 	int notifyengine;
 	size_t bfilethreshold;
-	unsigned int commondelay;
+	unsigned int syncdelay;
 	queueinfo_t _queues[QUEUE_MAX];	// TODO: remove this from here
 	unsigned int rsyncinclimit;
+	time_t synctime;
 };
 typedef struct options options_t;
 
@@ -165,8 +166,8 @@ enum state_enum {
 	STATE_EXIT 	= 0,
 	STATE_RUNNING,
 	STATE_REHASH,
-	STATE_TERM,
-	STATE_PTHREAD_GC
+	STATE_TERM//,
+//	STATE_PTHREAD_GC
 };
 typedef enum state_enum state_t;
 

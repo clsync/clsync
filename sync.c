@@ -234,6 +234,7 @@ int thread_del_bynum(int thread_num) {
 
 int thread_gc(options_t *options_p) {
 	int thread_num;
+	printf_ddd("Debug3: thread_gc()\n");
 	threadsinfo_t *threadsinfo_p = thread_getinfo();
 	if(threadsinfo_p == NULL)
 		return errno;
@@ -337,6 +338,8 @@ int thread_cleanup(options_t *options_p) {
 }
 
 int *state_p = NULL;
+
+options_t *_options_p = NULL;	// TODO: remove this global variable
 
 int exec_argv(char **argv) {
 	pid_t pid;
@@ -886,24 +889,24 @@ int sync_idle_dosync_collectedevents_cleanup(options_t *options_p, char **argv) 
 
 	if(options_p->flags[RSYNC] >= 2) {
 		int ret0, ret1;
-		if(argv[4] == NULL) {
+		if(argv[5] == NULL) {
 			printf_e("Error: Unexpected *argv[] end.");
 			return EINVAL;
 		}
 
-		printf_ddd("Debug3: unlink()-ing \"%s\"\n", argv[4]);
-		ret0 = unlink(argv[4]);
+		printf_ddd("Debug3: unlink()-ing \"%s\"\n", argv[5]);
+		ret0 = unlink(argv[5]);
 
 		if(options_p->flags[RSYNC_PREFERINCLUDE])
 			return ret0;
 
-		if(argv[6] == NULL) {
+		if(argv[7] == NULL) {
 			printf_e("Error: Unexpected *argv[] end.");
 			return EINVAL;
 		}
 
-		printf_ddd("Debug3: unlink()-ing \"%s\"\n", argv[6]);
-		ret1 = unlink(argv[6]);
+		printf_ddd("Debug3: unlink()-ing \"%s\"\n", argv[7]);
+		ret1 = unlink(argv[7]);
 
 		return ret0 == 0 ? ret1 : ret0;
 	}
@@ -1082,6 +1085,7 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 			return SYNC_EXEC(options_p,
 				sync_idle_dosync_collectedevents_cleanup,
 				options_p->actfpath,
+				"--inplace",
 				"-avH", 
 				"--delete-before",
 				*(dosync_arg_p->excf_path) ? "--exclude-from"		: "--include-from",
@@ -1225,6 +1229,10 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 	}
 #endif
 
+	// Setting the time to sync not before it:
+	options_p->synctime = time(NULL) + options_p->syncdelay;
+	printf_ddd("Debug3: Next sync will be not before: %u\n", options_p->synctime);
+
 	int queue_id=0;
 	while(queue_id < QUEUE_MAX) {
 		int ret;
@@ -1281,6 +1289,7 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 			printf_e("Error: Cannot submit to sync the list \"%s\": %s (errno: %i)\n", dosync_arg.outf_path, strerror(ret), ret);
 			return ret;
 		}
+
 	}
 
 	return 0;
@@ -1340,7 +1349,7 @@ int sync_fanotify_loop(int fanotify_d, options_t *options_p, indexes_t *indexes_
 #endif
 
 int sync_inotify_wait(int inotify_d, options_t *options_p, indexes_t *indexes_p) {
-	static struct timeval tv={0};
+	static struct timeval tv;
 	time_t tm = time(NULL);
 	long mindelayleft = ((unsigned long)~0 >> 1);
 
@@ -1362,16 +1371,25 @@ int sync_inotify_wait(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 
 		int qdelay = queueinfo->stime + queueinfo->collectdelay - tm;
 		printf_ddd("Debug3: sync_inotify_wait(): queue #%i: %i %i %i -> %i\n", queue_id-1, queueinfo->stime, queueinfo->collectdelay, tm, qdelay);
-		if(qdelay < -(long)options_p->commondelay)
-			qdelay = -(long)options_p->commondelay;
+		if(qdelay < -(long)options_p->syncdelay)
+			qdelay = -(long)options_p->syncdelay;
 
 		mindelayleft = MIN(mindelayleft, qdelay);
 	}
 
-	if(mindelayleft == ((unsigned long)~0 >> 1))
-		tv.tv_sec = mindelayleft;
-	else
-		tv.tv_sec = mindelayleft + options_p->commondelay;
+	long synctime_delay = ((long)options_p->synctime) - ((long)tm);
+	synctime_delay = synctime_delay > 0 ? synctime_delay : 0;
+
+	printf_ddd("Debu3: delay = MAX(%i, %i)\n", mindelayleft, synctime_delay);
+	mindelayleft = MAX(mindelayleft, synctime_delay);
+	mindelayleft = mindelayleft > 0 ? mindelayleft : 0;
+
+	printf_ddd("Debug3: sleeping for %i second(s).\n", SLEEP_SECONDS);
+	sleep(SLEEP_SECONDS);
+	mindelayleft = ((long)mindelayleft)>SLEEP_SECONDS ? mindelayleft-SLEEP_SECONDS : 0;
+
+	tv.tv_sec  = mindelayleft;
+	tv.tv_usec = 0;
 
 	printf_ddd("Debug3: sync_inotify_wait(): select with timeout %li secs.\n", tv.tv_sec);
 	return select(FD_SETSIZE, &rfds, NULL, NULL, &tv);
@@ -1513,13 +1531,14 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 	while(state != STATE_EXIT) {
 		int events = sync_inotify_wait(inotify_d, options_p, indexes_p);
 		switch(state) {
-			case STATE_PTHREAD_GC:
+// 			SIG_PTHREAD_GC doesn't interrupts select() :(
+/*			case STATE_PTHREAD_GC:
 				if(thread_gc(options_p)) {
 					state=STATE_EXIT;
 					break;
 				}
 				state = STATE_RUNNING;
-				continue;
+				continue;*/
 			case STATE_RUNNING:
 				break;
 			case STATE_REHASH:
@@ -1575,8 +1594,12 @@ int sync_notify_loop(int notify_d, options_t *options_p, indexes_t *indexes_p) {
 }
 
 void sync_sig_pthread_gc(int signal) {
+	printf_ddd("Debug3: got signal for thread_gc()\n");
+
+	thread_gc(_options_p);
+/*
 	if(state_p)
-		*state_p = STATE_PTHREAD_GC;
+		*state_p = STATE_PTHREAD_GC;*/
 
 	return;
 }
@@ -1596,6 +1619,8 @@ void sync_sig_term(int signal) {
 }
 
 int sync_run(options_t *options_p) {
+	_options_p = options_p;
+
 	int ret, i;
 	indexes_t indexes = {NULL};
 	indexes.wd2fpath_ht      = g_hash_table_new_full(g_direct_hash,	g_direct_equal,	0,    0);

@@ -31,7 +31,7 @@ static struct option long_options[] =
 	{"background",		no_argument,		NULL,	BACKGROUND},
 	{"pthread",		no_argument,		NULL,	PTHREAD},	// Not implemented, yet
 	{"collectdelay",	required_argument,	NULL,	DELAY},
-	{"commondelay",		required_argument,	NULL,	COMMONDELAY},
+	{"syncdelay",		required_argument,	NULL,	SYNCDELAY},
 	{"outlistsdir",		required_argument,	NULL,	OUTLISTSDIR},
 	{"rsync",		no_argument,		NULL,	RSYNC},
 	{"rsyncinclimit",	required_argument,	NULL,	RSYNCINCLIMIT},
@@ -91,7 +91,7 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 				options_p->label        = optarg;
 				break;
 			case 'w':
-				options_p->commondelay  = (unsigned int)atol(optarg);
+				options_p->syncdelay  = (unsigned int)atol(optarg);
 			case 't':
 				options_p->_queues[QUEUE_NORMAL].collectdelay = (unsigned int)atol(optarg);
 				break;
@@ -292,7 +292,7 @@ int main(int argc, char *argv[]) {
 	struct stat64 stat64={0};
 	memset(&options, 0, sizeof(options));
 	options.notifyengine 			   = DEFAULT_NOTIFYENGINE;
-	options.commondelay 			   = DEFAULT_COMMONDELAY;
+	options.syncdelay 			   = DEFAULT_SYNCDELAY;
 	options._queues[QUEUE_NORMAL].collectdelay = DEFAULT_COLLECTDELAY;
 	options._queues[QUEUE_BIGFILE].collectdelay= DEFAULT_BFILECOLLECTDELAY;
 	options._queues[QUEUE_INSTANT].collectdelay= COLLECTDELAY_INSTANT;

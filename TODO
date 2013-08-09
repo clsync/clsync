@@ -3,3 +3,4 @@
 3. Remove all code with "#ifdef DOXYGEN"
 4. Find-out is "pthread_tryjoin_np()" really required? Can we remove all this
 	"threadsinfo" mechanism?
+5. Deduplicate code from functions, that calls sync_exec() and sync_exec_thread()

@@ -70,24 +70,18 @@ to parallelize syncing processes.
 .I ordinary\-delay
 .RS 8
 Sets the delay (in seconds) to collect events about ordinary files and
-directories. Total maximum delay for ordinary files and
-directories will be
-.I ordinary\-delay
-+
-.I additional\-delay
-seconds.
+directories.
 
 Default value is "30".
 .RE
 
 .PP
-.B \-w, \-\-commondelay
+.B \-w, \-\-syncdelay
 .I additional\-delay
 .RS 8
-Sets the additional delay (in seconds) to collect events about any file
-or directory.
+Sets the minimal delay (in seconds) between syncs.
 
-Default value is "0".
+Default value is "30".
 .RE
 
 .PP
@@ -217,11 +211,7 @@ Default value is "134217728" ["128 MiB"].
 .RS 8
 Sets the delay (in seconds) to collect events about "big files" (see
 .I filesize\-threshold
-). Total maximum delay for "big files" will be 
-.I bigfiles\-delay
-+
-.I additional\-delay
-seconds.
+).
 
 Default value is "1800".
 .RE
@@ -386,7 +376,7 @@ case
 .B e
 .RS
 .I action\-script
-\-avH \-\-delete\-before [\-\-exclude\-from
+\-\-inplace \-avH \-\-delete\-before [\-\-exclude\-from
 .I rsync\-exclude\-listpath
 ]
 \-\-include\-from
