@@ -1380,7 +1380,7 @@ int sync_inotify_wait(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 	long synctime_delay = ((long)options_p->synctime) - ((long)tm);
 	synctime_delay = synctime_delay > 0 ? synctime_delay : 0;
 
-	printf_ddd("Debu3: delay = MAX(%i, %i)\n", mindelayleft, synctime_delay);
+	printf_ddd("Debug3: delay = MAX(%i, %i)\n", mindelayleft, synctime_delay);
 	mindelayleft = MAX(mindelayleft, synctime_delay);
 	mindelayleft = mindelayleft > 0 ? mindelayleft : 0;
 
