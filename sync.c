@@ -333,6 +333,7 @@ int thread_cleanup(options_t *options_p) {
 int *state_p = NULL;
 
 options_t *_options_p = NULL;	// TODO: remove this global variable
+indexes_t *_indexes_p = NULL;	// TODO: remove this global variable
 
 int exec_argv(char **argv) {
 	pid_t pid;
@@ -1398,7 +1399,15 @@ int sync_inotify_wait(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 	tv.tv_usec = 0;
 
 	printf_ddd("Debug3: sync_inotify_wait(): select with timeout %li secs.\n", tv.tv_sec);
-	return select(FD_SETSIZE, &rfds, NULL, NULL, &tv);
+
+	int ret = select(FD_SETSIZE, &rfds, NULL, NULL, &tv);
+
+	if((ret == -1) && (errno == EINTR)) {
+		errno = 0;
+		return 0;
+	}
+
+	return ret;
 }
 
 void sync_inotify_handle_dosync(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
@@ -1609,7 +1618,7 @@ int sync_notify_loop(int notify_d, options_t *options_p, indexes_t *indexes_p) {
 }
 
 void sync_sig_pthread_gc(int signal) {
-	printf_ddd("Debug3: got signal for thread_gc()\n");
+	printf_ddd("Debug3: Got signal for thread_gc()\n");
 
 	int ret = thread_gc(_options_p);
 	if(ret)
@@ -1618,6 +1627,16 @@ void sync_sig_pthread_gc(int signal) {
 /*
 	if(state_p)
 		*state_p = STATE_PTHREAD_GC;*/
+
+	return;
+}
+
+void sync_sig_initsync(int signal) {
+	printf_ddd("Debug3: Got signal for sync_initialsync()\n");
+
+	int ret = sync_initialsync(_options_p->watchdir, _options_p, _indexes_p);
+	if(ret)
+		kill(0, SIGTERM);
 
 	return;
 }
@@ -1653,6 +1672,8 @@ int sync_run(options_t *options_p) {
 		i++;
 	}
 
+	_indexes_p = &indexes;
+
 	if(options_p->listoutdir)
 		srand(time(NULL));
 
@@ -1667,6 +1688,7 @@ int sync_run(options_t *options_p) {
 	signal(SIGINT,	sync_sig_term);
 
 	signal(SIGUSR_PTHREAD_GC, sync_sig_pthread_gc);
+	signal(SIGUSR_INITSYNC,   sync_sig_initsync);
 
 	ret = sync_notify_loop(notify_d, options_p, &indexes);
 	if(ret) return ret;

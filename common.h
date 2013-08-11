@@ -116,7 +116,8 @@ typedef enum ruleaction_enum ruleaction_t;
 
 // signals (man 7 signal)
 enum sigusr_enum {
-	SIGUSR_PTHREAD_GC = 10
+	SIGUSR_PTHREAD_GC	= 10,
+	SIGUSR_INITSYNC  	= 12
 };
 
 struct rule {
