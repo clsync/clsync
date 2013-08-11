@@ -244,24 +244,26 @@ int thread_gc(options_t *options_p) {
 	while(++thread_num < threadsinfo_p->used) {
 		int err;
 		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[thread_num];
-
 		printf_ddd("Debug3: thread_gc(): Trying thread #%i.\n", thread_num);
 
 #ifndef VERYPARANOID
 		if(threadinfo_p->state != STATE_TERM) {
-			printf_ddd("Debug3: thread_gc(): Thread #%i is busy, skipping.\n", thread_num);
-//			thread_num++;
+			printf_ddd("Debug3: thread_gc(): Thread #%i is busy, skipping (#0).\n", thread_num);
 			continue;
 		}
+#endif
 		
+#ifdef PARANOID
+#ifndef VERYPARANOID
 		switch((err=pthread_join(threadinfo_p->pthread, (void **)&threadinfo_p->exitcode))) {
 #else
 		switch((err=pthread_tryjoin_np(threadinfo_p->pthread, (void **)&threadinfo_p->exitcode))) {
 			case EBUSY:
-				printf_ddd("Debug3: thread_gc(): Thread #%i is busy, skipping.\n", thread_num);
-//				thread_num++;
+				printf_ddd("Debug3: thread_gc(): Thread #%i is busy, skipping (#1).\n", thread_num);
 				continue;
 #endif
+			case EDEADLK:
+			case EINVAL:
 			case 0:
 				printf_ddd("Debug3: thread_gc(): Thread #%i is finished with exitcode %i, deleting.\n", thread_num, threadinfo_p->exitcode);
 				break;
@@ -270,21 +272,12 @@ int thread_gc(options_t *options_p) {
 				return errno;
 
 		}
+#endif
 
-		// (options_p->flags[RSYNC]>=2)  --  means, that "-RR" option is set
-		// (threadinfo_p->exitcode == 24) in case of "(options_p->flags[RSYNC]>=2)" means, that some files vanished from source
-		//	before rsync completed but this's normal, so we need to ignore this error
-
-		if((err=exitcode_process(options_p, threadinfo_p->exitcode))) {
-			printf_e("Error: Got error from exitcode_process(): %s (errno: %i).\n", strerror(err), err);
-			return err;
+		if(threadinfo_p->errcode) {
+			printf_e("Error: Got error from thread #%i: %s (errno: %i)\n", thread_num, strerror(threadinfo_p->errcode), threadinfo_p->errcode);
+			return threadinfo_p->errcode;
 		}
-
-		if(threadinfo_p->callback)
-			if((err=threadinfo_p->callback(options_p, threadinfo_p->argv))) {
-				printf_e("Error: Got error from callback function: %s (errno: %i).\n", strerror(err), err);
-				return err;
-			}
 
 		if(thread_del_bynum(thread_num))
 			return errno;
@@ -419,10 +412,22 @@ l_sync_exec_end:
 }
 
 static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode) {
-	threadinfo_p->state    = STATE_TERM;
+	int err;
 	threadinfo_p->exitcode = exitcode;
 
+	if((err=exitcode_process(threadinfo_p->options_p, threadinfo_p->exitcode))) {
+		printf_e("Error: Got error from exitcode_process(): %s (errno: %i).\n", strerror(err), err);
+		threadinfo_p->errcode = err;
+	}
+
+	if((threadinfo_p->callback) && !(err))
+		if((err=threadinfo_p->callback(threadinfo_p->options_p, threadinfo_p->argv))) {
+			printf_e("Error: Got error from callback function: %s (errno: %i).\n", strerror(err), err);
+			threadinfo_p->errcode = err;
+		}
+
 	// Notifying the parent-thread, that it's type to collect garbage threads
+	threadinfo_p->state    = STATE_TERM;
 	return kill(getpid(), SIGUSR_PTHREAD_GC);
 }
 
@@ -448,8 +453,9 @@ static inline int sync_exec_thread(options_t *options_p, thread_callbackfunct_t 
 	if(threadinfo_p == NULL)
 		return errno;
 
-	threadinfo_p->callback = callback;
-	threadinfo_p->argv     = argv;
+	threadinfo_p->callback  = callback;
+	threadinfo_p->argv      = argv;
+	threadinfo_p->options_p = options_p;
 
 	if(pthread_create(&threadinfo_p->pthread, NULL, (void *(*)(void *))__sync_exec_thread, threadinfo_p)) {
 		printf_e("Error: Cannot pthread_create(): %s (errno: %i).\n", strerror(errno), errno);
@@ -1605,7 +1611,10 @@ int sync_notify_loop(int notify_d, options_t *options_p, indexes_t *indexes_p) {
 void sync_sig_pthread_gc(int signal) {
 	printf_ddd("Debug3: got signal for thread_gc()\n");
 
-	thread_gc(_options_p);
+	int ret = thread_gc(_options_p);
+	if(ret)
+		kill(0, SIGTERM);
+
 /*
 	if(state_p)
 		*state_p = STATE_PTHREAD_GC;*/

@@ -60,6 +60,12 @@
 #define MAX(a,b) (a>b?a:b)
 #endif
 
+#ifdef VERYPARANOID
+#ifndef PARANOID
+#define PARANOID
+#endif
+#endif
+
 #ifndef IN_CREATE_SELF
 #define IN_CREATE_SELF IN_CREATE
 #endif
@@ -201,7 +207,9 @@ struct threadinfo {
 	char 			**argv;
 	pthread_t		  pthread;
 	int			  exitcode;
+	int			  errcode;
 	state_t			  state;
+	options_t		 *options_p;
 };
 typedef struct threadinfo threadinfo_t;
 
