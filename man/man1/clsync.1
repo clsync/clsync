@@ -439,9 +439,16 @@ Rule format:
 
 For example: \-*/[Tt]estdir
 
+.SH SIGNALS
+
+10 \- runs threads' GC function
+
+12 \- runs full resync
+
+
 .SH DIAGNOSTICS
 
-Initial rsync process works very slow on clsync start
+initial rsync process works very slow on clsync start
 .RS
 Probably there's too huge exclude list is passed to rsync. This can happened
 if you're excluding with regex in clsync's rules a lot of thousands files.
