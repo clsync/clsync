@@ -237,3 +237,12 @@ struct dosync_arg {
 	char buf[BUFSIZ+1];
 };
 
+enum initsync {
+	INITSYNC_UNKNOWN = 0,
+	INITSYNC_FIRST,
+	INITSYNC_SUBDIR,
+	INITSYNC_RESYNC
+};
+typedef enum initsync initsync_t;
+
+

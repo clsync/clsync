@@ -484,14 +484,14 @@ static int sync_queuesync(const char *fpath, eventinfo_t *evinfo, options_t *opt
 	return indexes_queueevent(indexes_p, strdup(fpath), evinfo_dup, queue_id);
 }
 
-int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, indexes_t *indexes_p, queue_id_t queue_id) {
+int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, indexes_t *indexes_p, queue_id_t queue_id, initsync_t initsync) {
 	const char *rootpaths[] = {dirpath, NULL};
 	eventinfo_t evinfo;
 	FTS *tree;
 	rule_t *rules_p = options_p->rules;
-	printf_dd("Debug2: sync_initialsync_rsync_walk(options_p, \"%s\", indexes_p, %i).\n", dirpath, queue_id);
+	printf_dd("Debug2: sync_initialsync_rsync_walk(options_p, \"%s\", indexes_p, %i, %i).\n", dirpath, queue_id, initsync);
 
-	char skip_rules = (STATE_STARTING(state_p) && options_p->flags[INITFULL]);
+	char skip_rules = ((initsync==INITSYNC_FIRST || initsync==INITSYNC_RESYNC) && options_p->flags[INITFULL]);
 
 	if((!options_p->flags[RSYNC_PREFERINCLUDE]) && skip_rules)
 		return 0;
@@ -589,8 +589,8 @@ int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, index
 	return 0;
 }
 
-int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_p) {
-	printf_ddd("Debug3: sync_initialsync(\"%s\", options_p, indexes_p)\n", path);
+int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_p, initsync_t initsync) {
+	printf_ddd("Debug3: sync_initialsync(\"%s\", options_p, indexes_p, %i)\n", path, initsync);
 
 	if(!options_p->flags[RSYNC]) {
 		// non-RSYNC case:
@@ -610,7 +610,7 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 
 	// RSYNC case:
 //	queue_id_t queue_id = initsync==INITSYNC_FIRST ? QUEUE_INSTANT : QUEUE_AUTO;
-	queue_id_t queue_id = STATE_STARTING(state_p) ? QUEUE_INSTANT : QUEUE_NORMAL;
+	queue_id_t queue_id = (initsync==INITSYNC_FIRST || initsync==INITSYNC_RESYNC) ? QUEUE_INSTANT : QUEUE_NORMAL;
 
 	if(!options_p->flags[RSYNC_PREFERINCLUDE]) {
 		queueinfo_t *queueinfo = &options_p->_queues[queue_id];
@@ -624,7 +624,7 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 		evinfo->flags |= EVIF_RECURSIVELY;
 
 		// Searching for excludes
-		int ret = sync_initialsync_rsync_walk(options_p, path, indexes_p, queue_id);
+		int ret = sync_initialsync_rsync_walk(options_p, path, indexes_p, queue_id, initsync);
 		if(ret) {
 			printf_e("Error: Cannot get exclude what to exclude: %s (errno: %i)\n", strerror(ret), ret);
 			return ret;
@@ -638,7 +638,7 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 	}
 
 	// Searching for includes
-	return sync_initialsync_rsync_walk(options_p, path, indexes_p, queue_id);
+	return sync_initialsync_rsync_walk(options_p, path, indexes_p, queue_id, initsync);
 }
 
 int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p) {
@@ -762,9 +762,6 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 		my_printf_e("Error: Got error while fts_close(): %s (errno: %i).\n", strerror(errno), errno);
 		return errno;
 	}
-
-	if(sync_initialsync(dirpath, options_p, indexes_p))
-		return -1;
 
 	return 0;
 }
@@ -1496,9 +1493,21 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 
 			if(event->mask & IN_ISDIR) {
 				if(event->mask & (IN_CREATE|IN_MOVED_TO)) {			// Appeared
-					int ret = sync_mark_walk(inotify_d, options_p, fpathfull, indexes_p);
-					if(ret)
+					int ret;
+
+					ret = sync_mark_walk(inotify_d, options_p, fpathfull, indexes_p);
+					if(ret) {
 						printf_d("Debug: Seems, that directory \"%s\" disappeared, while trying to mark it.\n", fpathfull);
+						free(fpathfull);
+						SYNC_INOTIFY_HANDLE_CONTINUE;
+					}
+					
+					ret = sync_initialsync(fpathfull, options_p, indexes_p, INITSYNC_SUBDIR);
+					if(ret) {
+						printf_e("Error: Got error from sync_initialsync(): %s (errno %i)\n", strerror(ret), ret);
+						return ret;
+					}
+
 					free(fpathfull);
 					SYNC_INOTIFY_HANDLE_CONTINUE;
 				} else 
@@ -1634,7 +1643,7 @@ void sync_sig_pthread_gc(int signal) {
 void sync_sig_initsync(int signal) {
 	printf_ddd("Debug3: Got signal for sync_initialsync()\n");
 
-	int ret = sync_initialsync(_options_p->watchdir, _options_p, _indexes_p);
+	int ret = sync_initialsync(_options_p->watchdir, _options_p, _indexes_p, INITSYNC_RESYNC);
 	if(ret)
 		kill(0, SIGTERM);
 
@@ -1681,6 +1690,9 @@ int sync_run(options_t *options_p) {
 	if(notify_d == -1) return errno;
 
 	ret = sync_mark_walk(notify_d, options_p, options_p->watchdir, &indexes);
+	if(ret) return ret;
+
+	ret = sync_initialsync(options_p->watchdir, options_p, &indexes, INITSYNC_FIRST);
 	if(ret) return ret;
 
 	signal(SIGHUP,	sync_sig_rehash);
