@@ -180,6 +180,26 @@ static threadsinfo_t *thread_getinfo() {	// TODO: optimize this
 	return &threadsinfo;
 }
 
+time_t thread_nextexpiretime() {
+	time_t nextexpiretime = 0;
+	threadsinfo_t *threadsinfo_p = thread_getinfo();
+
+	int thread_num = threadsinfo_p->used;
+
+	while(thread_num--) {
+		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[thread_num];
+		printf_ddd("Debug3: threadsinfo_p->threads[%i].expiretime == %i\n", thread_num, threadinfo_p->expiretime);
+		if(threadinfo_p->expiretime) {
+			if(nextexpiretime)
+				nextexpiretime = MIN(nextexpiretime, threadinfo_p->expiretime);
+			else
+				nextexpiretime = threadinfo_p->expiretime;
+		}
+	}
+
+	return nextexpiretime;
+}
+
 threadinfo_t *thread_new() {
 	threadsinfo_t *threadsinfo_p = thread_getinfo();
 	if(threadsinfo_p == NULL)
@@ -234,7 +254,8 @@ int thread_del_bynum(int thread_num) {
 
 int thread_gc(options_t *options_p) {
 	int thread_num;
-	printf_ddd("Debug3: thread_gc()\n");
+	time_t tm = time(NULL);
+	printf_ddd("Debug3: thread_gc(): tm == %i\n", tm);
 	threadsinfo_t *threadsinfo_p = thread_getinfo();
 	if(threadsinfo_p == NULL)
 		return errno;
@@ -244,7 +265,12 @@ int thread_gc(options_t *options_p) {
 	while(++thread_num < threadsinfo_p->used) {
 		int err;
 		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[thread_num];
-		printf_ddd("Debug3: thread_gc(): Trying thread #%i.\n", thread_num);
+		printf_ddd("Debug3: thread_gc(): Trying thread #%i (%i, %i).\n", thread_num, threadinfo_p->expiretime, tm);
+
+		if(threadinfo_p->expiretime && (threadinfo_p->expiretime <= tm)) {
+			printf_e("Debug3: thread_gc(): Thread #%i is alive too long: %lu < %lu (started at %lu)\n", thread_num, threadinfo_p->expiretime, tm, threadinfo_p->starttime);
+			return ETIME;
+		}
 
 #ifndef VERYPARANOID
 		if(threadinfo_p->state != STATE_TERM) {
@@ -331,6 +357,7 @@ int thread_cleanup(options_t *options_p) {
 }
 
 int *state_p = NULL;
+int exitcode = 0;
 
 options_t *_options_p = NULL;	// TODO: remove this global variable
 indexes_t *_indexes_p = NULL;	// TODO: remove this global variable
@@ -391,7 +418,9 @@ static inline int sync_exec(options_t *options_p, thread_callbackfunct_t callbac
 
 	_sync_exec_getargv(argv, callback, arg);
 
+	alarm(options_p->synctimeout);
 	int exitcode = exec_argv(argv);
+	alarm(0);
 
 	int ret;
 	if((ret=exitcode_process(options_p, exitcode))) {
@@ -454,9 +483,11 @@ static inline int sync_exec_thread(options_t *options_p, thread_callbackfunct_t 
 	if(threadinfo_p == NULL)
 		return errno;
 
-	threadinfo_p->callback  = callback;
-	threadinfo_p->argv      = argv;
-	threadinfo_p->options_p = options_p;
+	threadinfo_p->callback   = callback;
+	threadinfo_p->argv       = argv;
+	threadinfo_p->options_p  = options_p;
+	threadinfo_p->starttime	 = time(NULL);
+	threadinfo_p->expiretime = threadinfo_p->starttime + options_p->synctimeout;
 
 	if(pthread_create(&threadinfo_p->pthread, NULL, (void *(*)(void *))__sync_exec_thread, threadinfo_p)) {
 		printf_e("Error: Cannot pthread_create(): %s (errno: %i).\n", strerror(errno), errno);
@@ -1355,7 +1386,7 @@ int sync_fanotify_loop(int fanotify_d, options_t *options_p, indexes_t *indexes_
 int sync_inotify_wait(int inotify_d, options_t *options_p, indexes_t *indexes_p) {
 	static struct timeval tv;
 	time_t tm = time(NULL);
-	long mindelayleft = ((unsigned long)~0 >> 1);
+	long delay = ((unsigned long)~0 >> 1);
 
 	fd_set rfds;
 	FD_ZERO(&rfds);
@@ -1378,26 +1409,38 @@ int sync_inotify_wait(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 		if(qdelay < -(long)options_p->syncdelay)
 			qdelay = -(long)options_p->syncdelay;
 
-		mindelayleft = MIN(mindelayleft, qdelay);
+		delay = MIN(delay, qdelay);
 	}
 
 	long synctime_delay = ((long)options_p->synctime) - ((long)tm);
 	synctime_delay = synctime_delay > 0 ? synctime_delay : 0;
 
-	printf_ddd("Debug3: delay = MAX(%i, %i)\n", mindelayleft, synctime_delay);
-	mindelayleft = MAX(mindelayleft, synctime_delay);
-	mindelayleft = mindelayleft > 0 ? mindelayleft : 0;
+	printf_ddd("Debug3: delay = MAX(%i, %i)\n", delay, synctime_delay);
+	delay = MAX(delay, synctime_delay);
+	delay = delay > 0 ? delay : 0;
+
+	if(options_p->flags[PTHREAD]) {
+		time_t _thread_nextexpiretime = thread_nextexpiretime();
+		printf_ddd("Debug3: thread_nextexpiretime == %i\n", _thread_nextexpiretime);
+		if(_thread_nextexpiretime) {
+			long thread_expiredelay = (long)thread_nextexpiretime() - (long)tm + 1; // +1 is to make "tm>threadinfo_p->expiretime" after select() definitely TRUE
+			printf_ddd("Debug3: thread_expiredelay == %i\n", thread_expiredelay);
+			thread_expiredelay = thread_expiredelay > 0 ? thread_expiredelay : 0;
+			printf_ddd("Debug3: delay = MIN(%i, %i)\n", delay, thread_expiredelay);
+			delay = MIN(delay, thread_expiredelay);
+		}
+	}
 
 	printf_ddd("Debug3: sleeping for %i second(s).\n", SLEEP_SECONDS);
-	sleep(SLEEP_SECONDS);
-	mindelayleft = ((long)mindelayleft)>SLEEP_SECONDS ? mindelayleft-SLEEP_SECONDS : 0;
+//	sleep(SLEEP_SECONDS);
+	delay = ((long)delay)>SLEEP_SECONDS ? delay-SLEEP_SECONDS : 0;
 
-	tv.tv_sec  = mindelayleft;
+	tv.tv_sec  = delay;
 	tv.tv_usec = 0;
 
 	printf_ddd("Debug3: sync_inotify_wait(): select with timeout %li secs.\n", tv.tv_sec);
 
-	int ret = select(FD_SETSIZE, &rfds, NULL, NULL, &tv);
+	int ret = select(inotify_d+1, &rfds, NULL, NULL, &tv);
 
 	if((ret == -1) && (errno == EINTR)) {
 		errno = 0;
@@ -1562,7 +1605,9 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 	state_p = &state;
 
 	while(state != STATE_EXIT) {
-		int events = sync_inotify_wait(inotify_d, options_p, indexes_p);
+		int events;
+
+		events = 0;
 		switch(state) {
 // 			SIG_PTHREAD_GC doesn't interrupts select() :(
 /*			case STATE_PTHREAD_GC:
@@ -1573,6 +1618,7 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 				state = STATE_RUNNING;
 				continue;*/
 			case STATE_RUNNING:
+				events = sync_inotify_wait(inotify_d, options_p, indexes_p);
 				break;
 			case STATE_REHASH:
 				printf_d("Debug: sync_inotify_loop(): rehashing.\n");
@@ -1626,10 +1672,20 @@ int sync_notify_loop(int notify_d, options_t *options_p, indexes_t *indexes_p) {
 	return -1;
 }
 
+void sync_sig_alarm(int signal) {
+	printf_e("Error: Alarm received. Syncing process timed out. Exit.\n");
+	
+	exitcode = ETIME;
+	kill(0, SIGTERM);
+
+	return;
+}
+
 void sync_sig_pthread_gc(int signal) {
 	printf_ddd("Debug3: Got signal for thread_gc()\n");
 
 	int ret = thread_gc(_options_p);
+	exitcode = ret;
 	if(ret)
 		kill(0, SIGTERM);
 
@@ -1644,6 +1700,7 @@ void sync_sig_initsync(int signal) {
 	printf_ddd("Debug3: Got signal for sync_initialsync()\n");
 
 	int ret = sync_initialsync(_options_p->watchdir, _options_p, _indexes_p, INITSYNC_RESYNC);
+	exitcode = ret;
 	if(ret)
 		kill(0, SIGTERM);
 
@@ -1658,6 +1715,8 @@ void sync_sig_rehash(int signal) {
 }
 
 void sync_sig_term(int signal) {
+	printf_dd("Debug2: sync_sig_term(%i)\n", signal);
+
 	if(state_p)
 		*state_p = STATE_TERM;
 
@@ -1695,12 +1754,23 @@ int sync_run(options_t *options_p) {
 	ret = sync_initialsync(options_p->watchdir, options_p, &indexes, INITSYNC_FIRST);
 	if(ret) return ret;
 
-	signal(SIGHUP,	sync_sig_rehash);
-	signal(SIGTERM,	sync_sig_term);
-	signal(SIGINT,	sync_sig_term);
+	signal(SIGALRM,		sync_sig_alarm);
+	signal(SIGHUP,		sync_sig_rehash);
+	signal(SIGTERM,		sync_sig_term);
+	signal(SIGINT,		sync_sig_term);
 
 	signal(SIGUSR_PTHREAD_GC, sync_sig_pthread_gc);
 	signal(SIGUSR_INITSYNC,   sync_sig_initsync);
+
+	sigset_t sigset;
+	sigemptyset(&sigset);
+	sigaddset(&sigset, SIGALRM);
+	sigaddset(&sigset, SIGHUP);
+//	sigaddset(&sigset, SIGTERM);
+//	sigaddset(&sigset, SIGINT);
+	sigaddset(&sigset, SIGUSR_PTHREAD_GC);
+	ret = pthread_sigmask(SIG_UNBLOCK, &sigset, NULL);
+	if(ret)	return ret;
 
 	ret = sync_notify_loop(notify_d, options_p, &indexes);
 	if(ret) return ret;
@@ -1725,6 +1795,6 @@ int sync_run(options_t *options_p) {
 		i++;
 	}
 
-	return 0;
+	return exitcode;
 }
 

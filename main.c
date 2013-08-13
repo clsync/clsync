@@ -41,6 +41,7 @@ static struct option long_options[] =
 	{"bigfilethreshold",	required_argument,	NULL,	BFILETHRESHOLD},
 	{"bigfilecollectdelay",	required_argument,	NULL,	BFILEDELAY},
 	{"verbose",		no_argument,		NULL,	VERBOSE},
+	{"synctimeout",		required_argument,	NULL,	SYNCTIMEOUT},
 	{"debug",		no_argument,		NULL,	DEBUG},
 	{"quite",		no_argument,		NULL,	QUITE},
 #ifdef FANOTIFY_SUPPORT
@@ -73,9 +74,9 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 	int option_index = 0;
 	while(1) {
 #ifdef FANOTIFY_SUPPORT
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:If", long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:f", long_options, &option_index);
 #else
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:I",  long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:",  long_options, &option_index);
 #endif
 	
 		if (c == -1) break;
@@ -111,6 +112,9 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 				break;
 			case 'L':
 				options_p->rsyncinclimit = (unsigned int)atol(optarg);
+				break;
+			case 'k':
+				options_p->synctimeout = (unsigned int)atol(optarg);
 				break;
 			case 'V':
 				version();
@@ -299,6 +303,7 @@ int main(int argc, char *argv[]) {
 	options.bfilethreshold			   = DEFAULT_BFILETHRESHOLD;
 	options.label				   = DEFAULT_LABEL;
 	options.rsyncinclimit			   = DEFAULT_RSYNC_INCLUDELINESLIMIT;
+	options.synctimeout			   = DEFAULT_SYNCTIMEOUT;
 
 	parse_arguments(argc, argv, &options);
 	out_init(options.flags);

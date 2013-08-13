@@ -88,6 +88,7 @@ enum flags_enum {
 	RSYNC_PREFERINCLUDE= 'I',
 	DONTUNLINK	= 'U',
 	INITFULL	= 'F',
+	SYNCTIMEOUT	= 'k',
 #ifdef FANOTIFY_SUPPORT
 	FANOTIFY	= 'f',
 #endif
@@ -156,6 +157,8 @@ struct options {
 	queueinfo_t _queues[QUEUE_MAX];	// TODO: remove this from here
 	unsigned int rsyncinclimit;
 	time_t synctime;
+	unsigned int synctimeout;
+	sigset_t *sigset;
 };
 typedef struct options options_t;
 
@@ -211,6 +214,8 @@ struct threadinfo {
 	int			  errcode;
 	state_t			  state;
 	options_t		 *options_p;
+	time_t			  starttime;
+	time_t			  expiretime;
 };
 typedef struct threadinfo threadinfo_t;
 

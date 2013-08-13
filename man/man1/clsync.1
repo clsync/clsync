@@ -217,6 +217,19 @@ Default value is "1800".
 .RE
 
 .PP
+.B \-k, \-\-synctimeout
+.I sync-timeout
+.RS 8
+Sets timeout for syncing processes.
+.B clsync
+will die if syncing process alive more than
+.I sync-timeout
+seconds.
+
+Default value is "86400" ["24 hours"].
+.RE
+
+.PP
 .B \-v, \-\-verbose
 .RS 8
 This option is supposed to increase verbosity. But at the moment there's no
