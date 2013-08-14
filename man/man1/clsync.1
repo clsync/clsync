@@ -63,6 +63,19 @@ Daemonize, forcing clsync to fork() on start.
 Use
 .BR pthreads (7)
 to parallelize syncing processes.
+
+If you're running
+.B clsync
+with option
+.B \-\-pthread
+in conjunction with
+.B rsync
+with option
+.B \-\-backup
+, you may catch a bug due to nonatomicity of rsync's file replace operation.
+(see
+.B DIAGNOSTICS
+)
 .RE
 
 .PP
@@ -225,6 +238,8 @@ Sets timeout for syncing processes.
 will die if syncing process alive more than
 .I sync-timeout
 seconds.
+
+Set "0" to disable the timeout.
 
 Default value is "86400" ["24 hours"].
 .RE
@@ -488,19 +503,48 @@ The following diagnostics may be issued on stderr:
 
 Error: Cannot inotify_add_watch() on [...]
 .RS
-Not enough watching descriptors of inotify is allowed. It can be fixed
+Not enough inotify watching descriptors is allowed. It can be fixed
 by increasing value of "sysctl fs.inotify.max_user_watches"
 .RE
 
-Error: Got non-zero exitcode [...]
+Error: Got non-zero exitcode
+.I exitcode
+[...]
 .RS
 .I action-script
 returned non-zero exitcode. Probably, you should process exitcodes in it or
-your syncer process didn't worked well. This may happend, for example if out
-of space.
+your syncer process didn't worked well. I case of using rsync, you can find
+the exitcodes meanings in
+.B man 1 rsync
+\*S.
+
+If
+.I exitcode
+equals to 23 and you're using
+.B clsync
+in conjunction with
+.B rsync
+, this may happend, for example in next cases:
+
+.RS
+
+\- Not enough space on destination.
+
+\- You're running clsync with 
+.B \-\-pthread
+and rsync with
+.B \-\-backup
+\*S. See bugreport by URL:
+.I https://bugzilla.samba.org/show_bug.cgi?id=10081
+\*S.
+
+.RE
 
 To confirm the problem, you can try to add "return 0" or "exit 0" into
-your script.
+your
+.I action-script
+\*S.
+
 .RE
 
 .SH EXAMPLES

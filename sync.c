@@ -24,14 +24,26 @@
 #include "malloc.h"
 #include "sync.h"
 
+pthread_t pthread_sighandler;
 
-int exitcode_process(options_t *options_p, int exitcode) {
+static inline int _exitcode_process(options_t *options_p, int exitcode) {
 	if(exitcode && !((options_p->flags[RSYNC]>=2) && (exitcode == 24))) {
 		printf_e("Error: Got non-zero exitcode %i from __sync_exec().\n", exitcode);
 		return exitcode;
 	}
 
 	return 0;
+}
+
+int exitcode_process(options_t *options_p, int exitcode) {
+	int err = _exitcode_process(options_p, exitcode);
+
+	if(err) printf_e("Error: Got error-report from exitcode_process().\nExitcode is %i, strerror(%i) returns \"%s\". However strerror() is not ensures compliance "
+			"between exitcode and error description for every utility. So, e.g if you're using rsync, you should look for the error description "
+			"into rsync's manpage (\"man 1 rsync\"). Also some advices about diagnostics can be found in clsync's manpage (\"man 1 clsync\", see DIAGNOSTICS)\n", 
+			exitcode, exitcode, strerror(exitcode));
+
+	return err;
 }
 
 // Checks file path by rules' expressions (from file)
@@ -188,7 +200,7 @@ time_t thread_nextexpiretime() {
 
 	while(thread_num--) {
 		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[thread_num];
-		printf_ddd("Debug3: threadsinfo_p->threads[%i].expiretime == %i\n", thread_num, threadinfo_p->expiretime);
+		printf_ddd("Debug3: threadsinfo_p->threads[%i].pthread == %p;\tthreadsinfo_p->threads[%i].expiretime == %i\n", thread_num, threadsinfo_p->threads[thread_num].pthread, thread_num, threadinfo_p->expiretime);
 		if(threadinfo_p->expiretime) {
 			if(nextexpiretime)
 				nextexpiretime = MIN(nextexpiretime, threadinfo_p->expiretime);
@@ -197,6 +209,7 @@ time_t thread_nextexpiretime() {
 		}
 	}
 
+	printf_ddd("Debug3: thread_nextexpiretime(): nextexpiretime == %i\n", nextexpiretime);
 	return nextexpiretime;
 }
 
@@ -205,20 +218,36 @@ threadinfo_t *thread_new() {
 	if(threadsinfo_p == NULL)
 		return NULL;
 
-	if(threadsinfo_p->used >= threadsinfo_p->allocated) {
-		threadsinfo_p->allocated += ALLOC_PORTION;
-		printf_dd("Debug2: Reallocated memory for threadsinfo -> %i.\n", threadsinfo_p->allocated);
-		threadsinfo_p->threads = (threadinfo_t *)xrealloc((char *)threadsinfo_p->threads, sizeof(*threadsinfo_p->threads)*(threadsinfo_p->allocated));
+	int thread_num;
+	threadinfo_t *threadinfo_p;
+
+	if(threadsinfo_p->stacklen) {
+		threadinfo_p = threadsinfo_p->threadsstack[--threadsinfo_p->stacklen];
+		thread_num   = threadinfo_p->thread_num;
+	} else {
+		if(threadsinfo_p->used >= threadsinfo_p->allocated) {
+			threadsinfo_p->allocated += ALLOC_PORTION;
+			printf_dd("Debug2: Reallocated memory for threadsinfo -> %i.\n", threadsinfo_p->allocated);
+			threadsinfo_p->threads      = (threadinfo_t *) xrealloc((char *)threadsinfo_p->threads, 
+											sizeof(*threadsinfo_p->threads)     *(threadsinfo_p->allocated+2));
+			threadsinfo_p->threadsstack = (threadinfo_t **)xrealloc((char *)threadsinfo_p->threadsstack,
+											sizeof(*threadsinfo_p->threadsstack)*(threadsinfo_p->allocated+2));
+		}
+
+		thread_num = threadsinfo_p->used++;
+		threadinfo_p = &threadsinfo_p->threads[thread_num];
 	}
 
-	int thread_num = threadsinfo_p->used++;
-	threadinfo_t *threadinfo_p = &threadsinfo_p->threads[thread_num];
-
 #ifdef PARANOID
-	memset(threadinfo_p, 0, sizeof(&threadinfo_p));
+	memset(threadinfo_p, 0, sizeof(*threadinfo_p));
+#else
+	threadinfo_p->expiretime = 0;
+	threadinfo_p->errcode    = 0;
+	threadinfo_p->exitcode   = 0;
 #endif
 	threadinfo_p->thread_num = thread_num;
 	threadinfo_p->state	 = STATE_RUNNING;
+
 
 	printf_dd("Debug2: thread_new -> thread_num: %i; used: %i\n", thread_num, threadsinfo_p->used);
 	return threadinfo_p;
@@ -241,21 +270,41 @@ int thread_del_bynum(int thread_num) {
 			free(*(ptr++));
 		free(threadinfo_p->argv);
 	}
+	threadinfo_p->state = STATE_EXIT;
 
-	threadsinfo_p->used--;
-	if(thread_num != threadsinfo_p->used) {
-		printf_ddd("Debug3: thread_del_bynum(): %i -> %i; left: %i\n", threadsinfo_p->used, thread_num, threadsinfo_p->used);
-		memcpy(threadinfo_p, &threadsinfo_p->threads[threadsinfo_p->used], sizeof(*threadinfo_p));
+	if(thread_num == (threadsinfo_p->used-1)) {
+		threadsinfo_p->used--;
+		printf_ddd("Debug3: thread_del_bynum(%i): there're %i threads left (#0).\n", thread_num, threadsinfo_p->used - threadsinfo_p->stacklen);
+		return 0;
+	}
+	
+	threadinfo_t *t = &threadsinfo_p->threads[threadsinfo_p->used-1];
+	if(t->state == STATE_EXIT) {
+		threadsinfo_p->used--;
+		printf_ddd("Debug3: thread_del_bynum(): %i [%p] -> %i [%p]; left: %i\n", 
+			threadsinfo_p->used, t->pthread, thread_num, threadinfo_p->pthread, threadsinfo_p->used - threadsinfo_p->stacklen);
+		memcpy(threadinfo_p, t, sizeof(*threadinfo_p));
+	} else {
+#ifdef PARANOID
+		if(threadsinfo_p->stacklen >= threadsinfo_p->allocated) {
+			printf_e("Error: thread_del_bynum(): Threads metadata structures pointers stack overflowed!");
+			return EINVAL;
+		}
+#endif
+		threadsinfo_p->threadsstack[threadsinfo_p->stacklen++] = threadinfo_p;
 	}
 
-	printf_ddd("Debug3: thread_del_bynum(%i): there're %i threads left.\n", thread_num, threadsinfo_p->used);
+	printf_ddd("Debug3: thread_del_bynum(%i): there're %i threads left (#1).\n", thread_num, threadsinfo_p->used - threadsinfo_p->stacklen);
 	return 0;
 }
 
 int thread_gc(options_t *options_p) {
 	int thread_num;
 	time_t tm = time(NULL);
-	printf_ddd("Debug3: thread_gc(): tm == %i\n", tm);
+	printf_ddd("Debug3: thread_gc(): tm == %i; thread %p\n", tm, pthread_self());
+	if(!options_p->flags[PTHREAD])
+		return 0;
+
 	threadsinfo_t *threadsinfo_p = thread_getinfo();
 	if(threadsinfo_p == NULL)
 		return errno;
@@ -265,10 +314,11 @@ int thread_gc(options_t *options_p) {
 	while(++thread_num < threadsinfo_p->used) {
 		int err;
 		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[thread_num];
-		printf_ddd("Debug3: thread_gc(): Trying thread #%i (%i, %i).\n", thread_num, threadinfo_p->expiretime, tm);
+		printf_ddd("Debug3: thread_gc(): Trying thread #%i (==%i) (expire at: %i, now: %i, exitcode: %i, errcode: %i; i_p: %p; p: %p).\n", 
+			thread_num, threadinfo_p->thread_num, threadinfo_p->expiretime, tm, threadinfo_p->exitcode, threadinfo_p->errcode, threadinfo_p, threadinfo_p->pthread);
 
 		if(threadinfo_p->expiretime && (threadinfo_p->expiretime <= tm)) {
-			printf_e("Debug3: thread_gc(): Thread #%i is alive too long: %lu < %lu (started at %lu)\n", thread_num, threadinfo_p->expiretime, tm, threadinfo_p->starttime);
+			printf_e("Debug3: thread_gc(): Thread #%i is alive too long: %lu <= %lu (started at %lu)\n", thread_num, threadinfo_p->expiretime, tm, threadinfo_p->starttime);
 			return ETIME;
 		}
 
@@ -278,12 +328,14 @@ int thread_gc(options_t *options_p) {
 			continue;
 		}
 #endif
-		
-#ifdef PARANOID
+
+
+		printf_ddd("Debug3: thread_gc(): Trying to join thread #%i: %p\n", thread_num, threadinfo_p->pthread);
+
 #ifndef VERYPARANOID
-		switch((err=pthread_join(threadinfo_p->pthread, (void **)&threadinfo_p->exitcode))) {
+		switch((err=pthread_join(threadinfo_p->pthread, NULL))) {
 #else
-		switch((err=pthread_tryjoin_np(threadinfo_p->pthread, (void **)&threadinfo_p->exitcode))) {
+		switch((err=pthread_tryjoin_np(threadinfo_p->pthread, NULL))) {
 			case EBUSY:
 				printf_ddd("Debug3: thread_gc(): Thread #%i is busy, skipping (#1).\n", thread_num);
 				continue;
@@ -291,17 +343,18 @@ int thread_gc(options_t *options_p) {
 			case EDEADLK:
 			case EINVAL:
 			case 0:
-				printf_ddd("Debug3: thread_gc(): Thread #%i is finished with exitcode %i, deleting.\n", thread_num, threadinfo_p->exitcode);
+				printf_ddd("Debug3: thread_gc(): Thread #%i is finished with exitcode %i (errcode %i), deleting. threadinfo_p == %p\n",
+					thread_num, threadinfo_p->exitcode, threadinfo_p->errcode, threadinfo_p);
 				break;
 			default:
 				printf_e("Error: Got error while pthread_join() or pthread_tryjoin_np(): %s (errno: %i).\n", strerror(err), err);
 				return errno;
 
 		}
-#endif
 
 		if(threadinfo_p->errcode) {
-			printf_e("Error: Got error from thread #%i: %s (errno: %i)\n", thread_num, strerror(threadinfo_p->errcode), threadinfo_p->errcode);
+			printf_e("Error: Got error from thread #%i: errcode %i.\n", thread_num, threadinfo_p->errcode);
+			thread_del_bynum(thread_num);
 			return threadinfo_p->errcode;
 		}
 
@@ -309,12 +362,12 @@ int thread_gc(options_t *options_p) {
 			return errno;
 	}
 
-	printf_ddd("Debug3: thread_gc(): There're %i threads left.\n", threadsinfo_p->used);
+	printf_ddd("Debug3: thread_gc(): There're %i threads left.\n", threadsinfo_p->used - threadsinfo_p->stacklen);
 	return 0;
 }
 
 int thread_cleanup(options_t *options_p) {
-	printf_ddd("Debug3: thread_cleanup()\n");
+	printf_ddd("Debug3: thread_cleanup(). Thread %p\n", pthread_self());
 	threadsinfo_t *threadsinfo_p = thread_getinfo();
 	if(threadsinfo_p == NULL)
 		return errno;
@@ -322,15 +375,20 @@ int thread_cleanup(options_t *options_p) {
 	// Waiting for threads:
 	printf_d("Debug: There're %i opened threads. Waiting.\n", threadsinfo_p->used);
 	while(threadsinfo_p->used) {
-		int err;
+//		int err;
 		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[--threadsinfo_p->used];
-		pthread_kill(threadinfo_p->pthread, SIGTERM);
-		pthread_join(threadinfo_p->pthread, (void **)&threadinfo_p->exitcode);
+		if(threadinfo_p->state == STATE_EXIT)
+			continue;
+		//pthread_kill(threadinfo_p->pthread, SIGTERM);
+		printf_d("Debug: killing pid %i with SIGTERM\n", threadinfo_p->child_pid);
+		kill(threadinfo_p->child_pid, SIGTERM);
+		pthread_join(threadinfo_p->pthread, NULL);
 		printf_dd("Debug2: thread #%i exitcode: %i\n", threadsinfo_p->used, threadinfo_p->exitcode);
+/*
 		if(threadinfo_p->callback)
 			if((err=threadinfo_p->callback(options_p, threadinfo_p->argv)))
 				printf_e("Warning: Got error from callback function: %s (errno: %i).\n", strerror(err), err);
-
+*/
 		char **ptr = threadinfo_p->argv;
 		while(*ptr)
 			free(*(ptr++));
@@ -359,13 +417,12 @@ int thread_cleanup(options_t *options_p) {
 int *state_p = NULL;
 int exitcode = 0;
 
-options_t *_options_p = NULL;	// TODO: remove this global variable
-indexes_t *_indexes_p = NULL;	// TODO: remove this global variable
-
-int exec_argv(char **argv) {
+int exec_argv(char **argv, int *child_pid DEBUGV(, int _rand)) {
+	printf_ddd("Debug3: exec_argv(): Thread %p.\n", pthread_self());
 	pid_t pid;
 	int status;
 
+	// Forking
 	pid = fork();
 	switch(pid) {
 		case -1: 
@@ -375,13 +432,34 @@ int exec_argv(char **argv) {
 			execvp(argv[0], (char *const *)argv);
 			return errno;
 	}
+//	printf_ddd("Debug3: exec_argv(): After fork thread %p"DEBUGV(" (%i)")".\n", pthread_self() DEBUGV(, _rand));
 
+	// Setting *child_pid value
+	if(child_pid)
+		*child_pid = pid;
+
+	// Waiting for process end
+#ifdef VERYPARANOID
+	sigset_t sigset_exec, sigset_old;
+	sigemptyset(&sigset_exec);
+	sigaddset(&sigset_exec, SIGUSR_BLOPINT);
+	pthread_sigmask(SIG_BLOCK, &sigset_exec, &sigset_old);
+#endif
+
+//	printf_ddd("Debug3: exec_argv(): Pre-wait thread %p"DEBUGV(" (%i)")".\n", pthread_self() DEBUGV(, _rand));
 	if(waitpid(pid, &status, 0) != pid) {
 		printf_e("Error: Cannot waitid(): %s (errno: %i).\n", strerror(errno), errno);
 		return errno;
 	}
+//	printf_ddd("Debug3: exec_argv(): After-wait thread %p"DEBUGV(" (%i)")".\n", pthread_self() DEBUGV(, _rand));
 
+#ifdef VERYPARANOID
+	pthread_sigmask(SIG_SETMASK, &sigset_old, NULL);
+#endif
+
+	// Return
 	int exitcode = WEXITSTATUS(status);
+	printf_ddd("Debug3: exec_argv(): execution completed with exitcode %i. Thread %p"DEBUGV(" (%i)")".\n", exitcode, pthread_self() DEBUGV(, _rand));
 
 	return exitcode;
 }
@@ -419,12 +497,12 @@ static inline int sync_exec(options_t *options_p, thread_callbackfunct_t callbac
 	_sync_exec_getargv(argv, callback, arg);
 
 	alarm(options_p->synctimeout);
-	int exitcode = exec_argv(argv);
+	int exitcode = exec_argv(argv, NULL DEBUGV(, 0));
 	alarm(0);
 
 	int ret;
 	if((ret=exitcode_process(options_p, exitcode))) {
-		printf_e("Error: Got error while sync_exec(): %s (errno: %i).\n", strerror(ret), ret);
+		printf_e("Error: sync_exec(): Bad exitcode %i\n", exitcode);
 		goto l_sync_exec_end;
 	}
 
@@ -441,34 +519,63 @@ l_sync_exec_end:
 	return ret;
 }
 
-static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode) {
+static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode DEBUGV(, int _rand)) {
 	int err;
 	threadinfo_p->exitcode = exitcode;
 
+#if _DEBUG | VERYPARANOID
+	if(threadinfo_p->pthread != pthread_self()) {
+		printf_e("Error: thread_exit(): pthread id mismatch! (i_p->p) %p != (p) %p"DEBUGV("; rand == %i")"\n", threadinfo_p->pthread, pthread_self() DEBUGV(, _rand));
+		return EINVAL;
+	}
+#endif
+
 	if((err=exitcode_process(threadinfo_p->options_p, threadinfo_p->exitcode))) {
-		printf_e("Error: Got error from exitcode_process(): %s (errno: %i).\n", strerror(err), err);
+		printf_e("Error: thread_exit(): Bad exitcode %i (errcode %i)\n", exitcode, err);
 		threadinfo_p->errcode = err;
 	}
 
-	if((threadinfo_p->callback) && !(err))
+	if((threadinfo_p->callback) && !(err)) {
+		if(threadinfo_p->options_p->flags[DEBUG]>2) {
+			printf_ddd("Debug3: thread_exit(): thread %p, argv: \n", threadinfo_p->pthread);
+			char **argv = threadinfo_p->argv;
+			while(*argv) {
+				printf_ddd("\t%p == %s\n", *argv, *argv);
+				argv++;
+			}
+		}
 		if((err=threadinfo_p->callback(threadinfo_p->options_p, threadinfo_p->argv))) {
 			printf_e("Error: Got error from callback function: %s (errno: %i).\n", strerror(err), err);
 			threadinfo_p->errcode = err;
 		}
+	}
 
-	// Notifying the parent-thread, that it's type to collect garbage threads
+	// Notifying the parent-thread, that it's time to collect garbage threads
 	threadinfo_p->state    = STATE_TERM;
-	return kill(getpid(), SIGUSR_PTHREAD_GC);
+	printf_ddd("Debug3: thread_exit(): thread %p is sending signal to sighandler to call GC\n", threadinfo_p->pthread);
+	return pthread_kill(pthread_sighandler, SIGUSR_PTHREAD_GC);
 }
 
 int __sync_exec_thread(threadinfo_t *threadinfo_p) {
 	char **argv			= threadinfo_p->argv;
+#ifdef _DEBUG
+	int _rand=rand();
+#endif
 
-	int exitcode = exec_argv(argv);
+	printf_ddd("Debug3: __sync_exec_thread(): thread_num == %i; threadinfo_p == %p; i_p->pthread %p; thread %p"DEBUGV("; rand == %i")"\n", 
+			threadinfo_p->thread_num, threadinfo_p, threadinfo_p->pthread, pthread_self() DEBUGV(, _rand));
 
-	thread_exit(threadinfo_p, exitcode);
+	int exec_exitcode = exec_argv(argv, &threadinfo_p->child_pid DEBUGV(, _rand));
 
-	return exitcode;
+	int err;
+	if((err=thread_exit(threadinfo_p, exec_exitcode DEBUGV(, _rand)))) {
+		exitcode = err;	// This's global variable "exitcode"
+		pthread_kill(pthread_sighandler, SIGTERM);
+	}
+
+	printf_ddd("Debug3: __sync_exec_thread(): thread_num == %i; threadinfo_p == %p; i_p->pthread %p; thread %p"DEBUGV("; rand == %i")"; errcode %i\n", 
+			threadinfo_p->thread_num, threadinfo_p, threadinfo_p->pthread, pthread_self(), DEBUGV(_rand,) threadinfo_p->errcode);
+	return exec_exitcode;
 }
 
 static inline int sync_exec_thread(options_t *options_p, thread_callbackfunct_t callback, ...) {
@@ -487,12 +594,15 @@ static inline int sync_exec_thread(options_t *options_p, thread_callbackfunct_t 
 	threadinfo_p->argv       = argv;
 	threadinfo_p->options_p  = options_p;
 	threadinfo_p->starttime	 = time(NULL);
-	threadinfo_p->expiretime = threadinfo_p->starttime + options_p->synctimeout;
+
+	if(options_p->synctimeout)
+		threadinfo_p->expiretime = threadinfo_p->starttime + options_p->synctimeout;
 
 	if(pthread_create(&threadinfo_p->pthread, NULL, (void *(*)(void *))__sync_exec_thread, threadinfo_p)) {
 		printf_e("Error: Cannot pthread_create(): %s (errno: %i).\n", strerror(errno), errno);
 		return errno;
 	}
+	printf_ddd("Debug3: sync_exec_thread(): thread %p\n", threadinfo_p->pthread);
 	return 0;
 }
 
@@ -522,7 +632,7 @@ int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, index
 	rule_t *rules_p = options_p->rules;
 	printf_dd("Debug2: sync_initialsync_rsync_walk(options_p, \"%s\", indexes_p, %i, %i).\n", dirpath, queue_id, initsync);
 
-	char skip_rules = ((initsync==INITSYNC_FIRST || initsync==INITSYNC_RESYNC) && options_p->flags[INITFULL]);
+	char skip_rules = (initsync==INITSYNC_FULL) && options_p->flags[INITFULL];
 
 	if((!options_p->flags[RSYNC_PREFERINCLUDE]) && skip_rules)
 		return 0;
@@ -641,7 +751,7 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 
 	// RSYNC case:
 //	queue_id_t queue_id = initsync==INITSYNC_FIRST ? QUEUE_INSTANT : QUEUE_AUTO;
-	queue_id_t queue_id = (initsync==INITSYNC_FIRST || initsync==INITSYNC_RESYNC) ? QUEUE_INSTANT : QUEUE_NORMAL;
+	queue_id_t queue_id = (initsync==INITSYNC_FULL) ? QUEUE_INSTANT : QUEUE_NORMAL;
 
 	if(!options_p->flags[RSYNC_PREFERINCLUDE]) {
 		queueinfo_t *queueinfo = &options_p->_queues[queue_id];
@@ -922,6 +1032,8 @@ int sync_idle_dosync_collectedevents_cleanup(options_t *options_p, char **argv) 
 	if(options_p->flags[DONTUNLINK]) 
 		return 0;
 
+	printf_ddd("Debug3: sync_idle_dosync_collectedevents_cleanup(): thread %p\n", pthread_self());
+
 	if(options_p->flags[RSYNC] >= 2) {
 		int ret0, ret1;
 		if(argv[5] == NULL) {
@@ -1016,7 +1128,7 @@ int sync_idle_dosync_collectedevents_uniqfname(options_t *options_p, char *fpath
 
 	int counter = 0;
 	do {
-		snprintf(fpath, PATH_MAX, "%s/.clsync-%s.%u.%lu.%u", options_p->listoutdir, name, pid, (unsigned long)tm, rand());	// To be unique
+		snprintf(fpath, PATH_MAX, "%s/.clsync-%s.%u.%lu.%lu.%u", options_p->listoutdir, name, pid, (long)pthread_self(), (unsigned long)tm, rand());	// To be unique
 		lstat64(fpath, &stat64);
 		if(counter++ > COUNTER_LIMIT) {
 			printf_e("Error: Cannot file unused filename for list-file. The last try was \"%s\".\n", fpath);
@@ -1084,6 +1196,7 @@ gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, g
 	printf_ddd("Debug3: Adding to exclude-file: \"%s\"\n", fpath_rel);
 	fprintf(excf, "%s\n", fpath_rel);
 
+	free(fpath_rel_p);
 	return TRUE;
 }
 
@@ -1601,7 +1714,8 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 }
 
 int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p) {
-	int state=1;
+	int state = STATE_INITSYNC;
+	int ret;
 	state_p = &state;
 
 	while(state != STATE_EXIT) {
@@ -1609,16 +1723,22 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 
 		events = 0;
 		switch(state) {
-// 			SIG_PTHREAD_GC doesn't interrupts select() :(
-/*			case STATE_PTHREAD_GC:
+			case STATE_PTHREAD_GC:
 				if(thread_gc(options_p)) {
 					state=STATE_EXIT;
 					break;
 				}
 				state = STATE_RUNNING;
-				continue;*/
+				continue;
+			case STATE_INITSYNC:
+				ret = sync_initialsync(options_p->watchdir, options_p, indexes_p, INITSYNC_FULL);
+				if(ret) return ret;
+				state = STATE_RUNNING;
+				continue;
 			case STATE_RUNNING:
 				events = sync_inotify_wait(inotify_d, options_p, indexes_p);
+				if(state != STATE_RUNNING)
+					continue;
 				break;
 			case STATE_REHASH:
 				printf_d("Debug: sync_inotify_loop(): rehashing.\n");
@@ -1651,7 +1771,7 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 	}
 
 	SYNC_INOTIFY_LOOP_IDLE;
-	return 0;
+	return exitcode;
 
 #ifdef DOXYGEN
 	sync_idle(0, NULL, NULL);
@@ -1672,37 +1792,37 @@ int sync_notify_loop(int notify_d, options_t *options_p, indexes_t *indexes_p) {
 	return -1;
 }
 
+/*
 void sync_sig_alarm(int signal) {
 	printf_e("Error: Alarm received. Syncing process timed out. Exit.\n");
 	
 	exitcode = ETIME;
-	kill(0, SIGTERM);
+	pthread_kill(pthread_sighandler, SIGTERM);
 
 	return;
 }
 
 void sync_sig_pthread_gc(int signal) {
-	printf_ddd("Debug3: Got signal for thread_gc()\n");
+	printf_ddd("Debug3: Got signal for thread_gc(). Thread %p.\n", pthread_self());
 
 	int ret = thread_gc(_options_p);
-	exitcode = ret;
-	if(ret)
-		kill(0, SIGTERM);
 
-/*
+	exitcode = ret;
+	if(ret) pthread_kill(pthread_sighandler, SIGTERM);
+
+#if 0
 	if(state_p)
-		*state_p = STATE_PTHREAD_GC;*/
+		*state_p = STATE_PTHREAD_GC;
+#endif
 
 	return;
 }
-
 void sync_sig_initsync(int signal) {
 	printf_ddd("Debug3: Got signal for sync_initialsync()\n");
 
-	int ret = sync_initialsync(_options_p->watchdir, _options_p, _indexes_p, INITSYNC_RESYNC);
+
 	exitcode = ret;
-	if(ret)
-		kill(0, SIGTERM);
+	if(ret) pthread_kill(pthread_sighandler, SIGTERM);
 
 	return;
 }
@@ -1715,18 +1835,134 @@ void sync_sig_rehash(int signal) {
 }
 
 void sync_sig_term(int signal) {
-	printf_dd("Debug2: sync_sig_term(%i)\n", signal);
+	printf_dd("Debug2: sync_sig_term(%i). Thread %p.\n", signal, pthread_self());
 
 	if(state_p)
 		*state_p = STATE_TERM;
 
 	return;
 }
+*/
+void sync_sig_int(int signal) {
+	printf_dd("Debug2: sync_sig_int(%i): Thread %p\n", signal, pthread_self());
+	return;
+}
+
+int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
+	int signal, ret;
+//	options_t *options_p     = sighandler_arg_p->options_p;
+//	indexes_t *indexes_p     = sighandler_arg_p->indexes_p;
+	pthread_t pthread_parent = sighandler_arg_p->pthread_parent;
+	sigset_t *sigset_p	 = sighandler_arg_p->sigset_p;
+	int *exitcode_p		 = sighandler_arg_p->exitcode_p;
+
+	while(1) {
+		printf_ddd("Debug3: sync_sighandler(): waiting for signal\n");
+		ret = sigwait(sigset_p, &signal);
+
+		if(state_p == NULL) {
+			printf_e("Warning: Got signal %i, but the main loop is not started, yet. Ignoring the signal.\n", signal);
+			continue;
+		}
+
+		printf_ddd("Debug3: sync_sighandler(): got signal %i. *state_p == %i.\n", signal, *state_p);
+
+		if(ret) {
+			// TODO: handle an error here
+		}
+
+		switch(signal) {
+			case SIGALRM:
+				*exitcode_p = ETIME;
+			case SIGTERM:
+			case SIGINT:
+				*state_p = STATE_TERM;
+				pthread_kill(pthread_parent, SIGUSR_BLOPINT);
+				break;
+			case SIGHUP:
+				*state_p = STATE_REHASH;
+				pthread_kill(pthread_parent, SIGUSR_BLOPINT);
+				break;
+			case SIGUSR_PTHREAD_GC:
+				*state_p = STATE_PTHREAD_GC;
+				pthread_kill(pthread_parent, SIGUSR_BLOPINT);
+				break;
+			case SIGUSR_INITSYNC:
+				*state_p = STATE_INITSYNC;
+				pthread_kill(pthread_parent, SIGUSR_BLOPINT);
+				break;
+			default:
+				printf_e("Error: Unknown signal: %i. Exit.\n", signal);
+				*state_p = STATE_TERM;
+				pthread_kill(pthread_parent, SIGUSR_BLOPINT);
+				break;
+		}
+
+		if((*state_p == STATE_TERM) || (*state_p == STATE_EXIT)) {
+			break;
+		}
+	}
+
+	return 0;
+}
+
 
 int sync_run(options_t *options_p) {
-	_options_p = options_p;
-
 	int ret, i;
+	sighandler_arg_t sighandler_arg = {0};
+
+	// Creating signal handler thread
+
+#if 0
+	signal(SIGALRM,			SIG_IGN);
+	signal(SIGHUP,			SIG_IGN);
+	signal(SIGTERM,			SIG_IGN);
+	signal(SIGINT,			SIG_IGN);
+
+	signal(SIGUSR_PTHREAD_GC, 	SIG_IGN);
+	signal(SIGUSR_INITSYNC,   	SIG_IGN);
+#endif
+
+	sigset_t sigset_sighandler;
+	sigemptyset(&sigset_sighandler);
+	sigaddset(&sigset_sighandler, SIGALRM);
+	sigaddset(&sigset_sighandler, SIGHUP);
+	sigaddset(&sigset_sighandler, SIGTERM);
+	sigaddset(&sigset_sighandler, SIGINT);
+	sigaddset(&sigset_sighandler, SIGUSR_PTHREAD_GC);
+	sigaddset(&sigset_sighandler, SIGUSR_INITSYNC);
+
+	ret = pthread_sigmask(SIG_BLOCK, &sigset_sighandler, NULL);
+	if(ret)	return ret;
+
+//	sighandler_arg.options_p        =  options_p;
+//	sighandler_arg.indexes_p        = &indexes;
+	sighandler_arg.pthread_parent   =  pthread_self();
+	sighandler_arg.exitcode_p	= &ret;
+	sighandler_arg.sigset_p		= &sigset_sighandler;
+	pthread_create(&pthread_sighandler, NULL, (void *(*)(void *))sync_sighandler, &sighandler_arg);
+
+	sigset_t sigset_parent;
+	sigemptyset(&sigset_parent);
+
+	sigaddset(&sigset_parent, SIGUSR_BLOPINT);
+	ret = pthread_sigmask(SIG_UNBLOCK, &sigset_parent, NULL);
+	if(ret)	return ret;
+
+	signal(SIGUSR_BLOPINT,	sync_sig_int);
+
+/*
+	signal(SIGALRM,		sync_sig_alarm);
+	signal(SIGHUP,		sync_sig_rehash);
+	signal(SIGTERM,		sync_sig_term);
+	signal(SIGINT,		sync_sig_term);
+
+	signal(SIGUSR_PTHREAD_GC, sync_sig_pthread_gc);
+	signal(SIGUSR_INITSYNC,   sync_sig_initsync);
+*/
+
+	// Creating hash tables
+
 	indexes_t indexes = {NULL};
 	indexes.wd2fpath_ht      = g_hash_table_new_full(g_direct_hash,	g_direct_equal,	0,    0);
 	indexes.fpath2wd_ht      = g_hash_table_new_full(g_str_hash,	g_str_equal,	free, 0);
@@ -1740,42 +1976,33 @@ int sync_run(options_t *options_p) {
 		i++;
 	}
 
-	_indexes_p = &indexes;
+	// Initializing rand-generator if it's required
 
 	if(options_p->listoutdir)
 		srand(time(NULL));
 
+	// Initializing FS monitor kernel subsystem in this userspace application
+
 	int notify_d = sync_notify_init(options_p);
 	if(notify_d == -1) return errno;
 
+	// Marking file tree for FS monitor
 	ret = sync_mark_walk(notify_d, options_p, options_p->watchdir, &indexes);
 	if(ret) return ret;
 
+/*
+	// Full syncing the tree after marking it
 	ret = sync_initialsync(options_p->watchdir, options_p, &indexes, INITSYNC_FIRST);
 	if(ret) return ret;
+*/
 
-	signal(SIGALRM,		sync_sig_alarm);
-	signal(SIGHUP,		sync_sig_rehash);
-	signal(SIGTERM,		sync_sig_term);
-	signal(SIGINT,		sync_sig_term);
-
-	signal(SIGUSR_PTHREAD_GC, sync_sig_pthread_gc);
-	signal(SIGUSR_INITSYNC,   sync_sig_initsync);
-
-	sigset_t sigset;
-	sigemptyset(&sigset);
-	sigaddset(&sigset, SIGALRM);
-	sigaddset(&sigset, SIGHUP);
-//	sigaddset(&sigset, SIGTERM);
-//	sigaddset(&sigset, SIGINT);
-	sigaddset(&sigset, SIGUSR_PTHREAD_GC);
-	ret = pthread_sigmask(SIG_UNBLOCK, &sigset, NULL);
-	if(ret)	return ret;
-
+	// "Infinite" loop of processling the events
 	ret = sync_notify_loop(notify_d, options_p, &indexes);
 	if(ret) return ret;
 
 	// TODO: Do cleanup of watching points
+	pthread_kill(pthread_sighandler, SIGTERM);
+	pthread_join(pthread_sighandler, NULL);
 
 	thread_cleanup(options_p);
 
@@ -1795,6 +2022,10 @@ int sync_run(options_t *options_p) {
 		i++;
 	}
 
-	return exitcode;
+#ifdef VERYPARANOID
+	// One second for another threads
+	sleep(1);
+#endif
+	return ret;
 }
 

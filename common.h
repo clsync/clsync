@@ -70,6 +70,12 @@
 #define IN_CREATE_SELF IN_CREATE
 #endif
 
+#ifdef _DEBUG
+#define DEBUGV(...) __VA_ARGS__
+#else
+#define DEBUGV(...) {}
+#endif
+
 #define COLLECTDELAY_INSTANT ((unsigned int)~0)
 
 enum flags_enum {
@@ -118,7 +124,8 @@ typedef enum ruleaction_enum ruleaction_t;
 // signals (man 7 signal)
 enum sigusr_enum {
 	SIGUSR_PTHREAD_GC	= 10,
-	SIGUSR_INITSYNC  	= 12
+	SIGUSR_INITSYNC  	= 12,
+	SIGUSR_BLOPINT		= 16
 };
 
 struct rule {
@@ -176,8 +183,9 @@ enum state_enum {
 	STATE_EXIT 	= 0,
 	STATE_RUNNING,
 	STATE_REHASH,
-	STATE_TERM//,
-//	STATE_PTHREAD_GC
+	STATE_TERM,
+	STATE_PTHREAD_GC,
+	STATE_INITSYNC
 };
 typedef enum state_enum state_t;
 
@@ -216,17 +224,20 @@ struct threadinfo {
 	options_t		 *options_p;
 	time_t			  starttime;
 	time_t			  expiretime;
+	int			  child_pid;
 };
 typedef struct threadinfo threadinfo_t;
 
 struct threadsinfo {
 #ifdef PTHREAD_MUTEX
-	pthread_mutex_t  _mutex;
-	char		 _mutex_init;
+	pthread_mutex_t   _mutex;
+	char		  _mutex_init;
 #endif
-	int		 allocated;
-	int		 used;
-	threadinfo_t 	*threads;
+	int		  allocated;
+	int		  used;
+	threadinfo_t 	 *threads;
+	threadinfo_t 	**threadsstack;	// stack of threadinfo_t to be used on thread_new()
+	int		  stacklen;
 };
 typedef struct threadsinfo threadsinfo_t;
 
@@ -244,10 +255,18 @@ struct dosync_arg {
 
 enum initsync {
 	INITSYNC_UNKNOWN = 0,
-	INITSYNC_FIRST,
-	INITSYNC_SUBDIR,
-	INITSYNC_RESYNC
+	INITSYNC_FULL,
+	INITSYNC_SUBDIR
 };
 typedef enum initsync initsync_t;
+
+struct sighandler_arg {
+//	options_t *options_p;
+//	indexes_t *indexes_p;
+	pthread_t  pthread_parent;
+	int	  *exitcode_p;
+	sigset_t  *sigset_p;
+};
+typedef struct sighandler_arg sighandler_arg_t;
 
 
