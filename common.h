@@ -73,7 +73,7 @@
 #ifdef _DEBUG
 #define DEBUGV(...) __VA_ARGS__
 #else
-#define DEBUGV(...) {}
+#define DEBUGV(...)
 #endif
 
 #define COLLECTDELAY_INSTANT ((unsigned int)~0)
