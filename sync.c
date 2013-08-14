@@ -178,23 +178,28 @@ static inline int indexes_outaggr_add(indexes_t *indexes_p, char *outline) {
 }
 
 static threadsinfo_t *thread_getinfo() {	// TODO: optimize this
-	static threadsinfo_t threadsinfo={0};
-#ifdef PTHREAD_MUTEX
-	if(!threadsinfo._mutex_init) {
-		if(pthread_mutex_init(&threadsinfo._mutex, NULL)) {
-			printf_e("Error: Cannot pthread_mutex_init(): %s (errno: %i).\n", strerror(errno), errno);
-			return NULL;
+	static threadsinfo_t threadsinfo={{{{0}}},0};
+	if(!threadsinfo.mutex_init) {
+		int i=0;
+		while(i < PTHREAD_MUTEX_MAX) {
+			if(pthread_mutex_init(&threadsinfo.mutex[i], NULL)) {
+				printf_e("Error: Cannot pthread_mutex_init(): %s (errno: %i).\n", strerror(errno), errno);
+				return NULL;
+			}
+			i++;
 		}
-		threadsinfo._mutex_init++;
+		threadsinfo.mutex_init++;
 	}
 //	pthread_mutex_lock(&threadsinfo._mutex);
-#endif
+
 	return &threadsinfo;
 }
 
 time_t thread_nextexpiretime() {
 	time_t nextexpiretime = 0;
 	threadsinfo_t *threadsinfo_p = thread_getinfo();
+	if(threadsinfo_p == NULL)
+		return 0;
 
 	int thread_num = threadsinfo_p->used;
 
@@ -410,10 +415,11 @@ int thread_cleanup(options_t *options_p) {
 	if(threadsinfo_p->allocated)
 		free(threadsinfo_p->threads);
 
-#ifdef PTHREAD_MUTEX
-	if(threadsinfo_p->_mutex_init)
-		pthread_mutex_destroy(&threadsinfo_p->_mutex);
-#endif
+	if(threadsinfo_p->mutex_init) {
+		int i=0;
+		while(i < PTHREAD_MUTEX_MAX)
+			pthread_mutex_destroy(&threadsinfo_p->mutex[i++]);
+	}
 
 #ifdef PARANOID
 	// Reseting
@@ -1564,11 +1570,18 @@ int sync_inotify_wait(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 	tv.tv_sec  = delay;
 	tv.tv_usec = 0;
 
-	if(*state_p != STATE_RUNNING)
+	threadsinfo_t *threadsinfo_p = thread_getinfo();
+
+	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
+
+	if(*state_p != STATE_RUNNING) {
+		pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
 		return 0;
+	}
 
 	printf_ddd("Debug3: sync_inotify_wait(): select with timeout %li secs.\n", tv.tv_sec);
 	int ret = select(inotify_d+1, &rfds, NULL, NULL, &tv);
+	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
 
 	if((ret == -1) && (errno == EINTR)) {
 		errno = 0;
@@ -1863,6 +1876,50 @@ void sync_sig_int(int signal) {
 	return;
 }
 
+int sync_switch_state(pthread_t pthread_parent, int newstate) {
+	// Getting mutexes
+	threadsinfo_t *threadsinfo_p = thread_getinfo();
+	if(threadsinfo_p == NULL) {
+		// If no mutexes, just change the state
+		goto l_sync_parent_interrupt_end;
+	}
+	if(!threadsinfo_p->mutex_init) {
+		// If no mutexes, just change the state
+		goto l_sync_parent_interrupt_end;
+	}
+	pthread_mutex_t *pthread_mutex_select = &threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT];
+
+
+	// Locking all necessary mutexes
+	while(pthread_mutex_trylock(pthread_mutex_select) == EBUSY) {
+		// Sending kill to force every select()-s and so on to finish their work
+		printf_ddd("Debug3: sending signal to interrupt blocking operations like select()-s and so on\n");
+		pthread_kill(pthread_parent, SIGUSR_BLOPINT);
+		sleep(1);
+#ifdef VERYPARANOID
+		int i=0;
+		if(++i > KILL_TIMEOUT) {
+			printf_e("Error: sync_switch_state(): Seems we got a deadlock.");
+			return EDEADLK;
+		}
+#endif
+	}
+	// Changing the state
+	*state_p = newstate;
+
+	// Unlocking mutexes
+	pthread_mutex_unlock(pthread_mutex_select);
+	return 0;
+
+l_sync_parent_interrupt_end:
+
+	*state_p = newstate;
+	pthread_kill(pthread_parent, SIGUSR_BLOPINT);
+
+	return 0;
+
+}
+
 int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 	int signal, ret;
 //	options_t *options_p     = sighandler_arg_p->options_p;
@@ -1891,25 +1948,20 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 				*exitcode_p = ETIME;
 			case SIGTERM:
 			case SIGINT:
-				*state_p = STATE_TERM;
-				pthread_kill(pthread_parent, SIGUSR_BLOPINT);
+				sync_switch_state(pthread_parent, STATE_TERM);
 				break;
 			case SIGHUP:
-				*state_p = STATE_REHASH;
-				pthread_kill(pthread_parent, SIGUSR_BLOPINT);
+				sync_switch_state(pthread_parent, STATE_REHASH);
 				break;
 			case SIGUSR_PTHREAD_GC:
-				*state_p = STATE_PTHREAD_GC;
-				pthread_kill(pthread_parent, SIGUSR_BLOPINT);
+				sync_switch_state(pthread_parent, STATE_PTHREAD_GC);
 				break;
 			case SIGUSR_INITSYNC:
-				*state_p = STATE_INITSYNC;
-				pthread_kill(pthread_parent, SIGUSR_BLOPINT);
+				sync_switch_state(pthread_parent, STATE_INITSYNC);
 				break;
 			default:
 				printf_e("Error: Unknown signal: %i. Exit.\n", signal);
-				*state_p = STATE_TERM;
-				pthread_kill(pthread_parent, SIGUSR_BLOPINT);
+				sync_switch_state(pthread_parent, STATE_TERM);
 				break;
 		}
 

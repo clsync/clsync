@@ -228,16 +228,20 @@ struct threadinfo {
 };
 typedef struct threadinfo threadinfo_t;
 
+enum pthread_mutex_id {
+	PTHREAD_MUTEX_SELECT,
+	PTHREAD_MUTEX_MAX
+};
+
+
 struct threadsinfo {
-#ifdef PTHREAD_MUTEX
-	pthread_mutex_t   _mutex;
-	char		  _mutex_init;
-#endif
-	int		  allocated;
-	int		  used;
-	threadinfo_t 	 *threads;
-	threadinfo_t 	**threadsstack;	// stack of threadinfo_t to be used on thread_new()
-	int		  stacklen;
+	pthread_mutex_t		  mutex[PTHREAD_MUTEX_MAX];
+	char			  mutex_init;
+	int			  allocated;
+	int			  used;
+	threadinfo_t 		 *threads;
+	threadinfo_t 		**threadsstack;	// stack of threadinfo_t to be used on thread_new()
+	int			  stacklen;
 };
 typedef struct threadsinfo threadsinfo_t;
 
