@@ -32,3 +32,6 @@
 #define COUNTER_LIMIT			(1<<10)
 
 #define SLEEP_SECONDS			1
+
+#define KILL_TIMEOUT			60
+

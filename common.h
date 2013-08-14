@@ -48,8 +48,10 @@
 #include <sys/fanotify.h>
 #endif
 #include <sys/inotify.h>
+#include <sys/time.h>
 #include <dirent.h>
 #include <glib.h>
+
 #include "config.h"
 
 #ifndef MIN
@@ -229,13 +231,14 @@ struct threadinfo {
 typedef struct threadinfo threadinfo_t;
 
 enum pthread_mutex_id {
-	PTHREAD_MUTEX_SELECT,
+	PTHREAD_MUTEX_STATE,
 	PTHREAD_MUTEX_MAX
 };
 
 
 struct threadsinfo {
 	pthread_mutex_t		  mutex[PTHREAD_MUTEX_MAX];
+	pthread_cond_t		  cond [PTHREAD_MUTEX_MAX];
 	char			  mutex_init;
 	int			  allocated;
 	int			  used;

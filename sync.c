@@ -178,12 +178,16 @@ static inline int indexes_outaggr_add(indexes_t *indexes_p, char *outline) {
 }
 
 static threadsinfo_t *thread_getinfo() {	// TODO: optimize this
-	static threadsinfo_t threadsinfo={{{{0}}},0};
+	static threadsinfo_t threadsinfo={{{{0}}},{{{0}}},0};
 	if(!threadsinfo.mutex_init) {
 		int i=0;
 		while(i < PTHREAD_MUTEX_MAX) {
 			if(pthread_mutex_init(&threadsinfo.mutex[i], NULL)) {
 				printf_e("Error: Cannot pthread_mutex_init(): %s (errno: %i).\n", strerror(errno), errno);
+				return NULL;
+			}
+			if(pthread_cond_init (&threadsinfo.cond [i], NULL)) {
+				printf_e("Error: Cannot pthread_cond_init(): %s (errno: %i).\n", strerror(errno), errno);
 				return NULL;
 			}
 			i++;
@@ -419,8 +423,11 @@ int thread_cleanup(options_t *options_p) {
 
 	if(threadsinfo_p->mutex_init) {
 		int i=0;
-		while(i < PTHREAD_MUTEX_MAX)
-			pthread_mutex_destroy(&threadsinfo_p->mutex[i++]);
+		while(i < PTHREAD_MUTEX_MAX) {
+			pthread_mutex_destroy(&threadsinfo_p->mutex[i]);
+			pthread_cond_destroy (&threadsinfo_p->cond [i]);
+			i++;
+		}
 	}
 
 #ifdef PARANOID
@@ -1516,6 +1523,10 @@ int sync_inotify_wait(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 	static struct timeval tv;
 	time_t tm = time(NULL);
 	long delay = ((unsigned long)~0 >> 1);
+	threadsinfo_t *threadsinfo_p = thread_getinfo();
+
+	pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
+	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
 	printf_ddd("Debug3: sync_inotify_wait()\n");
 
@@ -1572,18 +1583,13 @@ int sync_inotify_wait(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 	tv.tv_sec  = delay;
 	tv.tv_usec = 0;
 
-	threadsinfo_t *threadsinfo_p = thread_getinfo();
+	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
-	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
-
-	if(*state_p != STATE_RUNNING) {
-		pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
+	if(*state_p != STATE_RUNNING)
 		return 0;
-	}
 
 	printf_ddd("Debug3: sync_inotify_wait(): select with timeout %li secs.\n", tv.tv_sec);
 	int ret = select(inotify_d+1, &rfds, NULL, NULL, &tv);
-	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
 
 	if((ret == -1) && (errno == EINTR)) {
 		errno = 0;
@@ -1743,6 +1749,12 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 	}\
 }
 
+#define SYNC_INOTIFY_LOOP_CONTINUE {\
+	pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);\
+	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);\
+	continue;\
+}
+
 int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p) {
 	int state = STATE_INITSYNC;
 	int ret;
@@ -1751,6 +1763,9 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 	while(state != STATE_EXIT) {
 		int events;
 
+		threadsinfo_t *threadsinfo_p = thread_getinfo();
+		pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
+		printf_ddd("Debug3: sync_inotify_loop(): current state is %i\n", state);
 		events = 0;
 		switch(state) {
 			case STATE_PTHREAD_GC:
@@ -1759,27 +1774,29 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 					break;
 				}
 				state = STATE_RUNNING;
-				continue;
+				SYNC_INOTIFY_LOOP_CONTINUE;
 			case STATE_INITSYNC:
 				ret = sync_initialsync(options_p->watchdir, options_p, indexes_p, INITSYNC_FULL);
 				if(ret) return ret;
 				state = STATE_RUNNING;
-				continue;
+				SYNC_INOTIFY_LOOP_CONTINUE;
 			case STATE_RUNNING:
-				events = sync_inotify_wait(inotify_d, options_p, indexes_p);
+				events = sync_inotify_wait(inotify_d, options_p, indexes_p); 
 				if(state != STATE_RUNNING)
-					continue;
+					SYNC_INOTIFY_LOOP_CONTINUE;
 				break;
 			case STATE_REHASH:
 				printf_d("Debug: sync_inotify_loop(): rehashing.\n");
 				main_rehash(options_p);
 				state = STATE_RUNNING;
-				continue;
+				SYNC_INOTIFY_LOOP_CONTINUE;
 			case STATE_TERM:
 				state = STATE_EXIT;
 			case STATE_EXIT:
-				continue;
+				SYNC_INOTIFY_LOOP_CONTINUE;
 		}
+		pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
+		pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
 		if(events == 0) {
 			printf_dd("Debug2: sync_inotify_wait(%i, options_p, indexes_p) timed-out.\n", inotify_d);
@@ -1879,6 +1896,13 @@ void sync_sig_int(int signal) {
 }
 
 int sync_switch_state(pthread_t pthread_parent, int newstate) {
+	if(state_p == NULL) {
+		printf_ddd("Debug3: sync_switch_state(%p, %i), but state_p == NULL\n", pthread_parent, newstate);
+		return 0;
+	}
+
+	printf_ddd("Debug3: sync_switch_state(%p, %i)\n", pthread_parent, newstate);
+
 	// Getting mutexes
 	threadsinfo_t *threadsinfo_p = thread_getinfo();
 	if(threadsinfo_p == NULL) {
@@ -1889,28 +1913,43 @@ int sync_switch_state(pthread_t pthread_parent, int newstate) {
 		// If no mutexes, just change the state
 		goto l_sync_parent_interrupt_end;
 	}
-	pthread_mutex_t *pthread_mutex_select = &threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT];
-
+	pthread_mutex_t *pthread_mutex_state = &threadsinfo_p->mutex[PTHREAD_MUTEX_STATE];
+	pthread_cond_t  *pthread_cond_state  = &threadsinfo_p->cond [PTHREAD_MUTEX_STATE];
 
 	// Locking all necessary mutexes
-	while(pthread_mutex_trylock(pthread_mutex_select) == EBUSY) {
-		// Sending kill to force every select()-s and so on to finish their work
-		printf_ddd("Debug3: sending signal to interrupt blocking operations like select()-s and so on\n");
-		pthread_kill(pthread_parent, SIGUSR_BLOPINT);
-		sleep(1);
+	if(pthread_mutex_trylock(pthread_mutex_state) == EBUSY) {
+		while(1) {
+			struct timespec time_timeout;
+			clock_gettime(CLOCK_REALTIME, &time_timeout);
+	//		time_timeout.tv_sec  = now.tv_sec;
+
+			printf_ddd("Debug3: sync_switch_state(): pthread_cond_timedwait() until %li.%li\n", time_timeout.tv_sec, time_timeout.tv_nsec);
+			if(pthread_cond_timedwait(pthread_cond_state, pthread_mutex_state, &time_timeout) != ETIMEDOUT)
+				break;
+			printf_ddd("Debug3: sending signal to interrupt blocking operations like select()-s and so on\n");
+			pthread_kill(pthread_parent, SIGUSR_BLOPINT);
 #ifdef VERYPARANOID
-		int i=0;
-		if(++i > KILL_TIMEOUT) {
-			printf_e("Error: sync_switch_state(): Seems we got a deadlock.");
-			return EDEADLK;
-		}
+			int i=0;
+			if(++i > KILL_TIMEOUT) {
+				printf_e("Error: sync_switch_state(): Seems we got a deadlock.");
+				return EDEADLK;
+			}
 #endif
+		}
 	}
 	// Changing the state
+
 	*state_p = newstate;
 
+#ifdef VERYPARANOID
+	pthread_kill(pthread_parent, SIGUSR_BLOPINT);
+#endif
+
 	// Unlocking mutexes
-	pthread_mutex_unlock(pthread_mutex_select);
+	printf_ddd("Debug3: sync_switch_state(): pthread_mutex_unlock(). New state is %i.\n", *state_p);
+
+	pthread_cond_broadcast(pthread_cond_state);
+	pthread_mutex_unlock(pthread_mutex_state);
 	return 0;
 
 l_sync_parent_interrupt_end:
