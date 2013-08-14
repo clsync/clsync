@@ -333,8 +333,10 @@ int thread_gc(options_t *options_p) {
 			continue;
 
 		if(threadinfo_p->expiretime && (threadinfo_p->expiretime <= tm)) {
-			printf_e("Debug3: thread_gc(): Thread #%i is alive too long: %lu <= %lu (started at %lu)\n", thread_num, threadinfo_p->expiretime, tm, threadinfo_p->starttime);
-			return ETIME;
+			if(pthread_tryjoin_np(threadinfo_p->pthread, NULL)) {	// TODO: check this pthread_tryjoin_np() on error returnings
+				printf_e("Debug3: thread_gc(): Thread #%i is alive too long: %lu <= %lu (started at %lu)\n", thread_num, threadinfo_p->expiretime, tm, threadinfo_p->starttime);
+				return ETIME;
+			}
 		}
 
 #ifndef VERYPARANOID
