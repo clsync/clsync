@@ -1976,7 +1976,19 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 		ret = sigwait(sigset_p, &signal);
 
 		if(state_p == NULL) {
-			printf_e("Warning: Got signal %i, but the main loop is not started, yet. Ignoring the signal.\n", signal);
+
+			switch(signal) {
+				case SIGALRM:
+					*exitcode_p = ETIME;
+				case SIGTERM:
+				case SIGINT:
+					// TODO: remove the exit() from here. Main thread should exit itself
+					exit(*exitcode_p);
+					break;
+				default:
+					printf_e("Warning: Got signal %i, but the main loop is not started, yet. Ignoring the signal.\n", signal);
+					break;
+			}
 			continue;
 		}
 
