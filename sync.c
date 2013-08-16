@@ -1749,7 +1749,7 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 	}\
 }
 
-#define SYNC_INOTIFY_LOOP_CONTINUE {\
+#define SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK {\
 	pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);\
 	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);\
 	continue;\
@@ -1774,26 +1774,28 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 					break;
 				}
 				state = STATE_RUNNING;
-				SYNC_INOTIFY_LOOP_CONTINUE;
+				SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
 			case STATE_INITSYNC:
+				pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
+				pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 				ret = sync_initialsync(options_p->watchdir, options_p, indexes_p, INITSYNC_FULL);
 				if(ret) return ret;
 				state = STATE_RUNNING;
-				SYNC_INOTIFY_LOOP_CONTINUE;
+				continue;
 			case STATE_RUNNING:
 				events = sync_inotify_wait(inotify_d, options_p, indexes_p); 
 				if(state != STATE_RUNNING)
-					SYNC_INOTIFY_LOOP_CONTINUE;
+					SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
 				break;
 			case STATE_REHASH:
 				printf_d("Debug: sync_inotify_loop(): rehashing.\n");
 				main_rehash(options_p);
 				state = STATE_RUNNING;
-				SYNC_INOTIFY_LOOP_CONTINUE;
+				SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
 			case STATE_TERM:
 				state = STATE_EXIT;
 			case STATE_EXIT:
-				SYNC_INOTIFY_LOOP_CONTINUE;
+				SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
 		}
 		pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
 		pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
