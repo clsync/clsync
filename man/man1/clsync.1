@@ -79,6 +79,40 @@ with option
 .RE
 
 .PP
+.B \-c, \-\-cluster\-iface
+.I interface\-ip
+.RS 8
+Enables inter-node notifing subsystem to prevent sync looping between nodes.
+This's very useful features that provides ability of birectional sync of the
+same directory between two or more nodes.
+.I interface-ip
+is an IP-address already assigned to the interface that will be used for
+multicast notifing.
+
+Not enabled by default.
+
+To find out the IP-address on interface "eth0", you can use for example next
+command:
+
+ip a s eth0 | awk '{if($1=="inet") {gsub("/.*", "", $2); print $2}}'
+.RE
+
+.PP
+.B \-c, \-\-cluster\-ip
+.I multicast\-ip
+.RS 8
+Sets IP-address for multicast group.
+
+This option can be used only in conjuction with
+.B \-\-cluster\-interface
+\*S.
+
+Use IP-addresses from 224.0.0.0/4 for this option.
+
+Default value is "227.108.115.121". [(128+"c")."l"."s"."y"]
+.RE
+
+.PP
 .B \-t, \-\-collectdelay
 .I ordinary\-delay
 .RS 8

@@ -83,6 +83,8 @@
 enum flags_enum {
 	BACKGROUND	= 'b',
 	PTHREAD		= 'p',
+	CLUSTERIFACE	= 'c',
+	CLUSTERMCASTIPADDR = 'm',
 	HELP		= 'h',
 	DELAY		= 't',
 	BFILEDELAY	= 'T',
@@ -151,6 +153,8 @@ struct options {
 	char *destdir;
 	char *watchdirwslash;
 	char *destdirwslash;
+	char *cluster_iface;
+	char *cluster_mcastipaddr;
 	size_t watchdirlen;
 	size_t destdirlen;
 	size_t watchdirsize;

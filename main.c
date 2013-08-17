@@ -29,7 +29,9 @@
 static struct option long_options[] =
 {
 	{"background",		no_argument,		NULL,	BACKGROUND},
-	{"pthread",		no_argument,		NULL,	PTHREAD},	// Not implemented, yet
+	{"pthread",		no_argument,		NULL,	PTHREAD},
+	{"cluster-iface",	required_argument,	NULL,	CLUSTERIFACE},		// Not implemented, yet
+	{"cluster-ip",		required_argument,	NULL,	CLUSTERMCASTIPADDR},	// Not implemented, yet
 	{"collectdelay",	required_argument,	NULL,	DELAY},
 	{"syncdelay",		required_argument,	NULL,	SYNCDELAY},
 	{"outlistsdir",		required_argument,	NULL,	OUTLISTSDIR},
@@ -84,6 +86,12 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 			case '?':
 			case 'h':
 				syntax();
+				break;
+			case 'c':
+				options_p->cluster_iface       = optarg;
+				break;
+			case 'm':
+				options_p->cluster_mcastipaddr = optarg;
 				break;
 			case 'd':
 				options_p->listoutdir   = optarg;
@@ -309,6 +317,11 @@ int main(int argc, char *argv[]) {
 	out_init(options.flags);
 	if((options.flags[RSYNC]>1) && (options.destdir == NULL)) {
 		printf_e("Error: Option \"-RR\" cannot be used without specifing \"destination directory\".\n");
+		ret = EINVAL;
+	}
+
+	if((options.cluster_iface == NULL) && (options.cluster_mcastipaddr != NULL)) {
+		printf_e("Error: Option \"--cluster-ip\" cannot be used without \"--cluster-iface\".\n");
 		ret = EINVAL;
 	}
 
