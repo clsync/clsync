@@ -17,6 +17,9 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-extern int cluster_init();
-extern int cluster_deinit();
+extern int cluster_init(options_t *options_p);
+extern int cluster_deinit(options_t *options_p);
+
+extern int cluster_send(options_t *options_p, indexes_t *indexes_p);
+extern int cluster_recv(options_t *options_p, indexes_t *indexes_p);
 

@@ -17,10 +17,11 @@ INC := $(shell pkg-config --cflags glib-2.0) $(INC)
 INSTDIR = $(DESTDIR)$(PREFIX)
 
 objs=\
+sync.o\
+cluster.o\
 main.o\
 output.o\
 fileutils.o\
-sync.o\
 malloc.o
 
 binary=clsync

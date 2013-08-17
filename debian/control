@@ -16,5 +16,6 @@ Description: live sync tool based on inotify, written in GNU C
  Clsync recursively watches for source directory and executes external
  program to sync the changes. Clsync is adapted to use together with rsync.
  This utility is much more lightweight than competitors and supports such
- features as separate queue for big files, regex file filter and
- multi-threading.
+ features as separate queue for big files, regex file filter,
+ multi-threading and multicast notifing clsync instances on another nodes
+ to prevent loop syncing.

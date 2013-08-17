@@ -28,6 +28,9 @@ by "lsyncd" project ("https://github.com/axkibe/lsyncd"). So I called it
 "clsync", that should be interpreted as "lsync, but on c" due to "lsyncd" that
 written on "LUA" and may be used for the same purposes.
 
+UPD: Also I was have to add somekind of clustering support. It's multicast
+notifing subsystem to prevent loops on bidirection syncing. So "clsync" also
+can be interpreted as "cluster live sync". ;)
 
 2. Motivation
 -------------

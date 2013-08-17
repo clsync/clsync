@@ -21,6 +21,7 @@
 #include "output.h"
 #include "sync.h"
 #include "malloc.h"
+#include "cluster.h"
 
 #define VERSION_MAJ	0
 #define VERSION_MIN	0
@@ -325,6 +326,15 @@ int main(int argc, char *argv[]) {
 		ret = EINVAL;
 	}
 
+	if(options.cluster_iface == NULL) {
+		int _ret;
+		_ret = cluster_init();
+		if(_ret) {
+			printf_e("Error: Cannot initialize cluster subsystem.\n");
+			ret = _ret;
+		}
+	}
+
 	{
 		size_t size = options.watchdirlen + 2;
 		char *newwatchdir = xmalloc(size);
@@ -408,6 +418,15 @@ int main(int argc, char *argv[]) {
 
 	if(ret == 0)
 		ret = sync_run(&options);
+
+	if(options.cluster_iface == NULL) {
+		int _ret;
+		_ret = cluster_deinit();
+		if(_ret) {
+			printf_e("Error: Cannot deinitialize cluster subsystem.\n");
+			ret = _ret;
+		}
+	}
 
 	main_cleanup(&options);
 

@@ -17,12 +17,26 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "common.h"
+#include "cluster.h"
+#include "output.h"
+#include "malloc.h"
 
-int cluster_init() {
+
+int cluster_init(options_t *options_p) {
 	return 0;
 }
 
-int cluster_deinit() {
+int cluster_deinit(options_t *options_p) {
+	return 0;
+}
+
+
+int cluster_send(options_t *options_p, indexes_t *indexes_p) {
+	return 0;
+}
+
+int cluster_recv(options_t *options_p, indexes_t *indexes_p) {
 	return 0;
 }
 
