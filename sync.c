@@ -22,6 +22,7 @@
 #include "output.h"
 #include "fileutils.h"
 #include "malloc.h"
+#include "cluster.h"
 #include "sync.h"
 
 pthread_t pthread_sighandler;
@@ -980,12 +981,16 @@ static inline int sync_dosync_exec(options_t *options_p, const char *evmask_str,
 
 static int sync_dosync(const char *fpath, uint32_t evmask, options_t *options_p, indexes_t *indexes_p) {
 	int ret;
+
+	ret = cluster_lock(fpath);
+	if(ret) return ret;
+
 	char *evmask_str = xmalloc(1<<8);
 	sprintf(evmask_str, "%u", evmask);
-
 	ret = sync_dosync_exec(options_p, evmask_str, fpath);
-
 	free(evmask_str);
+
+	ret = cluster_unlock_all();
 
 	return ret;
 }
@@ -1300,7 +1305,6 @@ gboolean sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer e
 
 	if(!options_p->flags[RSYNC]) {
 		// non-RSYNC case
-
 		fprintf(outf, "sync %s %i %s\n", options_p->label, evinfo->evmask, fpath);
 		return TRUE;
 	}
@@ -1475,8 +1479,13 @@ int sync_idle(int notify_d, options_t *options_p, indexes_t *indexes_p) {
 
 	printf_ddd("Debug3: sync_idle(): calling sync_idle_dosync_collectedevents()\n");
 
-	// TODO: make a separate thread on sync_idle_dosync_collectedevents();
+	ret = cluster_lock_byindexes();
+	if(ret) return ret;
+
 	ret = sync_idle_dosync_collectedevents(options_p, indexes_p);
+	if(ret) return ret;
+
+	ret = cluster_unlock_all();
 	if(ret) return ret;
 
 	return 0;
@@ -1841,57 +1850,6 @@ int sync_notify_loop(int notify_d, options_t *options_p, indexes_t *indexes_p) {
 	return -1;
 }
 
-/*
-void sync_sig_alarm(int signal) {
-	printf_e("Error: Alarm received. Syncing process timed out. Exit.\n");
-	
-	exitcode = ETIME;
-	pthread_kill(pthread_sighandler, SIGTERM);
-
-	return;
-}
-
-void sync_sig_pthread_gc(int signal) {
-	printf_ddd("Debug3: Got signal for thread_gc(). Thread %p.\n", pthread_self());
-
-	int ret = thread_gc(_options_p);
-
-	exitcode = ret;
-	if(ret) pthread_kill(pthread_sighandler, SIGTERM);
-
-#if 0
-	if(state_p)
-		*state_p = STATE_PTHREAD_GC;
-#endif
-
-	return;
-}
-void sync_sig_initsync(int signal) {
-	printf_ddd("Debug3: Got signal for sync_initialsync()\n");
-
-
-	exitcode = ret;
-	if(ret) pthread_kill(pthread_sighandler, SIGTERM);
-
-	return;
-}
-
-void sync_sig_rehash(int signal) {
-	if(state_p)
-		*state_p = STATE_REHASH;
-
-	return;
-}
-
-void sync_sig_term(int signal) {
-	printf_dd("Debug2: sync_sig_term(%i). Thread %p.\n", signal, pthread_self());
-
-	if(state_p)
-		*state_p = STATE_TERM;
-
-	return;
-}
-*/
 void sync_sig_int(int signal) {
 	printf_dd("Debug2: sync_sig_int(%i): Thread %p\n", signal, pthread_self());
 	return;
@@ -1963,6 +1921,7 @@ l_sync_parent_interrupt_end:
 
 }
 
+int *sync_sighandler_exitcode_p = NULL;
 int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 	int signal, ret;
 //	options_t *options_p     = sighandler_arg_p->options_p;
@@ -1970,6 +1929,8 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 	pthread_t pthread_parent = sighandler_arg_p->pthread_parent;
 	sigset_t *sigset_p	 = sighandler_arg_p->sigset_p;
 	int *exitcode_p		 = sighandler_arg_p->exitcode_p;
+
+	sync_sighandler_exitcode_p = exitcode_p;
 
 	while(1) {
 		printf_ddd("Debug3: sync_sighandler(): waiting for signal\n");
@@ -2028,23 +1989,16 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 	return 0;
 }
 
+int sync_term(int exitcode) {
+	*sync_sighandler_exitcode_p = exitcode;
+	return pthread_kill(pthread_sighandler, SIGTERM);
+}
 
 int sync_run(options_t *options_p) {
 	int ret, i;
 	sighandler_arg_t sighandler_arg = {0};
 
 	// Creating signal handler thread
-
-#if 0
-	signal(SIGALRM,			SIG_IGN);
-	signal(SIGHUP,			SIG_IGN);
-	signal(SIGTERM,			SIG_IGN);
-	signal(SIGINT,			SIG_IGN);
-
-	signal(SIGUSR_PTHREAD_GC, 	SIG_IGN);
-	signal(SIGUSR_INITSYNC,   	SIG_IGN);
-#endif
-
 	sigset_t sigset_sighandler;
 	sigemptyset(&sigset_sighandler);
 	sigaddset(&sigset_sighandler, SIGALRM);
@@ -2074,16 +2028,6 @@ int sync_run(options_t *options_p) {
 
 	signal(SIGUSR_BLOPINT,	sync_sig_int);
 
-/*
-	signal(SIGALRM,		sync_sig_alarm);
-	signal(SIGHUP,		sync_sig_rehash);
-	signal(SIGTERM,		sync_sig_term);
-	signal(SIGINT,		sync_sig_term);
-
-	signal(SIGUSR_PTHREAD_GC, sync_sig_pthread_gc);
-	signal(SIGUSR_INITSYNC,   sync_sig_initsync);
-*/
-
 	// Creating hash tables
 
 	indexes_t indexes = {NULL};
@@ -2099,6 +2043,16 @@ int sync_run(options_t *options_p) {
 		i++;
 	}
 
+	// Initializing cluster subsystem
+
+	if(options_p->cluster_iface == NULL) {
+		ret = cluster_init(options_p, &indexes);
+		if(ret) {
+			printf_e("Error: Cannot initialize cluster subsystem: %s (errno %i).\n", strerror(ret), ret);
+			return ret;
+		}
+	}
+
 	// Initializing rand-generator if it's required
 
 	if(options_p->listoutdir)
@@ -2112,12 +2066,6 @@ int sync_run(options_t *options_p) {
 	// Marking file tree for FS monitor
 	ret = sync_mark_walk(notify_d, options_p, options_p->watchdir, &indexes);
 	if(ret) return ret;
-
-/*
-	// Full syncing the tree after marking it
-	ret = sync_initialsync(options_p->watchdir, options_p, &indexes, INITSYNC_FIRST);
-	if(ret) return ret;
-*/
 
 	// "Infinite" loop of processling the events
 	ret = sync_notify_loop(notify_d, options_p, &indexes);
@@ -2143,6 +2091,15 @@ int sync_run(options_t *options_p) {
 		g_hash_table_destroy(indexes.fpath2ei_coll_ht[i]);
 		g_hash_table_destroy(indexes.exc_fpath_coll_ht[i]);
 		i++;
+	}
+
+	if(options_p->cluster_iface == NULL) {
+		int _ret;
+		_ret = cluster_deinit();
+		if(_ret) {
+			printf_e("Error: Cannot deinitialize cluster subsystem: %s (errno: %i).\n", strerror(_ret), _ret);
+			ret = _ret;
+		}
 	}
 
 #ifdef VERYPARANOID

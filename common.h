@@ -85,6 +85,7 @@ enum flags_enum {
 	PTHREAD		= 'p',
 	CLUSTERIFACE	= 'c',
 	CLUSTERMCASTIPADDR = 'm',
+	CLUSTERTIMEOUT	= 'W',
 	HELP		= 'h',
 	DELAY		= 't',
 	BFILEDELAY	= 'T',
@@ -171,6 +172,7 @@ struct options {
 	unsigned int rsyncinclimit;
 	time_t synctime;
 	unsigned int synctimeout;
+	unsigned int cluster_timeout;
 	sigset_t *sigset;
 };
 typedef struct options options_t;

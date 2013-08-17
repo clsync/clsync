@@ -17,6 +17,6 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 extern int sync_run(struct options *options);
+extern int sync_term(int exitcode);
 

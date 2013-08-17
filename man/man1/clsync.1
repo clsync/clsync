@@ -113,6 +113,16 @@ Default value is "227.108.115.121". [(128+"c")."l"."s"."y"]
 .RE
 
 .PP
+.B \-c, \-\-cluster\-timeout
+.I cluster\-timeout
+.RS 8
+Sets timeout (in milliseconds) of waiting answer from another nodes of the cluster.
+If there's no answer from some node, it will be excluded.
+
+Default value is "1000". [1 second]
+.RE
+
+.PP
 .B \-t, \-\-collectdelay
 .I ordinary\-delay
 .RS 8

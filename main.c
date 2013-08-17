@@ -33,6 +33,7 @@ static struct option long_options[] =
 	{"pthread",		no_argument,		NULL,	PTHREAD},
 	{"cluster-iface",	required_argument,	NULL,	CLUSTERIFACE},		// Not implemented, yet
 	{"cluster-ip",		required_argument,	NULL,	CLUSTERMCASTIPADDR},	// Not implemented, yet
+	{"cluster-timeout",	required_argument,	NULL,	CLUSTERTIMEOUT},	// Not implemented, yet
 	{"collectdelay",	required_argument,	NULL,	DELAY},
 	{"syncdelay",		required_argument,	NULL,	SYNCDELAY},
 	{"outlistsdir",		required_argument,	NULL,	OUTLISTSDIR},
@@ -77,9 +78,9 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 	int option_index = 0;
 	while(1) {
 #ifdef FANOTIFY_SUPPORT
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:f", long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:m:c:W:f", long_options, &option_index);
 #else
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:",  long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:m:c:W:",  long_options, &option_index);
 #endif
 	
 		if (c == -1) break;
@@ -93,6 +94,9 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 				break;
 			case 'm':
 				options_p->cluster_mcastipaddr = optarg;
+				break;
+			case 'W':
+				options_p->cluster_timeout     = (unsigned int)atol(optarg);
 				break;
 			case 'd':
 				options_p->listoutdir   = optarg;
@@ -313,6 +317,7 @@ int main(int argc, char *argv[]) {
 	options.label				   = DEFAULT_LABEL;
 	options.rsyncinclimit			   = DEFAULT_RSYNC_INCLUDELINESLIMIT;
 	options.synctimeout			   = DEFAULT_SYNCTIMEOUT;
+	options.cluster_timeout			   = DEFAULT_CLUSTERTIMEOUT;
 
 	parse_arguments(argc, argv, &options);
 	out_init(options.flags);
@@ -324,15 +329,6 @@ int main(int argc, char *argv[]) {
 	if((options.cluster_iface == NULL) && (options.cluster_mcastipaddr != NULL)) {
 		printf_e("Error: Option \"--cluster-ip\" cannot be used without \"--cluster-iface\".\n");
 		ret = EINVAL;
-	}
-
-	if(options.cluster_iface == NULL) {
-		int _ret;
-		_ret = cluster_init();
-		if(_ret) {
-			printf_e("Error: Cannot initialize cluster subsystem.\n");
-			ret = _ret;
-		}
 	}
 
 	{
@@ -418,15 +414,6 @@ int main(int argc, char *argv[]) {
 
 	if(ret == 0)
 		ret = sync_run(&options);
-
-	if(options.cluster_iface == NULL) {
-		int _ret;
-		_ret = cluster_deinit();
-		if(_ret) {
-			printf_e("Error: Cannot deinitialize cluster subsystem.\n");
-			ret = _ret;
-		}
-	}
 
 	main_cleanup(&options);
 

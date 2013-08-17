@@ -7,3 +7,4 @@
 	There's a memleak if not pthread_*join*() is done.
 
 5. Deduplicate code from functions, that calls sync_exec() and sync_exec_thread()
+6. Fix variables' names
