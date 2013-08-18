@@ -52,6 +52,11 @@
 #include <dirent.h>
 #include <glib.h>
 #include <sys/utsname.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+
 
 #include "config.h"
 
@@ -86,6 +91,7 @@ enum flags_enum {
 	PTHREAD		= 'p',
 	CLUSTERIFACE	= 'c',
 	CLUSTERMCASTIPADDR = 'm',
+	CLUSTERMCASTIPPORT = 'P',
 	CLUSTERTIMEOUT	= 'W',
 	CLUSTERNODENAME = 'n',
 	HELP		= 'h',
@@ -160,6 +166,8 @@ struct options {
 	char *cluster_iface;
 	char *cluster_mcastipaddr;
 	char *cluster_nodename;
+	uint32_t cluster_nodename_len;
+	uint16_t cluster_mcastipport;
 	size_t watchdirlen;
 	size_t destdirlen;
 	size_t watchdirsize;

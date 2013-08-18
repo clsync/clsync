@@ -6,9 +6,14 @@
 
 #define RULE_DEFAULT			RULE_ACCEPT
 
+// don't do to much rules, it will degrade performance
 #define MAXRULES			(1<<8)
+
+// there's no need in more than 256 arguments while running action-script, IMHO :)
 #define MAXARGUMENTS			(1<<8)
-#define MAXTHREADS			(1<<5)
+
+// clsync should be used, if there's more than 5-10 nodes. So the limit in 255 is quite enough. :)
+#define MAXNODES			((1<<8)-1)
 
 #define DEFAULT_NOTIFYENGINE		NE_INOTIFY
 #define DEFAULT_COLLECTDELAY		30
@@ -19,6 +24,8 @@
 #define DEFAULT_RSYNC_INCLUDELINESLIMIT	20000
 #define DEFAULT_SYNCTIMEOUT		(3600 * 24)
 #define DEFAULT_CLUSTERTIMEOUT		1000
+#define DEFAULT_CLUSTERIPADDR		"227.108.115.121"
+#define DEFAULT_CLUSTERIPPORT		40079
 
 #define FANOTIFY_FLAGS			(FAN_CLOEXEC|FAN_UNLIMITED_QUEUE|FAN_UNLIMITED_MARKS)
 #define FANOTIFY_EVFLAGS		(O_LARGEFILE|O_RDONLY|O_CLOEXEC)

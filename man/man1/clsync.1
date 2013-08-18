@@ -117,6 +117,24 @@ Default value is "227.108.115.121". [(128+"c")."l"."s"."y"]
 .RE
 
 .PP
+.B \-c, \-\-cluster\-port
+.I multicast\-port
+.RS 8
+Not implemented yet!
+
+Sets UDP-port number for multicast messages.
+
+This option can be used only in conjuction with
+.B \-\-cluster\-interface
+\*S.
+
+.I multicast\-port
+should be greater than 0 and less than 65535.
+
+Default value is "40079". [("n" << 8) + "c"]
+.RE
+
+.PP
 .B \-c, \-\-cluster\-timeout
 .I cluster\-timeout
 .RS 8

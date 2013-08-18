@@ -17,6 +17,50 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+enum nodestatus {
+	NODESTATUS_DOESNTEXIST = 0,
+	NODESTATUS_OFFLINE,
+	NODESTATUS_ONLINE
+};
+typedef enum nodestatus nodestatus_t;
+
+enum nodeid {
+	NODEID_NOID		= MAXNODES
+};
+typedef enum nodeid nodeid_t;
+
+struct nodeinfo {
+	nodestatus_t status;
+	uint32_t     updatets;
+	GHashTable  *modtime_ht;
+};
+typedef struct nodeinfo nodeinfo_t;
+
+enum clustercmd_id {
+	CLUSTERCMDID_PING 	= 0,
+	CLUSTERCMDID_REGISTER 	= 1,
+	CLUSTERCMDID_GETMYID	= 2,
+	CLUSTERCMDID_SETID	= 3,
+};
+typedef enum clustercmd_id clustercmd_id_t;
+
+struct clustercmd {
+	uint32_t  crc32;
+	uint8_t   node_id;
+	uint8_t   cmd_id;
+	uint32_t  data_len;
+	void     *data_p;
+};
+typedef struct clustercmd clustercmd_t;
+
+struct clustercmd_setiddata {
+	uint8_t  node_id;
+	uint32_t updatets;
+	char    *node_name;
+};
+
+typedef struct clustercmd_setiddata clustercmd_setiddata_t;
+
 extern int cluster_init(options_t *options_p, indexes_t *indexes_p);
 extern int cluster_deinit();
 
@@ -27,5 +71,4 @@ extern int cluster_capture(const char *fpath);
 
 extern int cluster_modtime_update(const char *dirpath);
 extern int cluster_initialsync();
-
 

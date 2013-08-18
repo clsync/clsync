@@ -827,8 +827,11 @@ int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, co
 		return wd;
 	}
 
-	if(options_p->cluster_iface)
-		cluster_modtime_update(path);
+	if(options_p->cluster_iface) {
+		int ret=cluster_modtime_update(path);
+		if(ret) printf_e("Error: sync_notify_mark() cannot cluster_modtime_update(): %s (errno %i)\n", strerror(ret), ret);
+		return ret;
+	}
 
 	switch(options_p->notifyengine) {
 #ifdef FANOTIFY_SUPPORT

@@ -33,6 +33,7 @@ static struct option long_options[] =
 	{"pthread",		no_argument,		NULL,	PTHREAD},
 	{"cluster-iface",	required_argument,	NULL,	CLUSTERIFACE},		// Not implemented, yet
 	{"cluster-ip",		required_argument,	NULL,	CLUSTERMCASTIPADDR},	// Not implemented, yet
+	{"cluster-port",	required_argument,	NULL,	CLUSTERMCASTIPPORT},	// Not implemented, yet
 	{"cluster-timeout",	required_argument,	NULL,	CLUSTERTIMEOUT},	// Not implemented, yet
 	{"cluster-node-name",	required_argument,	NULL,	CLUSTERNODENAME},	// Not implemented, yet
 	{"collectdelay",	required_argument,	NULL,	DELAY},
@@ -313,9 +314,9 @@ int main_rehash(options_t *options_p) {
 
 int main(int argc, char *argv[]) {
 	struct options options;
+	memset(&options, 0, sizeof(options));
 	int ret = 0, nret;
 	struct stat64 stat64={0};
-	memset(&options, 0, sizeof(options));
 	options.notifyengine 			   = DEFAULT_NOTIFYENGINE;
 	options.syncdelay 			   = DEFAULT_SYNCDELAY;
 	options._queues[QUEUE_NORMAL].collectdelay = DEFAULT_COLLECTDELAY;
@@ -325,7 +326,6 @@ int main(int argc, char *argv[]) {
 	options.label				   = DEFAULT_LABEL;
 	options.rsyncinclimit			   = DEFAULT_RSYNC_INCLUDELINESLIMIT;
 	options.synctimeout			   = DEFAULT_SYNCTIMEOUT;
-	options.cluster_timeout			   = DEFAULT_CLUSTERTIMEOUT;
 
 	parse_arguments(argc, argv, &options);
 	out_init(options.flags);
@@ -339,10 +339,15 @@ int main(int argc, char *argv[]) {
 		ret = EINVAL;
 	}
 
-	if((options.cluster_iface == NULL) && ((options.cluster_mcastipaddr != NULL) || (options.cluster_nodename != NULL))) {
-		printf_e("Error: Options \"--cluster-ip\" and/or \"--cluster-node-name\" cannot be used without \"--cluster-iface\".\n");
+	if((options.cluster_iface == NULL) && ((options.cluster_mcastipaddr != NULL) || (options.cluster_nodename != NULL) || (options.cluster_timeout) || (options.cluster_mcastipport))) {
+		printf_e("Error: Options \"--cluster-ip\", \"--cluster-node-name\", \"--cluster_timeout\" and/or \"cluster_ipport\" cannot be used without \"--cluster-iface\".\n");
 		ret = EINVAL;
 	}
+
+	if(!options.cluster_timeout)
+		options.cluster_timeout	    = DEFAULT_CLUSTERTIMEOUT;
+	if(!options.cluster_mcastipport)
+		options.cluster_mcastipport = DEFAULT_CLUSTERIPPORT;
 
 	if(options.cluster_iface != NULL) {
 #ifndef _DEBUG
@@ -358,6 +363,8 @@ int main(int argc, char *argv[]) {
 		if(options.cluster_nodename == NULL) {
 			printf_e("Error: Option \"--cluster-iface\" is set, but \"--cluster-node-name\" is not set and cannot get the nodename with uname().\n");
 			ret = EINVAL;
+		} else {
+			options.cluster_nodename_len = strlen(options.cluster_nodename);
 		}
 	}
 
