@@ -51,6 +51,7 @@
 #include <sys/time.h>
 #include <dirent.h>
 #include <glib.h>
+#include <sys/utsname.h>
 
 #include "config.h"
 

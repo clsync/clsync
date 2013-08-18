@@ -345,10 +345,18 @@ int main(int argc, char *argv[]) {
 	}
 
 	if(options.cluster_iface != NULL) {
-		if(options.cluster_nodename == NULL)
-			options.cluster_nodename = getenv("HOSTNAME");
+#ifndef _DEBUG
+		printf_e("Error: Cluster subsystem is not implemented, yet. Sorry.\n");
+		ret = EINVAL;
+#endif
 		if(options.cluster_nodename == NULL) {
-			printf_e("Error: Option \"--cluster-iface\" is set, but \"--cluster-node-name\" is not set and environment variable \"HOSTNAME\" doesn't exist.\n");
+			struct utsname utsname;
+
+			if(!uname(&utsname))
+				options.cluster_nodename = utsname.nodename;
+		}
+		if(options.cluster_nodename == NULL) {
+			printf_e("Error: Option \"--cluster-iface\" is set, but \"--cluster-node-name\" is not set and cannot get the nodename with uname().\n");
 			ret = EINVAL;
 		}
 	}

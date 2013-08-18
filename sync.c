@@ -767,7 +767,7 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 
 	if(initsync == INITSYNC_FULL) {
 		if(options_p->cluster_iface)
-			cluster_initialsync();
+			return cluster_initialsync();
 	}
 
 	if(!options_p->flags[RSYNC]) {

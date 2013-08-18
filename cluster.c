@@ -82,7 +82,7 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
  * 
  */
 
-inline int cluster_signal(int signal) {
+static inline int cluster_signal(int signal) {
 	return pthread_kill(pthread_cluster, signal);
 }
 
@@ -160,10 +160,10 @@ int cluster_unlock_all() {
  */
 
 int cluster_loop() {
+	sigset_t sigset_cluster;
 
 	// Ignoring SIGINT signal
 
-	sigset_t sigset_cluster;
 	sigemptyset(&sigset_cluster);
 	sigaddset(&sigset_cluster, SIGINT);
 	CLUSTER_LOOP_CHECK(pthread_sigmask(SIG_BLOCK, &sigset_cluster, NULL));
