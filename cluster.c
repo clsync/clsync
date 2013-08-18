@@ -170,6 +170,7 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 	clustercmd_t clustercmd;
 
 	//	Trying to preserve my node_id after restart. :)
+	//	Asking another nodes about my previous node_id
 	clustercmd.cmd_id   = CLUSTERCMDID_GETMYID;
 	clustercmd.data_len = options_p->cluster_nodename_len;
 	clustercmd.data_p   = options_p->cluster_nodename;
