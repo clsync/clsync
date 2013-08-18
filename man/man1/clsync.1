@@ -82,6 +82,8 @@ with option
 .B \-c, \-\-cluster\-iface
 .I interface\-ip
 .RS 8
+Not implemented yet!
+
 Enables inter-node notifing subsystem to prevent sync looping between nodes.
 This's very useful features that provides ability of birectional sync of the
 same directory between two or more nodes.
@@ -101,6 +103,8 @@ ip a s eth0 | awk '{if($1=="inet") {gsub("/.*", "", $2); print $2}}'
 .B \-c, \-\-cluster\-ip
 .I multicast\-ip
 .RS 8
+Not implemented yet!
+
 Sets IP-address for multicast group.
 
 This option can be used only in conjuction with
@@ -116,10 +120,26 @@ Default value is "227.108.115.121". [(128+"c")."l"."s"."y"]
 .B \-c, \-\-cluster\-timeout
 .I cluster\-timeout
 .RS 8
-Sets timeout (in milliseconds) of waiting answer from another nodes of the cluster.
-If there's no answer from some node, it will be excluded.
+Not implemented yet!
+
+Sets timeout (in milliseconds) of waiting answer from another nodes of the
+cluster. If there's no answer from some node, it will be excluded.
 
 Default value is "1000". [1 second]
+.RE
+
+.PP
+.B \-c, \-\-cluster\-node\-name
+.I cluster\-node\-name
+.RS 8
+Not implemented yet!
+
+Sets the name of current node in the cluster. It will be used in action
+scripts of another nodes (see 
+.B ACTION SCRIPT
+).
+
+Default value is $HOSTNAME.
 .RE
 
 .PP
@@ -179,12 +199,12 @@ option.
 
 Recommended option.
 
-You can use "-RR" to run "rsync" directly, bypassing intermediate script
+You can use "\-RR" to run "rsync" directly, bypassing intermediate script
 (see
 .B ACTION SCRIPT
 case
 .B e
-)
+). But you cannot use "\-\-cluster\-*" options in "\-RR" mode.
 
 Is not set by default.
 .RE
@@ -223,6 +243,23 @@ of
 This option is not recommended.
 
 Is not set by default.
+.RE
+
+.PP
+.B \-x, \-\-ignoreexitcode
+.I exitcode
+.RS 8
+Forces
+.B clsync
+to do not process exitcode
+.I exitcode
+of
+.I action-script
+as an error. You can set multiple ignores by passing this option multiple
+times.
+
+Recommended values for rsync case are "23" and "24".
+["-x 23 -x 24"]
 .RE
 
 .PP
@@ -368,7 +405,7 @@ case
 .RS
 .I action\-script
 initialsync
-.I label dirpath
+.I label dirpath [nodes]
 
 In this case,
 .I action\-script
@@ -382,7 +419,7 @@ case
 .RS
 .I action\-script
 sync
-.I label evmask path
+.I label evmask path [nodes]
 
 In this case,
 .I action\-script
@@ -399,7 +436,7 @@ case
 .RS
 .I action\-script
 synclist
-.I label listpath
+.I label listpath [nodes]
 
 In this case,
 .I action\-script
@@ -417,7 +454,7 @@ case
 .RS
 .I action\-script
 rsynclist
-.I label rsync\-listpath [rsync\-exclude\-listpath]
+.I label rsync\-listpath [nodes] [rsync\-exclude\-listpath]
 
 In this case,
 .I action\-script
@@ -469,9 +506,15 @@ will be ignored in this case.
 
 As can be noticed, in the first four cases clsync's
 .I label
-is passed (see 
+(see 
 .I \-\-label
-).
+) and
+.I nodes
+are passed (or can be passed).
+.I nodes
+is comma-separated list of cluster nodes names where to sync to (see
+.I --cluster-node-name
+)
 
 The listfile by path
 .I listpath

@@ -34,12 +34,14 @@ static struct option long_options[] =
 	{"cluster-iface",	required_argument,	NULL,	CLUSTERIFACE},		// Not implemented, yet
 	{"cluster-ip",		required_argument,	NULL,	CLUSTERMCASTIPADDR},	// Not implemented, yet
 	{"cluster-timeout",	required_argument,	NULL,	CLUSTERTIMEOUT},	// Not implemented, yet
+	{"cluster-node-name",	required_argument,	NULL,	CLUSTERNODENAME},	// Not implemented, yet
 	{"collectdelay",	required_argument,	NULL,	DELAY},
 	{"syncdelay",		required_argument,	NULL,	SYNCDELAY},
 	{"outlistsdir",		required_argument,	NULL,	OUTLISTSDIR},
 	{"rsync",		no_argument,		NULL,	RSYNC},
 	{"rsyncinclimit",	required_argument,	NULL,	RSYNCINCLIMIT},
 	{"rsyncpreferinclude",	no_argument,		NULL,	RSYNC_PREFERINCLUDE},
+	{"ignoreexitcode",	required_argument,	NULL,	IGNOREEXITCODE},
 	{"dontunlinklists",	no_argument,		NULL,	DONTUNLINK},
 	{"fullinitialsync",	no_argument,		NULL,	INITFULL},
 	{"bigfilethreshold",	required_argument,	NULL,	BFILETHRESHOLD},
@@ -78,9 +80,9 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 	int option_index = 0;
 	while(1) {
 #ifdef FANOTIFY_SUPPORT
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:m:c:W:f", long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:m:c:W:n:x:f", long_options, &option_index);
 #else
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:m:c:W:",  long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:m:c:W:n:x:",  long_options, &option_index);
 #endif
 	
 		if (c == -1) break;
@@ -97,6 +99,9 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 				break;
 			case 'W':
 				options_p->cluster_timeout     = (unsigned int)atol(optarg);
+				break;
+			case 'n':
+				options_p->cluster_nodename    = optarg;
 				break;
 			case 'd':
 				options_p->listoutdir   = optarg;
@@ -128,6 +133,9 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 				break;
 			case 'k':
 				options_p->synctimeout = (unsigned int)atol(optarg);
+				break;
+			case 'x':
+				options_p->isignoredexitcode[(unsigned char)atoi(optarg)] = 1;
 				break;
 			case 'V':
 				version();
@@ -326,9 +334,23 @@ int main(int argc, char *argv[]) {
 		ret = EINVAL;
 	}
 
-	if((options.cluster_iface == NULL) && (options.cluster_mcastipaddr != NULL)) {
-		printf_e("Error: Option \"--cluster-ip\" cannot be used without \"--cluster-iface\".\n");
+	if((options.flags[RSYNC]>1) && (options.cluster_iface != NULL)) {
+		printf_e("Error: Option \"-RR\" cannot be used in conjunction with \"--cluster-iface\".\n");
 		ret = EINVAL;
+	}
+
+	if((options.cluster_iface == NULL) && ((options.cluster_mcastipaddr != NULL) || (options.cluster_nodename != NULL))) {
+		printf_e("Error: Options \"--cluster-ip\" and/or \"--cluster-node-name\" cannot be used without \"--cluster-iface\".\n");
+		ret = EINVAL;
+	}
+
+	if(options.cluster_iface != NULL) {
+		if(options.cluster_nodename == NULL)
+			options.cluster_nodename = getenv("HOSTNAME");
+		if(options.cluster_nodename == NULL) {
+			printf_e("Error: Option \"--cluster-iface\" is set, but \"--cluster-node-name\" is not set and environment variable \"HOSTNAME\" doesn't exist.\n");
+			ret = EINVAL;
+		}
 	}
 
 	{

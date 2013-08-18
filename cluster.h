@@ -23,6 +23,9 @@ extern int cluster_deinit();
 extern int cluster_lock(const char *fpath);
 extern int cluster_lock_byindexes();
 extern int cluster_unlock_all();
+extern int cluster_capture(const char *fpath);
 
+extern int cluster_modtime_update(const char *dirpath);
+extern int cluster_initialsync();
 
 

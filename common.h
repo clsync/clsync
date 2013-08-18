@@ -86,6 +86,7 @@ enum flags_enum {
 	CLUSTERIFACE	= 'c',
 	CLUSTERMCASTIPADDR = 'm',
 	CLUSTERTIMEOUT	= 'W',
+	CLUSTERNODENAME = 'n',
 	HELP		= 'h',
 	DELAY		= 't',
 	BFILEDELAY	= 'T',
@@ -97,6 +98,7 @@ enum flags_enum {
 	RSYNC		= 'R',
 	RSYNCINCLIMIT	= 'L',
 	RSYNC_PREFERINCLUDE= 'I',
+	IGNOREEXITCODE	= 'x',
 	DONTUNLINK	= 'U',
 	INITFULL	= 'F',
 	SYNCTIMEOUT	= 'k',
@@ -156,6 +158,7 @@ struct options {
 	char *destdirwslash;
 	char *cluster_iface;
 	char *cluster_mcastipaddr;
+	char *cluster_nodename;
 	size_t watchdirlen;
 	size_t destdirlen;
 	size_t watchdirsize;
@@ -174,6 +177,7 @@ struct options {
 	unsigned int synctimeout;
 	unsigned int cluster_timeout;
 	sigset_t *sigset;
+	char isignoredexitcode[(1<<8)];
 };
 typedef struct options options_t;
 

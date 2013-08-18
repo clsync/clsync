@@ -28,6 +28,9 @@
 pthread_t pthread_sighandler;
 
 static inline int _exitcode_process(options_t *options_p, int exitcode) {
+	if(options_p->isignoredexitcode[(unsigned char)exitcode])
+		return 0;
+
 	if(exitcode && !((options_p->flags[RSYNC]>=2) && (exitcode == 24))) {
 		printf_e("Error: Got non-zero exitcode %i from __sync_exec().\n", exitcode);
 		return exitcode;
@@ -648,6 +651,9 @@ static int sync_queuesync(const char *fpath, eventinfo_t *evinfo, options_t *opt
 	eventinfo_t *evinfo_dup = (eventinfo_t *)xmalloc(sizeof(*evinfo_dup));
 	memcpy(evinfo_dup, evinfo, sizeof(*evinfo_dup));
 
+	if(options_p->cluster_iface)
+		cluster_capture(fpath);
+
 	return indexes_queueevent(indexes_p, strdup(fpath), evinfo_dup, queue_id);
 }
 
@@ -759,6 +765,11 @@ int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, index
 int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_p, initsync_t initsync) {
 	printf_ddd("Debug3: sync_initialsync(\"%s\", options_p, indexes_p, %i)\n", path, initsync);
 
+	if(initsync == INITSYNC_FULL) {
+		if(options_p->cluster_iface)
+			cluster_initialsync();
+	}
+
 	if(!options_p->flags[RSYNC]) {
 		// non-RSYNC case:
 		printf_ddd("Debug3: sync_initialsync(): syncing \"%s\"\n", path);
@@ -815,6 +826,9 @@ int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, co
 		printf_d("Debug: \"%s\" is already marked (wd: %i). Skipping.\n", path, wd);
 		return wd;
 	}
+
+	if(options_p->cluster_iface)
+		cluster_modtime_update(path);
 
 	switch(options_p->notifyengine) {
 #ifdef FANOTIFY_SUPPORT
@@ -1650,11 +1664,16 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 		char *end = &buf[r];
 		while(ptr < end) {
 			struct inotify_event *event = (struct inotify_event *)ptr;
+
+			// Removing stale wd-s
+
 			if(event->mask & IN_IGNORED) {
 				printf_dd("Debug2: Cleaning up info about watch descriptor %i.\n", event->wd);
 				indexes_remove_bywd(indexes_p, event->wd);
 				SYNC_INOTIFY_HANDLE_CONTINUE;
 			}
+
+			// Getting path
 
 			char *fpath = indexes_wd2fpath(indexes_p, event->wd);
 
@@ -1664,11 +1683,15 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 			}
 			printf_dd("Debug2: Event %p on \"%s\" (wd: %i; fpath: \"%s\").\n", (void *)(long)event->mask, event->len>0?event->name:"", event->wd, fpath);
 
+			// Getting full path
+
 			char *fpathfull = xmalloc(strlen(fpath) + event->len + 2);
 			if(event->len>0)
 				sprintf(fpathfull, "%s/%s", fpath, event->name);
 			else
 				sprintf(fpathfull, "%s", fpath);
+
+			// Getting infomation about file/dir/etc
 
 			struct stat64 lstat;
 			mode_t st_mode;
@@ -1685,6 +1708,8 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 				st_size = lstat.st_size;
 			}
 
+			// Checking by filter rules
+
 			ruleaction_t ruleaction = rules_check(fpathfull, st_mode, options_p->rules);
 
 			if(ruleaction == RULE_REJECT) {
@@ -1692,8 +1717,12 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 				SYNC_INOTIFY_HANDLE_CONTINUE;
 			}
 
+			// Handling different cases
+
 			if(event->mask & IN_ISDIR) {
 				if(event->mask & (IN_CREATE|IN_MOVED_TO)) {			// Appeared
+					// If new dir is created
+
 					int ret;
 
 					ret = sync_mark_walk(inotify_d, options_p, fpathfull, indexes_p);
@@ -1717,6 +1746,8 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 				}
 			}
 
+			// Locally queueing the event
+
 			int isnew = 0;
 			eventinfo_t *evinfo = indexes_fpath2ei(indexes_p, fpathfull);
 			if(evinfo == NULL) {
@@ -1736,6 +1767,8 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 
 			SYNC_INOTIFY_HANDLE_CONTINUE;
 		}
+
+		// Globally queueing captured events
 
 		struct dosync_arg dosync_arg;
 		dosync_arg.options_p 	= options_p;
