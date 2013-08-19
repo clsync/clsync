@@ -56,7 +56,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-
+#include <libgen.h>
 
 #include "config.h"
 
@@ -94,6 +94,9 @@ enum flags_enum {
 	CLUSTERMCASTIPPORT = 'P',
 	CLUSTERTIMEOUT	= 'W',
 	CLUSTERNODENAME = 'n',
+	CLUSTERHDLMIN	= 'o',
+	CLUSTERHDLMAX	= 'O',
+	CLUSTERSDLMAX	= 's',
 	HELP		= 'h',
 	DELAY		= 't',
 	BFILEDELAY	= 'T',
@@ -168,12 +171,16 @@ struct options {
 	char *cluster_nodename;
 	uint32_t cluster_nodename_len;
 	uint16_t cluster_mcastipport;
+	uint16_t cluster_hash_dl_min;
+	uint16_t cluster_hash_dl_max;
+	uint16_t cluster_scan_dl_max;
 	size_t watchdirlen;
 	size_t destdirlen;
 	size_t watchdirsize;
 	size_t destdirsize;
 	size_t watchdirwslashsize;
 	size_t destdirwslashsize;
+	short int watchdir_dirlevel;
 	char *actfpath;
 	char *rulfpath;
 	char *listoutdir;

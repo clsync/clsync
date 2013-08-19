@@ -22,6 +22,7 @@
 #include "sync.h"
 #include "malloc.h"
 #include "cluster.h"
+#include "fileutils.h"
 
 #define VERSION_MAJ	0
 #define VERSION_MIN	0
@@ -36,6 +37,9 @@ static struct option long_options[] =
 	{"cluster-port",	required_argument,	NULL,	CLUSTERMCASTIPPORT},	// Not implemented, yet
 	{"cluster-timeout",	required_argument,	NULL,	CLUSTERTIMEOUT},	// Not implemented, yet
 	{"cluster-node-name",	required_argument,	NULL,	CLUSTERNODENAME},	// Not implemented, yet
+	{"cluster-hash-dl-min",	required_argument,	NULL,	CLUSTERHDLMIN},
+	{"cluster-hash-dl-max",	required_argument,	NULL,	CLUSTERHDLMAX},
+	{"cluster-scan-dl-max",	required_argument,	NULL,	CLUSTERSDLMAX},
 	{"collectdelay",	required_argument,	NULL,	DELAY},
 	{"syncdelay",		required_argument,	NULL,	SYNCDELAY},
 	{"outlistsdir",		required_argument,	NULL,	OUTLISTSDIR},
@@ -81,9 +85,9 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 	int option_index = 0;
 	while(1) {
 #ifdef FANOTIFY_SUPPORT
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:m:c:W:n:x:f", long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:m:c:W:n:x:o:O:s:f", long_options, &option_index);
 #else
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:m:c:W:n:x:",  long_options, &option_index);
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:m:c:W:n:x:o:O:s:",  long_options, &option_index);
 #endif
 	
 		if (c == -1) break;
@@ -140,6 +144,15 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 				break;
 			case 'V':
 				version();
+				break;
+			case CLUSTERHDLMIN:
+				options_p->cluster_hash_dl_min = (uint16_t)atoi(optarg);
+				break;
+			case CLUSTERHDLMAX:
+				options_p->cluster_hash_dl_max = (uint16_t)atoi(optarg);
+				break;
+			case CLUSTERSDLMAX:
+				options_p->cluster_scan_dl_max = (uint16_t)atoi(optarg);
 				break;
 			default:
 				options_p->flags[c]++;
@@ -316,7 +329,6 @@ int main(int argc, char *argv[]) {
 	struct options options;
 	memset(&options, 0, sizeof(options));
 	int ret = 0, nret;
-	struct stat64 stat64={0};
 	options.notifyengine 			   = DEFAULT_NOTIFYENGINE;
 	options.syncdelay 			   = DEFAULT_SYNCDELAY;
 	options._queues[QUEUE_NORMAL].collectdelay = DEFAULT_COLLECTDELAY;
@@ -326,6 +338,9 @@ int main(int argc, char *argv[]) {
 	options.label				   = DEFAULT_LABEL;
 	options.rsyncinclimit			   = DEFAULT_RSYNC_INCLUDELINESLIMIT;
 	options.synctimeout			   = DEFAULT_SYNCTIMEOUT;
+	options.cluster_hash_dl_min		   = DEFAULT_CLUSTERHDLMIN;
+	options.cluster_hash_dl_max		   = DEFAULT_CLUSTERHDLMAX;
+	options.cluster_scan_dl_max		   = DEFAULT_CLUSTERSDLMAX;
 
 	parse_arguments(argc, argv, &options);
 	out_init(options.flags);
@@ -341,6 +356,16 @@ int main(int argc, char *argv[]) {
 
 	if((options.cluster_iface == NULL) && ((options.cluster_mcastipaddr != NULL) || (options.cluster_nodename != NULL) || (options.cluster_timeout) || (options.cluster_mcastipport))) {
 		printf_e("Error: Options \"--cluster-ip\", \"--cluster-node-name\", \"--cluster_timeout\" and/or \"cluster_ipport\" cannot be used without \"--cluster-iface\".\n");
+		ret = EINVAL;
+	}
+
+	if(options.cluster_hash_dl_min > options.cluster_hash_dl_max) {
+		printf_e("Error: \"--cluster-hash-dl-min\" cannot be greater than \"--cluster-hash-dl-max\".\n");
+		ret = EINVAL;
+	}
+
+	if(options.cluster_hash_dl_max > options.cluster_scan_dl_max) {
+		printf_e("Error: \"--cluster-hash-dl-max\" cannot be greater than \"--cluster-scan-dl-max\".\n");
 		ret = EINVAL;
 	}
 
@@ -369,42 +394,64 @@ int main(int argc, char *argv[]) {
 	}
 
 	{
-		size_t size = options.watchdirlen + 2;
-		char *newwatchdir = xmalloc(size);
-		memcpy( newwatchdir, options.watchdir, options.watchdirlen);
+		char *rwatchdir = realpath(options.watchdir, NULL);
+		if(rwatchdir == NULL) {
+			printf_e("Error: main(): Got error while realpath() on \"%s\": %s (errno: %i) [#0].\n", options.watchdir, strerror(errno), errno);
+			ret = errno;
+		}
 
-		if(options.watchdir[options.watchdirlen - 1] == '/') {
-			options.watchdirsize   = size;
-			options.watchdirwslash = options.watchdir;
-			options.watchdir       = newwatchdir;
-			options.watchdirlen--;
-			newwatchdir[options.watchdirlen] = 0x00;
-		} else {
+		if(!ret) {
+			options.watchdir     = rwatchdir;
+			options.watchdirlen  = strlen(options.watchdir);
+			options.watchdirsize = options.watchdirlen;
+
+			if(options.watchdirlen == 1) {
+				printf_e("Error: watchdir is supposed to be not \"/\".\n");
+				ret = EINVAL;
+			}
+		}
+
+		if(!ret) {
+			size_t size = options.watchdirlen + 2;
+			char *newwatchdir = xmalloc(size);
+			memcpy( newwatchdir, options.watchdir, options.watchdirlen);
 			options.watchdirwslash     = newwatchdir;
 			options.watchdirwslashsize = size;
 			memcpy(&options.watchdirwslash[options.watchdirlen], "/", 2);
+
+			options.watchdir_dirlevel  = fileutils_calcdirlevel(options.watchdirwslash);
 		}
 	}
 
 	if(options.destdir != NULL) {
-		size_t size = options.destdirlen  + 2;
-		char *newdestdir  = xmalloc(size);
-		memcpy( newdestdir,  options.destdir,  options.destdirlen);
+		char *rdestdir = realpath(options.destdir, NULL);
+		if(rdestdir == NULL) {
+			printf_e("Error: main(): Got error while realpath() on \"%s\": %s (errno: %i) [#1].\n", options.destdir, strerror(errno), errno);
+			ret = errno;
+		}
 
-		if(options.destdir[options.destdirlen - 1] == '/') {
-			options.destdirsize   = size;
-			options.destdirwslash = options.destdir;
-			options.destdir       = newdestdir;
-			options.destdirlen--;
-			newdestdir[options.destdirlen] = 0x00;
-		} else {
+		if(!ret) {
+			options.destdir     = rdestdir;
+			options.destdirlen  = strlen(options.destdir);
+			options.destdirsize = options.destdirlen;
+
+			if(options.destdirlen == 1) {
+				printf_e("Error: destdir is supposed to be not \"/\".\n");
+				ret = EINVAL;
+			}
+		}
+
+		if(!ret) {
+			size_t size = options.destdirlen  + 2;
+			char *newdestdir  = xmalloc(size);
+			memcpy( newdestdir,  options.destdir,  options.destdirlen);
 			options.destdirwslash     = newdestdir;
 			options.destdirwslashsize = size;
 			memcpy(&options.destdirwslash[options.destdirlen], "/", 2);
 		}
 	}
 
-	printf_ddd("Debug3: %s [%s] (%p) -> %s [%s]\n", options.watchdir, options.watchdirwslash, options.watchdirwslash, options.destdir?options.destdir:"", options.destdirwslash?options.destdirwslash:"");
+	printf_d("Debug: %s [%s] (%p) -> %s [%s]\n", options.watchdir, options.watchdirwslash, options.watchdirwslash, options.destdir?options.destdir:"", options.destdirwslash?options.destdirwslash:"");
 
 	if(options.flags[RSYNC] && (options.listoutdir == NULL)) {
 		printf_e("Error: Option \"--rsync\" cannot be used without \"--outlistsdir\".\n");
@@ -427,6 +474,8 @@ int main(int argc, char *argv[]) {
 		ret = errno;
 	}
 
+#ifdef VERYPARANOID
+	struct stat64 stat64={0};
 	lstat64(options.watchdir, &stat64);
 	if((stat64.st_mode & S_IFMT) == S_IFLNK) {
 		// TODO: Fix the problem with symlinks as watch dir.
@@ -438,6 +487,7 @@ int main(int argc, char *argv[]) {
 		printf_e("Error: Watch dir cannot be symlink, but \"%s\" is a symlink.\n", options.watchdir);
 		ret = EINVAL;
 	}
+#endif
 
 	nret=main_rehash(&options);
 	if(nret)

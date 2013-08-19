@@ -23,6 +23,9 @@
     Cluster technologies are almost always very difficult. So I'll try to
     fill this code with comments. Enjoy ;)
 
+    Also you can ask me directly by e-mail or IRC, if something seems too
+    hard.
+
                                                            -- 0x8E30679C
  */
 
@@ -374,27 +377,57 @@ int cluster_loop() {
 /**
  * @brief 			Updating information about modification time of a directory.
  * 
- * @param[in] 	dirpath		Path to the directory
+ * @param[in]	path		Canonized path to updated file/dir
+ * @param[in]	dirlevel	Directory level provided by fts (man 3 fts)
+ * @param[in]	st_mode		st_mode value to detect is it directory or not (S_IFDIR or not)
  * 
  * @retval	zero 		Successfully initialized
  * @retval	non-zero 	Got error, while initializing
  * 
  */
 
-int cluster_modtime_update(const char *dirpath) {
+int cluster_modtime_update(const char *path, short int dirlevel, mode_t st_mode) {
 	// "modtime" is incorrent name-part of function. Actually it updates "change time" (man 2 lstat64).
 	int ret;
 
-	// Getting directory information (including "change time" aka "st_ctime")
+	// Getting directory level (depth)
+	short int dirlevel_rel = dirlevel - options_p->watchdir_dirlevel;
+
+	if((st_mode & S_IFMT) == S_IFDIR)
+		dirlevel_rel++;
+
+	// Don't remembering information about directories with level beyond the limits
+	if((dirlevel_rel > options_p->cluster_scan_dl_max) || (dirlevel_rel < options_p->cluster_hash_dl_min))
+		return 0;
+
+
+	// Getting directory/file-'s information (including "change time" aka "st_ctime")
 	struct stat64 stat64;
-	ret=lstat64(dirpath, &stat64);
+	ret=lstat64(path, &stat64);
 	if(ret) {
-		printf_e("Error: cluster_modtime_update() cannot lstat64() on \"%s\": %s (errno: %i)\n", dirpath, strerror(errno), errno);
+		printf_e("Error: cluster_modtime_update() cannot lstat64() on \"%s\": %s (errno: %i)\n", path, strerror(errno), errno);
 		return errno;
 	}
 
+	// Getting absolute directory path
+	const char *dirpath;
+	if((st_mode & S_IFMT) == S_IFDIR) {
+		dirpath = path;
+	} else {
+		char *path_dup = strdup(path);
+		dirpath = (const char *)dirname(path_dup);
+		free(path_dup);
+	}
+
+	// Getting relative directory path
+	size_t  dirpath_len   = strlen(dirpath);
+	char   *dirpath_rel_p = xmalloc(dirpath_len+1);
+	char   *dirpath_rel   = dirpath_rel_p;
+
+	memcpy(dirpath_rel, &dirpath[options_p->watchdirlen], dirpath_len+1 - options_p->watchdirlen);
+
 	// Updating "st_ctime" information. g_hash_table_replace() will replace existent information about the directory or create it if it doesn't exist.
-	g_hash_table_replace(nodeinfo_my->modtime_ht, strdup(dirpath), GINT_TO_POINTER(stat64.st_ctime));
+	g_hash_table_replace(nodeinfo_my->modtime_ht, strdup(dirpath_rel), GINT_TO_POINTER(stat64.st_ctime));
 
 	// Why I'm using "st_ctime" instead of "st_mtime"? Because "st_ctime" also updates on updating inode information.
 	

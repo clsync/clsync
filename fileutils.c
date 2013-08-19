@@ -67,7 +67,7 @@ char *fd2fpath_malloc(int fd) {
  * 
  */
 
-int fileutils_copy(char *path_from, char *path_to) {
+int fileutils_copy(const char *path_from, const char *path_to) {
 	char buf[BUFSIZ];
 	FILE *from, *to;
 
@@ -111,4 +111,45 @@ int fileutils_copy(char *path_from, char *path_to) {
 
 	return 0;
 }
+
+
+/**
+ * @brief 				Calculates directory level of a canonized path (actually it just counts "/"-s)
+ * 
+ * @param[in] 	path 			Canonized path (with realpath())
+ *
+ * @retval	zero or prositive	Direcory level
+ * @retval	negative 		Got error, while calculation. Error-code is placed to errno.
+ * 
+ */
+
+short int fileutils_calcdirlevel(const char *path) {
+	short int dirlevel = 0;
+	const char *ptr = path;
+
+	if(path == NULL) {
+		printf_e("Error: fileutils_calcdirlevel(): path is NULL.\n");
+		errno=EINVAL;
+		return -1;
+	}
+
+	if(*path == 0) {
+		printf_e("Error: fileutils_calcdirlevel(): path has zero length.\n");
+		errno=EINVAL;
+		return -2;
+	}
+
+	if(*path != '/') {
+		printf_e("Error: fileutils_calcdirlevel(): path \"%s\" is not canonized.\n", path);
+		errno=EINVAL;
+		return -3;
+	}
+
+	while(*(ptr++))
+		if(*ptr == '/')
+			dirlevel++;
+
+	return dirlevel;
+}
+
 

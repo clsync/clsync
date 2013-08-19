@@ -827,12 +827,6 @@ int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, co
 		return wd;
 	}
 
-	if(options_p->cluster_iface) {
-		int ret=cluster_modtime_update(path);
-		if(ret) printf_e("Error: sync_notify_mark() cannot cluster_modtime_update(): %s (errno %i)\n", strerror(ret), ret);
-		return ret;
-	}
-
 	switch(options_p->notifyengine) {
 #ifdef FANOTIFY_SUPPORT
 		case NE_FANOTIFY: {
@@ -875,6 +869,15 @@ int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, co
 	return wd;
 }
 
+static inline int sync_mark_walk_cluster_modtime_update(options_t *options_p, const char *path, short int dirlevel, mode_t st_mode) {
+	if(options_p->cluster_iface) {
+		int ret=cluster_modtime_update(path, dirlevel, st_mode);
+		if(ret) printf_e("Error: sync_mark_walk() cannot cluster_modtime_update(): %s (errno %i)\n", strerror(ret), ret);
+		return ret;
+	}
+	return 0;
+}
+
 int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, indexes_t *indexes_p) {
 	const char *rootpaths[] = {dirpath, NULL};
 	FTS *tree;
@@ -891,19 +894,26 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 
 	FTSENT *node;
 	while((node = fts_read(tree))) {
+		int ret;
 		printf_dd("Debug3: walking: \"%s\" (depth %u): fts_info == %i\n", node->fts_path, node->fts_level, node->fts_info);
+
 		switch(node->fts_info) {
 			// Duplicates:
 			case FTS_DP:
+				continue;
 			case FTS_DEFAULT:
 			case FTS_SL:
 			case FTS_SLNONE:
 			case FTS_F:
 			case FTS_NSOK:
+				if((ret=sync_mark_walk_cluster_modtime_update(options_p, node->fts_path, node->fts_level, S_IFREG)))
+					return ret;
 				continue;
 			// To mark:
 			case FTS_D:
 			case FTS_DOT:
+				if((ret=sync_mark_walk_cluster_modtime_update(options_p, node->fts_path, node->fts_level, S_IFDIR)))
+					return ret;
 				break;
 			// Error cases:
 			case FTS_ERR:

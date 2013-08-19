@@ -19,5 +19,6 @@
 
 extern char *fd2fpath_malloc(int fd);
 
-extern int fileutils_copy(char *path_from, char *path_to);
+extern int fileutils_copy(const char *path_from, const char *path_to);
+extern short int fileutils_calcdirlevel(const char *path);
 
