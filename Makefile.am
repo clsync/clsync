@@ -6,9 +6,12 @@ main.o: revision.h
 
 man_MANS = man/man1/clsync.1
 
-doc_DATA = CONTRIB DEVELOPING LICENSE README.md TODO		\
- examples/clsync-actionscript.sh examples/clsync-start0.sh	\
- examples/clsync-start1.sh
+doc_DATA = CONTRIB DEVELOPING LICENSE README.md TODO
+
+exampledir=$(docdir)/examples
+
+example_DATA = examples/clsync-actionscript.sh		\
+ examples/clsync-start0.sh examples/clsync-start1.sh
 
 revision.h:
 	(echo -n '#define REVISION "'; [ -d .git ] && \
