@@ -506,7 +506,7 @@ int main(int argc, char *argv[]) {
 			if(st.st_mode & (S_IRWXG|S_IRWXO)) {
 #ifdef PARANOID
 				printf_e("Error: Insecure: Others have access to directory \"%s\". Exit.\n", options.listoutdir);
-				return EACCES;
+				ret = EACCES;
 #else
 				printf_e("Warning: Insecure: Others have access to directory \"%s\".\n", options.listoutdir);
 #endif
