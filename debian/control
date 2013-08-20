@@ -2,7 +2,8 @@ Source: clsync
 Section: admin
 Priority: optional
 Maintainer: Artyom A Anikeev <anikeev@ut.mephi.ru>
-Build-Depends: debhelper (>= 8.0.0), libglib2.0-dev (>= 2.0.0)
+Build-Depends: debhelper (>= 8.0.0), libglib2.0-dev (>= 2.0.0),
+	       dh-autoreconf
 Standards-Version: 3.9.4
 Homepage: http://ut.mephi.ru/oss
 Vcs-Git: git://git.mephi.ru/clsync
