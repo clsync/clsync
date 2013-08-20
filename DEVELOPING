@@ -7,7 +7,7 @@ with "man ./man/man1/clsync.1".
 
 After that, I recommend you to run command "make doc" and look at images 
 "./doc/html/main_8c_a0ddf1224851353fc92bfbff6f499fa97_cgraph.png" and
-"./doc/html/sync_8c_a6ca5ff1b7289deddcc1f23d9383982e6_icgraph.png"
+"./doc/html/sync_8c_a320ae70a547c80b9b3ae897f955b2862_icgraph.png"
 
 The syncing is proceeding on "exec_argv()" on this image. ;)
 
@@ -75,23 +75,4 @@ external syncer process.
 
 The external syncer process is supposed to be rsync or any script that is able
 to handle with the task.
-
-
-
-Traces:
-
-syncing:
-
-main() -> 
-sync_run() -> 
-sync_notify_loop() -> 
-sync_inotify_loop() ->
-sync_idle() -> 
-sync_idle_dosync_collectedevents() -> 
-sync_idle_dosync_collectedevents_commitpart() -> 
-SYNC_EXEC() ->
-(sync_exec_thread|sync_exec)() -> 
-exec_argv() ->
-execvp()
-
 
