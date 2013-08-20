@@ -119,7 +119,7 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 			case CLUSTERMCASTIPPORT:
 				options_p->cluster_mcastipport = (uint16_t)atoi(optarg);
 				break;
-			case CLUSTERTIMEOUT
+			case CLUSTERTIMEOUT:
 				options_p->cluster_timeout     = (unsigned int)atol(optarg);
 				break;
 			case CLUSTERNODENAME:
