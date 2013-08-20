@@ -14,3 +14,6 @@ revision.h:
 	(echo -n '#define REVISION "'; [ -d .git ] && \
 	(echo -n '.'$$(( $$(git log 2>/dev/null | grep -c ^commit | tr -d "\n") - 137 )) ) \
 	|| echo -n '-release'; echo '"') > $@
+
+doc:
+	doxygen .doxygen
