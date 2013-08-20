@@ -59,6 +59,9 @@
 #include <libgen.h>
 
 #include "config.h"
+#ifdef HAVE_CONFIG_H
+#include "autoconfig.h"
+#endif
 
 #ifndef MIN
 #define MIN(a,b) ((a)>(b)?(b):(a))
