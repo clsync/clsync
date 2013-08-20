@@ -48,7 +48,7 @@ debug: updaterevision
 	$(CC) $(NORMSYSTEMCFLAGS) -DFANOTIFY_SUPPORT $(DEBUGCFLAGS) $(INC) $(LDFLAGS) \
 	$(shell ls *.c | grep -v "test.c") $(LIBS) -o $(binarydebug)
 
-test: updaterevision
+unittest: updaterevision
 	$(CC) $(NORMSYSTEMCFLAGS) -DFANOTIFY_SUPPORT $(DEBUGCFLAGS) $(INC) $(LDFLAGS) \
 	$(shell ls *.c | grep -v "main.c") $(LIBS) -o $(binarytest)
 
