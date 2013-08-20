@@ -63,7 +63,7 @@ updaterevision:
 
 clean:
 	rm -f $(binary) $(binarydebug) $(binarytest) $(objs) revision.h
-	rm -rf example/testdir example/rules doc
+	rm -rf examples/testdir examples/rules doc
 
 distclean: clean
 
@@ -74,7 +74,7 @@ install:
 	install -d "$(INSTDIR)/bin" "$(INSTDIR)/share/man/man1"
 ifeq ($(EXAMPLES),yes)
 	install -d "$(INSTDIR)/share/doc/clsync"
-	cp -Rp example "$(INSTDIR)/share/doc/clsync"
+	cp -Rp examples "$(INSTDIR)/share/doc/clsync"
 endif
 ifeq ($(STRIP_BINARY),yes)
 	strip --strip-unneeded -R .comment -R .GCC.command.line -R .note.gnu.gold-version clsync
