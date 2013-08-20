@@ -2,6 +2,7 @@
 DESTDIR ?= 
 PREFIX  ?= /usr
 COMPRESS_MAN ?= yes
+STRIP_BINARY ?= yes
 
 CSECFLAGS ?= -fstack-protector-all -Wall --param ssp-buffer-size=4 -D_FORTIFY_SOURCE=2 -fstack-check -DPARANOID
 CFLAGS ?= -pipe -O2
@@ -72,7 +73,10 @@ doc:
 install:
 	mkdir -p "$(INSTDIR)/bin" "$(INSTDIR)/share/man/man1" "$(INSTDIR)/share/doc/clsync"
 	cp -Rp example "$(INSTDIR)/share/doc/clsync"
-	install -m 755 -s clsync "$(INSTDIR)"/bin/
+ifeq ($(STRIP_BINARY),yes)
+	strip --strip-unneeded -R .comment -R .GCC.command.line -R .note.gnu.gold-version clsync
+endif
+	install -m 755 clsync "$(INSTDIR)"/bin/
 	install -m 644 man/man1/clsync.1 "$(INSTDIR)"/share/man/man1/
 ifeq ($(COMPRESS_MAN),yes)
 	rm -f "$(INSTDIR)"/share/man/man1/clsync.1.gz
