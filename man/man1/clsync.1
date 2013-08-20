@@ -157,7 +157,7 @@ scripts of another nodes (see
 .B ACTION SCRIPT
 ).
 
-Default value is $(uname -n).
+Default value is $(uname \-n).
 .RE
 
 .PP
@@ -277,7 +277,7 @@ as an error. You can set multiple ignores by passing this option multiple
 times.
 
 Recommended values for rsync case are "23" and "24".
-["-x 23 -x 24"]
+["\-x 23 \-x 24"]
 .RE
 
 .PP
@@ -531,7 +531,7 @@ As can be noticed, in the first four cases clsync's
 are passed (or can be passed).
 .I nodes
 is comma-separated list of cluster nodes names where to sync to (see
-.I --cluster-node-name
+.I \-\-cluster-node-name
 )
 
 The listfile by path
@@ -588,7 +588,7 @@ Probably there's too huge exclude list is passed to rsync. This can happened
 if you're excluding with regex in clsync's rules a lot of thousands files.
 They will be passed to rsync's exclude list one by one.
 
-To diagnose it, you can use "-U" option and look into 
+To diagnose it, you can use "\-U" option and look into 
 .I rsync\-exclude\-listpath
 file (see
 .B ACTION SCRIPT
@@ -600,8 +600,8 @@ To prevent this, it's recommended to write such rules for rsync directly
 (not via clsync).
 
 For example, often problem is with PHP's session files. You shouldn't exclude
-them in clsync's rules with "-f/sess_.*", but you should exclude it in rsync
-directly (e.g with «--exclude "sess_*"»).
+them in clsync's rules with "\-f/sess_.*", but you should exclude it in rsync
+directly (e.g with «\-\-exclude "sess_*"»).
 .RE
 
 The following diagnostics may be issued on stderr:
