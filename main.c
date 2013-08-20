@@ -61,7 +61,7 @@ static struct option long_options[] =
 	{"fanotify",		no_argument,		NULL,	FANOTIFY},
 #endif
 	{"inotify",		no_argument,		NULL,	INOTIFY},
-	{"label",		no_argument,		NULL,	LABEL},
+	{"label",		required_argument,	NULL,	LABEL},
 	{"help",		no_argument,		NULL,	HELP},
 	{"version",		no_argument,		NULL,	VERSION},
 	{NULL,			0,			NULL,	0}
