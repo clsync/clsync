@@ -486,6 +486,27 @@ int main(int argc, char *argv[]) {
 	if(options.flags[DEBUG])
 		debug_print_flags();
 
+	if(options.listoutdir != NULL) {
+		struct stat st={0};
+		errno = 0;
+		if(stat(options.listoutdir, &st)) {
+			if(errno == ENOENT) {
+				printf_e("Warning: Directory \"%s\" doesn't exist. Creating it.\n", options.listoutdir);
+				errno = 0;
+				if(mkdir(options.listoutdir, S_IRWXU)) {
+					printf_e("Error: main(): Cannot create directory \"%s\": %s (%i)", options.listoutdir, strerror(errno), errno);
+					ret = errno;
+				}
+			} else {
+				printf_e("Error: main(): Got error while stat() on \"%s\": %s (errno: %i).\n", options.listoutdir, strerror(errno), errno);
+				ret = errno;
+			}
+		}
+		if(!errno)
+			if(st.st_mode & (S_IRWXG|S_IRWXO))
+				printf_e("Warning: Insecure: Others have access to directory \"%s\".\n", options.listoutdir);
+	}
+
 #ifdef FANOTIFY_SUPPORT
 	if(options.notifyengine != NE_INOTIFY) {
 		printf_e("Warning: fanotify is not fully supported, yet!\n");
@@ -498,15 +519,21 @@ int main(int argc, char *argv[]) {
 	}
 
 #ifdef VERYPARANOID
-	struct stat64 stat64={0};
-	lstat64(options.watchdir, &stat64);
-	if((stat64.st_mode & S_IFMT) == S_IFLNK) {
-		// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
-		// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
-		// it disables filters, because exclude-list will be empty.
+	{
+		struct stat64 stat64={0};
+		if(lstat64(options.watchdir, &stat64)) {
+			printf_e("Error: main(): Cannot lstat64() on \"%s\": %s (errno: %i)\n", options.watchdir, strerror(errno), errno);
+			ret = errno;
+		} else {
+			if((stat64.st_mode & S_IFMT) == S_IFLNK) {
+				// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
+				// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
+				// it disables filters, because exclude-list will be empty.
 
-		printf_e("Error: Watch dir cannot be symlink, but \"%s\" is a symlink.\n", options.watchdir);
-		ret = EINVAL;
+				printf_e("Error: Watch dir cannot be symlink, but \"%s\" is a symlink.\n", options.watchdir);
+				ret = EINVAL;
+			}
+		}
 	}
 #endif
 
