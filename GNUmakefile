@@ -3,6 +3,7 @@ DESTDIR ?=
 PREFIX  ?= /usr
 COMPRESS_MAN ?= yes
 STRIP_BINARY ?= yes
+EXAMPLES ?= yes
 
 CSECFLAGS ?= -fstack-protector-all -Wall --param ssp-buffer-size=4 -D_FORTIFY_SOURCE=2 -fstack-check -DPARANOID
 CFLAGS ?= -pipe -O2
@@ -70,8 +71,11 @@ doc:
 	doxygen .doxygen
 
 install:
-	mkdir -p "$(INSTDIR)/bin" "$(INSTDIR)/share/man/man1" "$(INSTDIR)/share/doc/clsync"
+	install -d "$(INSTDIR)/bin" "$(INSTDIR)/share/man/man1"
+ifeq ($(EXAMPLES),yes)
+	install -d "$(INSTDIR)/share/doc/clsync"
 	cp -Rp example "$(INSTDIR)/share/doc/clsync"
+endif
 ifeq ($(STRIP_BINARY),yes)
 	strip --strip-unneeded -R .comment -R .GCC.command.line -R .note.gnu.gold-version clsync
 endif
