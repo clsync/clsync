@@ -129,7 +129,7 @@ enum flags_enum {
 #endif
 	INOTIFY		= 'i',
 	LABEL		= 'l',
-	VERSION		= 'V',
+	SHOW_VERSION	= 'V',
 };
 typedef enum flags_enum flags_t;
 
