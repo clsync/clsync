@@ -215,7 +215,7 @@ int cluster_send(clustercmd_t *clustercmd_p) {
 
 
 /**
- * @brief 			Sends message to another nodes of the cluster and waits for ACK-answers. (with skipping all other packets)
+ * @brief 			(syncop) Sends message to another nodes of the cluster and waits for ACK-answers. (with skipping all other packets)
  * 
  * @param[in]	clustercmd_p	Command structure pointer.
  *
