@@ -67,7 +67,6 @@ clean:
 distclean: clean
 
 doc:
-	mkdir -p doc
 	doxygen .doxygen
 
 install:
