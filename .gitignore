@@ -21,15 +21,15 @@ log*
 from/*
 to/*
 .clsync-list.*
-debian/clsync
-debian/clsync/*
-debian/clsync.debhelper.log
-debian/clsync.substvars
-debian/files
-debian/*.ex
-example/rules
-testdir
-doc
+/debian/clsync
+/debian/clsync/*
+/debian/clsync.debhelper.log
+/debian/clsync.substvars
+/debian/files
+/debian/*.ex
+/examples/rules
+/examples/testdir
+/doc
 
 # autotools build debris
 /.deps/
@@ -49,3 +49,7 @@ Makefile.in
 
 /debian/autoreconf.after
 /debian/autoreconf.before
+/autoscan.log
+/configure.scan
+
+
