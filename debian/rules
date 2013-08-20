@@ -14,5 +14,4 @@
 
 override_dh_auto_install:
 	dh_auto_install
-	-rm --verbose debian/clsync/usr/share/doc/clsync/clsync-*.sh
 	-rm --verbose debian/clsync/usr/share/doc/clsync/LICENSE
