@@ -30,3 +30,19 @@ debian/*.ex
 example/rules
 testdir
 doc
+
+# autotools build debris
+/.deps/
+/aclocal.m4
+/autoconfig.h
+/autoconfig.h.in
+/autom4te.cache/
+/config.log
+/config.status
+/configure
+/depcomp
+/install-sh
+/missing
+/stamp-h1
+Makefile
+Makefile.in
