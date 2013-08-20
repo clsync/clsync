@@ -41,16 +41,20 @@ all: updaterevision $(objs)
 	$(CC) $(NORMSYSTEMCFLAGS) $(CFLAGS) $(INC) $< -c -o $@
 
 debug: updaterevision
-	$(CC) $(NORMSYSTEMCFLAGS) -DFANOTIFY_SUPPORT $(DEBUGCFLAGS) $(INC) $(LDFLAGS) $(shell ls *.c | grep -v "test.c") $(LIBS) -o $(binarydebug)
+	$(CC) $(NORMSYSTEMCFLAGS) -DFANOTIFY_SUPPORT $(DEBUGCFLAGS) $(INC) $(LDFLAGS) \
+	$(shell ls *.c | grep -v "test.c") $(LIBS) -o $(binarydebug)
 
 test: updaterevision
-	$(CC) $(NORMSYSTEMCFLAGS) -DFANOTIFY_SUPPORT $(DEBUGCFLAGS) $(INC) $(LDFLAGS) $(shell ls *.c | grep -v "main.c") $(LIBS) -o $(binarytest)
+	$(CC) $(NORMSYSTEMCFLAGS) -DFANOTIFY_SUPPORT $(DEBUGCFLAGS) $(INC) $(LDFLAGS) \
+	$(shell ls *.c | grep -v "main.c") $(LIBS) -o $(binarytest)
 
 onoldsystem: updaterevision
 	$(CC) $(OLDSYSTEMCFLAGS) $(CFLAGS) $(INC) $(LDFLAGS) *.c $(LIBS) -o $(binary)
 
 updaterevision:
-	(echo -n '#define REVISION "'; [ -d .git ] && (echo -n '.'$$(( $$(git log 2>/dev/null | grep -c ^commit | tr -d "\n") - 137 )) ) || echo -n '-release'; echo '"') > revision.h
+	(echo -n '#define REVISION "'; [ -d .git ] && \
+	(echo -n '.'$$(( $$(git log 2>/dev/null | grep -c ^commit | tr -d "\n") - 137 )) ) \
+	|| echo -n '-release'; echo '"') > revision.h
 	touch main.c
 
 clean:
