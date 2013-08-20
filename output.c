@@ -77,7 +77,7 @@ int debug_log_e(const char *fmt, va_list args) {
 }
 
 int printf_e(const char *fmt, ...) {
-	if(flags[QUITE])
+	if(flags[QUIET])
 		return 0;
 
 	int ret_log, ret_print;
