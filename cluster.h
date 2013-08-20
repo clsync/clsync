@@ -19,9 +19,46 @@
 
 #ifdef CLUSTER_SUPPORT
 
+// Macros for reading messages
+
+#define CLUSTER_RESTDATALEN(clustercmd_p, data_type) \
+	((clustercmd_p)->data_len - sizeof(data_type) + sizeof(char *))
+
+#define CLUSTER_LOOP_EXPECTCMD(clustercmd_p, clustercmd_id, ret) {\
+		/* Exit if error */ \
+		if(ret == -1) { \
+			printf_e("Error: cluster_init(): Got error while cluster_recv(): %s (%i).\n", strerror(errno), errno); \
+			return errno; \
+		}\
+\
+		/* Is that the command we are expecting? Skipping if not. */\
+		if(clustercmd_p->cmd_id != clustercmd_id)\
+			continue;\
+}
+
+// Macros for writing messages
+
+#define CLUSTER_REQMEM(data_type, restdata_len) \
+	(sizeof(clustercmd_t)-1 + sizeof(data_type)-1 + (restdata_len) + 2)
+
+#define CLUSTER_ALLOC(clustercmd_p, data_type, t_data_p, restdata_len, alloc_funct)\
+	clustercmd_t *clustercmd_p = (clustercmd_t *)(alloc_funct)(CLUSTER_REQMEM(data_type, restdata_len));\
+	PARANOIDV(memset(clustercmd_p, 0, CLUSTER_REQMEM(data_type, restdata_len)));\
+	data_type *t_data_p = (data_type *)clustercmd_p->data_p;\
+	(void)t_data_p; /* anti-warning */
+
+#define CLUSTER_ALLOCA(clustercmd_p, data_type, data_p, restdata_len)\
+	CLUSTER_ALLOC(clustercmd_p, data_type, data_p, restdata_len, alloca)
+
+#define CLUSTER_MALLOC(clustercmd_p, data_type, data_p, restdata_len)\
+	CLUSTER_ALLOC(clustercmd_p, data_type, data_p, restdata_len, xmalloc)
+
+// Types
+
 enum nodestatus {
 	NODESTATUS_DOESNTEXIST = 0,
 	NODESTATUS_OFFLINE,
+	NODESTATUS_SEEMSONLINE,
 	NODESTATUS_ONLINE
 };
 typedef enum nodestatus nodestatus_t;
@@ -40,9 +77,10 @@ typedef struct nodeinfo nodeinfo_t;
 
 enum clustercmd_id {
 	CLUSTERCMDID_PING 	= 0,
-	CLUSTERCMDID_REGISTER 	= 1,
-	CLUSTERCMDID_GETMYID	= 2,
-	CLUSTERCMDID_SETID	= 3,
+	CLUSTERCMDID_ACK 	= 1,
+	CLUSTERCMDID_REGISTER 	= 2,
+	CLUSTERCMDID_GETMYID	= 3,
+	CLUSTERCMDID_SETID	= 4,
 };
 typedef enum clustercmd_id clustercmd_id_t;
 
@@ -51,17 +89,31 @@ struct clustercmd {
 	uint8_t   node_id;
 	uint8_t   cmd_id;
 	uint32_t  data_len;
-	void     *data_p;
+	uint32_t  ts;
+	uint32_t  serial;
+	char      data_p[1];
 };
 typedef struct clustercmd clustercmd_t;
 
 struct clustercmd_setiddata {
-	uint8_t  node_id;
-	uint32_t updatets;
-	char    *node_name;
+	uint8_t   node_id;
+	uint32_t  updatets;
+	char      node_name[1];
 };
-
 typedef struct clustercmd_setiddata clustercmd_setiddata_t;
+
+struct clustercmd_register {
+	char     node_name[1];
+};
+typedef struct clustercmd_register clustercmd_register_t;
+
+struct clustercmd_ack {
+	uint8_t  node_id;
+	uint32_t serial;
+};
+typedef struct clustercmd_ack clustercmd_ack_t;
+
+// Externs
 
 extern int cluster_init(options_t *options_p, indexes_t *indexes_p);
 extern int cluster_deinit();

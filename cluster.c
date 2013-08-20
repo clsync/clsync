@@ -50,37 +50,46 @@ nodeinfo_t nodeinfo[MAXNODES]   = {{0}};
 nodeinfo_t *nodeinfo_my		= NULL;
 uint8_t	node_id_my		= NODEID_NOID;
 unsigned int cluster_timeout	= 0;
+uint8_t node_count		= 0;
+uint8_t node_online		= 0;
 
 
 /**
- * @brief 			Sends message to another nodes of the cluster.
+ * @brief 			Changes information about node's status in nodeinfo[] and updates connected information.
  * 
- * @param[in]	clustercmd_p	Command structure pointer.
- *
- * @retval	zero 		Successfully send.
- * @retval	non-zero 	Got error, while sending.
+ * @param[out]	node_id		node_id of the node.
+ * @param[out]	node_status	New node status.
+ * 
+ * @retval	zero		Successful
+ * @retval	non-zero	If got error while changing the status. The error-code is placed into returned value.
  * 
  */
 
-int cluster_send(clustercmd_t *clustercmd_p) {
-	// Paranoid routines
-
-#ifdef PARANOID
-	if(clustercmd_p->cmd_id != CLUSTERCMDID_PING) {
-		if(clustercmd_p->node_id != node_id_my) {
+int node_changestatus(uint8_t node_id, uint8_t node_status) {
+	uint8_t node_status_old = nodeinfo[node_id].status;
 #ifdef VERYPARANOID
-			printf_e("Error: cluster_send(): clustercmd_p->node_id != node_id_my (%i != %i). Exit.\n", clustercmd_p->node_id, node_id_my);
-			return EINVAL;
-#else
-			printf_e("Warning: cluster_send(): clustercmd_p->node_id != node_id_my (%i != %i). Correcting.\n", clustercmd_p->node_id, node_id_my);
-			clustercmd_p->node_id = node_id_my;
-#endif
-		}
+	if(node_status == NODESTATUS_DOESNTEXIST) {
+		printf_e("Error: cluster_recv(): There's something wrong, new node's status for node_id == %i is NODESTATUS_DOESNTEXIST [%i] (was %i)\n", 
+			node_id, NODESTATUS_DOESNTEXIST, node_status_old);
+		return EINVAL;
 	}
 #endif
+	if(node_status == node_status_old)
+		return 0;
 
-	// CODE HERE
+	switch(node_status_old) {
+		case NODESTATUS_DOESNTEXIST:
+			node_count++;
+		case NODESTATUS_OFFLINE:
+			node_online++;
+			break;
+		default:
+			if(node_status == NODESTATUS_OFFLINE)
+				node_online--;
+			break;
+	}
 
+	nodeinfo[node_id].status = node_status;
 
 	return 0;
 }
@@ -88,8 +97,9 @@ int cluster_send(clustercmd_t *clustercmd_p) {
 /**
  * @brief 			Receives message from another nodes of the cluster.
  * 
- * @param[out]	clustercmd_p	Command structure pointer.
- * @param[i/o]	timeout		Pointer to timeout (in milliseconds). Timeout is assumed zero if the pointer is NULL. After waiting the event timeout value will be decreased on wasted time.
+ * @param[i/o]	clustercmd_pp	Pointer to command structure pointer. It will be re-allocated every time when size is not enough.
+ * @param[i/o]	size_p		Pointer to size of allocated memory for command structure (see related to clustercmd_pp). The value of size will be updated on re-allocs.
+ * @param[i/o]	timeout_p	Pointer to timeout (in milliseconds). Timeout is assumed zero if the pointer is NULL. After waiting the event timeout value will be decreased on elapsed time.
  * 
  * @retval	1		If there's new message.
  * @retval	0		If there's no new messages.
@@ -97,22 +107,61 @@ int cluster_send(clustercmd_t *clustercmd_p) {
  * 
  */
 
-int cluster_recv(clustercmd_t *clustercmd_p, unsigned int *timeout_p) {
+int cluster_recv(clustercmd_t **clustercmd_pp, size_t *size_p, unsigned int *timeout_p) {
 	int timeout;
+	size_t size;
+
+#ifdef PARANOID
+	// Checking arguments
+
+	if((clustercmd_pp == NULL) || (size_p == NULL)) {
+		printf_e("Error: cluster_recv() clustercmd_p or size_p is equals to NULL.\n");
+		return EINVAL;
+	}
+
+	if((*clustercmd_pp != NULL) && (*size_p == 0)) {
+		printf_e("Error: cluster_recv(): *clustercmd_pp != NULL && *size_p == 0.\n");
+		return EINVAL;
+	}
+
+	if((*clustercmd_pp == NULL) && (*size_p != 0)) {
+		printf_e("Error: cluster_recv(): *clustercmd_pp == NULL && *size_p != 0.\n");
+		return EINVAL;
+	}
+#endif
 
 	// Getting the timeout
 	timeout = (timeout_p == NULL ? 0 : *timeout_p);
 
+	// Getting size
+	if(*size_p) {
+		size = *size_p;
+	} else {
+		size = BUFSIZ;
+		*clustercmd_pp = (clustercmd_t *)xmalloc(size);
+	}
+
+	// Getting clustercmd_p
+	clustercmd_t *clustercmd_p = *clustercmd_pp;
+
 
 	// CODE HERE
+	if(clustercmd_p->node_id >= MAXNODES) {
+		printf_e("Warning: cluster_recv(): Invalid node_id: %i >= "XTOSTR(MAXNODES)"\n", clustercmd_p->node_id);
+	}
 
+
+	printf_ddd("Debug3: cluster_recv(): Received: {crc32: %u, node_id: %u, cmd_id: %u, data_len: %u, data_ptr: %p}, timeout: %u -> %u\n",
+		clustercmd_p->crc32, clustercmd_p->node_id, clustercmd_p->cmd_id, clustercmd_p->data_len, clustercmd_p->data_p, *timeout_p, timeout);
 
 	// Setting the timeout
 	if(timeout_p != NULL)
 		*timeout_p = timeout;
 
-	// Paranoid routines
+	// Setting the size
+	*size_p = size;
 
+	// Paranoid routines
 #ifdef PARANOID
 	if(clustercmd_p->node_id == node_id_my) {
 #ifdef VERYPARANOID
@@ -127,6 +176,90 @@ int cluster_recv(clustercmd_t *clustercmd_p, unsigned int *timeout_p) {
 #endif
 	return 0;
 }
+
+
+/**
+ * @brief 			Sends message to another nodes of the cluster.
+ * 
+ * @param[in]	clustercmd_p	Command structure pointer.
+ *
+ * @retval	zero 		Successfully send.
+ * @retval	non-zero 	Got error, while sending.
+ * 
+ */
+
+int cluster_send(clustercmd_t *clustercmd_p) {
+	// Paranoid routines
+#ifdef PARANOID
+	if(clustercmd_p->cmd_id != CLUSTERCMDID_PING) {
+		if(clustercmd_p->node_id != node_id_my) {
+#ifdef VERYPARANOID
+			printf_e("Error: cluster_send(): clustercmd_p->node_id != node_id_my (%i != %i). Exit.\n", clustercmd_p->node_id, node_id_my);
+			return EINVAL;
+#else
+			printf_e("Warning: cluster_send(): clustercmd_p->node_id != node_id_my (%i != %i). Correcting.\n", clustercmd_p->node_id, node_id_my);
+			clustercmd_p->node_id = node_id_my;
+#endif
+		}
+	}
+#endif
+
+
+	// CODE HERE
+
+	printf_ddd("Debug3: cluster_send(): Sending: {crc32: %u, node_id: %u, cmd_id: %u, data_len: %u, data_ptr: %p}\n",
+		clustercmd_p->crc32, clustercmd_p->node_id, clustercmd_p->cmd_id, clustercmd_p->data_len, clustercmd_p->data_p);
+
+	return 0;
+}
+
+
+/**
+ * @brief 			Sends message to another nodes of the cluster and waits for ACK-answers. (with skipping all other packets)
+ * 
+ * @param[in]	clustercmd_p	Command structure pointer.
+ *
+ * @retval	zero 		Successfully send.
+ * @retval	non-zero 	Got error, while sending.
+ * 
+ */
+
+int cluster_send_ack(clustercmd_t *clustercmd_p) {
+	uint32_t cmd_serial = clustercmd_p->serial;
+
+	// Sending the message
+	int ret = cluster_send(clustercmd_p);
+	if(ret) {
+		printf_e("Error: cluster_send_ack(): Got error from cluster_send(): %s (errno %i).\n", strerror(ret), ret);
+		return ret;
+	}
+
+	// Waiting for ACK-messages from all registered nodes
+	{
+		clustercmd_t *clustercmd_p=NULL;
+		size_t size=0;
+		unsigned int timeout = cluster_timeout;
+		while((ret=cluster_recv(&clustercmd_p, &size, &timeout)) && (timeout>0)) {
+			// 	Skipping not ACK-message.
+			CLUSTER_LOOP_EXPECTCMD(clustercmd_p, CLUSTERCMDID_ACK, ret);
+
+			// 	Is this an acknowledge packet for us? Skipping if not.
+			clustercmd_ack_t *ackdata = (clustercmd_ack_t *)clustercmd_p->data_p;
+			if(ackdata->node_id != node_id_my)
+				continue;
+
+			// 	Is this acknowledge packet about the commend we sent? Skipping if not.
+			if(ackdata->serial != cmd_serial)
+				continue;
+
+			
+		}
+		free(clustercmd_p);
+	}
+
+	return 0;
+}
+
 
 extern int cluster_loop();
 /**
@@ -159,6 +292,7 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 	}
 
 	struct sockaddr_in sa = {0};
+	(void)sa;	// Anti-warning
 
 	sa.sin_family		= AF_INET;
 	sa.sin_port 		= htons(options_p->cluster_mcastipport);
@@ -171,48 +305,53 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 	cluster_timeout	= options_p->cluster_timeout * 1000;
 
 	// Getting my ID in the cluster
-	clustercmd_t clustercmd;
 
 	//	Trying to preserve my node_id after restart. :)
 	//	Asking another nodes about my previous node_id
-	clustercmd.cmd_id   = CLUSTERCMDID_GETMYID;
-	clustercmd.data_len = options_p->cluster_nodename_len;
-	clustercmd.data_p   = options_p->cluster_nodename;
-	cluster_send(&clustercmd);
+	{
+		CLUSTER_ALLOCA(clustercmd_p, void, data_p, options_p->cluster_nodename_len);
+		memcpy(clustercmd_p->data_p, options_p->cluster_nodename, clustercmd_p->data_len+1);
 
-	int updatets = 0;
-	unsigned int timeout = cluster_timeout;
-	while((ret=cluster_recv(&clustercmd, &timeout)) && (timeout>0)) {
-
-		// 	Exit if error
-		if(ret == -1) {
-			printf_e("Error: cluster_init(): Got error while cluster_recv(): %s (%i).\n", strerror(errno), errno);
-			return errno;
-		}
-
-		// 	Somebody tryes to give us the cue about our node_id? Skipping if not.
-		if(clustercmd.cmd_id != CLUSTERCMDID_SETID)
-			continue;
-
-		// 	Is this the most recent information? Skipping if not.
-		clustercmd_setiddata_t *setiddata = clustercmd.data_p;
-		if(!(setiddata->updatets > updatets))
-			continue;
-
-		// 	Is the node name length in message equals to our node name length? Skipping if not.
-		uint32_t recv_nodename_len;
-		recv_nodename_len = clustercmd.data_len - sizeof(*setiddata) + sizeof(char *);
-		if(recv_nodename_len != options_p->cluster_nodename_len)
-			continue;
-
-		// 	Is the node name equals to ours? Skipping if not.
-		if(memcmp(setiddata->node_name, options_p->cluster_nodename, recv_nodename_len))
-			continue;
-
-		// 	Seems, that somebody knows our node id, remembering it.
-		node_id_my = setiddata->node_id;
-		updatets   = setiddata->updatets;
+		clustercmd_p->cmd_id   = CLUSTERCMDID_GETMYID;
+		cluster_send(clustercmd_p);
 	}
+
+	//	Processing answers
+	{
+		clustercmd_t *clustercmd_p=NULL;
+		int updatets = 0;
+		size_t size=0;
+		unsigned int timeout = cluster_timeout;
+		while((ret=cluster_recv(&clustercmd_p, &size, &timeout)) && (timeout>0)) {
+			//	Skipping not SETID-packets
+			CLUSTER_LOOP_EXPECTCMD(clustercmd_p, CLUSTERCMDID_SETID, ret);
+
+			// 	Is this the most recent information? Skipping if not.
+			clustercmd_setiddata_t *setiddata = (clustercmd_setiddata_t *)clustercmd_p->data_p;
+			if(!(setiddata->updatets > updatets))
+				continue;
+
+			// 	Is the node name length in message equals to our node name length? Skipping if not.
+			uint32_t recv_nodename_len;
+			recv_nodename_len = CLUSTER_RESTDATALEN(clustercmd_p, clustercmd_setiddata_t);
+			if(recv_nodename_len != options_p->cluster_nodename_len)
+				continue;
+
+			// 	Is the node name equals to ours? Skipping if not.
+			if(memcmp(setiddata->node_name, options_p->cluster_nodename, recv_nodename_len))
+				continue;
+
+			//	Remembering the node that answered us
+			node_changestatus(clustercmd_p->node_id, NODESTATUS_SEEMSONLINE);
+
+			// 	Seems, that somebody knows our node id, remembering it.
+			node_id_my = setiddata->node_id;
+			updatets   = setiddata->updatets;
+		}
+		free(clustercmd_p);
+	}
+
+	printf_ddd("Debug3: cluster_init(): After communicating with others, my node_id is %i.\n", node_id_my);
 
 	//	Getting free node_id if nobody said us the certain value (see above).
 	if(node_id_my == NODEID_NOID) {
@@ -224,6 +363,7 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 			}
 			i++;
 		}
+		printf_ddd("Debug3: cluster_init(): I was have to set my node_id to %i.\n", node_id_my);
 	}
 
 	//	If there's no free id-s, then exit :(
@@ -232,10 +372,18 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 		return ENOMEM;
 	}
 
-	clustercmd.cmd_id   = CLUSTERCMDID_REGISTER;
-	clustercmd.data_len = 1;
-	clustercmd.data_p   = &node_id_my;
-	cluster_send(&clustercmd);
+	// Registering in the cluster
+	node_changestatus(node_id_my, NODESTATUS_SEEMSONLINE);
+	{
+
+		CLUSTER_ALLOCA(clustercmd_p, clustercmd_register_t, registerdata_p, options_p->cluster_nodename_len);
+
+		memcpy(registerdata_p->node_name, options_p->cluster_nodename, options_p->cluster_nodename_len+1);
+
+		clustercmd_p->cmd_id = CLUSTERCMDID_REGISTER;
+		cluster_send_ack(clustercmd_p);
+	}
+	node_changestatus(node_id_my, NODESTATUS_ONLINE);
 
 	// Initializing global variables, pt. 2
 	nodeinfo_my = &nodeinfo[node_id_my];
@@ -281,6 +429,12 @@ int cluster_deinit() {
 
 	g_hash_table_destroy(nodeinfo_my->modtime_ht);
 
+#ifdef VERYPARANOID
+	memset(node_info, 0, sizeof(node_info));
+	node_count  = 0;
+	node_online = 0;
+	node_id_my  = NODEID_NOID;
+#endif
 	return ret;
 }
 
@@ -391,7 +545,7 @@ int cluster_modtime_update(const char *path, short int dirlevel, mode_t st_mode)
 	// "modtime" is incorrent name-part of function. Actually it updates "change time" (man 2 lstat64).
 	int ret;
 
-	// Getting directory level (depth)
+	// Getting relative directory level (depth)
 	short int dirlevel_rel = dirlevel - options_p->watchdir_dirlevel;
 
 	if((st_mode & S_IFMT) == S_IFDIR)
@@ -421,14 +575,42 @@ int cluster_modtime_update(const char *path, short int dirlevel, mode_t st_mode)
 	}
 
 	// Getting relative directory path
+	//	Initializing
 	size_t  dirpath_len   = strlen(dirpath);
 	char   *dirpath_rel_p = xmalloc(dirpath_len+1);
 	char   *dirpath_rel   = dirpath_rel_p;
 
-	memcpy(dirpath_rel, &dirpath[options_p->watchdirlen], dirpath_len+1 - options_p->watchdirlen);
+	const char *dirpath_rel_full     = &dirpath[options_p->watchdirlen];
+	size_t      dirpath_rel_full_len = dirpath_len - options_p->watchdirlen;
 
-	// Updating "st_ctime" information. g_hash_table_replace() will replace existent information about the directory or create it if it doesn't exist.
-	g_hash_table_replace(nodeinfo_my->modtime_ht, strdup(dirpath_rel), GINT_TO_POINTER(stat64.st_ctime));
+	// 	Getting coodinate of the end (directory path is already canonized, so we can simply count number of slashes to get directory level)
+	int     slashcount=0;
+	size_t  dirpath_rel_end=0;
+	while(dirpath_rel_full[dirpath_rel_end] && (dirpath_rel_end < dirpath_rel_full_len)) {
+		if(dirpath_rel_full[dirpath_rel_end] == '/') {
+			slashcount++;
+			if(slashcount >= options_p->cluster_hash_dl_max)
+				break;
+		}
+		dirpath_rel_end++;
+	}
+
+	//	Copy the required part of path to dirpath_rel
+	memcpy(dirpath_rel, dirpath_rel_full, dirpath_rel_end);
+
+	
+	// Updating "st_ctime" information. We should check current value for this directory and update it only if it less or not set.
+	//	Checking current value
+	char toupdate = 0;
+	gpointer ctime_gp = g_hash_table_lookup(nodeinfo_my->modtime_ht, dirpath_rel);
+	if(ctime_gp == NULL)
+		toupdate++;
+	else if(GPOINTER_TO_INT(ctime_gp) < stat64.st_ctime)
+		toupdate++;
+
+	//	g_hash_table_replace() will replace existent information about the directory or create it if it doesn't exist.
+	if(toupdate)
+		g_hash_table_replace(nodeinfo_my->modtime_ht, strdup(dirpath_rel), GINT_TO_POINTER(stat64.st_ctime));
 
 	// Why I'm using "st_ctime" instead of "st_mtime"? Because "st_ctime" also updates on updating inode information.
 	

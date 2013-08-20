@@ -84,6 +84,15 @@
 #define DEBUGV(...)
 #endif
 
+#ifdef PARANOID
+#define PARANOIDV(...) __VA_ARGS__
+#else
+#define PARANOIDV(...)
+#endif
+
+#define TOSTR(a) # a
+#define XTOSTR(a) TOSTR(a)
+
 #define COLLECTDELAY_INSTANT ((unsigned int)~0)
 
 enum flags_enum {
