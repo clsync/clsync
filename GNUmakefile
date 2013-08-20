@@ -1,6 +1,7 @@
 
 DESTDIR ?= 
 PREFIX  ?= /usr
+COMPRESS_MAN ?= yes
 
 CSECFLAGS ?= -fstack-protector-all -Wall --param ssp-buffer-size=4 -D_FORTIFY_SOURCE=2 -fstack-check -DPARANOID
 CFLAGS ?= -pipe -O2
@@ -73,8 +74,10 @@ install:
 	cp -Rp example "$(INSTDIR)/share/doc/clsync"
 	install -m 755 -s clsync "$(INSTDIR)"/bin/
 	install -m 644 man/man1/clsync.1 "$(INSTDIR)"/share/man/man1/
+ifeq ($(COMPRESS_MAN),yes)
 	rm -f "$(INSTDIR)"/share/man/man1/clsync.1.gz
 	gzip "$(INSTDIR)"/share/man/man1/clsync.1
+endif
 
 deinstall:
 	rm -f "$(INSTDIR)"/bin/clsync "$(INSTDIR)"/share/man/man1/clsync.1.gz
