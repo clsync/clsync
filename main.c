@@ -71,7 +71,7 @@ int syntax() {
 	printf("syntax: clsync [flags] <watch dir> <action script> [file with rules regexps] [destination directory]\npossible options:\n");
 	int i=0;
 	while(long_options[i].name != NULL) {
-		printf("\t--%-24s-%c\n", long_options[i].name, long_options[i].val);
+		printf("\t--%-24s-%c%s\n", long_options[i].name, long_options[i].val, (long_options[i].has_arg == required_argument ? " argument" : ""));
 		i++;
 	}
 	exit(0);
