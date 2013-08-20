@@ -366,7 +366,7 @@ int main(int argc, char *argv[]) {
 	parse_arguments(argc, argv, &options);
 	out_init(options.flags);
 	if((options.flags[RSYNC]>1) && (options.destdir == NULL)) {
-		printf_e("Error: Option \"-RR\" cannot be used without specifing \"destination directory\".\n");
+		printf_e("Error: Option \"-RR\" cannot be used without specifying \"destination directory\".\n");
 		ret = EINVAL;
 	}
 
