@@ -1,5 +1,3 @@
-ACLOCAL_AMFLAGS = -I m4
-
 bin_PROGRAMS = clsync
 
 clsync_SOURCES = sync.c cluster.c main.c output.c fileutils.c malloc.c
