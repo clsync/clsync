@@ -56,7 +56,7 @@ static struct option long_options[] =
 	{"verbose",		no_argument,		NULL,	VERBOSE},
 	{"synctimeout",		required_argument,	NULL,	SYNCTIMEOUT},
 	{"debug",		no_argument,		NULL,	DEBUG},
-	{"quite",		no_argument,		NULL,	QUITE},
+	{"quiet",		no_argument,		NULL,	QUIET},
 #ifdef FANOTIFY_SUPPORT
 	{"fanotify",		no_argument,		NULL,	FANOTIFY},
 #endif

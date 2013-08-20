@@ -114,7 +114,7 @@ enum flags_enum {
 	SYNCDELAY	= 'w',
 	BFILETHRESHOLD	= 'B',
 	DEBUG		= 'D',
-	QUITE		= 'q',
+	QUIET		= 'q',
 	VERBOSE		= 'v',
 	OUTLISTSDIR	= 'd',
 	RSYNC		= 'R',
