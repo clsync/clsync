@@ -17,6 +17,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifdef CLUSTER_SUPPORT
+
 enum nodestatus {
 	NODESTATUS_DOESNTEXIST = 0,
 	NODESTATUS_OFFLINE,
@@ -71,4 +73,6 @@ extern int cluster_capture(const char *fpath);
 
 extern int cluster_modtime_update(const char *dirpath, short int dirlevel, mode_t st_mode);
 extern int cluster_initialsync();
+
+#endif
 

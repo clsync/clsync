@@ -87,8 +87,10 @@
 #define COLLECTDELAY_INSTANT ((unsigned int)~0)
 
 enum flags_enum {
+	HELP		= 'h',
 	BACKGROUND	= 'b',
 	PTHREAD		= 'p',
+#ifdef CLUSTER_SUPPORT
 	CLUSTERIFACE	= 'c',
 	CLUSTERMCASTIPADDR = 'm',
 	CLUSTERMCASTIPPORT = 'P',
@@ -97,10 +99,11 @@ enum flags_enum {
 	CLUSTERHDLMIN	= 'o',
 	CLUSTERHDLMAX	= 'O',
 	CLUSTERSDLMAX	= 's',
-	HELP		= 'h',
+#endif
 	DELAY		= 't',
 	BFILEDELAY	= 'T',
 	SYNCDELAY	= 'w',
+	BFILETHRESHOLD	= 'B',
 	DEBUG		= 'D',
 	QUITE		= 'q',
 	VERBOSE		= 'v',
@@ -117,7 +120,6 @@ enum flags_enum {
 #endif
 	INOTIFY		= 'i',
 	LABEL		= 'l',
-	BFILETHRESHOLD	= 'B',
 	VERSION		= 'V',
 };
 typedef enum flags_enum flags_t;
@@ -166,6 +168,7 @@ struct options {
 	char *destdir;
 	char *watchdirwslash;
 	char *destdirwslash;
+#ifdef CLUSTER_SUPPORT
 	char *cluster_iface;
 	char *cluster_mcastipaddr;
 	char *cluster_nodename;
@@ -174,6 +177,8 @@ struct options {
 	uint16_t cluster_hash_dl_min;
 	uint16_t cluster_hash_dl_max;
 	uint16_t cluster_scan_dl_max;
+	unsigned int cluster_timeout;
+#endif
 	size_t watchdirlen;
 	size_t destdirlen;
 	size_t watchdirsize;
@@ -191,7 +196,6 @@ struct options {
 	unsigned int rsyncinclimit;
 	time_t synctime;
 	unsigned int synctimeout;
-	unsigned int cluster_timeout;
 	sigset_t *sigset;
 	char isignoredexitcode[(1<<8)];
 };

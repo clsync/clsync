@@ -651,8 +651,10 @@ static int sync_queuesync(const char *fpath, eventinfo_t *evinfo, options_t *opt
 	eventinfo_t *evinfo_dup = (eventinfo_t *)xmalloc(sizeof(*evinfo_dup));
 	memcpy(evinfo_dup, evinfo, sizeof(*evinfo_dup));
 
+#ifdef CLUSTER_SUPPORT
 	if(options_p->cluster_iface)
 		cluster_capture(fpath);
+#endif
 
 	return indexes_queueevent(indexes_p, strdup(fpath), evinfo_dup, queue_id);
 }
@@ -765,10 +767,12 @@ int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, index
 int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_p, initsync_t initsync) {
 	printf_ddd("Debug3: sync_initialsync(\"%s\", options_p, indexes_p, %i)\n", path, initsync);
 
+#ifdef CLUSTER_SUPPORT
 	if(initsync == INITSYNC_FULL) {
 		if(options_p->cluster_iface)
 			return cluster_initialsync();
 	}
+#endif
 
 	if(!options_p->flags[RSYNC]) {
 		// non-RSYNC case:
@@ -869,6 +873,7 @@ int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, co
 	return wd;
 }
 
+#ifdef CLUSTER_SUPPORT
 static inline int sync_mark_walk_cluster_modtime_update(options_t *options_p, const char *path, short int dirlevel, mode_t st_mode) {
 	if(options_p->cluster_iface) {
 		int ret=cluster_modtime_update(path, dirlevel, st_mode);
@@ -877,6 +882,7 @@ static inline int sync_mark_walk_cluster_modtime_update(options_t *options_p, co
 	}
 	return 0;
 }
+#endif
 
 int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, indexes_t *indexes_p) {
 	const char *rootpaths[] = {dirpath, NULL};
@@ -894,7 +900,9 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 
 	FTSENT *node;
 	while((node = fts_read(tree))) {
+#ifdef CLUSTER_SUPPORT
 		int ret;
+#endif
 		printf_dd("Debug3: walking: \"%s\" (depth %u): fts_info == %i\n", node->fts_path, node->fts_level, node->fts_info);
 
 		switch(node->fts_info) {
@@ -906,14 +914,18 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 			case FTS_SLNONE:
 			case FTS_F:
 			case FTS_NSOK:
+#ifdef CLUSTER_SUPPORT
 				if((ret=sync_mark_walk_cluster_modtime_update(options_p, node->fts_path, node->fts_level, S_IFREG)))
 					return ret;
+#endif
 				continue;
 			// To mark:
 			case FTS_D:
 			case FTS_DOT:
+#ifdef CLUSTER_SUPPORT
 				if((ret=sync_mark_walk_cluster_modtime_update(options_p, node->fts_path, node->fts_level, S_IFDIR)))
 					return ret;
+#endif
 				break;
 			// Error cases:
 			case FTS_ERR:
@@ -1009,15 +1021,19 @@ static inline int sync_dosync_exec(options_t *options_p, const char *evmask_str,
 static int sync_dosync(const char *fpath, uint32_t evmask, options_t *options_p, indexes_t *indexes_p) {
 	int ret;
 
+#ifdef CLUSTER_SUPPORT
 	ret = cluster_lock(fpath);
 	if(ret) return ret;
+#endif
 
 	char *evmask_str = xmalloc(1<<8);
 	sprintf(evmask_str, "%u", evmask);
 	ret = sync_dosync_exec(options_p, evmask_str, fpath);
 	free(evmask_str);
 
+#ifdef CLUSTER_SUPPORT
 	ret = cluster_unlock_all();
+#endif
 
 	return ret;
 }
@@ -1506,14 +1522,18 @@ int sync_idle(int notify_d, options_t *options_p, indexes_t *indexes_p) {
 
 	printf_ddd("Debug3: sync_idle(): calling sync_idle_dosync_collectedevents()\n");
 
+#ifdef CLUSTER_SUPPORT
 	ret = cluster_lock_byindexes();
 	if(ret) return ret;
+#endif
 
 	ret = sync_idle_dosync_collectedevents(options_p, indexes_p);
 	if(ret) return ret;
 
+#ifdef CLUSTER_SUPPORT
 	ret = cluster_unlock_all();
 	if(ret) return ret;
+#endif
 
 	return 0;
 }
@@ -2089,6 +2109,7 @@ int sync_run(options_t *options_p) {
 		i++;
 	}
 
+#ifdef CLUSTER_SUPPORT
 	// Initializing cluster subsystem
 
 	if(options_p->cluster_iface == NULL) {
@@ -2098,6 +2119,7 @@ int sync_run(options_t *options_p) {
 			return ret;
 		}
 	}
+#endif
 
 	// Initializing rand-generator if it's required
 
@@ -2139,6 +2161,7 @@ int sync_run(options_t *options_p) {
 		i++;
 	}
 
+#ifdef CLUSTER_SUPPORT
 	if(options_p->cluster_iface == NULL) {
 		int _ret;
 		_ret = cluster_deinit();
@@ -2147,6 +2170,7 @@ int sync_run(options_t *options_p) {
 			ret = _ret;
 		}
 	}
+#endif
 
 #ifdef VERYPARANOID
 	// One second for another threads

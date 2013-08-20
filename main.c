@@ -64,7 +64,7 @@ static struct option long_options[] =
 	{"label",		no_argument,		NULL,	LABEL},
 	{"help",		no_argument,		NULL,	HELP},
 	{"version",		no_argument,		NULL,	VERSION},
-	{0,			0,			0,	0}
+	{NULL,			0,			NULL,	0}
 };
 
 int syntax() {
@@ -85,70 +85,45 @@ int version() {
 int parse_arguments(int argc, char *argv[], struct options *options_p) {
 	int c;
 	int option_index = 0;
+
+	// Generating "optstring" (man 3 getopt_long) with using information from struct array "long_options"
+	char *optstring     = alloca((('z'-'a'+1)*2 + '9'-'0'+1)*2 + 1);
+	char *optstring_ptr = optstring;
+
+	struct option *lo_ptr = long_options;
+	while(lo_ptr->name != NULL) {
+		*(optstring_ptr++) = lo_ptr->val;
+		if(lo_ptr->has_arg == required_argument)
+			*(optstring_ptr++) = ':';
+		lo_ptr++;
+	}
+	*optstring_ptr = 0;
+
+	// Parsing arguments
 	while(1) {
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:x:"
-#ifdef FANOTIFY_SUPPORT
-				"f"
-#endif
-#ifdef CLUSTER_SUPPORT
-				"c:m:P:W:n:o:O:s:"
-#endif
-				, long_options, &option_index);
+		c = getopt_long(argc, argv, optstring, long_options, &option_index);
 	
 		if (c == -1) break;
 		switch (c) {
 			case '?':
-			case 'h':
+			case HELP:
 				syntax();
 				break;
-			case 'c':
+#ifdef CLUSTER_SUPPORT
+			case CLUSTERIFACE:
 				options_p->cluster_iface       = optarg;
 				break;
-			case 'm':
+			case CLUSTERMCASTIPADDR:
 				options_p->cluster_mcastipaddr = optarg;
 				break;
-			case 'W':
+			case CLUSTERMCASTIPPORT:
+				options_p->cluster_mcastipport = (uint16_t)atoi(optarg);
+				break;
+			case CLUSTERTIMEOUT
 				options_p->cluster_timeout     = (unsigned int)atol(optarg);
 				break;
-			case 'n':
+			case CLUSTERNODENAME:
 				options_p->cluster_nodename    = optarg;
-				break;
-			case 'd':
-				options_p->listoutdir   = optarg;
-				break;
-			case 'l':
-				options_p->label        = optarg;
-				break;
-			case 'w':
-				options_p->syncdelay  = (unsigned int)atol(optarg);
-			case 't':
-				options_p->_queues[QUEUE_NORMAL].collectdelay = (unsigned int)atol(optarg);
-				break;
-			case 'T':
-				options_p->_queues[QUEUE_BIGFILE].collectdelay = (unsigned int)atol(optarg);
-				break;
-			case 'B':
-				options_p->bfilethreshold = (unsigned long)atol(optarg);
-				break;
-#ifdef FANOTIFY_SUPPORT
-			case 'f':
-				options_p->notifyengine = NE_FANOTIFY;
-				break;
-#endif
-			case 'i':
-				options_p->notifyengine = NE_INOTIFY;
-				break;
-			case 'L':
-				options_p->rsyncinclimit = (unsigned int)atol(optarg);
-				break;
-			case 'k':
-				options_p->synctimeout = (unsigned int)atol(optarg);
-				break;
-			case 'x':
-				options_p->isignoredexitcode[(unsigned char)atoi(optarg)] = 1;
-				break;
-			case 'V':
-				version();
 				break;
 			case CLUSTERHDLMIN:
 				options_p->cluster_hash_dl_min = (uint16_t)atoi(optarg);
@@ -158,6 +133,45 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 				break;
 			case CLUSTERSDLMAX:
 				options_p->cluster_scan_dl_max = (uint16_t)atoi(optarg);
+				break;
+#endif
+			case OUTLISTSDIR:
+				options_p->listoutdir   = optarg;
+				break;
+			case LABEL:
+				options_p->label        = optarg;
+				break;
+			case SYNCDELAY: 
+				options_p->syncdelay  = (unsigned int)atol(optarg);
+				break;
+			case DELAY:
+				options_p->_queues[QUEUE_NORMAL].collectdelay = (unsigned int)atol(optarg);
+				break;
+			case BFILEDELAY:
+				options_p->_queues[QUEUE_BIGFILE].collectdelay = (unsigned int)atol(optarg);
+				break;
+			case BFILETHRESHOLD:
+				options_p->bfilethreshold = (unsigned long)atol(optarg);
+				break;
+#ifdef FANOTIFY_SUPPORT
+			case FANOTIFY:
+				options_p->notifyengine = NE_FANOTIFY;
+				break;
+#endif
+			case INOTIFY:
+				options_p->notifyengine = NE_INOTIFY;
+				break;
+			case RSYNCINCLIMIT:
+				options_p->rsyncinclimit = (unsigned int)atol(optarg);
+				break;
+			case SYNCTIMEOUT:
+				options_p->synctimeout = (unsigned int)atol(optarg);
+				break;
+			case IGNOREEXITCODE:
+				options_p->isignoredexitcode[(unsigned char)atoi(optarg)] = 1;
+				break;
+			case VERSION:
+				version();
 				break;
 			default:
 				options_p->flags[c]++;
@@ -343,9 +357,11 @@ int main(int argc, char *argv[]) {
 	options.label				   = DEFAULT_LABEL;
 	options.rsyncinclimit			   = DEFAULT_RSYNC_INCLUDELINESLIMIT;
 	options.synctimeout			   = DEFAULT_SYNCTIMEOUT;
+#ifdef CLUSTER_SUPPORT
 	options.cluster_hash_dl_min		   = DEFAULT_CLUSTERHDLMIN;
 	options.cluster_hash_dl_max		   = DEFAULT_CLUSTERHDLMAX;
 	options.cluster_scan_dl_max		   = DEFAULT_CLUSTERSDLMAX;
+#endif
 
 	parse_arguments(argc, argv, &options);
 	out_init(options.flags);
@@ -354,6 +370,7 @@ int main(int argc, char *argv[]) {
 		ret = EINVAL;
 	}
 
+#ifdef CLUSTER_SUPPORT
 	if((options.flags[RSYNC]>1) && (options.cluster_iface != NULL)) {
 		printf_e("Error: Option \"-RR\" cannot be used in conjunction with \"--cluster-iface\".\n");
 		ret = EINVAL;
@@ -397,6 +414,7 @@ int main(int argc, char *argv[]) {
 			options.cluster_nodename_len = strlen(options.cluster_nodename);
 		}
 	}
+#endif // CLUSTER_SUPPORT
 
 	{
 		char *rwatchdir = realpath(options.watchdir, NULL);

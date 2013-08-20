@@ -29,6 +29,7 @@
                                                            -- 0x8E30679C
  */
 
+#ifdef CLUSTER_SUPPORT
 
 #include "common.h"
 #include "cluster.h"
@@ -479,4 +480,6 @@ int cluster_initialsync() {
 int cluster_capture(const char *path) {
 	return 0;
 }
+
+#endif
 
