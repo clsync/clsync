@@ -46,3 +46,6 @@ doc
 /stamp-h1
 Makefile
 Makefile.in
+
+/debian/autoreconf.after
+/debian/autoreconf.before
