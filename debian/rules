@@ -10,5 +10,9 @@
 #export DH_VERBOSE=1
 
 %:
-	dh $@ 
+	dh $@ --parallel --with autoreconf
 
+override_dh_auto_install:
+	dh_auto_install
+	-rm --verbose debian/clsync/usr/share/doc/clsync/clsync-*.sh
+	-rm --verbose debian/clsync/usr/share/doc/clsync/LICENSE
