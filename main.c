@@ -32,6 +32,7 @@ static struct option long_options[] =
 {
 	{"background",		no_argument,		NULL,	BACKGROUND},
 	{"pthread",		no_argument,		NULL,	PTHREAD},
+#ifdef CLUSTER_SUPPORT
 	{"cluster-iface",	required_argument,	NULL,	CLUSTERIFACE},		// Not implemented, yet
 	{"cluster-ip",		required_argument,	NULL,	CLUSTERMCASTIPADDR},	// Not implemented, yet
 	{"cluster-port",	required_argument,	NULL,	CLUSTERMCASTIPPORT},	// Not implemented, yet
@@ -40,6 +41,7 @@ static struct option long_options[] =
 	{"cluster-hash-dl-min",	required_argument,	NULL,	CLUSTERHDLMIN},
 	{"cluster-hash-dl-max",	required_argument,	NULL,	CLUSTERHDLMAX},
 	{"cluster-scan-dl-max",	required_argument,	NULL,	CLUSTERSDLMAX},
+#endif
 	{"collectdelay",	required_argument,	NULL,	DELAY},
 	{"syncdelay",		required_argument,	NULL,	SYNCDELAY},
 	{"outlistsdir",		required_argument,	NULL,	OUTLISTSDIR},
@@ -84,11 +86,14 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 	int c;
 	int option_index = 0;
 	while(1) {
+		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:x:"
 #ifdef FANOTIFY_SUPPORT
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:m:c:W:n:x:o:O:s:f", long_options, &option_index);
-#else
-		c = getopt_long(argc, argv, "bT:B:d:t:l:pw:qvDFhaVRUL:Ik:m:c:W:n:x:o:O:s:",  long_options, &option_index);
+				"f"
 #endif
+#ifdef CLUSTER_SUPPORT
+				"c:m:P:W:n:o:O:s:"
+#endif
+				, long_options, &option_index);
 	
 		if (c == -1) break;
 		switch (c) {
@@ -478,9 +483,7 @@ int main(int argc, char *argv[]) {
 	struct stat64 stat64={0};
 	lstat64(options.watchdir, &stat64);
 	if((stat64.st_mode & S_IFMT) == S_IFLNK) {
-		// TODO: Fix the problem with symlinks as watch dir.
-		//
-		// The proplems exists due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
+		// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
 		// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
 		// it disables filters, because exclude-list will be empty.
 

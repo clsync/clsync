@@ -7,7 +7,7 @@ STRIP_BINARY ?= yes
 CSECFLAGS ?= -fstack-protector-all -Wall --param ssp-buffer-size=4 -D_FORTIFY_SOURCE=2 -fstack-check -DPARANOID
 CFLAGS ?= -pipe -O2
 CFLAGS += $(CSECFLAGS)
-DEBUGCFLAGS ?= -pipe -Wall -Werror -ggdb3 -Wno-error=unused-variable $(CSECFLAGS) -D_DEBUG
+DEBUGCFLAGS ?= -pipe -Wall -Werror -ggdb3 -Wno-error=unused-variable $(CSECFLAGS)
 
 CARCHFLAGS ?= -march=native
 
