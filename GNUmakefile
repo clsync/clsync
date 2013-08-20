@@ -11,7 +11,9 @@ CARCHFLAGS ?= -march=native
 NORMSYSTEMCFLAGS ?= -std=gnu11 $(CARCHFLAGS)
 OLDSYSTEMCFLAGS  ?= -std=gnu99 -DOLDSYSTEM
 
-LDFLAGS := $(shell pkg-config --libs glib-2.0) -lpthread -Xlinker -zrelro $(LDFLAGS)
+LIBS := $(shell pkg-config --libs glib-2.0) -lpthread
+LDSECFLAGS ?= -Xlinker -zrelro
+LDFLAGS += $(LDSECFLAGS)
 INC := $(shell pkg-config --cflags glib-2.0) $(INC)
 
 INSTDIR = $(DESTDIR)$(PREFIX)
@@ -33,19 +35,19 @@ binarytest=$(binary)-test
 .PHONY: doc
 
 all: updaterevision $(objs)
-	$(CC) $(NORMSYSTEMCFLAGS) $(CFLAGS) $(LDFLAGS) $(objs) -o $(binary)
+	$(CC) $(NORMSYSTEMCFLAGS) $(CFLAGS) $(LDFLAGS) $(objs) $(LIBS) -o $(binary)
 
 %.o: %.c
 	$(CC) $(NORMSYSTEMCFLAGS) $(CFLAGS) $(INC) $< -c -o $@
 
 debug: updaterevision
-	$(CC) $(NORMSYSTEMCFLAGS) -DFANOTIFY_SUPPORT $(DEBUGCFLAGS) $(INC) $(LDFLAGS) $(shell ls *.c | grep -v "test.c") -o $(binarydebug)
+	$(CC) $(NORMSYSTEMCFLAGS) -DFANOTIFY_SUPPORT $(DEBUGCFLAGS) $(INC) $(LDFLAGS) $(shell ls *.c | grep -v "test.c") $(LIBS) -o $(binarydebug)
 
 test: updaterevision
-	$(CC) $(NORMSYSTEMCFLAGS) -DFANOTIFY_SUPPORT $(DEBUGCFLAGS) $(INC) $(LDFLAGS) $(shell ls *.c | grep -v "main.c") -o $(binarytest)
+	$(CC) $(NORMSYSTEMCFLAGS) -DFANOTIFY_SUPPORT $(DEBUGCFLAGS) $(INC) $(LDFLAGS) $(shell ls *.c | grep -v "main.c") $(LIBS) -o $(binarytest)
 
 onoldsystem: updaterevision
-	$(CC) $(OLDSYSTEMCFLAGS) $(CFLAGS) $(INC) $(LDFLAGS) *.c -o $(binary)
+	$(CC) $(OLDSYSTEMCFLAGS) $(CFLAGS) $(INC) $(LDFLAGS) *.c $(LIBS) -o $(binary)
 
 updaterevision:
 	(echo -n '#define REVISION "'; [ -d .git ] && (echo -n '.'$$(( $$(git log 2>/dev/null | grep -c ^commit | tr -d "\n") - 137 )) ) || echo -n '-release'; echo '"') > revision.h
