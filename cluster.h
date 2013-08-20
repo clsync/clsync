@@ -41,17 +41,14 @@
 #define CLUSTER_REQMEM(data_type, restdata_len) \
 	(sizeof(clustercmd_t)-1 + sizeof(data_type)-1 + (restdata_len) + 2)
 
-#define CLUSTER_ALLOC(clustercmd_p, data_type, t_data_p, restdata_len, alloc_funct)\
-	clustercmd_t *clustercmd_p = (clustercmd_t *)(alloc_funct)(CLUSTER_REQMEM(data_type, restdata_len));\
-	PARANOIDV(memset(clustercmd_p, 0, CLUSTER_REQMEM(data_type, restdata_len)));\
-	data_type *t_data_p = (data_type *)clustercmd_p->data_p;\
-	(void)t_data_p; /* anti-warning */
+#define CLUSTER_ALLOC(data_type, restdata_len, alloc_funct)\
+	(clustercmd_t *)PARANOIDV(memset)((alloc_funct)(CLUSTER_REQMEM(data_type, restdata_len))PARANOIDV(, 0, CLUSTER_REQMEM(data_type, restdata_len)))
 
-#define CLUSTER_ALLOCA(clustercmd_p, data_type, data_p, restdata_len)\
-	CLUSTER_ALLOC(clustercmd_p, data_type, data_p, restdata_len, alloca)
+#define CLUSTER_ALLOCA(data_type, restdata_len)\
+	CLUSTER_ALLOC(data_type, restdata_len, alloca)
 
-#define CLUSTER_MALLOC(clustercmd_p, data_type, data_p, restdata_len)\
-	CLUSTER_ALLOC(clustercmd_p, data_type, data_p, restdata_len, xmalloc)
+#define CLUSTER_MALLOC(data_type, restdata_len)\
+	CLUSTER_ALLOC(data_type, restdata_len, xmalloc)
 
 // Types
 
@@ -84,19 +81,12 @@ enum clustercmd_id {
 };
 typedef enum clustercmd_id clustercmd_id_t;
 
-struct clustercmd {
-	uint32_t  crc32;
-	uint8_t   node_id;
-	uint8_t   cmd_id;
-	uint32_t  data_len;
-	uint32_t  ts;
-	uint32_t  serial;
-	char      data_p[1];
+struct clustercmd_getmyid {
+	char     node_name[1];
 };
-typedef struct clustercmd clustercmd_t;
+typedef struct clustercmd_getmyid clustercmd_getmyid_t;
 
 struct clustercmd_setiddata {
-	uint8_t   node_id;
 	uint32_t  updatets;
 	char      node_name[1];
 };
@@ -108,10 +98,27 @@ struct clustercmd_register {
 typedef struct clustercmd_register clustercmd_register_t;
 
 struct clustercmd_ack {
-	uint8_t  node_id;
 	uint32_t serial;
 };
 typedef struct clustercmd_ack clustercmd_ack_t;
+
+struct clustercmd {
+	uint8_t   dst_node_id;
+	uint8_t   src_node_id;
+	uint8_t   cmd_id;
+	uint32_t  crc32;
+	uint32_t  data_len;
+	uint32_t  ts;
+	uint32_t  serial;
+	union {
+		char data_p[1];
+		clustercmd_setiddata_t	data_setid;
+		clustercmd_register_t	data_register;
+		clustercmd_ack_t	data_ack;
+		clustercmd_getmyid_t	data_getmyid;
+	};
+};
+typedef struct clustercmd clustercmd_t;
 
 // Externs
 
