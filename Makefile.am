@@ -28,3 +28,7 @@ revision.h:
 
 doc:
 	doxygen .doxygen
+
+clean-local:
+	rm -rf revision.h examples/testdir examples/rules doc
+
