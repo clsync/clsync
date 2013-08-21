@@ -28,8 +28,12 @@ AS_HELP_STRING([--enable-paranoid],
 esac],
 [paranoid=1])
 
-AS_IF([test $paranoid -ge 1], [CPPFLAGS+=" -DPARANOID"])
-AS_IF([test $paranoid -eq 2], [CPPFLAGS+=" -DVERY_PARANOID"])
+AS_IF([test $paranoid -ge 1],[
+CPPFLAGS+=" -D_FORTIFY_SOURCE=2 -DPARANOID"
+CFLAGS+=" -fstack-protector-all -Wall --param ssp-buffer-size=4 -fstack-check"
+LDFLAGS+=" -Xlinker -zrelro"
+])
+AS_IF([test $paranoid -eq 2], [CPPFLAGS+=" -DVERYPARANOID"])
 
 # Checks for programs.
 AC_PROG_CC_C99
