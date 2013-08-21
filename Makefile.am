@@ -4,9 +4,12 @@ clsync_SOURCES = sync.c cluster.c main.c output.c fileutils.c malloc.c
 
 main.o: revision.h
 
-if DEBUG
-else
+if PARANOID
 AM_CPPFLAGS += -DPARANOID
+endif
+
+if VERYPARANOID
+AM_CPPFLAGS += -DVERYPARANOID
 endif
 
 man_MANS = man/man1/clsync.1

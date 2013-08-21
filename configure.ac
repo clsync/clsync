@@ -7,17 +7,38 @@ AC_CONFIG_SRCDIR([sync.c])
 AM_INIT_AUTOMAKE([1.11 -Wall foreign])
 AC_CONFIG_HEADERS([autoconfig.h])
 
+
+# --enable-debug
+
 AC_ARG_ENABLE(debug,
 AS_HELP_STRING([--enable-debug],
                [enable debugging, default: no]),
 [case "${enableval}" in
-             yes) debug=true ;;
-             no)  debug=false ;;
-             *)   AC_MSG_ERROR([bad value ${enableval} for --enable-debug]) ;;
+	yes)	debug=true  ;;
+	no)	debug=false ;;
+	*)	AC_MSG_ERROR([bad value ${enableval} for --enable-debug]) ;;
 esac],
 [debug=false])
 
-AM_CONDITIONAL(DEBUG, test x"$debug" = x"true")
+AM_CONDITIONAL(DEBUG,        test x"$debug"    = x"true")
+
+
+# --paranoid-level
+
+AC_ARG_ENABLE(paranoid,
+AS_HELP_STRING([--enable-paranoid],
+               [set paranoid level of code security, default: 1, values: 0, 1, 2]),
+[case "${enableval}" in
+	0)	paranoid=0 ;;
+	1)	paranoid=1 ;;
+	2)	paranoid=2 ;;
+	*)	AC_MSG_ERROR([bad value ${enableval} for --paranoid-level]) ;;
+esac],
+[paranoid=1])
+
+AM_CONDITIONAL(PARANOID,     test x"$paranoid" = x"1")
+AM_CONDITIONAL(VERYPARANOID, test x"$paranoid" = x"2")
+
 
 # Checks for programs.
 AC_PROG_CC_C99
