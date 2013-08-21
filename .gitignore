@@ -33,9 +33,9 @@ to/*
 # autotools build debris
 /.deps/
 /aclocal.m4
-/autoconfig.h.in
-/autoconfig.h
+/autoconfig.h*
 /autom4te.cache/
+/config.h.in
 /config.log
 /config.status
 /configure
