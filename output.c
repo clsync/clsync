@@ -114,7 +114,7 @@ void out_flush() {
 }
 
 void hexdump_e(const unsigned char *buf, size_t len) {
-	int i=0;
+	size_t i=0;
 
 	while(i<len)
 		printf_e("%5p ", (void *)(unsigned long)buf[i++]);
