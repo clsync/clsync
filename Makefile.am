@@ -4,14 +4,6 @@ clsync_SOURCES = sync.c cluster.c main.c output.c fileutils.c malloc.c
 
 main.o: revision.h
 
-if PARANOID
-AM_CPPFLAGS += -DPARANOID
-endif
-
-if VERYPARANOID
-AM_CPPFLAGS += -DVERYPARANOID
-endif
-
 man_MANS = man/man1/clsync.1
 
 doc_DATA = CONTRIB DEVELOPING LICENSE README.md TODO
