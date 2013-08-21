@@ -71,12 +71,6 @@
 #define MAX(a,b) ((a)>(b)?(a):(b))
 #endif
 
-#ifdef VERYPARANOID
-#ifndef PARANOID
-#define PARANOID
-#endif
-#endif
-
 #ifndef IN_CREATE_SELF
 #define IN_CREATE_SELF IN_CREATE
 #endif
