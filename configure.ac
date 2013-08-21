@@ -5,7 +5,7 @@ AC_PREREQ([2.59])
 AC_INIT([clsync],[0.0],[Dmitry Yu Okunev <xai@mephi.ru>],,[https://github.com/xaionaro/clsync])
 AC_CONFIG_SRCDIR([sync.c])
 AM_INIT_AUTOMAKE([1.11 -Wall foreign])
-AC_CONFIG_HEADERS([autoconfig.h])
+AC_CONFIG_HEADERS([config.h])
 
 dnl --enable-debug
 AC_ARG_ENABLE(debug,
