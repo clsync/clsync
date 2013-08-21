@@ -8,22 +8,16 @@ AM_INIT_AUTOMAKE([1.11 -Wall foreign])
 AC_CONFIG_HEADERS([autoconfig.h])
 
 
-# --enable-debug
+dnl --enable-debug
 
 AC_ARG_ENABLE(debug,
-AS_HELP_STRING([--enable-debug],
-               [enable debugging, default: no]),
-[case "${enableval}" in
-	yes)	debug=true  ;;
-	no)	debug=false ;;
-	*)	AC_MSG_ERROR([bad value ${enableval} for --enable-debug]) ;;
-esac],
-[debug=false])
+AS_HELP_STRING(--enable-debug,
+[enable debugging, default: no]))
 
-AM_CONDITIONAL(DEBUG,        test x"$debug"    = x"true")
+AS_IF([test "x$enable_debug" = "xyes"],
+[CFLAGS+="-pipe -Wall -Werror -ggdb3 -Wno-error=unused-variable"])
 
-
-# --paranoid-level
+dnl --paranoid-level
 
 AC_ARG_ENABLE(paranoid,
 AS_HELP_STRING([--enable-paranoid],
@@ -52,7 +46,6 @@ PKG_CHECK_MODULES(GLIB, [glib-2.0])
 LIBS="${GLIB_LIBS} ${LIBS}"
 AM_CPPFLAGS="${GLIB_CFLAGS}"
 AC_SUBST(AM_CPPFLAGS)
-
 
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h limits.h netinet/in.h stdint.h stdlib.h string.h strings.h sys/socket.h sys/time.h unistd.h])
