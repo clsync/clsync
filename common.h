@@ -58,9 +58,9 @@
 #include <netinet/in.h>
 #include <libgen.h>
 
-#include "config.h"
+#include "configuration.h"
 #ifdef HAVE_CONFIG_H
-#include "autoconfig.h"
+#include "config.h"
 #endif
 
 #ifndef MIN
