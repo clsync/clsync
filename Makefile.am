@@ -29,6 +29,7 @@ revision.h:
 doc:
 	doxygen .doxygen
 
+CLEANFILES = revision.h
+CLEANFILES += examples/rules
 clean-local:
-	rm -rf revision.h examples/testdir examples/rules doc
-
+	-rm -rf examples/testdir doc
