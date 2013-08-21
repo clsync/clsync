@@ -17,18 +17,17 @@ test1
 test2
 .gdbcommands
 log*
-from/*
-to/*
+from/
+to/
 .clsync-list.*
-/debian/clsync
-/debian/clsync/*
+/debian/clsync/
 /debian/clsync.debhelper.log
 /debian/clsync.substvars
 /debian/files
 /debian/*.ex
 /examples/rules
-/examples/testdir
-/doc
+/examples/testdir/
+/doc/
 
 # autotools build debris
 /.deps/
