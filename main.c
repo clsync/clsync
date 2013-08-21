@@ -63,7 +63,7 @@ static struct option long_options[] =
 	{"inotify",		no_argument,		NULL,	INOTIFY},
 	{"label",		required_argument,	NULL,	LABEL},
 	{"help",		no_argument,		NULL,	HELP},
-	{"version",		no_argument,		NULL,	VERSION},
+	{"version",		no_argument,		NULL,	SHOW_VERSION},
 	{NULL,			0,			NULL,	0}
 };
 
@@ -170,7 +170,7 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 			case IGNOREEXITCODE:
 				options_p->isignoredexitcode[(unsigned char)atoi(optarg)] = 1;
 				break;
-			case VERSION:
+			case SHOW_VERSION:
 				version();
 				break;
 			default:

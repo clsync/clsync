@@ -59,13 +59,16 @@
 #include <libgen.h>
 
 #include "config.h"
+#ifdef HAVE_CONFIG_H
+#include "autoconfig.h"
+#endif
 
 #ifndef MIN
-#define MIN(a,b) (a>b?b:a)
+#define MIN(a,b) ((a)>(b)?(b):(a))
 #endif
 
 #ifndef MAX
-#define MAX(a,b) (a>b?a:b)
+#define MAX(a,b) ((a)>(b)?(a):(b))
 #endif
 
 #ifdef VERYPARANOID
@@ -129,7 +132,7 @@ enum flags_enum {
 #endif
 	INOTIFY		= 'i',
 	LABEL		= 'l',
-	VERSION		= 'V',
+	SHOW_VERSION	= 'V',
 };
 typedef enum flags_enum flags_t;
 
