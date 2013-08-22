@@ -58,6 +58,7 @@ cluster_recvproc_funct_t recvproc_funct[COUNT_CLUSTERCMDID] = {NULL};
 
 window_t window = {0};
 
+uint32_t clustercmd_crc32_table[1<<8];
 
 /**
  * @brief 			Adds command (message) to window buffer
@@ -84,7 +85,7 @@ static inline int clustercmd_window_add(clustercmd_t *clustercmd_p) {
 	}
 
 	// Calculating required memory space in buffer for the message
-	size_t clustercmd_size = sizeof(clustercmdhdr_t) + clustercmd_p->h.data_len;
+	size_t clustercmd_size = CLUSTERCMD_SIZE(*clustercmd_p);
 	size_t required_space  = sizeof(clustercmdwaitackhdr_t) + clustercmd_size;
 
 	// Searching occupied boundaries in the window buffer
@@ -197,6 +198,46 @@ static inline int clustercmd_window_del(clustercmdwaitack_t *waitack_p) {
 
 
 /**
+ * @brief 			Initializes table for CRC32 calculations
+ * 
+ * @param[in]	clustercmd_p	Pointer to clustercmd
+ * 
+ * @retval	uint32_t	CRC32 value of clustecmd
+ * 
+ */
+
+/*
+   Name  : CRC-32
+   Poly  : 0x04C11DB7    x^32 + x^26 + x^23 + x^22 + x^16 + x^12 + x^11 
+                        + x^10 + x^8 + x^7 + x^5 + x^4 + x^2 + x + 1
+   Init  : 0xFFFFFFFF
+   Revert: true
+   XorOut: 0xFFFFFFFF
+   Check : 0xCBF43926 ("123456789")
+ */
+int clustercmd_crc32_calc_init() {
+	int i;
+	uint32_t crc32;
+
+	i=0;
+	while(i < (1<<8)) {
+		int j;
+		crc32 = i;
+
+		j = 0;
+		while(j < 8) {
+			crc32  =  (crc32 & 1) ? (crc32 >> 1) ^ 0xEDB88320 : crc32 >> 1;
+			j++;
+		}
+	
+		clustercmd_crc32_table[i] = crc32;
+		i++;
+	};
+
+	return 0;
+}
+
+/**
  * @brief 			Calculates CRC32 for clustercmd
  * 
  * @param[in]	clustercmd_p	Pointer to clustercmd
@@ -205,10 +246,34 @@ static inline int clustercmd_window_del(clustercmdwaitack_t *waitack_p) {
  * 
  */
 
-int clustercmd_crc32_calc(clustercmd_t *clustercmd_p) {
-	return 0;
-}
+/*
+   Name  : CRC-32
+   Poly  : 0x04C11DB7    x^32 + x^26 + x^23 + x^22 + x^16 + x^12 + x^11 
+                        + x^10 + x^8 + x^7 + x^5 + x^4 + x^2 + x + 1
+   Init  : 0xFFFFFFFF
+   Revert: true
+   XorOut: 0xFFFFFFFF
+   Check : 0xCBF43926 ("123456789")
+ */
+uint32_t clustercmd_crc32_calc(clustercmd_t *clustercmd_p) {
+	uint32_t crc32, crc32_save;
 
+	// Preparing
+	crc32_save = clustercmd_p->h.crc32;
+	clustercmd_p->h.crc32 = 0;
+	crc32 = 0xFFFFFFFF;
+
+	uint32_t size = CLUSTERCMD_SIZE(*clustercmd_p);
+	char    *ptr  = (char *)clustercmd_p;
+
+	// Calculating
+	while(size--) 
+		crc32 = clustercmd_crc32_table[(crc32 ^ *(ptr++)) & 0xFF] ^ (crc32 >> 8);
+
+	// Ending
+	clustercmd_p->h.crc32 = crc32_save;
+	return crc32 ^ 0xFFFFFFFF;
+}
 
 /**
  * @brief 			Changes information about node's status in nodeinfo[] and updates connected information.
@@ -646,7 +711,8 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 
 	cluster_timeout	= options_p->cluster_timeout * 1000;
 
-	// Initializing a cluster_read_proc() with cluster_read_proc_init()
+	// Initializing another routines
+	clustercmd_crc32_calc_init();
 	cluster_recv_proc_init();
 
 	// Getting my ID in the cluster

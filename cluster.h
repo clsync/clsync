@@ -50,6 +50,9 @@
 #define CLUSTER_MALLOC(data_type, restdata_len)\
 	CLUSTER_ALLOC(data_type, restdata_len, xmalloc)
 
+// Common macros
+#define CLUSTERCMD_SIZE(clustercmd) (sizeof(clustercmdhdr_t) + (clustercmd).h.data_len)
+
 // Types
 
 enum nodestatus {
