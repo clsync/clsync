@@ -149,12 +149,8 @@ typedef struct window_occupied_sides window_occupied_sides_t;
 
 struct window {
 	unsigned int		  size;			// Allocated cells
-	unsigned int		  packets;		// Packets are waiting for ACK-s
-	unsigned int		  idstack_len;		// Count of stacked cells for future use
-	unsigned int		 *idstack;		// Stack of cells for future use
-	char			 *idstacked;		// Assoc-array of cells' id-s (aka window_id) to determine is the cell stacked
-	unsigned int		  occupied_len;		// Count of cells with packets and stacked cells for future use
-	unsigned int		 *occupied_id;		// Array of cells' id-s with packets and stacked cells for future use
+	unsigned int		  packets_len;		// Count of packets (are waiting for ACK-s)
+	unsigned int		 *packets_id;		// Array of cells' id-s with packets
 	window_occupied_sides_t	 *occupied_sides;	// Array of structures with coordinates in buffer of occupied space by cell ida (aka window_id)
 	GHashTable		 *serial2waitack_ht;	// Hash-table: clustercmd.h.serial ->  clustercmdwaitack
 	size_t			  buf_size;		// Allocated space of the buffer
