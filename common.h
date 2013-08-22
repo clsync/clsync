@@ -21,8 +21,6 @@
 #define _XOPEN_SOURCE 700
 #define _LARGEFILE64_SOURCE
 
-#define ALLOC_PORTION	(1<<10)
-
 #define AUTHOR "Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C"
 
 #include <stdio.h>
