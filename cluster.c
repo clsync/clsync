@@ -49,9 +49,181 @@ nodeinfo_t nodeinfo[MAXNODES]   = {{0}};
 
 nodeinfo_t *nodeinfo_my		= NULL;
 uint8_t	node_id_my		= NODEID_NOID;
+uint8_t node_ids[MAXNODES]	= {0};
 unsigned int cluster_timeout	= 0;
 uint8_t node_count		= 0;
 uint8_t node_online		= 0;
+
+cluster_recvproc_funct_t recvproc_funct[COUNT_CLUSTERCMDID] = {NULL};
+
+window_t window = {0};
+
+
+/**
+ * @brief 			Adds command (message) to window buffer
+ * 
+ * @param[in]	clustercmd_p	Pointer to cluster cmd to put into window
+ * 
+ * @retval	zero		Successful
+ * @retval	non-zero	If got error while deleting the message. The error-code is placed into returned value.
+ * 
+ */
+
+static inline int clustercmd_window_add(clustercmd_t *clustercmd_p) {
+	/*
+	struct window {
+		unsigned int	  size;
+		unsigned int	  packets;
+		unsigned int	  last;
+		unsigned int	  idstack_len;
+		unsigned int	 *idstack;
+		char		 *idstacked;
+		unsigned int	 *busy_id;
+		size_t		 *busy_sides[WINDOW_SIDES];
+		GHashTable	 *serial2waitack_ht;
+		size_t		  buf_size;
+		char 		 *buf;
+	};
+	struct clustercmdwaitack {
+		unsigned int	window_id;
+		char 		ack_from[MAXNODES];
+		uint8_t 	ack_count;
+		clustercmd_t 	cmd;
+	};
+	*/
+
+	// Checking if there enough window cells allocated
+	if(window.packets >= window.size) {
+		window.size 		+= ALLOC_PORTION;
+
+#		define CXREALLOC(a, size) \
+			(typeof(a))xrealloc((char *)(a), (size_t)(size) * sizeof(*(a)))
+	
+		window.idstack	  = CXREALLOC(window.idstack,	  window.size);
+		window.idstacked  = CXREALLOC(window.idstacked,  window.size);
+		window.busy_id	  = CXREALLOC(window.busy_id,	  window.size);
+		window.busy_sides = CXREALLOC(window.busy_sides, window.size);
+#		undef CXREALLOC
+	}
+
+	// Calculating required memory space in buffer for the message
+	size_t required_space = sizeof(clustercmdwaitackhdr_t) + sizeof(clustercmdhdr_t) + clustercmd_p->h.data_len;
+
+	// Searching business boundaries in the window buffer
+	size_t busy_left = SIZE_MAX, busy_right=0;
+	int i;
+	i = 0;
+	while(i < window.packets) {
+		unsigned int window_id;
+		window_id  = window.busy_id[i];
+
+		busy_left  = MIN(busy_left,  window.busy_sides[window_id].left);
+		busy_right = MAX(busy_right, window.busy_sides[window_id].right);
+	}
+
+	printf_ddd("Debug3: clustercmd_window_add(): w.size == %u, b_left == %u; b_right == %u; w.buf_size == %u; r_space == %u\n",
+		window.size, busy_left, busy_right, window.buf_size, required_space);
+
+	// Trying to find a space in the buffer to place message
+	size_t buf_coordinate = SIZE_MAX;
+	if(window.packets) {
+		size_t free_left  = busy_left;
+		size_t free_right = window.buf_size - busy_right;
+
+		if(free_left  > required_space)
+			buf_coordinate = free_left - required_space;
+		else
+		if(free_right > required_space)
+			buf_coordinate = busy_right;
+		else {	// Not enough space in the window buffer;
+			window.buf_size += MAX(CLUSTER_WINDOW_BUFSIZE_PORTION, required_space);
+			window.buf	 = xrealloc(window.buf, window.buf_size);
+			buf_coordinate = busy_right;
+		}
+		printf_ddd("Debug3: clustercmd_window_add(): f_left == %u; f_right == %u; b_coord == %u; w.buf_size == %u",
+			free_left, free_right, buf_coordinate, window.buf_size);
+	}
+
+	if(window.idstack_len) {
+		unsigned int window_id;
+		(void)window_id;	// Anti-warning
+		window.busy_sides[window_id].left  = buf_coordinate;
+		window.busy_sides[window_id].right = buf_coordinate + required_space;
+	} else {
+		// !!!
+	}
+
+	window.packets++;
+
+	
+
+	g_hash_table_remove(window.serial2waitack_ht, GINT_TO_POINTER(clustercmd_p->h.serial));
+
+	return 0;
+}
+
+
+/**
+ * @brief 			Removes command (message) from window buffer
+ * 
+ * @param[in]	waitack_p	Pointer to waitack structure of the command (message)
+ * 
+ * @retval	zero		Successful
+ * @retval	non-zero	If got error while deleting the message. The error-code is placed into returned value.
+ * 
+ */
+
+static inline int clustercmd_window_del(clustercmdwaitack_t *waitack_p) {
+#ifdef PARANOID
+	if(!window.size) {
+		printf_e("Error: clustercmd_window_del(): window is not allocated.");
+		return EINVAL;
+	}
+	if(!window.packets) {
+		printf_e("Error: clustercmd_window_del(): there already no packets in the window.");
+		return EINVAL;
+	}
+#endif
+
+	/*
+	struct window {
+		unsigned int	  size;
+		unsigned int	  packets;
+		unsigned int	  used;
+		unsigned int	  idstack_len;
+		unsigned int	 *idstack;
+		char		 *idstacked;
+		size_t		 *busy[WINDOW_SIDES];
+		GHashTable	 *serial2waitack_ht;
+		size_t		  buf_size;
+		char 		 *buf;
+	};
+	struct clustercmdwaitack {
+		unsigned int	window_id;
+		char 		ack_from[MAXNODES];
+		uint8_t 	ack_count;
+		clustercmd_t 	cmd;
+	};
+	*/
+
+	unsigned int window_id = waitack_p->h.window_id;
+
+	g_hash_table_remove(window.serial2waitack_ht, GINT_TO_POINTER(waitack_p->cmd.h.serial));
+	window.packets--;
+
+	if(window_id == (window.used-1)) {
+		window.used--;
+		while(window.idstacked[window.used-1]) {
+			window.idstacked[--window.used] = 0;
+			window.idstack_len--;
+		}
+		return 0;
+	}
+
+	window.idstack[window.idstack_len++] = window_id;
+
+	return 0;
+}
 
 
 /**
@@ -79,21 +251,36 @@ int clustercmd_crc32_calc(clustercmd_t *clustercmd_p) {
  * 
  */
 
-int node_changestatus(uint8_t node_id, uint8_t node_status) {
+int node_status_change(uint8_t node_id, uint8_t node_status) {
 	uint8_t node_status_old = nodeinfo[node_id].status;
+	nodeinfo_t *nodeinfo_p = &nodeinfo[node_id];
+
+	if((node_status == NODESTATUS_DOESNTEXIST) && (node_status_old != NODESTATUS_DOESNTEXIST)) {
+		node_count--;
+
+		node_ids[nodeinfo_p->num] = node_ids[node_count];
+		g_hash_table_destroy(nodeinfo_p->modtime_ht);
 #ifdef VERYPARANOID
-	if(node_status == NODESTATUS_DOESNTEXIST) {
-		printf_e("Error: cluster_recv(): There's something wrong, new node's status for node_id == %i is NODESTATUS_DOESNTEXIST [%i] (was %i)\n", 
-			node_id, NODESTATUS_DOESNTEXIST, node_status_old);
-		return EINVAL;
-	}
+		memset(nodeinfo_p, 0, sizeof(*nodeinfo_p));
 #endif
+		return 0;
+	}
+
 	if(node_status == node_status_old)
 		return 0;
 
+
 	switch(node_status_old) {
 		case NODESTATUS_DOESNTEXIST:
+			nodeinfo_p->id  = node_id;
+			nodeinfo_p->num = node_count;
+			node_ids[node_count] = node_id;
+
 			node_count++;
+#ifdef PARANOID
+			if(node_status == NODESTATUS_OFFLINE)
+				break;
+#endif
 		case NODESTATUS_OFFLINE:
 			node_online++;
 			break;
@@ -107,6 +294,25 @@ int node_changestatus(uint8_t node_id, uint8_t node_status) {
 
 	return 0;
 }
+
+
+/**
+ * @brief 			Sets message processing functions for cluster_recv_proc() function for specified command type
+ * 
+ * @param[in]	cmd_id		The command type
+ * @param[in]	procfunct	The processing function for messages with specified cmd_id
+ * 
+ * @retval	zero		Successful
+ * @retval	non-zero	If got error while setting processing function. The error-code is placed into returned value.
+ * 
+ */
+
+static inline int cluster_recv_proc_set(clustercmd_id_t cmd_id, cluster_recvproc_funct_t procfunct) {
+	recvproc_funct[cmd_id] = procfunct;
+
+	return 0;
+}
+
 
 /**
  * @brief 			Receives message from another nodes of the cluster.
@@ -160,16 +366,16 @@ int cluster_recv(clustercmd_t **clustercmd_pp, size_t *size_p, unsigned int *tim
 
 
 	// CODE HERE
-	if(clustercmd_p->src_node_id >= MAXNODES) {
-		printf_e("Warning: cluster_recv(): Invalid src_node_id: %i >= "XTOSTR(MAXNODES)"\n", clustercmd_p->src_node_id);
+	if(clustercmd_p->h.src_node_id >= MAXNODES) {
+		printf_e("Warning: cluster_recv(): Invalid h.src_node_id: %i >= "XTOSTR(MAXNODES)"\n", clustercmd_p->h.src_node_id);
 	}
-	if(clustercmd_p->dst_node_id >= MAXNODES) {
-		printf_e("Warning: cluster_recv(): Invalid dst_node_id: %i >= "XTOSTR(MAXNODES)"\n", clustercmd_p->dst_node_id);
+	if(clustercmd_p->h.dst_node_id >= MAXNODES) {
+		printf_e("Warning: cluster_recv(): Invalid h.dst_node_id: %i >= "XTOSTR(MAXNODES)"\n", clustercmd_p->h.dst_node_id);
 	}
 
 
-	printf_ddd("Debug3: cluster_recv(): Received: {dst_node_id: %u, src_node_id: %u, cmd_id: %u, crc32: %u, data_len: %u}, timeout: %u -> %u\n",
-		clustercmd_p->dst_node_id, clustercmd_p->src_node_id, clustercmd_p->cmd_id, clustercmd_p->crc32, clustercmd_p->data_len, *timeout_p, timeout);
+	printf_ddd("Debug3: cluster_recv(): Received: {h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u, crc32: %u, data_len: %u}, timeout: %u -> %u\n",
+		clustercmd_p->h.dst_node_id, clustercmd_p->h.src_node_id, clustercmd_p->h.cmd_id, clustercmd_p->h.crc32, clustercmd_p->h.data_len, *timeout_p, timeout);
 
 	// Setting the timeout
 	if(timeout_p != NULL)
@@ -179,27 +385,141 @@ int cluster_recv(clustercmd_t **clustercmd_pp, size_t *size_p, unsigned int *tim
 	*size_p = size;
 
 	uint32_t crc32 = clustercmd_crc32_calc(clustercmd_p);
-	if(crc32 != clustercmd_p->crc32) {
+	if(crc32 != clustercmd_p->h.crc32) {
 //		CLUSTER_ALLOCA(clustercmd_p, )
 
-		printf_d("Debug: cluster_recv(): CRC32 mismatch: clustercmd_p->crc32 != clustercmd_crc32_calc(clustercmd_p): %p != %p.\n", (void*)(long)clustercmd_p->crc32, (void*)(long)crc32);
+		printf_d("Debug: cluster_recv(): CRC32 mismatch: clustercmd_p->crc32 != clustercmd_crc32_calc(clustercmd_p): %p != %p.\n", (void*)(long)clustercmd_p->h.crc32, (void*)(long)crc32);
 //		cluster_send
 	}
 
 	// Paranoid routines
 	//	The message from us? Something wrong if it is.
 #ifdef PARANOID
-	if(clustercmd_p->src_node_id == node_id_my) {
+	if(clustercmd_p->h.src_node_id == node_id_my) {
 #ifdef VERYPARANOID
-		printf_e("Error: cluster_recv(): clustercmd_p->src_node_id == node_id_my (%i != %i). Exit.\n", clustercmd_p->src_node_id, node_id_my);
+		printf_e("Error: cluster_recv(): clustercmd_p->h.src_node_id == node_id_my (%i != %i). Exit.\n", clustercmd_p->h.src_node_id, node_id_my);
 		return EINVAL;
 #else
-		printf_e("Warning: cluster_recv(): clustercmd_p->src_node_id == node_id_my (%i != %i). Ignoring the command.\n", clustercmd_p->src_node_id, node_id_my);
+		printf_e("Warning: cluster_recv(): clustercmd_p->h.src_node_id == node_id_my (%i != %i). Ignoring the command.\n", clustercmd_p->h.src_node_id, node_id_my);
 		clustercmd_p = NULL;
 		return 0;
 #endif
 	}
 #endif
+	return 0;
+}
+
+
+/**
+ * @brief 			(hsyncop) Reads messages for time "_timeout" and proceeding them to recvproc_funct[] functions
+ * 
+ * @param[in]	_timeout	How long to wait messages (totally)
+ * 
+ * @retval	zero		Successful
+ * @retval	non-zero	If got error while reading or processing messages. The error-code is placed into returned value.
+ * 
+ */
+
+int cluster_recv_proc(unsigned int _timeout) {
+	int ret;
+	clustercmd_t *clustercmd_p=NULL;
+	size_t size=0;
+	unsigned int timeout = _timeout;
+	while((ret=cluster_recv(&clustercmd_p, &size, &timeout))) {
+		// Exit if error
+		if(ret == -1) {
+			printf_e("Error: cluster_recv_proc(): Got error while cluster_recv(): %s (%i).\n", strerror(errno), errno);
+			return errno;
+		}
+
+		// If we have appropriate callback function, then call it! :)
+		if(recvproc_funct[clustercmd_p->h.cmd_id])
+			if((ret=recvproc_funct[clustercmd_p->h.cmd_id](clustercmd_p))) {
+				printf_e("Error: cluster_recv_proc(): Got error from recvproc_funct[%i]: %s (%i)\n", clustercmd_p->h.cmd_id, strerror(ret), ret);
+				return ret;
+			}
+	}
+	free(clustercmd_p);
+
+	return 0;
+}
+
+
+/**
+ * @brief 			recvproc-function for ACK-messages
+ * 
+ * @param[in] 	clustercmd_p 	Pointer to clustercmd
+ * @param[in] 	arg_p		Pointer to argument
+ *
+ * @retval	zero 		Successfully initialized.
+ * @retval	non-zero 	Got error, while initializing.
+ * 
+ */
+
+static int cluster_recvproc_ack(clustercmd_t *clustercmd_p) {
+
+	uint32_t cmd_serial_ack = clustercmd_p->data_ack.serial;
+
+	clustercmdwaitack_t *waitack_p = (clustercmdwaitack_t *)g_hash_table_lookup(window.serial2waitack_ht, GINT_TO_POINTER(cmd_serial_ack));
+
+	if(waitack_p == NULL)
+		return 0;
+
+	uint8_t node_id_from = clustercmd_p->h.src_node_id;
+
+	if(! waitack_p->h.ack_from[node_id_from]) {
+		waitack_p->h.ack_count++;
+		waitack_p->h.ack_from[node_id_from]++;
+
+		if(waitack_p->h.ack_count == node_count)
+			clustercmd_window_del(waitack_p);
+	}
+
+	return 0;
+}
+
+
+/**
+ * @brief 			Sets message processing functions for cluster_recv_proc() function for specified command type
+ * 
+ * @param[in]	cmd_id		The command type
+ * @param[in]	procfunct	The processing function for messages with specified cmd_id
+ * 
+ * @retval	zero		Successful
+ * @retval	non-zero	If got error while setting processing function. The error-code is placed into returned value.
+ * 
+ */
+
+int cluster_recv_proc_init() {
+	window.serial2waitack_ht = g_hash_table_new_full(g_direct_hash, g_direct_equal, 0, 0);
+
+	cluster_recv_proc_set(CLUSTERCMDID_ACK, cluster_recvproc_ack);
+	return 0;
+}
+
+
+/**
+ * @brief 			Antagonist of cluster_recv_proc_init() function. Freeing everything what was allocated in cluster_recv_proc_init()
+ * 
+ * @retval	zero 		Successfully initialized
+ * @retval	non-zero 	Got error, while initializing
+ * 
+ */
+
+int cluster_recv_proc_deinit() {
+
+	if(window.serial2waitack_ht != NULL)
+		g_hash_table_destroy(window.serial2waitack_ht);
+
+	if(window.buf_size) {
+#ifdef PARANOID
+		if(window.buf == NULL) {
+			printf_e("Error: cluster_recv_proc_deinit(): window_buf_size != 0, but window_buf == NULL.\n");
+		} else
+#endif
+		free(window.buf);
+	}
+
 	return 0;
 }
 
@@ -215,12 +535,12 @@ int cluster_recv(clustercmd_t **clustercmd_pp, size_t *size_p, unsigned int *tim
  */
 
 int cluster_send(clustercmd_t *clustercmd_p) {
-	clustercmd_p->src_node_id = node_id_my;
+	clustercmd_p->h.src_node_id = node_id_my;
 
 	// CODE HERE
 
-	printf_ddd("Debug3: cluster_send(): Sending: {dst_node_id: %u, src_node_id: %u, cmd_id: %u, crc32: %u, data_len: %u}\n",
-		clustercmd_p->dst_node_id, clustercmd_p->src_node_id, clustercmd_p->cmd_id, clustercmd_p->crc32, clustercmd_p->data_len);
+	printf_ddd("Debug3: cluster_send(): Sending: {h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u, crc32: %u, data_len: %u}\n",
+		clustercmd_p->h.dst_node_id, clustercmd_p->h.src_node_id, clustercmd_p->h.cmd_id, clustercmd_p->h.crc32, clustercmd_p->h.data_len);
 
 	return 0;
 }
@@ -234,7 +554,7 @@ int cluster_send(clustercmd_t *clustercmd_p) {
  * @retval	zero 		Successfully send.
  * @retval	non-zero 	Got error, while sending.
  * 
- */
+ * /
 
 int cluster_send_ack(clustercmd_t *clustercmd_p) {
 	uint32_t cmd_serial = clustercmd_p->serial;
@@ -257,7 +577,7 @@ int cluster_send_ack(clustercmd_t *clustercmd_p) {
 
 			// 	Is this an acknowledge packet for us? Skipping if not.
 			clustercmd_ack_t *data_ack_p = &clustercmd_p->data_ack;
-			if(clustercmd_p->dst_node_id != node_id_my)
+			if(clustercmd_p->h.dst_node_id != node_id_my)
 				continue;
 
 			// 	Is this acknowledge packet about the commend we sent? Skipping if not.
@@ -268,6 +588,46 @@ int cluster_send_ack(clustercmd_t *clustercmd_p) {
 		}
 		free(clustercmd_p);
 	}
+
+	return 0;
+}
+*/
+
+/**
+ * @brief 			recvproc-function for setid-messages
+ * 
+ * @param[in] 	clustercmd_p 	Pointer to clustercmd
+ * @param[in] 	arg_p		Pointer to argument
+ *
+ * @retval	zero 		Successfully initialized.
+ * @retval	non-zero 	Got error, while initializing.
+ * 
+ */
+
+static int cluster_recvproc_setid(clustercmd_t *clustercmd_p) {
+	static time_t updatets = 0;
+
+	// 	Is this the most recent information? Skipping if not.
+	clustercmd_setiddata_t *data_setid_p = &clustercmd_p->data_setid;
+	if(!(data_setid_p->updatets > updatets))
+		return 0;
+
+	// 	Is the node name length in message equals to our node name length? Skipping if not.
+	uint32_t recv_nodename_len;
+	recv_nodename_len = CLUSTER_RESTDATALEN(clustercmd_p, clustercmd_setiddata_t);
+	if(recv_nodename_len != options_p->cluster_nodename_len)
+		return 0;
+
+	// 	Is the node name equals to ours? Skipping if not.
+	if(memcmp(data_setid_p->node_name, options_p->cluster_nodename, recv_nodename_len))
+		return 0;
+
+	//	Remembering the node that answered us
+	node_status_change(clustercmd_p->h.src_node_id, NODESTATUS_SEEMSONLINE);
+
+	// 	Seems, that somebody knows our node id, remembering it.
+	node_id_my  = clustercmd_p->h.dst_node_id;
+	updatets    = data_setid_p->updatets;
 
 	return 0;
 }
@@ -316,52 +676,26 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 
 	cluster_timeout	= options_p->cluster_timeout * 1000;
 
+	// Initializing a cluster_read_proc() with cluster_read_proc_init()
+	cluster_recv_proc_init();
+
 	// Getting my ID in the cluster
 
 	//	Trying to preserve my node_id after restart. :)
 	//	Asking another nodes about my previous node_id
 	{
 		clustercmd_t *clustercmd_p = CLUSTER_ALLOCA(clustercmd_getmyid_t, options_p->cluster_nodename_len);
-		memcpy(clustercmd_p->data_getmyid.node_name, options_p->cluster_nodename, clustercmd_p->data_len+1);
+		memcpy(clustercmd_p->data_getmyid.node_name, options_p->cluster_nodename, clustercmd_p->h.data_len+1);
 
-		clustercmd_p->cmd_id = CLUSTERCMDID_GETMYID;
+		clustercmd_p->h.cmd_id = CLUSTERCMDID_GETMYID;
 		cluster_send(clustercmd_p);
 	}
 
 	//	Processing answers
-	{
-		clustercmd_t *clustercmd_p=NULL;
-		int updatets = 0;
-		size_t size=0;
-		unsigned int timeout = cluster_timeout;
-		while((ret=cluster_recv(&clustercmd_p, &size, &timeout)) && (timeout>0)) {
-			//	Skipping not SETID-packets
-			CLUSTER_LOOP_EXPECTCMD(clustercmd_p, CLUSTERCMDID_SETID, ret);
+	cluster_recv_proc_set(CLUSTERCMDID_SETID, cluster_recvproc_setid);
 
-			// 	Is this the most recent information? Skipping if not.
-			clustercmd_setiddata_t *data_setid_p = &clustercmd_p->data_setid;
-			if(!(data_setid_p->updatets > updatets))
-				continue;
-
-			// 	Is the node name length in message equals to our node name length? Skipping if not.
-			uint32_t recv_nodename_len;
-			recv_nodename_len = CLUSTER_RESTDATALEN(clustercmd_p, clustercmd_setiddata_t);
-			if(recv_nodename_len != options_p->cluster_nodename_len)
-				continue;
-
-			// 	Is the node name equals to ours? Skipping if not.
-			if(memcmp(data_setid_p->node_name, options_p->cluster_nodename, recv_nodename_len))
-				continue;
-
-			//	Remembering the node that answered us
-			node_changestatus(clustercmd_p->src_node_id, NODESTATUS_SEEMSONLINE);
-
-			// 	Seems, that somebody knows our node id, remembering it.
-			node_id_my = clustercmd_p->dst_node_id;
-			updatets   = data_setid_p->updatets;
-		}
-		free(clustercmd_p);
-	}
+	if((ret=cluster_recv_proc(cluster_timeout)))
+		return ret;
 
 	printf_ddd("Debug3: cluster_init(): After communicating with others, my node_id is %i.\n", node_id_my);
 
@@ -380,22 +714,29 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 
 	//	If there's no free id-s, then exit :(
 	if(node_id_my == NODEID_NOID) {
-		printf_e("Error: Cannot find free node ID. Seems, that all %i ID-s is already busy.\n");
+		printf_e("Error: Cannot find free node ID. Seems, that all %i ID-s are already busy.\n");
 		return ENOMEM;
 	}
 
 	// Registering in the cluster
-	node_changestatus(node_id_my, NODESTATUS_SEEMSONLINE);
+
+	// 	Sending registration information
+	node_status_change(node_id_my, NODESTATUS_SEEMSONLINE);
 	{
 		clustercmd_t *clustercmd_p = CLUSTER_ALLOCA(clustercmd_register_t, options_p->cluster_nodename_len);
 		clustercmd_register_t *data_register_p = &clustercmd_p->data_register;
 
 		memcpy(data_register_p->node_name, options_p->cluster_nodename, options_p->cluster_nodename_len+1);
 
-		clustercmd_p->cmd_id = CLUSTERCMDID_REGISTER;
-		cluster_send_ack(clustercmd_p);
+		clustercmd_p->h.cmd_id = CLUSTERCMDID_REGISTER;
+		cluster_send(clustercmd_p);
 	}
-	node_changestatus(node_id_my, NODESTATUS_ONLINE);
+
+	// 	Getting answers
+	if((ret=cluster_recv_proc(cluster_timeout)))
+		return ret;
+
+	node_status_change(node_id_my, NODESTATUS_ONLINE);
 
 	// Initializing global variables, pt. 2
 	nodeinfo_my = &nodeinfo[node_id_my];
@@ -439,7 +780,20 @@ int cluster_deinit() {
 
 	ret = pthread_join(pthread_cluster, NULL);
 
-	g_hash_table_destroy(nodeinfo_my->modtime_ht);
+	cluster_recv_proc_deinit();
+
+#ifdef VERYPARANOID
+	int i=0;
+#endif
+	while(node_count) {
+#ifdef VERYPARANOID
+		if(i++ > NODES_MAX) {
+			printf_e("Error: cluster_deinit() looped. Forcing break.");
+			break;
+		}
+#endif
+		node_status_change(0, NODESTATUS_DOESNTEXIST);
+	}
 
 #ifdef VERYPARANOID
 	memset(node_info, 0, sizeof(node_info));
@@ -447,6 +801,7 @@ int cluster_deinit() {
 	node_online = 0;
 	node_id_my  = NODEID_NOID;
 #endif
+
 	return ret;
 }
 

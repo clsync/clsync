@@ -22,24 +22,24 @@
 // Macros for reading messages
 
 #define CLUSTER_RESTDATALEN(clustercmd_p, data_type) \
-	((clustercmd_p)->data_len - sizeof(data_type) + sizeof(char *))
+	((clustercmd_p)->h.data_len - sizeof(data_type) + sizeof(char *))
 
 #define CLUSTER_LOOP_EXPECTCMD(clustercmd_p, clustercmd_id, ret) {\
 		/* Exit if error */ \
 		if(ret == -1) { \
-			printf_e("Error: cluster_init(): Got error while cluster_recv(): %s (%i).\n", strerror(errno), errno); \
+			printf_e("Error: CLUSTER_LOOP_EXPECTCMD(): Got error while cluster_recv(): %s (%i).\n", strerror(errno), errno); \
 			return errno; \
 		}\
 \
 		/* Is that the command we are expecting? Skipping if not. */\
-		if(clustercmd_p->cmd_id != clustercmd_id)\
+		if(clustercmd_p->h.cmd_id != clustercmd_id)\
 			continue;\
 }
 
 // Macros for writing messages
 
 #define CLUSTER_REQMEM(data_type, restdata_len) \
-	(sizeof(clustercmd_t)-1 + sizeof(data_type)-1 + (restdata_len) + 2)
+	(sizeof(clustercmdhdr_t) + sizeof(data_type) + (restdata_len) + 2)
 
 #define CLUSTER_ALLOC(data_type, restdata_len, alloc_funct)\
 	(clustercmd_t *)PARANOIDV(memset)((alloc_funct)(CLUSTER_REQMEM(data_type, restdata_len))PARANOIDV(, 0, CLUSTER_REQMEM(data_type, restdata_len)))
@@ -66,6 +66,8 @@ enum nodeid {
 typedef enum nodeid nodeid_t;
 
 struct nodeinfo {
+	uint8_t      id;
+	uint8_t      num;
 	nodestatus_t status;
 	uint32_t     updatets;
 	GHashTable  *modtime_ht;
@@ -78,6 +80,7 @@ enum clustercmd_id {
 	CLUSTERCMDID_REGISTER 	= 2,
 	CLUSTERCMDID_GETMYID	= 3,
 	CLUSTERCMDID_SETID	= 4,
+	COUNT_CLUSTERCMDID
 };
 typedef enum clustercmd_id clustercmd_id_t;
 
@@ -102,7 +105,7 @@ struct clustercmd_ack {
 };
 typedef struct clustercmd_ack clustercmd_ack_t;
 
-struct clustercmd {
+struct clustercmdhdr {
 	uint8_t   dst_node_id;
 	uint8_t   src_node_id;
 	uint8_t   cmd_id;
@@ -110,6 +113,11 @@ struct clustercmd {
 	uint32_t  data_len;
 	uint32_t  ts;
 	uint32_t  serial;
+};
+typedef struct clustercmdhdr clustercmdhdr_t;
+
+struct clustercmd {
+	clustercmdhdr_t h;
 	union {
 		char data_p[1];
 		clustercmd_setiddata_t	data_setid;
@@ -119,6 +127,42 @@ struct clustercmd {
 	};
 };
 typedef struct clustercmd clustercmd_t;
+
+struct clustercmdwaitackhdr {
+	unsigned int	window_id;
+	char 		ack_from[MAXNODES];
+	uint8_t 	ack_count;
+};
+typedef struct clustercmdwaitackhdr clustercmdwaitackhdr_t;
+
+struct clustercmdwaitack {
+	clustercmdwaitackhdr_t	h;
+	clustercmd_t 		cmd;
+};
+typedef struct clustercmdwaitack clustercmdwaitack_t;
+
+struct window_busy_sides {
+	size_t	left;
+	size_t	right;
+};
+typedef struct window_busy_sides window_busy_sides_t;
+
+struct window {
+	unsigned int		  size;
+	unsigned int		  packets;
+	unsigned int		  used;
+	unsigned int		  idstack_len;
+	unsigned int		 *idstack;
+	char			 *idstacked;
+	unsigned int		 *busy_id;
+	window_busy_sides_t	 *busy_sides;
+	GHashTable		 *serial2waitack_ht;
+	size_t			  buf_size;
+	char 			 *buf;
+};
+typedef struct window window_t;
+
+typedef int (*cluster_recvproc_funct_t)(clustercmd_t *clustercmd_p);
 
 // Externs
 
