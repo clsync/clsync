@@ -81,7 +81,7 @@ ip a s eth0 | awk '{if($1=="inet") {gsub("/.*", "", $2); print $2}}'
 .RE
 
 .PP
-.B \-c, \-\-cluster\-ip
+.B \-m, \-\-cluster\-ip
 .I multicast\-ip
 .RS 8
 Not implemented yet!
@@ -98,7 +98,7 @@ Default value is "227.108.115.121". [(128+"c")."l"."s"."y"]
 .RE
 
 .PP
-.B \-c, \-\-cluster\-port
+.B \-P, \-\-cluster\-port
 .I multicast\-port
 .RS 8
 Not implemented yet!
@@ -116,7 +116,7 @@ Default value is "40079". [("n" << 8) + "c"]
 .RE
 
 .PP
-.B \-c, \-\-cluster\-timeout
+.B \-W, \-\-cluster\-timeout
 .I cluster\-timeout
 .RS 8
 Not implemented yet!
@@ -128,7 +128,7 @@ Default value is "1000". [1 second]
 .RE
 
 .PP
-.B \-c, \-\-cluster\-node\-name
+.B \-n, \-\-cluster\-node\-name
 .I cluster\-node\-name
 .RS 8
 Not implemented yet!

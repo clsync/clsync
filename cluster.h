@@ -98,6 +98,7 @@ struct nodeinfo {
 	nodestatus_t 	 status;
 	uint32_t    	 updatets;
 	GHashTable  	*modtime_ht;
+	GHashTable	*serial2queuedpacket_ht;
 	packets_stats_t	 packets_in;
 	packets_stats_t	 packets_out;
 	uint32_t	 last_serial;
@@ -214,7 +215,6 @@ struct window {
 	unsigned int		  packets_len;		// Count of packets (are waiting for ACK-s)
 	unsigned int		 *packets_id;		// Array of cells' id-s with packets
 	window_occupied_sides_t	 *occupied_sides;	// Array of structures with coordinates in buffer of occupied space by cell ida (aka window_id)
-	GHashTable		 *serial2queuedpacket_ht;// Hash-table: clustercmd.h.serial ->  clustercmdqueuedpacket
 	size_t			  buf_size;		// Allocated space of the buffer
 	char 			 *buf;			// Pointer to the buffer
 };
