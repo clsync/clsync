@@ -142,7 +142,31 @@ Default value is $(uname \-n).
 .RE
 
 .PP
-.B \-t, \-\-collectdelay
+.B \-k, \-\-timeout\-sync
+.I sync-timeout
+.RS 8
+Sets timeout for syncing processes.
+.B clsync
+will die if syncing process alive more than
+.I sync-timeout
+seconds.
+
+Set "0" to disable the timeout.
+
+Default value is "86400" ["24 hours"].
+.RE
+
+.PP
+.B \-w, \-\-delay\-sync
+.I additional\-delay
+.RS 8
+Sets the minimal delay (in seconds) between syncs.
+
+Default value is "30".
+.RE
+
+.PP
+.B \-t, \-\-delay\-collect
 .I ordinary\-delay
 .RS 8
 Sets the delay (in seconds) to collect events about ordinary files and
@@ -152,16 +176,30 @@ Default value is "30".
 .RE
 
 .PP
-.B \-w, \-\-syncdelay
-.I additional\-delay
+.B \-T, \-\-delay\-collect\-bigfile
+.I bigfiles\-delay
 .RS 8
-Sets the minimal delay (in seconds) between syncs.
+Sets the delay (in seconds) to collect events about "big files" (see
+.I filesize\-threshold
+).
 
-Default value is "30".
+Default value is "1800".
 .RE
 
 .PP
-.B \-d, \-\-outlistsdir
+.B \-B, \-\-threshold\-bigfile
+.I filesize\-threshold
+.RS 8
+Sets file size threshold (in bytes) that separates ordinary files from
+"big files". Events about "big files" are processed in another queue with a
+separate collecting delay. This is supposed to be used as a means of unloading
+IO resources.
+
+Default value is "134217728" ["128 MiB"].
+.RE
+
+.PP
+.B \-d, \-\-dir\-lists
 .I tmpdir\-path
 .RS 8
 Sets directory path to output temporary events\-lists files.
@@ -193,7 +231,7 @@ Forces
 to use "rsynclist" action instead of "initialsync" and "synclist" (see 
 .B SYNC HANDLER
 ). This option can be used only with
-.I \-\-outlistsdir
+.I \-\-dir\-lists
 option.
 
 Recommended option.
@@ -209,7 +247,7 @@ Is not set by default.
 .RE
 
 .PP
-.B \-L, \-\-rsyncinclimit
+.B \-L, \-\-rsync\-inclimit
 .I rsync\-includes\-line\-limit
 .RS 8
 Sets soft limit for lines count in files by path
@@ -226,7 +264,7 @@ Default value is "20000".
 .RE
 
 .PP
-.B \-I, \-\-rsyncpreferinclude
+.B \-I, \-\-rsync\-prefer\-include
 .RS 8
 Forces
 .B clsync
@@ -245,7 +283,7 @@ Is not set by default.
 .RE
 
 .PP
-.B \-x, \-\-ignoreexitcode
+.B \-x, \-\-ignore\-exitcode
 .I exitcode
 .RS 8
 Forces
@@ -262,7 +300,7 @@ Recommended values for rsync case are "23" and "24".
 .RE
 
 .PP
-.B \-U, \-\-dontunlinklists
+.B \-U, \-\-dont\-unlink\-lists
 .RS 8
 Do not delete list\-files after
 .I sync\-handler
@@ -274,54 +312,16 @@ Is not set by default.
 .RE
 
 .PP
-.B \-F, \-\-fullinitialsync
+.B \-F, \-\-full\-initialsync
 .RS 8
 Ignore filter rules from
 .I rules-file
 on initial sync.
 
-This may be useful, e.g. if it's required to sync "/var/log/" tree but not
-sync every change from there.
+This may be useful for quick start or e.g. if it's required to sync 
+"/var/log/" tree but not sync every change from there.
 
 Is not set by default.
-.RE
-
-.PP
-.B \-B, \-\-bigfilethreshold
-.I filesize\-threshold
-.RS 8
-Sets file size threshold (in bytes) that separates ordinary files from
-"big files". Events about "big files" are processed in another queue with a
-separate collecting delay. This is supposed to be used as a means of unloading
-IO resources.
-
-Default value is "134217728" ["128 MiB"].
-.RE
-
-.PP
-.B \-T, \-\-bigfilescollectdelay
-.I bigfiles\-delay
-.RS 8
-Sets the delay (in seconds) to collect events about "big files" (see
-.I filesize\-threshold
-).
-
-Default value is "1800".
-.RE
-
-.PP
-.B \-k, \-\-synctimeout
-.I sync-timeout
-.RS 8
-Sets timeout for syncing processes.
-.B clsync
-will die if syncing process alive more than
-.I sync-timeout
-seconds.
-
-Set "0" to disable the timeout.
-
-Default value is "86400" ["24 hours"].
 .RE
 
 .PP
@@ -398,7 +398,7 @@ is only a convenient way to run a syncing script.
 can run
 .I sync\-handler
 in five ways. Which way will be used is depends on specified options (see
-.I \-\-outlistsdir
+.I \-\-dir\-lists
 and
 .I \-\-rsync
 \*S).
@@ -420,7 +420,7 @@ it's passed bitmask of events with the file or directory (see
 "/usr/include/linux/inotify.h").
 
 This case will be used, if there is no
-.I \-\-outlistsdir
+.I \-\-dir\-lists
 options set.
 .RE
 
@@ -438,7 +438,7 @@ is supposed to recursively sync data from directory by path
 with manual excluding extra files.
 
 This case will be used for initial sync, if option
-.I \-\-outlistsdir
+.I \-\-dir\-lists
 is set, but option
 .I \-\-rsync
 is not set.
@@ -462,7 +462,7 @@ it's passed bitmask of events with the file or directory (see
 "/usr/include/linux/inotify.h").
 
 This case will be used not initial syncs, if option
-.I \-\-outlistsdir
+.I \-\-dir\-lists
 is set, but option
 .I \-\-rsync
 is not set.
@@ -484,7 +484,7 @@ is supposed to run "rsync" application with parameters:
 \-\-exclude '*'
 
 if option
-.I \-\-rsyncpreferinclude
+.I \-\-rsync\-prefer\-include
 is enabled.
 
 And with parameters:
@@ -496,7 +496,7 @@ And with parameters:
 \-\-exclude '*'
 
 if option
-.I \-\-rsyncpreferinclude
+.I \-\-rsync\-prefer\-include
 is disabled.
 
 This case will be used, if option
