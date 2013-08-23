@@ -1,0 +1,33 @@
+Unfortunetaly, on L2 all messages are sending to all members of the cluster.
+
+unicast:	dst_node_id == node_id
+broadcast:	dst_node_id == NOID
+
+session example of two nodes (A and B):
+
+A appears
+
+A -> getmyid	(serial: 0;	src: NOID	; dst: NOID;	name: A)
+A -> register	(serial: 1;	src: 0		; dst: NOID;	name: A)
+
+B appers
+
+B -> getmyid	(serial: 0;	src: NOID	; dst: NOID;	name: B)
+A -> setid	(serial: 2;	src: 0		; dst: NOID;	name: A;	updatets: 100)
+B -> register	(serial: 1;	src: 1		: dst: NOID;	name: B)
+A -> ack	(serial: 3;	src: 0		; dst: 1;	ack_serial: 1)
+A -> lock	(serial: 4:	src: 0		; dst: NOID;	[paths list])
+B -> ack	(serial: 2;	src: 1		; dst: 0;	ack_serial: 4)
+A -> unlock_all	(serial: 5:	src: 0		; dst: NOID)
+B -> ack	(serial: 3;	src: 1		; dst: 0;	ack_serial: 5)
+
+A disappers (shutdown)
+A appears
+
+A -> getmyid	(serial: 0;	src: NOID	; dst: NOID;	name: A)
+B -> setid	(serial: 4;	src: 1		; dst: 0;	name: A;	updatets: 200)
+A -> register	(serial: 1;	src: 0		; dst: NOID;	name: A)
+B -> ack	(serial: 5;	src: 1		; dst: 0;	ack_serial: 1)
+
+[...]
+

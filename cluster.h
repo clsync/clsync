@@ -59,7 +59,8 @@ enum nodestatus {
 	NODESTATUS_DOESNTEXIST = 0,
 	NODESTATUS_OFFLINE,
 	NODESTATUS_SEEMSONLINE,
-	NODESTATUS_ONLINE
+	NODESTATUS_ONLINE,
+	NODESTATUS_BANNED
 };
 typedef enum nodestatus nodestatus_t;
 
@@ -68,12 +69,21 @@ enum nodeid {
 };
 typedef enum nodeid nodeid_t;
 
+struct packets_stats {
+	uint64_t	 tot;
+	uint64_t	 rej;
+};
+typedef struct packets_stats packets_stats_t;
+
 struct nodeinfo {
-	uint8_t      id;
-	uint8_t      num;
-	nodestatus_t status;
-	uint32_t     updatets;
-	GHashTable  *modtime_ht;
+	uint8_t      	 id;
+	uint8_t      	 num;
+	nodestatus_t 	 status;
+	uint32_t    	 updatets;
+	GHashTable  	*modtime_ht;
+	packets_stats_t	 packets_in;
+	packets_stats_t	 packets_out;
+	uint32_t	 last_serial;
 };
 typedef struct nodeinfo nodeinfo_t;
 
@@ -88,7 +98,7 @@ enum clustercmd_id {
 typedef enum clustercmd_id clustercmd_id_t;
 
 struct clustercmd_getmyid {
-	char     node_name[1];
+	char      node_name[1];
 };
 typedef struct clustercmd_getmyid clustercmd_getmyid_t;
 
@@ -99,7 +109,7 @@ struct clustercmd_setiddata {
 typedef struct clustercmd_setiddata clustercmd_setiddata_t;
 
 struct clustercmd_register {
-	char     node_name[1];
+	char      node_name[1];
 };
 typedef struct clustercmd_register clustercmd_register_t;
 
@@ -107,6 +117,11 @@ struct clustercmd_ack {
 	uint32_t serial;
 };
 typedef struct clustercmd_ack clustercmd_ack_t;
+
+struct clustercmd_ackrej {
+	uint32_t serial;
+};
+typedef struct clustercmd_ackrej clustercmd_ackrej_t;
 
 struct clustercmdhdr {
 	uint8_t   dst_node_id;
@@ -126,6 +141,7 @@ struct clustercmd {
 		clustercmd_setiddata_t	data_setid;
 		clustercmd_register_t	data_register;
 		clustercmd_ack_t	data_ack;
+		clustercmd_ackrej_t	data_ackrej;
 		clustercmd_getmyid_t	data_getmyid;
 	};
 };

@@ -2,22 +2,27 @@
 I want to say thanks to next people:
 
 
-1. Artyom A Anikeev <anikeev@ut.mephi.ru> 0xB5385841
+1. Andrew A Savchenko <bircoph@ut.mephi.ru> 0x76B176E4
 
-For preparing deb packages.
-
-
-2. Andrew A Savchenko <bircoph@ut.mephi.ru> 0x76B176E4
-
-For fixing my Makefile and good programming advices :)
+For adapting clsync for gentoo and for good programming advices :)
 
 
-3. oldlaptop (https://github.com/oldlaptop)
+2. Barak A Pearlmutter (https://github.com/barak)
+
+For adapting clsync to autotools
+
+
+3. Artyom A Anikeev <anikeev@ut.mephi.ru> 0xB5385841
+
+For preparing first deb packages.
+
+
+4. oldlaptop (https://github.com/oldlaptop)
 
 For fixing spelling and grammar.
 
 
-4. Alexander M Gladtsin <amgladtsin@mephi.ru>
+5. Alexander M Gladtsin <amgladtsin@mephi.ru>
 
 For testing
 

@@ -332,6 +332,75 @@ int node_status_change(uint8_t node_id, uint8_t node_status) {
 
 
 /**
+ * @brief 			Sends message to another nodes of the cluster.
+ * 
+ * @param[in]	clustercmd_p	Command structure pointer.
+ *
+ * @retval	zero 		Successfully send.
+ * @retval	non-zero 	Got error, while sending.
+ * 
+ */
+
+int cluster_send(clustercmd_t *clustercmd_p) {
+	clustercmd_p->h.src_node_id = node_id_my;
+
+	// CODE HERE
+
+	printf_ddd("Debug3: cluster_send(): Sending: {h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u, crc32: %u, data_len: %u}\n",
+		clustercmd_p->h.dst_node_id, clustercmd_p->h.src_node_id, clustercmd_p->h.cmd_id, clustercmd_p->h.crc32, clustercmd_p->h.data_len);
+
+	return 0;
+}
+
+
+/**
+ * @brief 			(syncop) Sends message to another nodes of the cluster and waits for ACK-answers. (with skipping all other packets)
+ * 
+ * @param[in]	clustercmd_p	Command structure pointer.
+ *
+ * @retval	zero 		Successfully send.
+ * @retval	non-zero 	Got error, while sending.
+ * 
+ * /
+
+int cluster_send_ack(clustercmd_t *clustercmd_p) {
+	uint32_t cmd_serial = clustercmd_p->serial;
+
+	// Sending the message
+	int ret = cluster_send(clustercmd_p);
+	if(ret) {
+		printf_e("Error: cluster_send_ack(): Got error from cluster_send(): %s (errno %i).\n", strerror(ret), ret);
+		return ret;
+	}
+
+	// Waiting for ACK-messages from all registered nodes
+	{
+		clustercmd_t *clustercmd_p=NULL;
+		size_t size=0;
+		unsigned int timeout = cluster_timeout;
+		while((ret=cluster_recv(&clustercmd_p, &size, &timeout)) && (timeout>0)) {
+			// 	Skipping not ACK-messages.
+			CLUSTER_LOOP_EXPECTCMD(clustercmd_p, CLUSTERCMDID_ACK, ret);
+
+			// 	Is this an acknowledge packet for us? Skipping if not.
+			clustercmd_ack_t *data_ack_p = &clustercmd_p->data_ack;
+			if(clustercmd_p->h.dst_node_id != node_id_my)
+				continue;
+
+			// 	Is this acknowledge packet about the commend we sent? Skipping if not.
+			if(data_ack_p->serial != cmd_serial)
+				continue;
+
+			
+		}
+		free(clustercmd_p);
+	}
+
+	return 0;
+}
+*/
+
+/**
  * @brief 			Sets message processing functions for cluster_recv_proc() function for specified command type
  * 
  * @param[in]	cmd_id		The command type
@@ -396,17 +465,28 @@ int cluster_recv(clustercmd_t **clustercmd_pp, size_t *size_p, unsigned int *tim
 		*clustercmd_pp = (clustercmd_t *)xmalloc(size);
 	}
 
+	// CODE HERE
 	// Getting clustercmd_p
 	clustercmd_t *clustercmd_p = *clustercmd_pp;
 
+	if(clustercmd_p->h.src_node_id == NODEID_NOID) {
+		// Packet from registering node
 
-	// CODE HERE
+		return 0;
+	} else
 	if(clustercmd_p->h.src_node_id >= MAXNODES) {
 		printf_e("Warning: cluster_recv(): Invalid h.src_node_id: %i >= "XTOSTR(MAXNODES)"\n", clustercmd_p->h.src_node_id);
+		return 0;
 	}
+	if(clustercmd_p->h.dst_node_id == NODEID_NOID) {
+		// Broadcast packet
+
+	} else
 	if(clustercmd_p->h.dst_node_id >= MAXNODES) {
 		printf_e("Warning: cluster_recv(): Invalid h.dst_node_id: %i >= "XTOSTR(MAXNODES)"\n", clustercmd_p->h.dst_node_id);
+		return 0;
 	}
+	// CODE HERE
 
 
 	printf_ddd("Debug3: cluster_recv(): Received: {h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u, crc32: %u, data_len: %u}, timeout: %u -> %u\n",
@@ -421,10 +501,15 @@ int cluster_recv(clustercmd_t **clustercmd_pp, size_t *size_p, unsigned int *tim
 
 	uint32_t crc32 = clustercmd_crc32_calc(clustercmd_p);
 	if(crc32 != clustercmd_p->h.crc32) {
-//		CLUSTER_ALLOCA(clustercmd_p, )
+		// CRC32 mismatch. Sending REJECT-packet.
+
+		clustercmd_t *clustercmd_rej_p 		= CLUSTER_ALLOCA(clustercmd_ackrej_t, 0);
+		clustercmd_rej_p->h.dst_node_id 	= clustercmd_p->h.src_node_id;
+		clustercmd_rej_p->data_ackrej.serial 	= clustercmd_p->h.serial;
 
 		printf_d("Debug: cluster_recv(): CRC32 mismatch: clustercmd_p->crc32 != clustercmd_crc32_calc(clustercmd_p): %p != %p.\n", (void*)(long)clustercmd_p->h.crc32, (void*)(long)crc32);
-//		cluster_send
+
+		cluster_send(clustercmd_rej_p);
 	}
 
 	// Paranoid routines
@@ -506,7 +591,7 @@ static int cluster_recvproc_ack(clustercmd_t *clustercmd_p) {
 		waitack_p->h.ack_count++;
 		waitack_p->h.ack_from[node_id_from]++;
 
-		if(waitack_p->h.ack_count == node_count)
+		if(waitack_p->h.ack_count == node_count-1)
 			clustercmd_window_del(waitack_p);
 	}
 
@@ -557,76 +642,6 @@ int cluster_recv_proc_deinit() {
 
 	return 0;
 }
-
-
-/**
- * @brief 			Sends message to another nodes of the cluster.
- * 
- * @param[in]	clustercmd_p	Command structure pointer.
- *
- * @retval	zero 		Successfully send.
- * @retval	non-zero 	Got error, while sending.
- * 
- */
-
-int cluster_send(clustercmd_t *clustercmd_p) {
-	clustercmd_p->h.src_node_id = node_id_my;
-
-	// CODE HERE
-
-	printf_ddd("Debug3: cluster_send(): Sending: {h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u, crc32: %u, data_len: %u}\n",
-		clustercmd_p->h.dst_node_id, clustercmd_p->h.src_node_id, clustercmd_p->h.cmd_id, clustercmd_p->h.crc32, clustercmd_p->h.data_len);
-
-	return 0;
-}
-
-
-/**
- * @brief 			(syncop) Sends message to another nodes of the cluster and waits for ACK-answers. (with skipping all other packets)
- * 
- * @param[in]	clustercmd_p	Command structure pointer.
- *
- * @retval	zero 		Successfully send.
- * @retval	non-zero 	Got error, while sending.
- * 
- * /
-
-int cluster_send_ack(clustercmd_t *clustercmd_p) {
-	uint32_t cmd_serial = clustercmd_p->serial;
-
-	// Sending the message
-	int ret = cluster_send(clustercmd_p);
-	if(ret) {
-		printf_e("Error: cluster_send_ack(): Got error from cluster_send(): %s (errno %i).\n", strerror(ret), ret);
-		return ret;
-	}
-
-	// Waiting for ACK-messages from all registered nodes
-	{
-		clustercmd_t *clustercmd_p=NULL;
-		size_t size=0;
-		unsigned int timeout = cluster_timeout;
-		while((ret=cluster_recv(&clustercmd_p, &size, &timeout)) && (timeout>0)) {
-			// 	Skipping not ACK-messages.
-			CLUSTER_LOOP_EXPECTCMD(clustercmd_p, CLUSTERCMDID_ACK, ret);
-
-			// 	Is this an acknowledge packet for us? Skipping if not.
-			clustercmd_ack_t *data_ack_p = &clustercmd_p->data_ack;
-			if(clustercmd_p->h.dst_node_id != node_id_my)
-				continue;
-
-			// 	Is this acknowledge packet about the commend we sent? Skipping if not.
-			if(data_ack_p->serial != cmd_serial)
-				continue;
-
-			
-		}
-		free(clustercmd_p);
-	}
-
-	return 0;
-}
-*/
 
 /**
  * @brief 			recvproc-function for setid-messages
@@ -689,12 +704,18 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 		return EALREADY;
 	}
 
+	// Initializing global variables, pt. 1
+	options_p	= _options_p;
+	indexes_p	= _indexes_p;
+	cluster_timeout	= options_p->cluster_timeout * 1000;
+
 	// Initializing network routines
 	sock = socket(AF_INET, SOCK_DGRAM, 0);
 
 	int reuse = 1;
 	if(setsockopt(sock, SOL_SOCKET, SO_REUSEADDR,(char *)&reuse, sizeof(reuse)) < 0) {
-		printf_e("Error: cluster_init(): Got error while setsockopt(): %s (errno: %i)\n", strerror(errno), errno);
+		printf_e("Error: cluster_init(): Got error while setsockopt(): %s (errno: %i)\n", 
+			strerror(errno), errno);
 		return errno;
 	}
 
@@ -705,11 +726,23 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 	sa.sin_port 		= htons(options_p->cluster_mcastipport);
 	sa.sin_addr.s_addr	= INADDR_ANY;
 
-	// Initializing global variables, pt. 1
-	options_p	= _options_p;
-	indexes_p	= _indexes_p;
+	if(bind(sock, (struct sockaddr*)&sa, sizeof(sa))) {
+		printf_e("Error: cluster_init(): Got error while bind(): %s (errno: %i)\n", 
+			strerror(errno), errno);
+		return errno;
+	}
 
-	cluster_timeout	= options_p->cluster_timeout * 1000;
+	struct ip_mreq group;
+	group.imr_interface.s_addr = inet_addr(options_p->cluster_iface);
+	group.imr_multiaddr.s_addr = inet_addr(options_p->cluster_mcastipaddr);
+
+	if(setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, 
+				(char *)&group, sizeof(group)) < 0) {
+		printf_e("Error: cluster_init(): Cannot setsockopt() to enter to membership %s -> %s\n",
+			options_p->cluster_iface, options_p->cluster_mcastipaddr);
+		return errno;
+	}
+
 
 	// Initializing another routines
 	clustercmd_crc32_calc_init();
@@ -830,6 +863,8 @@ int cluster_deinit() {
 #endif
 		node_status_change(0, NODESTATUS_DOESNTEXIST);
 	}
+
+	close(sock);
 
 #ifdef VERYPARANOID
 	memset(node_info, 0, sizeof(node_info));

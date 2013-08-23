@@ -2116,6 +2116,7 @@ int sync_run(options_t *options_p) {
 		ret = cluster_init(options_p, &indexes);
 		if(ret) {
 			printf_e("Error: Cannot initialize cluster subsystem: %s (errno %i).\n", strerror(ret), ret);
+			cluster_deinit();
 			return ret;
 		}
 	}
