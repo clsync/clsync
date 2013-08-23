@@ -5,27 +5,47 @@ broadcast:	dst_node_id == NOID
 
 session example of two nodes (A and B):
 
-A appears
+A appears (getting node_id):
 
-A -> getmyid	(serial: 0;	src: NOID	; dst: NOID;	name: A)
-A -> register	(serial: 1;	src: 0		; dst: NOID;	name: A)
+A -> getmyid	(serial: 0;	src: NOID	; dst: NOID;	name: A)		| cluster_init()
+A -> register	(serial: 1;	src: 0		; dst: NOID;	name: A)		|
 
-B appers
+Trying to sync with somebody:
 
-B -> getmyid	(serial: 0;	src: NOID	; dst: NOID;	name: B)
-A -> setid	(serial: 2;	src: 0		; dst: NOID;	name: A;	updatets: 100)
-B -> register	(serial: 1;	src: 1		: dst: NOID;	name: B)
-A -> ack	(serial: 3;	src: 0		; dst: 1;	ack_serial: 1)
-A -> lock	(serial: 4:	src: 0		; dst: NOID;	[paths list])
-B -> ack	(serial: 2;	src: 1		; dst: 0;	ack_serial: 4)
-A -> unlock_all	(serial: 5:	src: 0		; dst: NOID)
-B -> ack	(serial: 3;	src: 1		; dst: 0;	ack_serial: 5)
+A -> updtree	(serial: 2;	src: 0		; dst: NOID;	[A modtree])
+
+B appears (getting node_id):
+
+B -> getmyid	(serial: 0;	src: NOID	; dst: NOID;	name: B)		| cluster_init()
+A -> setid	(serial: 3;	src: 0		; dst: NOID;	name: A; updatets: 100)	
+B -> register	(serial: 1;	src: 1		: dst: NOID;	name: B)		|
+A -> ack	(serial: 4;	src: 0		; dst: 1;	ack_serial: 1)
+
+Initial syncing A <-> B:
+
+B -> updtree	(serial: 2;	src: 1		; dst: NOID;	[B modtree])
+A -> updtree	(serial: 5;	src: 0		; dst: NOID;	[A modtree])
+A -> lock	(serial: 6:	src: 0		; dst: NOID;	[paths list])
+B -> ack	(serial: 2;	src: 1		; dst: 0;	ack_serial: 6)
+B -> lock	(serial: 3:	src: 1		; dst: NOID;	[paths list])
+A -> ack	(serial: 7;	src: 0		; dst: 1;	ack_serial: 3)
+A -> unlockall	(serial: 8:	src: 0		; dst: NOID)
+B -> ack	(serial: 4;	src: 1		; dst: 0;	ack_serial: 8)
+B -> unlockall	(serial: 5:	src: 1		; dst: NOID)
+A -> ack	(serial: 9;	src: 0		; dst: 1;	ack_serial: 5)
+
+Just syncing A -> B:
+
+A -> lock	(serial: 10:	src: 0		; dst: NOID;	[paths list])
+B -> ack	(serial: 6;	src: 1		; dst: 0;	ack_serial: 10)
+A -> unlockall	(serial: 11:	src: 0		; dst: NOID)
+B -> ack	(serial: 7;	src: 1		; dst: 0;	ack_serial: 11)
 
 A disappers (shutdown)
-A appears
+A appears (registering with old node_id)
 
 A -> getmyid	(serial: 0;	src: NOID	; dst: NOID;	name: A)
-B -> setid	(serial: 4;	src: 1		; dst: 0;	name: A;	updatets: 200)
+B -> setid	(serial: 4;	src: 1		; dst: 0;	name: A; updatets: 200)
 A -> register	(serial: 1;	src: 0		; dst: NOID;	name: A)
 B -> ack	(serial: 5;	src: 1		; dst: 0;	ack_serial: 1)
 

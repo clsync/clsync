@@ -46,6 +46,7 @@
 
 #define KILL_TIMEOUT			60
 
-#define ALLOC_PORTION			(1<<10) /* 1 KiX */
-#define CLUSTER_WINDOW_BUFSIZE_PORTION	(1<<20) /* 1 MiB */
+#define ALLOC_PORTION			(1<<10) /* 1  KiX */
+#define CLUSTER_WINDOW_BUFSIZE_PORTION	(1<<20) /* 1  MiB */
+#define CLUSTER_PACKET_MAXSIZE		(1<<24) /* 16 MiB */
 
