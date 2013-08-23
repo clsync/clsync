@@ -779,11 +779,11 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 		printf_ddd("Debug3: sync_initialsync(): syncing \"%s\"\n", path);
 /*
 		if(options_p->flags[PTHREAD])
-			return sync_exec_thread(options_p, NULL, options_p->actfpath, "initialsync", options_p->label, path, NULL);
+			return sync_exec_thread(options_p, NULL, options_p->handlerfpath, "initialsync", options_p->label, path, NULL);
 		else
-			return sync_exec       (options_p, NULL, options_p->actfpath, "initialsync", options_p->label, path, NULL);*/
+			return sync_exec       (options_p, NULL, options_p->handlerfpath, "initialsync", options_p->label, path, NULL);*/
 
-		return SYNC_EXEC(options_p, NULL, options_p->actfpath, "initialsync", options_p->label, path, NULL);
+		return SYNC_EXEC(options_p, NULL, options_p->handlerfpath, "initialsync", options_p->label, path, NULL);
 
 #ifdef DOXYGEN
 		sync_exec(NULL, NULL); sync_exec_thread(NULL, NULL);
@@ -1007,10 +1007,10 @@ int sync_notify_init(options_t *options_p) {
 static inline int sync_dosync_exec(options_t *options_p, const char *evmask_str, const char *fpath) {
 /*
 	if(options_p->flags[PTHREAD])
-		return sync_exec_thread(options_p, NULL, options_p->actfpath, "sync", options_p->label, evmask_str, fpath, NULL);
+		return sync_exec_thread(options_p, NULL, options_p->handlerfpath, "sync", options_p->label, evmask_str, fpath, NULL);
 	else
-		return sync_exec       (options_p, NULL, options_p->actfpath, "sync", options_p->label, evmask_str, fpath, NULL);*/
-	return SYNC_EXEC(options_p, NULL, options_p->actfpath, "sync", options_p->label, evmask_str, fpath, NULL);
+		return sync_exec       (options_p, NULL, options_p->handlerfpath, "sync", options_p->label, evmask_str, fpath, NULL);*/
+	return SYNC_EXEC(options_p, NULL, options_p->handlerfpath, "sync", options_p->label, evmask_str, fpath, NULL);
 
 #ifdef DOXYGEN
 	sync_exec(NULL, NULL); sync_exec_thread(NULL, NULL);
@@ -1284,7 +1284,7 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 		if(options_p->flags[PTHREAD])
 			return sync_exec_thread(options_p,
 						sync_idle_dosync_collectedevents_cleanup,
-						options_p->actfpath,
+						options_p->handlerfpath,
 						options_p->flags[RSYNC]?"rsynclist":"synclist",
 						options_p->label,
 						dosync_arg_p->outf_path,
@@ -1293,7 +1293,7 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 		else
 			return sync_exec       (options_p,
 						sync_idle_dosync_collectedevents_cleanup,
-						options_p->actfpath,
+						options_p->handlerfpath,
 						options_p->flags[RSYNC]?"rsynclist":"synclist", 
 						options_p->label,
 						dosync_arg_p->outf_path,
@@ -1305,7 +1305,7 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 		if(options_p->flags[RSYNC] >= 2)
 			return SYNC_EXEC(options_p,
 				sync_idle_dosync_collectedevents_cleanup,
-				options_p->actfpath,
+				options_p->handlerfpath,
 				"--inplace",
 				"-avH", 
 				"--delete-before",
@@ -1320,7 +1320,7 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 
 		return SYNC_EXEC(options_p,
 			sync_idle_dosync_collectedevents_cleanup,
-			options_p->actfpath,
+			options_p->handlerfpath,
 			options_p->flags[RSYNC]?"rsynclist":"synclist", 
 			options_p->label,
 			dosync_arg_p->outf_path,

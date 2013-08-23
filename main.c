@@ -181,7 +181,7 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 	if(optind+1 >= argc)
 		syntax();
 
-	options_p->actfpath = argv[optind+1];
+	options_p->handlerfpath = argv[optind+1];
 
 	if(optind+2 < argc) {
 		options_p->rulfpath = argv[optind+2];
@@ -519,8 +519,8 @@ int main(int argc, char *argv[]) {
 	}
 #endif
 
-	if(access(options.actfpath, X_OK) == -1) {
-		printf_e("Error: \"%s\" is not executable: %s (errno: %i).\n", options.actfpath, strerror(errno), errno);
+	if(access(options.handlerfpath, X_OK) == -1) {
+		printf_e("Error: \"%s\" is not executable: %s (errno: %i).\n", options.handlerfpath, strerror(errno), errno);
 		ret = errno;
 	}
 

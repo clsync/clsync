@@ -28,7 +28,7 @@ clsync \- live sync tool, written in GNU C
 .I label
 .B ]
 .I watch\-dir
-.I action\-script
+.I sync\-handler
 .B [
 .I rules\-file
 .B ]
@@ -38,7 +38,7 @@ clsync \- live sync tool, written in GNU C
 .SH DESCRIPTION
 .B clsync
 executes
-.I action\-script
+.I sync\-handler
 with appropriate arguments on FS events in directory
 .I watch\-dir
 using the
@@ -154,7 +154,7 @@ Not implemented yet!
 
 Sets the name of current node in the cluster. It will be used in action
 scripts of another nodes (see 
-.B ACTION SCRIPT
+.B SYNC HANDLER
 ).
 
 Default value is $(uname \-n).
@@ -188,17 +188,17 @@ Sets directory path to output temporary events\-lists files.
 If this option is enabled,
 .B clsync
 will execute
-.I action\-script
+.I sync\-handler
 once for each aggregated event list, passing the path to a file containing
 this list (actions "synclist" and "rsynclist").
 Otherwise,
 .B clsync
 will execute
-.I action\-script
+.I sync\-handler
 for every file in the aggregated event list (action "sync").
 
 See
-.B ACTION SCRIPT
+.B SYNC HANDLER
 \*S.
 
 Is not set by default.
@@ -210,7 +210,7 @@ Is not set by default.
 Forces
 .B clsync
 to use "rsynclist" action instead of "initialsync" and "synclist" (see 
-.B ACTION SCRIPT
+.B SYNC HANDLER
 ). This option can be used only with
 .I \-\-outlistsdir
 option.
@@ -219,7 +219,7 @@ Recommended option.
 
 You can use "\-RR" to run "rsync" directly, bypassing intermediate script
 (see
-.B ACTION SCRIPT
+.B SYNC HANDLER
 case
 .B e
 ). But you cannot use "\-\-cluster\-*" options in "\-RR" mode.
@@ -255,7 +255,7 @@ rsync on recursive syncing.
 See
 .B case d
 of
-.B ACTION SCRIPT
+.B SYNC HANDLER
 \*S.
 
 This option is not recommended.
@@ -272,7 +272,7 @@ Forces
 to do not process exitcode
 .I exitcode
 of
-.I action-script
+.I sync\-handler
 as an error. You can set multiple ignores by passing this option multiple
 times.
 
@@ -284,7 +284,7 @@ Recommended values for rsync case are "23" and "24".
 .B \-U, \-\-dontunlinklists
 .RS 8
 Do not delete list\-files after
-.I action\-script
+.I sync\-handler
 has finished.
 
 This may be used for debugging purposes.
@@ -387,7 +387,7 @@ Is set by default.
 Sets a label for this instance of clsync. The
 .I label
 will be passed to
-.I action\-script
+.I sync\-handler
 every execution.
 
 Default value is "nolabel".
@@ -405,28 +405,28 @@ Outputs options list and exits with exitcode "0".
 Outputs clsync version and exits with exitcode "0".
 .RE
 
-.SH ACTION SCRIPT
+.SH SYNC HANDLER
 .B clsync
 executes
-.I action\-script
+.I sync\-handler
 that supposed to take care of the actual syncing process. Therefore
 .B clsync
 is only a convenient way to run a syncing script.
 
 .B clsync
 can run
-.I action\-script
+.I sync\-handler
 in five ways:
 
 case
 .B a
 .RS
-.I action\-script
+.I sync\-handler
 initialsync
 .I label dirpath [nodes]
 
 In this case,
-.I action\-script
+.I sync\-handler
 is supposed to recursively sync data from directory by path
 .I dirpath
 with manual excluding extra files.
@@ -435,12 +435,12 @@ with manual excluding extra files.
 case
 .B b
 .RS
-.I action\-script
+.I sync\-handler
 sync
 .I label evmask path [nodes]
 
 In this case,
-.I action\-script
+.I sync\-handler
 is supposed to non\-recursively sync file or directory by
 .I path
 \*S. With
@@ -452,12 +452,12 @@ it's passed bitmask of events with the file or directory (see
 case
 .B c
 .RS
-.I action\-script
+.I sync\-handler
 synclist
 .I label listpath [nodes]
 
 In this case,
-.I action\-script
+.I sync\-handler
 is supposed to non\-recursively sync files and directories from list in a file by
 path
 .I listpath
@@ -470,12 +470,12 @@ it's passed bitmask of events with the file or directory (see
 case
 .B d
 .RS
-.I action\-script
+.I sync\-handler
 rsynclist
 .I label rsync\-listpath [nodes] [rsync\-exclude\-listpath]
 
 In this case,
-.I action\-script
+.I sync\-handler
 is supposed to run "rsync" application with parameters: 
 
 \-aH \-\-delete\-before \-\-include\-from
@@ -502,7 +502,7 @@ is disabled.
 case
 .B e
 .RS
-.I action\-script
+.I sync\-handler
 \-\-inplace \-avH \-\-delete\-before [\-\-exclude\-from
 .I rsync\-exclude\-listpath
 ]
@@ -512,13 +512,13 @@ case
 .I watch-dir/ dest-dir/
 
 In this case,
-.I action\-script
+.I sync\-handler
 is supposed to be a path to
 .B rsync
 binary.
 
 Error code "24" from
-.I action-script
+.I sync\-handler
 will be ignored in this case.
 .RE
 
@@ -591,7 +591,7 @@ They will be passed to rsync's exclude list one by one.
 To diagnose it, you can use "\-U" option and look into 
 .I rsync\-exclude\-listpath
 file (see
-.B ACTION SCRIPT
+.B SYNC HANDLER
 case 
 .B d
 )
@@ -616,7 +616,7 @@ Error: Got non-zero exitcode
 .I exitcode
 [...]
 .RS
-.I action-script
+.I sync\-handler
 returned non-zero exitcode. Probably, you should process exitcodes in it or
 your syncer process didn't worked well. I case of using rsync, you can find
 the exitcodes meanings in
@@ -647,7 +647,7 @@ and rsync with
 
 To confirm the problem, you can try to add "return 0" or "exit 0" into
 your
-.I action-script
+.I sync\-handler
 \*S.
 
 .RE

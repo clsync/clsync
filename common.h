@@ -190,7 +190,7 @@ struct options {
 	size_t watchdirwslashsize;
 	size_t destdirwslashsize;
 	short int watchdir_dirlevel;
-	char *actfpath;
+	char *handlerfpath;
 	char *rulfpath;
 	char *listoutdir;
 	int notifyengine;
