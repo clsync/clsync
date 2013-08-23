@@ -1,32 +1,13 @@
 .\" Sorry for my English 
 .\" --Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 .\"
-.\" Thanks to oldlaptop [https://github.com/oldlaptop] for spell and
-.\" grammar correction of this page.
+.\" Thanks to oldlaptop [https://github.com/oldlaptop] for help with spelling
 .\"
 .TH CLSYNC 1 "JULY 2013" Linux "User Manuals"
 .SH NAME
 clsync \- live sync tool, written in GNU C
 .SH SYNOPSIS
-.B clsync [\-bpvDqfih] 
-.B [\-t
-.I ordinary\-delay
-.B ]
-.B [\-w
-.I additional\-delay
-.B ]
-.B [\-d
-.I tmpdir\-path
-.B ]
-.B [\-B
-.I filesize\-theshold
-.B ]
-.B [\-t
-.I bigfiles\-delay
-.B ]
-.B [\-l
-.I label
-.B ]
+.B clsync [ options ] 
 .I watch\-dir
 .I sync\-handler
 .B [
@@ -416,24 +397,14 @@ is only a convenient way to run a syncing script.
 .B clsync
 can run
 .I sync\-handler
-in five ways:
+in five ways. Which way will be used is depends on specified options (see
+.I \-\-outlistsdir
+and
+.I \-\-rsync
+\*S).
 
 case
 .B a
-.RS
-.I sync\-handler
-initialsync
-.I label dirpath [nodes]
-
-In this case,
-.I sync\-handler
-is supposed to recursively sync data from directory by path
-.I dirpath
-with manual excluding extra files.
-.RE
-
-case
-.B b
 .RS
 .I sync\-handler
 sync
@@ -447,6 +418,30 @@ is supposed to non\-recursively sync file or directory by
 .I evmask
 it's passed bitmask of events with the file or directory (see 
 "/usr/include/linux/inotify.h").
+
+This case will be used, if there is no
+.I \-\-outlistsdir
+options set.
+.RE
+
+case
+.B b
+.RS
+.I sync\-handler
+initialsync
+.I label dirpath [nodes]
+
+In this case,
+.I sync\-handler
+is supposed to recursively sync data from directory by path
+.I dirpath
+with manual excluding extra files.
+
+This case will be used for initial sync, if option
+.I \-\-outlistsdir
+is set, but option
+.I \-\-rsync
+is not set.
 .RE
 
 case
@@ -465,6 +460,12 @@ path
 .I evmask
 it's passed bitmask of events with the file or directory (see 
 "/usr/include/linux/inotify.h").
+
+This case will be used not initial syncs, if option
+.I \-\-outlistsdir
+is set, but option
+.I \-\-rsync
+is not set.
 .RE
 
 case
@@ -497,6 +498,12 @@ And with parameters:
 if option
 .I \-\-rsyncpreferinclude
 is disabled.
+
+This case will be used, if option
+.I \-\-rsync
+is set once.
+
+Recommended case.
 .RE
 
 case
@@ -520,6 +527,10 @@ binary.
 Error code "24" from
 .I sync\-handler
 will be ignored in this case.
+
+This case will be used, if option
+.I \-\-rsync
+is set twice. This case is supposed to be used only as a proof of concept.
 .RE
 
 As can be noticed, in the first four cases clsync's
@@ -570,7 +581,7 @@ Rule format:
 .I *
 \- means all.
 
-For example: \-*/[Tt]estdir
+For example: \-*/[Tt]est
 
 .SH SIGNALS
 1  \- to reread filter rules
@@ -579,10 +590,12 @@ For example: \-*/[Tt]estdir
 
 12 \- runs full resync
 
+16 \- interrupts sleep()/select() and wait() [for debugging and internal uses]
+
 
 .SH DIAGNOSTICS
 
-initial rsync process works very slow on clsync start
+Initial rsync process works very slow on clsync start
 .RS
 Probably there's too huge exclude list is passed to rsync. This can happened
 if you're excluding with regex in clsync's rules a lot of thousands files.
