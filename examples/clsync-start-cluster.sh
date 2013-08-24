@@ -26,5 +26,5 @@ EOF
 
 
 
-../clsync -c "$IPADDR" -RR -d ./testdir/listdir -w 2 -p -t 5 ./testdir/from `which rsync` rules ./testdir/to
+../clsync -c "$IPADDR" -R -d ./testdir/listdir -w 2 -p -t 5 ./testdir/from ./clsync-actionscript-rsync.sh rules ./testdir/to
 
