@@ -43,12 +43,12 @@
 	(sizeof(clustercmdhdr_t) + sizeof(data_type) + (restdata_len) + 2)
 
 //	calculated required memory for clustercmd packet with padding
-#define CLUSTER_PREQMEM(data_type, restdata_len) \
-	((CLUSTER_REQMEM(data_type, restdata_len)+3)%4)
+#define CLUSTER_REQMEM_PADDED(data_type, restdata_len) \
+	CLUSTER_PAD(CLUSTER_REQMEM(data_type, restdata_len))
 
 //	allocated memory for clustercmd packet with padding
 #define CLUSTER_ALLOC(data_type, restdata_len, alloc_funct)\
-	(clustercmd_t *)PARANOIDV(memset)((alloc_funct)(CLUSTER_PREQMEM(data_type, restdata_len))PARANOIDV(, 0, CLUSTER_PREQMEM(data_type, restdata_len)))
+	(clustercmd_t *)PARANOIDV(memset)((alloc_funct)(CLUSTER_REQMEM_PADDED(data_type, restdata_len))PARANOIDV(, 0, CLUSTER_REQMEM_PADDED(data_type, restdata_len)))
 
 //	allocated memory for clustercmd packet with padding with alloca()
 #define CLUSTER_ALLOCA(data_type, restdata_len)\
@@ -60,7 +60,10 @@
 
 // Common macros
 
-#define CLUSTERCMD_SIZE(clustercmd) (sizeof(clustercmdhdr_t) + (clustercmd).h.data_len)
+#define CLUSTER_PAD(size) (((size) + 3) % 4)
+
+#define CLUSTERCMD_SIZE(clustercmd_p)        (sizeof(clustercmdhdr_t) +             (*(clustercmd_p)).h.data_len)
+#define CLUSTERCMD_SIZE_PADDED(clustercmd_p) (sizeof(clustercmdhdr_t) + CLUSTER_PAD((*(clustercmd_p)).h.data_len))
 
 // Types
 
