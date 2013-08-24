@@ -47,7 +47,7 @@ struct sockaddr_in sa_o		= {0};
 
 options_t  *options_p		= NULL;
 indexes_t  *indexes_p		= NULL;
-pthread_t   pthread_cluster;
+pthread_t   pthread_cluster	= 0;
 
 nodeinfo_t nodeinfo[MAXNODES]   = {{0}};
 
@@ -1083,13 +1083,16 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
  * 
  * @param[in] 	signal 		Signal number
  *
- * @retval	zero 		Successfully initialized
- * @retval	non-zero 	Got error, while initializing
+ * @retval	zero 		Successfully send the signal
+ * @retval	non-zero 	Got error, while sending the signal
  * 
  */
 
 static inline int cluster_signal(int signal) {
-	return pthread_kill(pthread_cluster, signal);
+	if(pthread_cluster)
+		return pthread_kill(pthread_cluster, signal);
+
+	return 0;
 }
 
 

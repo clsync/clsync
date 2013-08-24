@@ -395,6 +395,8 @@ int main(int argc, char *argv[]) {
 		options.cluster_timeout	    = DEFAULT_CLUSTERTIMEOUT;
 	if(!options.cluster_mcastipport)
 		options.cluster_mcastipport = DEFAULT_CLUSTERIPPORT;
+	if(!options.cluster_mcastipaddr)
+		options.cluster_mcastipaddr = DEFAULT_CLUSTERIPADDR;
 
 	if(options.cluster_iface != NULL) {
 #ifndef _DEBUG
