@@ -72,6 +72,13 @@ enum crc32_calc {
 };
 typedef enum crc32_calc crc32_calc_t;
 
+enum cluster_read_flags {
+	CLREAD_NONE		= 0x00,
+	CLREAD_CONTINUE		= 0x01,
+	CLREAD_ALL		= 0xff
+};
+typedef enum cluster_read_flags cluster_read_flags_t;
+
 enum nodestatus {
 	NODESTATUS_DOESNTEXIST = 0,
 	NODESTATUS_OFFLINE,
