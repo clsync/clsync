@@ -462,7 +462,7 @@ static inline int cluster_recv_proc_set(clustercmd_id_t cmd_id, cluster_recvproc
 
 
 /**
- * @brief 			Safe wrapper for read() function
+ * @brief 			Safe wrapper for recvfrom() function
  * 
  * @param[in]	sock		The socket descriptor
  * @param[in]	buf		Pointer to buffer
@@ -474,19 +474,25 @@ static inline int cluster_recv_proc_set(clustercmd_id_t cmd_id, cluster_recvproc
  */
 
 static inline int cluster_read(int sock, void *buf, size_t size) {
-	int readret = read(sock, buf, size);
+	struct sockaddr_in sa_in;
+	size_t sa_in_len = sizeof(sa_in);
+
+	int readret = recvfrom(sock, buf, size, MSG_WAITALL, (struct sockaddr *)&sa_in, (socklen_t * restrict)&sa_in_len);
+
 #ifdef PARANOID
 	if(!readret) {
-		printf_e("Error: cluster_read(): read() returned 0. This shouldn't happend. Exit.");
+		printf_e("Error: cluster_read(): recvfrom() returned 0. This shouldn't happend. Exit.");
 		return EINVAL;
 	}
 #endif
 	if(readret < 0) {
-		printf_e("Error: cluster_read(): read() returned %i. "
+		printf_e("Error: cluster_read(): recvfrom() returned %i. "
 			"Seems, that something wrong with network socket: %s (errno %i).\n", 
 			readret, strerror(errno), errno);
 		return errno != -1 ? errno : -2;
 	}
+
+	printf_dd("Debug2: cluster_read(): Got message from %s.\n", inet_ntoa(sa_in.sin_addr));
 
 	if(readret < size) {
 		// Too short message
