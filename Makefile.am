@@ -10,8 +10,8 @@ doc_DATA = CONTRIB DEVELOPING LICENSE README.md TODO
 
 exampledir=$(docdir)/examples
 
-example_DATA = examples/clsync-actionscript.sh		\
- examples/clsync-start0.sh examples/clsync-start1.sh
+example_DATA = examples/clsync-actionscript-rsync.sh		\
+ examples/clsync-start-rsync.sh examples/clsync-start-simple.sh examples/clsync-start-cluster.sh
 
 revision.h:
 	(echo -n '#define REVISION "'; [ -d .git ] && \

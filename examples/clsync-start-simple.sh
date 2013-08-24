@@ -1,6 +1,6 @@
 #!/bin/bash
 
-make -C .. all
+. ./build.sh
 
 mkdir -m 700 -p testdir/{from,to,listdir}
 
