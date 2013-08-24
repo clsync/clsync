@@ -1,0 +1,13 @@
+env:
+ global:
+   - CFLAGS=-DCLUSTER_SUPPORT
+before_install:
+ - apt-get install libglib2.0-dev
+before_script:
+ - autoreconf -i
+ - ./configure
+script:
+ - make all
+install:
+ - make install
+
