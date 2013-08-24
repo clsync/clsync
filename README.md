@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/xaionaro/clsync.png?branch=master)](https://travis-ci.org/xaionaro/clsync)
+
 clsync
 ======
 Contents
