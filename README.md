@@ -88,6 +88,9 @@ First of all, you should install dependencies to compile clsync. As you can
 see from GNUmakefile clsync depends only on "glib-2.0", so on debian-like
 systems you should execute something like "apt-get install libglib2.0-dev".
 
+Next step is generating Makefile. To do that usually it's enought to execute
+"autoreconf -i && ./configure".
+
 Next step is compiling. To compile usually it's enough to execute "make".
 
 Next step in installing. To install usually it's enough to execute
