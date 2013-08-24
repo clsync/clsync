@@ -2112,7 +2112,7 @@ int sync_run(options_t *options_p) {
 #ifdef CLUSTER_SUPPORT
 	// Initializing cluster subsystem
 
-	if(options_p->cluster_iface == NULL) {
+	if(options_p->cluster_iface != NULL) {
 		ret = cluster_init(options_p, &indexes);
 		if(ret) {
 			printf_e("Error: Cannot initialize cluster subsystem: %s (errno %i).\n", strerror(ret), ret);
