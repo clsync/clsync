@@ -28,6 +28,7 @@ to/
 /examples/rules
 /examples/testdir/
 /doc/
+*.swp
 
 # autotools build debris
 /.deps/
