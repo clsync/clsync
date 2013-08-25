@@ -346,6 +346,7 @@ int main_rehash(options_t *options_p) {
 
 int main(int argc, char *argv[]) {
 	struct options options;
+	struct utsname utsname;
 	memset(&options, 0, sizeof(options));
 	int ret = 0, nret;
 	options.notifyengine 			   = DEFAULT_NOTIFYENGINE;
@@ -404,10 +405,11 @@ int main(int argc, char *argv[]) {
 		ret = EINVAL;
 #endif
 		if(options.cluster_nodename == NULL) {
-			struct utsname utsname;
 
 			if(!uname(&utsname))
 				options.cluster_nodename = utsname.nodename;
+
+			printf_d("Debug: cluster node name is: %s\n", options.cluster_nodename);
 		}
 		if(options.cluster_nodename == NULL) {
 			printf_e("Error: Option \"--cluster-iface\" is set, but \"--cluster-node-name\" is not set and cannot get the nodename with uname().\n");

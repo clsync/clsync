@@ -1014,6 +1014,8 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 	//	Asking another nodes about my previous node_id
 	{
 		clustercmd_t *clustercmd_p = CLUSTER_ALLOCA(clustercmd_getmyid_t, options_p->cluster_nodename_len);
+
+		clustercmd_p->h.data_len = options_p->cluster_nodename_len;
 		memcpy(clustercmd_p->data_getmyid.node_name, options_p->cluster_nodename, clustercmd_p->h.data_len+1);
 
 		clustercmd_p->h.cmd_id = CLUSTERCMDID_GETMYID;
