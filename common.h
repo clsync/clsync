@@ -56,7 +56,7 @@
 #include <netinet/in.h>
 #include <libgen.h>
 #ifdef CLUSTER_SUPPORT
-#ifndef NO_MHASH
+#ifdef HAVE_MHASH
 #include <mhash.h>
 #endif
 #endif

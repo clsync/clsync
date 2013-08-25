@@ -210,6 +210,7 @@ static inline int clustercmd_window_del(window_t *window_p, clustercmdqueuedpack
 }
 
 
+#ifndef HAVE_MHASH
 /**
  * @brief 			Calculated Adler32 value for char array
  * 
@@ -236,6 +237,7 @@ uint32_t adler32_calc(unsigned char *data, int32_t len) { // where data is the l
 	
 	return (b << 16) | a;
 }
+#endif
 
 
 /**
@@ -264,12 +266,12 @@ int clustercmd_adler32_calc(clustercmd_t *clustercmd_p, clustercmdadler32_t *clu
 		char    *ptr  = (char *)&clustercmd_p->h;
 
 		// Calculating
-#ifdef NO_MHASH
-		adler32 = adler32_calc((unsigned char *)ptr, size);
-#else
+#ifdef HAVE_MHASH
 		MHASH td = mhash_init(MHASH_ADLER32);
 		mhash(td, ptr, size);
 		mhash_deinit(td, &adler32);
+#else
+		adler32 = adler32_calc((unsigned char *)ptr, size);
 #endif
 
 		// Ending
@@ -292,12 +294,12 @@ int clustercmd_adler32_calc(clustercmd_t *clustercmd_p, clustercmdadler32_t *clu
 #endif
 
 		// Calculating
-#ifdef NO_MHASH
-		adler32 = adler32_calc((unsigned char *)ptr, size);
-#else
+#ifdef HAVE_MHASH
 		MHASH td = mhash_init(MHASH_ADLER32);
 		mhash(td, ptr, size);
 		mhash_deinit(td, &adler32);
+#else
+		adler32 = adler32_calc((unsigned char *)ptr, size);
 #endif
 
 		// Ending
