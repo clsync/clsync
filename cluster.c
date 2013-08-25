@@ -29,7 +29,6 @@
                                                            -- 0x8E30679C
  */
 
-#define NO_MHASH
 
 #ifdef CLUSTER_SUPPORT
 
@@ -409,7 +408,6 @@ int node_status_change(uint8_t node_id, uint8_t node_status) {
 
 int cluster_send(clustercmd_t *clustercmd_p) {
 	clustercmd_p->h.src_node_id = node_id_my;
-	hexdump_e((unsigned char *)&clustercmd_p->h, sizeof(clustercmd_p->h));
 	clustercmd_crc32_calc(clustercmd_p, &clustercmd_p->h.crc32, CRC32_CALC_ALL);
 
 	printf_ddd("Debug3: cluster_send(): Sending: "
