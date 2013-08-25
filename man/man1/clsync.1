@@ -63,7 +63,7 @@ with option
 .B \-c, \-\-cluster\-iface
 .I interface\-ip
 .RS 8
-Not implemented yet!
+.B DANGEROUS OPTION. This functionality wan't tested well. You can lost your data.
 
 Enables inter-node notifing subsystem to prevent sync looping between nodes.
 This's very useful features that provides ability of birectional sync of the
@@ -84,8 +84,6 @@ ip a s eth0 | awk '{if($1=="inet") {gsub("/.*", "", $2); print $2}}'
 .B \-m, \-\-cluster\-ip
 .I multicast\-ip
 .RS 8
-Not implemented yet!
-
 Sets IP-address for multicast group.
 
 This option can be used only in conjunction with
@@ -101,8 +99,6 @@ Default value is "227.108.115.121". [(128+"c")."l"."s"."y"]
 .B \-P, \-\-cluster\-port
 .I multicast\-port
 .RS 8
-Not implemented yet!
-
 Sets UDP-port number for multicast messages.
 
 This option can be used only in conjunction with
@@ -119,8 +115,6 @@ Default value is "40079". [("n" << 8) + "c"]
 .B \-W, \-\-cluster\-timeout
 .I cluster\-timeout
 .RS 8
-Not implemented yet!
-
 Sets timeout (in milliseconds) of waiting answer from another nodes of the
 cluster. If there's no answer from some node, it will be excluded.
 
@@ -131,14 +125,45 @@ Default value is "1000". [1 second]
 .B \-n, \-\-cluster\-node\-name
 .I cluster\-node\-name
 .RS 8
-Not implemented yet!
-
 Sets the name of current node in the cluster. It will be used in action
 scripts of another nodes (see 
 .B SYNC HANDLER
 ).
 
 Default value is $(uname \-n).
+.RE
+
+.PP
+.B \-o, \-\-cluster\-hash\-dl\-min
+.I hash\-dirlevel\-min
+.RS 8
+Sets minimal directory level for ctime hashing (see
+.B CLUSTERING
+).
+
+Default value is "1".
+.RE
+
+.PP
+.B \-O, \-\-cluster\-hash\-dl\-max
+.I hash\-dirlevel\-max
+.RS 8
+Sets maximal directory level for ctime hashing (see
+.B CLUSTERING
+).
+
+Default value is "16".
+.RE
+
+.PP
+.B \-O, \-\-cluster\-scan\-dl\-max
+.I scan\-dirlevel\-max
+.RS 8
+Sets maximal directory level for ctime scanning (see
+.B CLUSTERING
+).
+
+Default value is "32".
 .RE
 
 .PP
@@ -664,6 +689,13 @@ your
 \*S.
 
 .RE
+
+.SH CLUSTERING
+
+Not implemented, yet.
+.B Don't try to use cluster functionality.
+
+Not described, yet.
 
 .SH EXAMPLES
 Working example you can try out in "example/" or 
