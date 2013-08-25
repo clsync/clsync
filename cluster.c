@@ -32,8 +32,6 @@
 
 #ifdef CLUSTER_SUPPORT
 
-#define NO_MHASH
-
 #include "common.h"
 #include "cluster.h"
 #include "sync.h"
