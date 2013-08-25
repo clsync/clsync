@@ -738,6 +738,7 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
  */
 
  int cluster_recv_proc(unsigned int _timeout) {
+	printf_ddd("Debu3: cluster_recv_proc(%i)\n", _timeout);
 	clustercmd_t *clustercmd_p;
 	int ret;
 	unsigned int timeout = _timeout;
@@ -909,7 +910,7 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 	// Initializing global variables, pt. 1
 	options_p	= _options_p;
 	indexes_p	= _indexes_p;
-	cluster_timeout	= options_p->cluster_timeout * 1000;
+	cluster_timeout	= options_p->cluster_timeout;
 	node_status_change(NODEID_NOID, NODESTATUS_ONLINE);
 
 	// Initializing network routines
