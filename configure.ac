@@ -43,9 +43,20 @@ PKG_PROG_PKG_CONFIG([0.20])
 # Checks for libraries.
 AC_CHECK_LIB([pthread], [pthread_create])
 PKG_CHECK_MODULES(GLIB,  [glib-2.0])
-AC_CHECK_HEADER([mhash.h],     [:], [MHASH_ENABLE=0])
-AC_CHECK_LIB([mhash], [mhash], [:], [MHASH_ENABLE=0])
-AS_IF([test "$MHASH_ENABLE" = "0"], [CPPFLAGS+=" -DNO_MHASH "], [LIBS+=" -lmhash "])
+
+dnl mhash check
+AC_ARG_WITH(mhash,
+AS_HELP_STRING(--without-mhash,
+[disable mhash support and use internal version of hash algo, default: enabled]))
+
+AS_IF([test "x$with_mhash" = "xyes"],[
+    AC_CHECK_HEADER([mhash.h],     [], [MHASH_ENABLE=0])
+    AC_SEARCH_LIBS([mhash_init], [mhash], [], [MHASH_ENABLE=0])
+    LIBS+=" -lmhash"
+], [
+    CPPFLAGS+=" -DNO_MHASH "
+])
+
 LIBS="${GLIB_LIBS} ${LIBS} -lrt"
 AM_CPPFLAGS="${GLIB_CFLAGS}"
 AC_SUBST(AM_CPPFLAGS)
