@@ -33,8 +33,7 @@ to/
 /.deps/
 /aclocal.m4
 /autom4te.cache/
-/config.h.in
-/config.h
+/config.h*
 /config.log
 /config.status
 /configure
