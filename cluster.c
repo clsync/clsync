@@ -32,6 +32,8 @@
 
 #ifdef CLUSTER_SUPPORT
 
+#define NO_MHASH
+
 #include "common.h"
 #include "cluster.h"
 #include "sync.h"
@@ -66,10 +68,6 @@ cluster_recvproc_funct_t recvproc_funct[COUNT_CLUSTERCMDID] = {NULL};
 
 window_t window_i = {0};
 window_t window_o = {0};
-
-#ifdef NO_MHASH
-static uint32_t clustercmd_adler32_table[1<<8] 	= {0};
-#endif
 
 /**
  * @brief 			Adds command (message) to window_p->buffer
