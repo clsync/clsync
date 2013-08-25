@@ -52,8 +52,7 @@ AS_HELP_STRING(--with-mhash,
 
 AS_IF([test "x$with_mhash" = "xno"], [], [
     AC_CHECK_HEADER([mhash.h], [], [AC_MSG_ERROR("Unable to find mhash.h")])
-    AC_CHECK_LIB([mhash], [mhash_init],
-        [LIBS+=" -lmhash" CPPFLAGS+=" -DHAVE_MHASH"],
+    AC_SEARCH_LIBS([mhash_init], [mhash], [CPPFLAGS+=" -DHAVE_MHASH"],
         [AC_MSG_ERROR("Unable to find libmhash")])
 ])
 
