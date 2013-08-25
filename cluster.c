@@ -221,8 +221,8 @@ static inline int clustercmd_window_del(window_t *window_p, clustercmdqueuedpack
  */
 
 // Copied from http://en.wikipedia.org/wiki/Adler-32
-uint32_t adler32_calc(unsigned char *data, int32_t len) { // where data is the location of the data in physical memory and 
-                                                     // len is the length of the data in bytes
+uint32_t adler32_calc(unsigned char *data, int32_t len) { // where data is the location of the data in physical
+                                                          // memory and len is the length of the data in bytes
 	const int MOD_ADLER = 65521;
 	uint32_t a = 1, b = 0;
 	int32_t index;
