@@ -45,6 +45,10 @@ AC_CHECK_LIB([pthread], [pthread_create],[CPPFLAGS+=" -pthread"],
     [AC_MSG_ERROR("Pthread support is mandatory")])
 PKG_CHECK_MODULES(GLIB,  [glib-2.0])
 
+dnl -lrt is needed on < glibc-2.17
+AC_SEARCH_LIBS([clock_getres], [rt], [],
+    [AC_MSG_ERROR("Unable to find librt; clock_getres() is needed")])
+
 dnl mhash check
 AC_ARG_WITH(mhash,
 AS_HELP_STRING(--with-mhash,
@@ -56,7 +60,7 @@ AS_IF([test "x$with_mhash" = "xno"], [], [
         [AC_MSG_ERROR("Unable to find libmhash")])
 ])
 
-LIBS="${GLIB_LIBS} ${LIBS} -lrt"
+LIBS="${GLIB_LIBS} ${LIBS}"
 AM_CPPFLAGS="${GLIB_CFLAGS}"
 AC_SUBST(AM_CPPFLAGS)
 
