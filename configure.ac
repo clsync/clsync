@@ -41,7 +41,8 @@ AC_PROG_INSTALL
 PKG_PROG_PKG_CONFIG([0.20])
 
 # Checks for libraries.
-AC_CHECK_LIB([pthread], [pthread_create])
+AC_CHECK_LIB([pthread], [pthread_create],[],
+    [AC_MSG_ERROR("Pthread support is mandatory")])
 PKG_CHECK_MODULES(GLIB,  [glib-2.0])
 
 dnl mhash check
@@ -53,7 +54,7 @@ AS_IF([test "x$with_mhash" = "xno"], [], [
     AC_CHECK_HEADER([mhash.h], [], [AC_MSG_ERROR("Unable to find mhash.h")])
     AC_CHECK_LIB([mhash], [mhash_init],
         [LIBS+=" -lmhash" CPPFLAGS+=" -DHAVE_MHASH"],
-        [AC_MSG_ERROR("Unable to find libmhash.so")])
+        [AC_MSG_ERROR("Unable to find libmhash")])
 ])
 
 LIBS="${GLIB_LIBS} ${LIBS} -lrt"
