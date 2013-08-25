@@ -42,6 +42,7 @@
 
 #define NODES_ALLOC (MAX(MAXNODES, NODEID_NOID)+1)
 
+
 int sock_i			= -1;
 struct sockaddr_in sa_i		= {0};
 
@@ -67,7 +68,7 @@ window_t window_i = {0};
 window_t window_o = {0};
 
 #ifdef NO_MHASH
-static uint32_t clustercmd_crc32_table[1<<8] 	= {0};
+static uint32_t clustercmd_adler32_table[1<<8] 	= {0};
 #endif
 
 /**
@@ -214,105 +215,81 @@ static inline int clustercmd_window_del(window_t *window_p, clustercmdqueuedpack
 
 
 /**
- * @brief 			Initializes table for CRC32 calculations
+ * @brief 			Calculated Adler32 value for char array
  * 
- * @param[in]	clustercmd_p	Pointer to clustercmd
+ * @param[in]	date		Pointer to data
+ * @param[in]	len		Length of the data
  * 
- * @retval	uint32_t	CRC32 value of clustecmd
+ * @retval	uint32_t	Adler32 value of data
  * 
  */
 
-/*
-   Name  : CRC-32
-   Poly  : 0x04C11DB7    x^32 + x^26 + x^23 + x^22 + x^16 + x^12 + x^11 
-                        + x^10 + x^8 + x^7 + x^5 + x^4 + x^2 + x + 1
-   Init  : 0xFFFFFFFF
-   Revert: true
-   XorOut: 0xFFFFFFFF
-   Check : 0xCBF43926 ("123456789")
- */
-#ifdef NO_MHASH
-int clustercmd_crc32_calc_init() {
-	int i;
-	uint32_t crc32;
-
-	i=0;
-	while(i < (1<<8)) {
-		int j;
-		crc32 = i;
-
-		j = 0;
-		while(j < 8) {
-			crc32  =  (crc32 & 1) ? (crc32 >> 1) ^ 0xEDB88320 : crc32 >> 1;
-			j++;
-		}
+// Copied from http://en.wikipedia.org/wiki/Adler-32
+uint32_t adler32_calc(unsigned char *data, int32_t len) { // where data is the location of the data in physical memory and 
+                                                     // len is the length of the data in bytes
+	const int MOD_ADLER = 65521;
+	uint32_t a = 1, b = 0;
+	int32_t index;
 	
-		clustercmd_crc32_table[i] = crc32;
-		i++;
-	};
-
-	return 0;
+	// Process each byte of the data in order
+	for (index = 0; index < len; ++index)
+	{
+		a = (a + data[index]) % MOD_ADLER;
+		b = (b + a) % MOD_ADLER;
+	}
+	
+	return (b << 16) | a;
 }
-#endif
+
 
 /**
- * @brief 			Calculates CRC32 for clustercmd
+ * @brief 			Calculates Adler32 for clustercmd
  * 
  * @param[in]	clustercmd_p	Pointer to clustercmd
+ * @param[out]	clustercmdadler32_p Pointer to structure to return value(s)
  * 
  * @retval	zero		On successful calculation
  * @retval	non-zero	On error. Error-code is placed into returned value.
  * 
  */
 
-/*
-   Name  : CRC-32
-   Poly  : 0x04C11DB7    x^32 + x^26 + x^23 + x^22 + x^16 + x^12 + x^11 
-                        + x^10 + x^8 + x^7 + x^5 + x^4 + x^2 + x + 1
-   Init  : 0xFFFFFFFF
-   Revert: true
-   XorOut: 0xFFFFFFFF
-   Check : 0xCBF43926 ("123456789")
- */
-int clustercmd_crc32_calc(clustercmd_t *clustercmd_p, clustercmdcrc32_t *clustercmdcrc32_p, crc32_calc_t flags) {
+int clustercmd_adler32_calc(clustercmd_t *clustercmd_p, clustercmdadler32_t *clustercmdadler32_p, adler32_calc_t flags) {
 
-	if(flags & CRC32_CALC_HEADER) {
-		uint32_t crc32;
-		clustercmdcrc32_t crc32_save;
+	if(flags & ADLER32_CALC_HEADER) {
+		uint32_t adler32;
+		clustercmdadler32_t adler32_save;
 
 		// Preparing
-		memcpy(&crc32_save, 	&clustercmd_p->h.crc32, sizeof(clustercmdcrc32_t));
-		memset(&clustercmd_p->h.crc32, 		0, 	sizeof(clustercmdcrc32_t));
-		crc32 = 0xFFFFFFFF;
+		memcpy(&adler32_save, 	&clustercmd_p->h.adler32, sizeof(clustercmdadler32_t));
+		memset(&clustercmd_p->h.adler32, 		0, 	sizeof(clustercmdadler32_t));
+		adler32 = 0xFFFFFFFF;
 
 		uint32_t size = sizeof(clustercmdhdr_t);
 		char    *ptr  = (char *)&clustercmd_p->h;
 
 		// Calculating
 #ifdef NO_MHASH
-		crc32 = 0;
-		while(size--)
-			crc32 = clustercmd_crc32_table[(crc32 ^ *(ptr++)) & 0xFF] ^ (crc32 >> 8);
+		adler32 = adler32_calc((unsigned char *)ptr, size);
 #else
-		MHASH td = mhash_init(MHASH_CRC32);
+		MHASH td = mhash_init(MHASH_ADLER32);
 		mhash(td, ptr, size);
-		mhash_deinit(td, &crc32);
+		mhash_deinit(td, &adler32);
 #endif
 
 		// Ending
-		memcpy(&clustercmd_p->h.crc32, &crc32_save, sizeof(clustercmdcrc32_t));
-		clustercmdcrc32_p->hdr = crc32 ^ 0xFFFFFFFF;
+		memcpy(&clustercmd_p->h.adler32, &adler32_save, sizeof(clustercmdadler32_t));
+		clustercmdadler32_p->hdr = adler32 ^ 0xFFFFFFFF;
 	}
 
-	if(flags & CRC32_CALC_DATA) {
-		uint32_t crc32;
+	if(flags & ADLER32_CALC_DATA) {
+		uint32_t adler32;
 
 		uint32_t size = clustercmd_p->h.data_len;
 		char    *ptr  = clustercmd_p->data_p;
 
 #ifdef PARANOID
 		if(size & 0x3) {
-			printf_e("Error: clustercmd_crc32_calc(): clustercmd_p->h.data_len&0x3 != 0: %u\n",
+			printf_e("Error: clustercmd_adler32_calc(): clustercmd_p->h.data_len&0x3 != 0: %u\n",
 				clustercmd_p->h.data_len);
 			return EINVAL;
 		}
@@ -320,17 +297,15 @@ int clustercmd_crc32_calc(clustercmd_t *clustercmd_p, clustercmdcrc32_t *cluster
 
 		// Calculating
 #ifdef NO_MHASH
-		crc32 = 0;
-		while(size--) 
-			crc32 = clustercmd_crc32_table[(crc32 ^ *(ptr++)) & 0xFF] ^ (crc32 >> 8);
+		adler32 = adler32_calc((unsigned char *)ptr, size);
 #else
-		MHASH td = mhash_init(MHASH_CRC32);
+		MHASH td = mhash_init(MHASH_ADLER32);
 		mhash(td, ptr, size);
-		mhash_deinit(td, &crc32);
+		mhash_deinit(td, &adler32);
 #endif
 
 		// Ending
-		clustercmdcrc32_p->dat = crc32 ^ 0xFFFFFFFF;
+		clustercmdadler32_p->dat = adler32 ^ 0xFFFFFFFF;
 	}
 
 	return 0;
@@ -408,12 +383,12 @@ int node_status_change(uint8_t node_id, uint8_t node_status) {
 
 int cluster_send(clustercmd_t *clustercmd_p) {
 	clustercmd_p->h.src_node_id = node_id_my;
-	clustercmd_crc32_calc(clustercmd_p, &clustercmd_p->h.crc32, CRC32_CALC_ALL);
+	clustercmd_adler32_calc(clustercmd_p, &clustercmd_p->h.adler32, ADLER32_CALC_ALL);
 
 	printf_ddd("Debug3: cluster_send(): Sending: "
-		"{h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u, crc32.hdr: %p, crc32.dat: %p, data_len: %u}\n",
+		"{h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u, adler32.hdr: %p, adler32.dat: %p, data_len: %u}\n",
 		clustercmd_p->h.dst_node_id, clustercmd_p->h.src_node_id, clustercmd_p->h.cmd_id,
-		(void *)(long)clustercmd_p->h.crc32.hdr, (void *)(long)clustercmd_p->h.crc32.dat,
+		(void *)(long)clustercmd_p->h.adler32.hdr, (void *)(long)clustercmd_p->h.adler32.dat,
 		clustercmd_p->h.data_len);
 
 	nodeinfo_t *nodeinfo_p;
@@ -606,7 +581,7 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 	printf_ddd("Debug: cluster_recv(): got new message(s).\n");
 
 	// Reading new message's header
-	clustercmdcrc32_t crc32;
+	clustercmdadler32_t adler32;
 	//clustercmd_t *clustercmd_p = (clustercmd_t *)mmap(NULL, sizeof(clustercmdhdr_t), PROT_NONE, 
 	//	MAP_PRIVATE, sock, 0);
 	int ret;
@@ -619,13 +594,13 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 		return -1;
 	}
 
-	// Checking CRC32 of packet headers.
-	clustercmd_crc32_calc(clustercmd_p, &crc32, CRC32_CALC_HEADER);
-	if(crc32.hdr != clustercmd_p->h.crc32.hdr) {
-		printf_d("Debug: cluster_recv(): hdr-CRC32 mismatch: %p != %p.\n", 
-			(void*)(long)clustercmd_p->h.crc32.hdr, (void*)(long)crc32.hdr);
+	// Checking adler32 of packet headers.
+	clustercmd_adler32_calc(clustercmd_p, &adler32, ADLER32_CALC_HEADER);
+	if(adler32.hdr != clustercmd_p->h.adler32.hdr) {
+		printf_d("Debug: cluster_recv(): hdr-adler32 mismatch: %p != %p.\n", 
+			(void*)(long)clustercmd_p->h.adler32.hdr, (void*)(long)adler32.hdr);
 
-		if((ret=clustercmd_reject(clustercmd_p, REJ_CRC32MISMATCH)) != EADDRNOTAVAIL) {
+		if((ret=clustercmd_reject(clustercmd_p, REJ_adler32MISMATCH)) != EADDRNOTAVAIL) {
 			printf_e("Error: cluster_recv(): Got error while clustercmd_reject(): %s (errno: %i).\n", 
 				strerror(ret), ret);
 			errno = ret;
@@ -669,9 +644,9 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 
 	// Seems, that headers are correct. Continuing.
 	printf_ddd("Debug3: cluster_recv(): Received: {h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u,"
-		" crc32: %u, data_len: %u}, timeout: %u -> %u\n",
+		" adler32: %u, data_len: %u}, timeout: %u -> %u\n",
 		dst_node_id, src_node_id, clustercmd_p->h.cmd_id, 
-		clustercmd_p->h.crc32, clustercmd_p->h.data_len, *timeout_p, timeout);
+		clustercmd_p->h.adler32, clustercmd_p->h.data_len, *timeout_p, timeout);
 
 	// Paranoid routines
 	//	The message from us? Something wrong if it is.
@@ -738,13 +713,13 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 		return -1;
 	}
 
-	// Checking CRC32 of packet data.
-	clustercmd_crc32_calc(clustercmd_p, &crc32, CRC32_CALC_DATA);
-	if(crc32.dat != clustercmd_p->h.crc32.dat) {
-		printf_d("Debug: cluster_recv(): dat-CRC32 mismatch: %p != %p.\n", 
-			(void*)(long)clustercmd_p->h.crc32.dat, (void*)(long)crc32.dat);
+	// Checking adler32 of packet data.
+	clustercmd_adler32_calc(clustercmd_p, &adler32, ADLER32_CALC_DATA);
+	if(adler32.dat != clustercmd_p->h.adler32.dat) {
+		printf_d("Debug: cluster_recv(): dat-adler32 mismatch: %p != %p.\n", 
+			(void*)(long)clustercmd_p->h.adler32.dat, (void*)(long)adler32.dat);
 
-		if((ret=clustercmd_reject(clustercmd_p, REJ_CRC32MISMATCH)) != EADDRNOTAVAIL) {
+		if((ret=clustercmd_reject(clustercmd_p, REJ_adler32MISMATCH)) != EADDRNOTAVAIL) {
 			printf_e("Error: cluster_recv(): Got error while clustercmd_reject(): %s (errno: %i).\n", 
 				strerror(ret), ret);
 			errno = ret;
@@ -1027,9 +1002,6 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 
 
 	// Initializing another routines
-#ifdef NO_MHASH
-	clustercmd_crc32_calc_init();
-#endif
 	cluster_io_init();
 
 	// Getting my ID in the cluster

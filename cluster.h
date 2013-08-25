@@ -67,13 +67,13 @@
 
 // Types
 
-enum crc32_calc {
-	CRC32_CALC_NONE		= 0x00,
-	CRC32_CALC_HEADER	= 0x01,
-	CRC32_CALC_DATA		= 0x02,
-	CRC32_CALC_ALL		= 0x03,
+enum adler32_calc {
+	ADLER32_CALC_NONE		= 0x00,
+	ADLER32_CALC_HEADER	= 0x01,
+	ADLER32_CALC_DATA		= 0x02,
+	ADLER32_CALC_ALL		= 0x03,
 };
-typedef enum crc32_calc crc32_calc_t;
+typedef enum adler32_calc adler32_calc_t;
 
 enum cluster_read_flags {
 	CLREAD_NONE		= 0x00,
@@ -148,7 +148,7 @@ typedef struct clustercmd_ack clustercmd_ack_t;
 
 enum reject_reason {
 	REJ_UNKNOWN		= 0,
-	REJ_CRC32MISMATCH,
+	REJ_adler32MISMATCH,
 };
 typedef enum reject_reason reject_reason_t;
 
@@ -158,18 +158,18 @@ struct clustercmd_rej {
 };
 typedef struct clustercmd_rej clustercmd_rej_t;
 
-struct clustercmdcrc32 {
+struct clustercmdadler32 {
 	uint32_t hdr;
 	uint32_t dat;
 };
-typedef struct clustercmdcrc32 clustercmdcrc32_t;
+typedef struct clustercmdadler32 clustercmdadler32_t;
 
 struct clustercmdhdr {					// bits
 	uint8_t			dst_node_id;		// 8
 	uint8_t			src_node_id;		// 16
 	uint8_t			flags;			// 24	(for future compatibility)
 	uint8_t			cmd_id;			// 32
-	clustercmdcrc32_t	crc32;			// 64
+	clustercmdadler32_t	adler32;		// 64
 	uint32_t		data_len;		// 96
 	uint32_t		ts;			// 128
 	uint32_t		serial;			// 160
