@@ -38,6 +38,10 @@
 #include "output.h"
 #include "malloc.h"
 
+#ifdef HAVE_MHASH
+#include <mhash.h>
+#endif
+
 // Global variables. They will be initialized in cluster_init()
 
 #define NODES_ALLOC (MAX(MAXNODES, NODEID_NOID)+1)
