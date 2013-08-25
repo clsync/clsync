@@ -29,6 +29,8 @@
                                                            -- 0x8E30679C
  */
 
+#define NO_MHASH
+
 #ifdef CLUSTER_SUPPORT
 
 #include "common.h"
@@ -38,6 +40,8 @@
 #include "malloc.h"
 
 // Global variables. They will be initialized in cluster_init()
+
+#define NODES_ALLOC (MAX(MAXNODES, NODEID_NOID)+1)
 
 int sock_i			= -1;
 struct sockaddr_in sa_i		= {0};
@@ -49,11 +53,11 @@ options_t  *options_p		= NULL;
 indexes_t  *indexes_p		= NULL;
 pthread_t   pthread_cluster	= 0;
 
-nodeinfo_t nodeinfo[MAXNODES]   = {{0}};
+nodeinfo_t nodeinfo[NODES_ALLOC]= {{0}};
 
 nodeinfo_t *nodeinfo_my				= NULL;
 uint8_t	node_id_my				= NODEID_NOID;
-uint8_t node_ids[MAX(MAXNODES, NODEID_NOID)+1]	= {0};
+uint8_t node_ids[NODES_ALLOC]			= {0};
 unsigned int cluster_timeout			= 0;
 uint8_t node_count				= 0;
 uint8_t node_online				= 0;
@@ -63,7 +67,9 @@ cluster_recvproc_funct_t recvproc_funct[COUNT_CLUSTERCMDID] = {NULL};
 window_t window_i = {0};
 window_t window_o = {0};
 
-uint32_t clustercmd_crc32_table[1<<8];
+#ifdef NO_MHASH
+static uint32_t clustercmd_crc32_table[1<<8] 	= {0};
+#endif
 
 /**
  * @brief 			Adds command (message) to window_p->buffer
@@ -226,6 +232,7 @@ static inline int clustercmd_window_del(window_t *window_p, clustercmdqueuedpack
    XorOut: 0xFFFFFFFF
    Check : 0xCBF43926 ("123456789")
  */
+#ifdef NO_MHASH
 int clustercmd_crc32_calc_init() {
 	int i;
 	uint32_t crc32;
@@ -247,6 +254,7 @@ int clustercmd_crc32_calc_init() {
 
 	return 0;
 }
+#endif
 
 /**
  * @brief 			Calculates CRC32 for clustercmd
@@ -282,9 +290,15 @@ int clustercmd_crc32_calc(clustercmd_t *clustercmd_p, clustercmdcrc32_t *cluster
 		char    *ptr  = (char *)&clustercmd_p->h;
 
 		// Calculating
+#ifdef NO_MHASH
 		crc32 = 0;
-		while(size--) 
+		while(size--)
 			crc32 = clustercmd_crc32_table[(crc32 ^ *(ptr++)) & 0xFF] ^ (crc32 >> 8);
+#else
+		MHASH td = mhash_init(MHASH_CRC32);
+		mhash(td, ptr, size);
+		mhash_deinit(td, &crc32);
+#endif
 
 		// Ending
 		memcpy(&clustercmd_p->h.crc32, &crc32_save, sizeof(clustercmdcrc32_t));
@@ -306,9 +320,15 @@ int clustercmd_crc32_calc(clustercmd_t *clustercmd_p, clustercmdcrc32_t *cluster
 #endif
 
 		// Calculating
+#ifdef NO_MHASH
 		crc32 = 0;
 		while(size--) 
 			crc32 = clustercmd_crc32_table[(crc32 ^ *(ptr++)) & 0xFF] ^ (crc32 >> 8);
+#else
+		MHASH td = mhash_init(MHASH_CRC32);
+		mhash(td, ptr, size);
+		mhash_deinit(td, &crc32);
+#endif
 
 		// Ending
 		clustercmdcrc32_p->dat = crc32 ^ 0xFFFFFFFF;
@@ -347,7 +367,6 @@ int node_status_change(uint8_t node_id, uint8_t node_status) {
 
 	if(node_status == node_status_old)
 		return 0;
-
 
 	switch(node_status_old) {
 		case NODESTATUS_DOESNTEXIST:
@@ -390,8 +409,16 @@ int node_status_change(uint8_t node_id, uint8_t node_status) {
 
 int cluster_send(clustercmd_t *clustercmd_p) {
 	clustercmd_p->h.src_node_id = node_id_my;
-	nodeinfo_t *nodeinfo_p;
+	hexdump_e((unsigned char *)&clustercmd_p->h, sizeof(clustercmd_p->h));
+	clustercmd_crc32_calc(clustercmd_p, &clustercmd_p->h.crc32, CRC32_CALC_ALL);
 
+	printf_ddd("Debug3: cluster_send(): Sending: "
+		"{h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u, crc32.hdr: %p, crc32.dat: %p, data_len: %u}\n",
+		clustercmd_p->h.dst_node_id, clustercmd_p->h.src_node_id, clustercmd_p->h.cmd_id,
+		(void *)(long)clustercmd_p->h.crc32.hdr, (void *)(long)clustercmd_p->h.crc32.dat,
+		clustercmd_p->h.data_len);
+
+	nodeinfo_t *nodeinfo_p;
 	nodeinfo_p = &nodeinfo[clustercmd_p->h.dst_node_id];
 
 	// Checking if the node online
@@ -404,17 +431,14 @@ int cluster_send(clustercmd_t *clustercmd_p) {
 			break;
 	}
 
-	// Putting the message into output window
-	clustercmd_window_add(&window_o, clustercmd_p, nodeinfo_my->serial2queuedpacket_ht);
+	// Putting the message into output windowa
+	if(nodeinfo_my != NULL)
+		clustercmd_window_add(&window_o, clustercmd_p, nodeinfo_my->serial2queuedpacket_ht);
 
 	// Sending the message
 	sendto(sock_o, clustercmd_p, CLUSTERCMD_SIZE_PADDED(clustercmd_p), 0, &sa_o, sizeof(sa_o));
 
 	// Finishing
-
-	printf_ddd("Debug3: cluster_send(): Sending: {h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u, crc32: %u, data_len: %u}\n",
-		clustercmd_p->h.dst_node_id, clustercmd_p->h.src_node_id, clustercmd_p->h.cmd_id, clustercmd_p->h.crc32, clustercmd_p->h.data_len);
-
 	return 0;
 }
 
@@ -1005,7 +1029,9 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 
 
 	// Initializing another routines
+#ifdef NO_MHASH
 	clustercmd_crc32_calc_init();
+#endif
 	cluster_io_init();
 
 	// Getting my ID in the cluster
@@ -1018,8 +1044,10 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 		clustercmd_p->h.data_len = options_p->cluster_nodename_len;
 		memcpy(clustercmd_p->data_getmyid.node_name, options_p->cluster_nodename, clustercmd_p->h.data_len+1);
 
-		clustercmd_p->h.cmd_id = CLUSTERCMDID_GETMYID;
-		cluster_send(clustercmd_p);
+		clustercmd_p->h.cmd_id      = CLUSTERCMDID_GETMYID;
+		clustercmd_p->h.dst_node_id = NODEID_NOID; // broadcast
+		if((ret=cluster_send(clustercmd_p)))
+			return ret;
 	}
 
 	//	Processing answers
@@ -1059,8 +1087,10 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 
 		memcpy(data_register_p->node_name, options_p->cluster_nodename, options_p->cluster_nodename_len+1);
 
-		clustercmd_p->h.cmd_id = CLUSTERCMDID_REGISTER;
-		cluster_send(clustercmd_p);
+		clustercmd_p->h.cmd_id      = CLUSTERCMDID_REGISTER;
+		clustercmd_p->h.dst_node_id = NODEID_NOID; // broadcast
+		if((ret=cluster_send(clustercmd_p)))
+			return ret;
 	}
 
 	// 	Getting answers
