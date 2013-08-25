@@ -46,7 +46,7 @@ PKG_CHECK_MODULES(GLIB,  [glib-2.0])
 AC_CHECK_HEADER([mhash.h],     [:], [MHASH_ENABLE=0])
 AC_CHECK_LIB([mhash], [mhash], [:], [MHASH_ENABLE=0])
 AS_IF([test "$MHASH_ENABLE" = "0"], [CPPFLAGS+=" -DNO_MHASH "], [LIBS+=" -lmhash "])
-LIBS="${GLIB_LIBS} ${LIBS}"
+LIBS="${GLIB_LIBS} ${LIBS} -lrt"
 AM_CPPFLAGS="${GLIB_CFLAGS}"
 AC_SUBST(AM_CPPFLAGS)
 
