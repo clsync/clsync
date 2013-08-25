@@ -7,6 +7,13 @@ AC_CONFIG_SRCDIR([sync.c])
 AM_INIT_AUTOMAKE([1.11 -Wall foreign])
 AC_CONFIG_HEADERS([config.h])
 
+dnl --enable-cluster
+AC_ARG_ENABLE(cluster,
+AS_HELP_STRING(--enable-cluster,
+[enable clustering support (not yet implemented), default: no]))
+
+AS_IF([test "x$enable_cluster" = "xyes"], [CPPFLAGS+=" -DCLUSTER_SUPPORT"])
+
 dnl --enable-debug
 AC_ARG_ENABLE(debug,
 AS_HELP_STRING(--enable-debug,
