@@ -14,6 +14,7 @@
   to prevent loop syncing.
 </longdescription>
 <use>
+	<flag name="cluster">Enable clustering support (allows master-master clsync on multiple hosts). Not fully implemented yet.</flag>
 	<flag name="extra-hardened">Enable extra security checks. This may hurt performance.</flag>
 </use>
 </pkgmetadata>
