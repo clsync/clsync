@@ -346,7 +346,9 @@ int main_rehash(options_t *options_p) {
 
 int main(int argc, char *argv[]) {
 	struct options options;
+#ifdef CLUSTER_SUPPORT
 	struct utsname utsname;
+#endif
 	memset(&options, 0, sizeof(options));
 	int ret = 0, nret;
 	options.notifyengine 			   = DEFAULT_NOTIFYENGINE;
