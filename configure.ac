@@ -4,7 +4,7 @@
 AC_PREREQ([2.59])
 AC_INIT([clsync],[0.0],[Dmitry Yu Okunev <xai@mephi.ru>],,[https://github.com/xaionaro/clsync])
 AC_CONFIG_SRCDIR([sync.c])
-AM_INIT_AUTOMAKE([1.11 foreign])
+AM_INIT_AUTOMAKE([1.11 foreign -Wall])
 AC_CONFIG_HEADERS([config.h])
 
 dnl --enable-cluster
