@@ -1,6 +1,7 @@
 #!/bin/bash
 
-export CFLAGS=
+# test aggressive optimizations
+export CFLAGS="-O3 -march=native"
 autoreconf -if
 
 # Test all possible package-specific configure options, including
