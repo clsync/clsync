@@ -20,7 +20,7 @@ AS_HELP_STRING(--enable-debug,
 [enable debugging, default: no]))
 
 AS_IF([test "x$enable_debug" = "xyes"],
-[CFLAGS+=" -pipe -Wall -ggdb3"])
+[CFLAGS+=" -pipe -Wall -ggdb3" CPPFLAGS+=" -D_DEBUG"])
 
 dnl --paranoid-level
 AC_ARG_ENABLE(paranoid,
