@@ -1,9 +1,7 @@
 env:
- global:
-   - CFLAGS=-DCLUSTER_SUPPORT
 language: c
 before_install:
- - sudo apt-get install libglib2.0-dev
+ - sudo apt-get install libglib2.0-dev libmhash-dev
 script:
- - autoreconf -i && ./configure && make all
+ - autoreconf -if && ./configure --enable-cluster && make
 
