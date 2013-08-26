@@ -47,7 +47,8 @@ AC_PROG_INSTALL
 PKG_PROG_PKG_CONFIG([0.20])
 
 # Checks for libraries.
-AC_CHECK_LIB([pthread], [pthread_create],[CPPFLAGS+=" -pthread"],
+AC_CHECK_LIB([pthread], [pthread_create],
+    [CPPFLAGS+=" -pthread" LDFLAGS+=" -pthread"],
     [AC_MSG_ERROR("Pthread support is mandatory")])
 PKG_CHECK_MODULES(GLIB,  [glib-2.0])
 
