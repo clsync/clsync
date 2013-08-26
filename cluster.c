@@ -1124,7 +1124,7 @@ int cluster_deinit() {
 #endif
 	while(node_count) {
 #ifdef VERYPARANOID
-		if(i++ > NODES_MAX) {
+		if(i++ > MAXNODES) {
 			printf_e("Error: cluster_deinit() looped. Forcing break.");
 			break;
 		}
