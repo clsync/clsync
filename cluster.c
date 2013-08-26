@@ -281,7 +281,7 @@ int clustercmd_adler32_calc(clustercmd_t *clustercmd_p, clustercmdadler32_t *clu
 		uint32_t adler32;
 
 		uint32_t size = clustercmd_p->h.data_len;
-		char    *ptr  = clustercmd_p->data_p;
+		char    *ptr  = clustercmd_p->data.p;
 
 #ifdef PARANOID
 		if(size & 0x3) {
@@ -495,8 +495,8 @@ static inline int cluster_read(int sock, void *buf, size_t size, cluster_read_fl
 static inline int clustercmd_reject(clustercmd_t *clustercmd_p, uint8_t reason) {
 	clustercmd_t *clustercmd_rej_p 		= CLUSTER_ALLOCA(clustercmd_rej_t, 0);
 	clustercmd_rej_p->h.dst_node_id 	= clustercmd_p->h.src_node_id;
-	clustercmd_rej_p->data_rej.serial 	= clustercmd_p->h.serial;
-	clustercmd_rej_p->data_rej.reason 	= reason;
+	clustercmd_rej_p->data.rej.serial 	= clustercmd_p->h.serial;
+	clustercmd_rej_p->data.rej.reason 	= reason;
 
 	return cluster_send(clustercmd_rej_p);
 }
@@ -700,7 +700,7 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 	}
 
 	// Reading the data
-	if((ret=cluster_read(sock_i, (void *)clustercmd_p->data_p, clustercmd_p->h.data_len, CLREAD_CONTINUE))) {
+	if((ret=cluster_read(sock_i, (void *)clustercmd_p->data.p, clustercmd_p->h.data_len, CLREAD_CONTINUE))) {
 		if(ret == -1) return 0;
 
 		printf_e("Error: cluster_recv(): Got error from cluster_read(): %s (errno %i).\n", 
@@ -776,7 +776,7 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 
 static int cluster_recvproc_ack(clustercmd_t *clustercmd_p) {
 
-	uint32_t cmd_serial_ack = clustercmd_p->data_ack.serial;
+	uint32_t cmd_serial_ack = clustercmd_p->data.ack.serial;
 
 	clustercmdqueuedpacket_t *queuedpacket_p = 
 		(clustercmdqueuedpacket_t *)g_hash_table_lookup(nodeinfo_my->serial2queuedpacket_ht, GINT_TO_POINTER(cmd_serial_ack));
@@ -786,11 +786,11 @@ static int cluster_recvproc_ack(clustercmd_t *clustercmd_p) {
 
 	uint8_t node_id_from = clustercmd_p->h.src_node_id;
 
-	if(! queuedpacket_p->h.o.ack_from[node_id_from]) {
-		queuedpacket_p->h.o.ack_count++;
-		queuedpacket_p->h.o.ack_from[node_id_from]++;
+	if(! queuedpacket_p->h.w.o.ack_from[node_id_from]) {
+		queuedpacket_p->h.w.o.ack_count++;
+		queuedpacket_p->h.w.o.ack_from[node_id_from]++;
 
-		if(queuedpacket_p->h.o.ack_count == node_count-1)
+		if(queuedpacket_p->h.w.o.ack_count == node_count-1)
 			clustercmd_window_del(&window_o, queuedpacket_p, nodeinfo_my->serial2queuedpacket_ht);
 	}
 
@@ -861,7 +861,7 @@ static int cluster_recvproc_setid(clustercmd_t *clustercmd_p) {
 	static time_t updatets = 0;
 
 	// 	Is this the most recent information? Skipping if not.
-	clustercmd_setiddata_t *data_setid_p = &clustercmd_p->data_setid;
+	clustercmd_setiddata_t *data_setid_p = &clustercmd_p->data.setid;
 	if(!(data_setid_p->updatets > updatets))
 		return 0;
 
@@ -1009,7 +1009,7 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 		clustercmd_t *clustercmd_p = CLUSTER_ALLOCA(clustercmd_getmyid_t, options_p->cluster_nodename_len);
 
 		clustercmd_p->h.data_len = options_p->cluster_nodename_len;
-		memcpy(clustercmd_p->data_getmyid.node_name, options_p->cluster_nodename, clustercmd_p->h.data_len+1);
+		memcpy(clustercmd_p->data.getmyid.node_name, options_p->cluster_nodename, clustercmd_p->h.data_len+1);
 
 		clustercmd_p->h.cmd_id      = CLUSTERCMDID_GETMYID;
 		clustercmd_p->h.dst_node_id = NODEID_NOID; // broadcast
@@ -1049,12 +1049,12 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 	// 	Sending registration information
 	node_status_change(node_id_my, NODESTATUS_SEEMSONLINE);
 	{
-		clustercmd_t *clustercmd_p = CLUSTER_ALLOCA(clustercmd_register_t, options_p->cluster_nodename_len);
-		clustercmd_register_t *data_register_p = &clustercmd_p->data_register;
+		clustercmd_t *clustercmd_p = CLUSTER_ALLOCA(clustercmd_reg_t, options_p->cluster_nodename_len);
+		clustercmd_reg_t *data_reg_p = &clustercmd_p->data.reg;
 
-		memcpy(data_register_p->node_name, options_p->cluster_nodename, options_p->cluster_nodename_len+1);
+		memcpy(data_reg_p->node_name, options_p->cluster_nodename, options_p->cluster_nodename_len+1);
 
-		clustercmd_p->h.cmd_id      = CLUSTERCMDID_REGISTER;
+		clustercmd_p->h.cmd_id      = CLUSTERCMDID_REG;
 		clustercmd_p->h.dst_node_id = NODEID_NOID; // broadcast
 		if((ret=cluster_send(clustercmd_p)))
 			return ret;

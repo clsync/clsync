@@ -118,7 +118,7 @@ typedef struct nodeinfo nodeinfo_t;
 enum clustercmd_id {
 	CLUSTERCMDID_PING 	= 0,
 	CLUSTERCMDID_ACK 	= 1,
-	CLUSTERCMDID_REGISTER 	= 2,
+	CLUSTERCMDID_REG 	= 2,
 	CLUSTERCMDID_GETMYID	= 3,
 	CLUSTERCMDID_SETID	= 4,
 	COUNT_CLUSTERCMDID
@@ -136,10 +136,10 @@ struct clustercmd_setiddata {
 };
 typedef struct clustercmd_setiddata clustercmd_setiddata_t;
 
-struct clustercmd_register {
+struct clustercmd_reg {
 	char      node_name[1];
 };
-typedef struct clustercmd_register clustercmd_register_t;
+typedef struct clustercmd_reg clustercmd_reg_t;
 
 struct clustercmd_ack {
 	uint32_t serial;
@@ -178,18 +178,19 @@ typedef struct clustercmdhdr clustercmdhdr_t;
 
 struct clustercmd {
 	clustercmdhdr_t h;
-	union {
-		char data_p[1];
-		clustercmd_setiddata_t	data_setid;
-		clustercmd_register_t	data_register;
-		clustercmd_ack_t	data_ack;
-		clustercmd_rej_t	data_rej;
-		clustercmd_getmyid_t	data_getmyid;
-	};
+	union data {
+		char 			p[1];
+		clustercmd_setiddata_t	setid;
+		clustercmd_reg_t	reg;
+		clustercmd_ack_t	ack;
+		clustercmd_rej_t	rej;
+		clustercmd_getmyid_t	getmyid;
+	} data;
 };
 typedef struct clustercmd clustercmd_t;
 
 struct clustercmdqueuedpackethdri {
+	char	dummy; // anti-warning
 };
 typedef struct clustercmdqueuedpackethdri clustercmdqueuedpackethdri_t;
 
@@ -201,10 +202,10 @@ typedef struct clustercmdqueuedpackethdro clustercmdqueuedpackethdro_t;
 
 struct clustercmdqueuedpackethdr {
 	unsigned int	window_id;
-	union {
+	union w {
 		clustercmdqueuedpackethdri_t i;
 		clustercmdqueuedpackethdro_t o;
-	};
+	} w;
 };
 typedef struct clustercmdqueuedpackethdr clustercmdqueuedpackethdr_t;
 
