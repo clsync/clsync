@@ -19,9 +19,8 @@ AC_ARG_ENABLE(debug,
 AS_HELP_STRING(--enable-debug,
 [enable debugging, default: no]))
 
-dnl -Werror disables std autodetection, so we must specify it here
 AS_IF([test "x$enable_debug" = "xyes"],
-[CFLAGS+=" -std=gnu11 -pipe -Wall -Werror -ggdb3 -Wno-error=unused-variable"])
+[CFLAGS+=" -pipe -Wall -ggdb3"])
 
 dnl --paranoid-level
 AC_ARG_ENABLE(paranoid,
