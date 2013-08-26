@@ -121,6 +121,7 @@ enum clustercmd_id {
 	CLUSTERCMDID_REG 	= 2,
 	CLUSTERCMDID_GETMYID	= 3,
 	CLUSTERCMDID_SETID	= 4,
+	CLUSTERCMDID_HT_EXCH	= 5,
 	COUNT_CLUSTERCMDID
 };
 typedef enum clustercmd_id clustercmd_id_t;
@@ -158,6 +159,13 @@ struct clustercmd_rej {
 };
 typedef struct clustercmd_rej clustercmd_rej_t;
 
+struct clustercmd_ht_exch {
+	time_t	 ctime;
+	size_t	 path_length;
+	char	 path[1];
+};
+typedef struct clustercmd_ht_exch clustercmd_ht_exch_t;
+
 struct clustercmdadler32 {
 	uint32_t hdr;
 	uint32_t dat;
@@ -185,6 +193,7 @@ struct clustercmd {
 		clustercmd_ack_t	ack;
 		clustercmd_rej_t	rej;
 		clustercmd_getmyid_t	getmyid;
+		clustercmd_ht_exch_t	ht_exch;
 	} data;
 };
 typedef struct clustercmd clustercmd_t;
