@@ -4,17 +4,23 @@
 AC_PREREQ([2.59])
 AC_INIT([clsync],[0.0],[Dmitry Yu Okunev <xai@mephi.ru>],,[https://github.com/xaionaro/clsync])
 AC_CONFIG_SRCDIR([sync.c])
-AM_INIT_AUTOMAKE([1.11 -Wall foreign])
+AM_INIT_AUTOMAKE([1.11 foreign])
 AC_CONFIG_HEADERS([config.h])
+
+dnl --enable-cluster
+AC_ARG_ENABLE(cluster,
+AS_HELP_STRING(--enable-cluster,
+[enable clustering support (not yet implemented), default: no]))
+
+AS_IF([test "x$enable_cluster" = "xyes"], [CPPFLAGS+=" -DCLUSTER_SUPPORT"])
 
 dnl --enable-debug
 AC_ARG_ENABLE(debug,
 AS_HELP_STRING(--enable-debug,
 [enable debugging, default: no]))
 
-dnl -Werror disables std autodetection, so we must specify it here
 AS_IF([test "x$enable_debug" = "xyes"],
-[CFLAGS+=" -std=gnu11 -pipe -Wall -Werror -ggdb3 -Wno-error=unused-variable"])
+[CFLAGS+=" -pipe -Wall -ggdb3"])
 
 dnl --paranoid-level
 AC_ARG_ENABLE(paranoid,
@@ -41,12 +47,26 @@ AC_PROG_INSTALL
 PKG_PROG_PKG_CONFIG([0.20])
 
 # Checks for libraries.
-AC_CHECK_LIB([pthread], [pthread_create])
+AC_CHECK_LIB([pthread], [pthread_create],[CPPFLAGS+=" -pthread"],
+    [AC_MSG_ERROR("Pthread support is mandatory")])
 PKG_CHECK_MODULES(GLIB,  [glib-2.0])
-AC_CHECK_HEADER([mhash.h],     [:], [MHASH_ENABLE=0])
-AC_CHECK_LIB([mhash], [mhash], [:], [MHASH_ENABLE=0])
-AS_IF([test "$MHASH_ENABLE" = "0"], [CPPFLAGS+=" -DNO_MHASH "], [LIBS+=" -lmhash "])
-LIBS="${GLIB_LIBS} ${LIBS} -lrt"
+
+dnl -lrt is needed on < glibc-2.17
+AC_SEARCH_LIBS([clock_getres], [rt], [],
+    [AC_MSG_ERROR("Unable to find librt; clock_getres() is needed")])
+
+dnl mhash check
+AC_ARG_WITH(mhash,
+AS_HELP_STRING(--with-mhash,
+[use mhash instead of internal version of hash algo, default: enabled]))
+
+AS_IF([test "x$with_mhash" = "xno"], [], [
+    AC_CHECK_HEADER([mhash.h], [], [AC_MSG_ERROR("Unable to find mhash.h")])
+    AC_SEARCH_LIBS([mhash_init], [mhash], [CPPFLAGS+=" -DHAVE_MHASH"],
+        [AC_MSG_ERROR("Unable to find libmhash")])
+])
+
+LIBS="${GLIB_LIBS} ${LIBS}"
 AM_CPPFLAGS="${GLIB_CFLAGS}"
 AC_SUBST(AM_CPPFLAGS)
 

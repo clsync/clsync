@@ -20,7 +20,7 @@ DESCRIPTION="Live sync tool based on inotify, written in GNU C"
 HOMEPAGE="http://ut.mephi.ru/oss"
 LICENSE="GPL-3"
 SLOT="0"
-IUSE="debug doc +examples extra-hardened hardened"
+IUSE="-cluster debug doc +examples extra-hardened hardened +mhash"
 REQUIRED_USE="
 	extra-hardened? ( hardened )"
 
@@ -28,6 +28,7 @@ RDEPEND="dev-libs/glib:2"
 DEPEND="${RDEPEND}
 	virtual/pkgconfig
 	doc? ( app-doc/doxygen )
+	mhash? ( app-crypt/mhash )
 "
 
 src_prepare() {
@@ -42,7 +43,9 @@ src_configure() {
 	econf \
 		--docdir="${EPREFIX}/usr/share/doc/${PF}" \
 		--enable-paranoid=${harden_level} \
-		$(use_enable debug)
+		$(use_enable cluster) \
+		$(use_enable debug) \
+		$(use_with mhash)
 }
 
 src_compile() {
