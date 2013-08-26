@@ -294,6 +294,35 @@ struct dosync_arg {
 	char buf[BUFSIZ+1];
 };
 
+struct doubleentry {
+	size_t  size0;
+	size_t  size1;
+	size_t  alloc0;
+	size_t  alloc1;
+	void   *dat0;
+	void   *dat1;
+};
+
+struct pushdoubleentry_arg {
+	int			 allocated;
+	int			 total;
+	size_t			 size;
+	struct doubleentry	*entry;
+};
+
+struct entry {
+	size_t  size;
+	size_t  alloc;
+	void   *dat;
+};
+
+struct pushentry_arg {
+	int		 allocated;
+	int		 total;
+	size_t		 size;
+	struct entry	*entry;
+};
+
 enum initsync {
 	INITSYNC_UNKNOWN = 0,
 	INITSYNC_FULL,

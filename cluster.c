@@ -1101,6 +1101,7 @@ static inline int cluster_signal(int signal) {
 }
 
 
+extern int cluster_modtime_exchange_cleanup();
 /**
  * @brief 			Antagonist of cluster_init() function. Kills cluster_loop()-thread and cleaning up
  * 
@@ -1145,6 +1146,8 @@ int cluster_deinit() {
 	memset(&sa_i,	0, sizeof(sa_i));
 	memset(&sa_o,	0, sizeof(sa_o));
 #endif
+
+	cluster_modtime_exchange_cleanup();
 
 	return ret;
 }
@@ -1208,6 +1211,7 @@ int cluster_unlock_all() {
  */
 
 int cluster_loop() {
+	int ret;
 	sigset_t sigset_cluster;
 
 	// Ignoring SIGINT signal
@@ -1230,7 +1234,11 @@ int cluster_loop() {
 			if(sigismember(&sigset_cluster, SIGTERM))
 				break;
 
-		// LISTENING
+		// Processing new messages
+		if((ret=cluster_recv_proc(0))) {
+			sync_term(ret);
+			return ret;
+		}
 	}
 
 	return 0;
@@ -1330,7 +1338,73 @@ int cluster_modtime_update(const char *path, short int dirlevel, mode_t st_mode)
 
 
 /**
- * @brief 			(syncop) Exchanging with "modtime_ht"-s to be able to compare them.
+ * @brief 			Puts entry to list to be send to other nodes. To be called from cluster_modtime_exchange()
+ *
+ * @param[in] 	pushrentry_arg_p Pointer to pushentry_arg structure
+ * 
+ */
+
+void cluster_modtime_exchange_pushentry(gpointer dir_gp, gpointer modtype_gp, void *pushentry_arg_gp) {
+	struct pushdoubleentry_arg *pushentry_arg_p = (struct pushdoubleentry_arg *)pushentry_arg_gp;
+	char  *dir   = (char *)dir_gp;
+	time_t ctime = (time_t)GPOINTER_TO_INT(modtype_gp);
+	size_t size  = strlen(dir);				// TODO: strlen should be already prepared
+								// but not re-calculated here
+
+	if(pushentry_arg_p->allocated <= pushentry_arg_p->total) {
+		pushentry_arg_p->allocated += ALLOC_PORTION;
+		pushentry_arg_p->entry      = (struct doubleentry *)
+			xrealloc(
+				(char *)pushentry_arg_p->entry, 
+				pushentry_arg_p->allocated * sizeof(*pushentry_arg_p->entry)
+			);
+	}
+
+	pushentry_arg_p->entry[pushentry_arg_p->total].dat0  = dir;
+	pushentry_arg_p->entry[pushentry_arg_p->total].size0 = size;
+	pushentry_arg_p->entry[pushentry_arg_p->total].dat1  = (void *)ctime;	// Will be problems if sizeof(time_t) > sizeof(void *)
+	pushentry_arg_p->entry[pushentry_arg_p->total].size1 = sizeof(ctime);
+
+	pushentry_arg_p->size += size;
+	pushentry_arg_p->total++;
+
+	return;
+}
+
+
+static struct pushdoubleentry_arg cluster_modtime_exchange_pushentry_arg = {0};
+/**
+ * @brief 			Clean up after the last run of cluster_modtime_exchange.
+ * 
+ * @retval	zero 		Successfully initialized
+ * @retval	non-zero 	Got error, while initializing
+ * 
+ */
+
+int cluster_modtime_exchange_cleanup() {
+	struct pushdoubleentry_arg *pushentry_arg_p = &cluster_modtime_exchange_pushentry_arg;
+
+	int i=0;
+	while(i < pushentry_arg_p->allocated) {
+		if(pushentry_arg_p->entry[i].alloc0)
+			free(pushentry_arg_p->entry[i].dat0);
+		if(pushentry_arg_p->entry[i].alloc1)
+			free(pushentry_arg_p->entry[i].dat1);
+		i++;
+	}
+
+	free(pushentry_arg_p->entry);
+
+#ifdef VERYPARANOID
+	memset(pushentry_arg_p, 0, sizeof(*pushentry_arg_p));
+#endif
+
+	return 0;
+}
+
+
+/**
+ * @brief 			Exchanging with "modtime_ht"-s to be able to compare them.
  * 
  * @retval	zero 		Successfully initialized
  * @retval	non-zero 	Got error, while initializing
@@ -1338,6 +1412,26 @@ int cluster_modtime_update(const char *path, short int dirlevel, mode_t st_mode)
  */
 
 int cluster_modtime_exchange() {
+	struct pushdoubleentry_arg *pushentry_arg_p = &cluster_modtime_exchange_pushentry_arg;
+
+	pushentry_arg_p->size=0;
+	pushentry_arg_p->total=0;
+
+	g_hash_table_foreach(nodeinfo_my->modtime_ht, cluster_modtime_exchange_pushentry, (void *)pushentry_arg_p);
+
+	if(!pushentry_arg_p->total) {
+		// !!!
+	}
+
+	size_t toalloc = 0;
+	int i = 0;
+	while(i < pushentry_arg_p->total) {
+		toalloc += 4;					// for size header
+		toalloc += pushentry_arg_p->entry[i].size0;	// for path
+		toalloc += pushentry_arg_p->entry[i].size1;	// for ctime
+	}
+
+	
 
 	return 0;
 }
