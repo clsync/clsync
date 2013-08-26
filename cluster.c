@@ -1136,7 +1136,8 @@ int cluster_deinit() {
 	close(sock_o);
 
 #ifdef VERYPARANOID
-	memset(node_info, 0, sizeof(node_info));
+	memset(nodeinfo, 0, sizeof(nodeinfo_t) * NODES_ALLOC);
+	nodeinfo_my = NULL;
 	node_count  = 0;
 	node_online = 0;
 	node_id_my  = NODEID_NOID;
