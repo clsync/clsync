@@ -12,9 +12,10 @@ Contents
 5.  How to use
 6.  Example of usage
 7.  Recommended configuration
-8.  Known issues
-9.  Support
-10. Developing
+8.  Clustering
+9.  Known issues
+10. Support
+11. Developing
 
 
 1. Name
@@ -142,21 +143,51 @@ updating.
 excludes):
 ```clsync -l mirror -p -R -d /dev/shm/clsync -I /home/user /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules```
 
+8. Clustering
+-------------
 
-8. Known building issues
+I've started to implement support of bi-directional syncing with using
+multicast notifing of other nodes. However it became a long task, so it was
+suspended for next releases.
+
+However let's solve next hypothetical problem. For example, you're using
+LXC and trying to replicate containers between two servers (to make failover
+and load balancing).
+
+In this case you have to sync containers in both directions. However, if you
+just run clsync to sync containers to neighboring node on both of them, you'll
+get sync-loop [file-update on A causes file-update on B causes file-update
+on A causes ...].
+
+Well, in this case I with my colleagues were using separate directories for
+every node of cluster (e.g. "/srv/nodes/<NODE NAME>/containers/<CONTAINERS>")
+and syncing every directory only in one direction. That was failover with
+load-balancing, but very unconvenient. So I've started to write code for
+bi-directional syncing, however it's no time to complete it :(. So
+Andrew Savchenko proposed to run one clsync-instance per container. And this's
+really good solution. It's just need to start clsync-process when container
+starts and stop the process when containers stops. The only problem is
+split-brain, that can be solved two ways:
+- by human every time;
+- by scripts that chooses which variant of container to save.
+
+Example of the script is just a script that calls "find" on both sides to
+determine which side has the latest changes :)
+
+9. Known building issues
 ------------------------
 
 1. Doesn't compiles on old systems
  - In this case you should compile with command "make onoldsystem"
 
-9. Support
+10. Support
 ----------
 
 To get support, you can contact with me this ways:
 - IRC: SSL+UTF-8 irc.campus.mephi.ru:6695#mephi,xaionaro,xai
 - e-mail: <xai@mephi.ru>, <dyokunev@ut.mephi.ru>, <xaionaro@gmail.com>; PGP pubkey: 0x8E30679C
 
-10. Developing
+11. Developing
 --------------
 
 I started to write "DEVELOPING" file. You can look there if you wish. ;)
