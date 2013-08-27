@@ -177,11 +177,12 @@ determine which side has the latest changes :)
 9. Known building issues
 ------------------------
 
-1. Doesn't compiles on old systems
- - In this case you should compile with command "make onoldsystem"
+May be problems with "configuring" or compilation. In this case just try
+next command:
+> gcc -std=gnu99 -D\_FORTIFY\_SOURCE=2 -DPARANOID -pthread -DHAVE\_MHASH  -pipe -Wall -ggdb3 -fstack-protector-all -Wall --param ssp-buffer-size=4 -fstack-check -std=gnu99  -pipe -Wall -ggdb3 -fstack-protector-all -Wall --param ssp-buffer-size=4 -fstack-check  -Xlinker -zrelro -pthread $(pkg-config --cflags glib-2.0) $(pkg-config --libs glib-2.0) -lmhash \*.c -o /tmp/clsync
 
 10. Support
-----------
+-----------
 
 To get support, you can contact with me this ways:
 - IRC: SSL+UTF-8 irc.campus.mephi.ru:6695#mephi,xaionaro,xai
