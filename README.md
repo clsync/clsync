@@ -185,19 +185,19 @@ next command:
 -----------
 
 To get support, you can contact with me this ways:
-- IRC: SSL+UTF-8 irc.campus.mephi.ru:6695#mephi,xaionaro,xai
-- e-mail: <xai@mephi.ru>, <dyokunev@ut.mephi.ru>, <xaionaro@gmail.com>; PGP pubkey: 0x8E30679C
+- Official IRC channel of "clsync": irc.freenode.net#clsync
+- Where else can you find me: IRC:SSL+UTF-8 irc.campus.mephi.ru:6695#mephi,xaionaro,xai
+- And e-mail: <xai@mephi.ru>, <dyokunev@ut.mephi.ru>, <xaionaro@gmail.com>; PGP pubkey: 0x8E30679C
 
 11. Developing
 --------------
 
-I started to write "DEVELOPING" file. You can look there if you wish. ;)
+I started to write "DEVELOPING" and "PROTOCOL" files.
+You can look there if you wish. ;)
 
 I'll be glad to receive code contribution :)
 
 
 
-				-- Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
-
-P.S.: Sorry for my English and for the code :)
+                                               -- Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
 
