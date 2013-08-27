@@ -53,7 +53,7 @@ To do backups we also tried a lot of different solution, and again I was have
 to write own utility for this purpose.
 
 The best known (for me) replacement for this utility is "lsyncd", however:
-- It's code is >½ on LUA. There a lot of problems connected with it,
+- It's code is `>½` on LUA. There a lot of problems connected with it,
 for example:
     - It's more difficult to maintain the code with ordinary sysadmin.
     - It really eats 100% CPU sometimes.
@@ -67,7 +67,7 @@ to serve huge directories with a lot of containers right.
 event. :(
 - Sometimes, it's too complex in configuration for our situation.
 - It can't set another event-collecting delay for big files. We don't
-want to sync big files (>1GiB) so often as ordinary files.
+want to sync big files (`>1GiB`) so often as ordinary files.
 
 Sorry, if I'm wrong. Let me know if it is, please :). "lsyncd" - is really
 good and useful utility, just it's not appropriate for us.
@@ -160,7 +160,7 @@ get sync-loop [file-update on A causes file-update on B causes file-update
 on A causes ...].
 
 Well, in this case I with my colleagues were using separate directories for
-every node of cluster (e.g. "/srv/nodes/<NODE NAME>/containers/<CONTAINERS>")
+every node of cluster (e.g. "`/srv/nodes/<NODE NAME>/containers/<CONTAINERS>`")
 and syncing every directory only in one direction. That was failover with
 load-balancing, but very unconvenient. So I've started to write code for
 bi-directional syncing, however it's no time to complete it :(. So
