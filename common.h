@@ -94,6 +94,7 @@ enum flags_enum {
 	HELP		= 'h',
 	BACKGROUND	= 'b',
 	PTHREAD		= 'p',
+	PIDFILE		= 'z',
 #ifdef CLUSTER_SUPPORT
 	CLUSTERIFACE	= 'c',
 	CLUSTERMCASTIPADDR = 'm',
@@ -169,6 +170,7 @@ struct options {
 	int flags[1<<8];
 	char *label;
 	char *watchdir;
+	char *pidfile;
 	char *destdir;
 	char *watchdirwslash;
 	char *destdirwslash;

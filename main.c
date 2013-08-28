@@ -31,6 +31,7 @@
 static struct option long_options[] =
 {
 	{"background",		no_argument,		NULL,	BACKGROUND},
+	{"pid-file",		required_argument,	NULL,	PIDFILE},
 	{"pthread",		no_argument,		NULL,	PTHREAD},
 #ifdef CLUSTER_SUPPORT
 	{"cluster-iface",	required_argument,	NULL,	CLUSTERIFACE},		// Not implemented, yet
@@ -59,8 +60,8 @@ static struct option long_options[] =
 	{"quiet",		no_argument,		NULL,	QUIET},
 #ifdef FANOTIFY_SUPPORT
 	{"fanotify",		no_argument,		NULL,	FANOTIFY},
-#endif
 	{"inotify",		no_argument,		NULL,	INOTIFY},
+#endif
 	{"label",		required_argument,	NULL,	LABEL},
 	{"help",		no_argument,		NULL,	HELP},
 	{"version",		no_argument,		NULL,	SHOW_VERSION},
@@ -108,6 +109,9 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 			case '?':
 			case HELP:
 				syntax();
+				break;
+			case PIDFILE:
+				options_p->pidfile             = optarg;
 				break;
 #ifdef CLUSTER_SUPPORT
 			case CLUSTERIFACE:
@@ -559,8 +563,28 @@ int main(int argc, char *argv[]) {
 			ret = nret;
 	}
 
+	if(options.pidfile != NULL) {
+		pid_t pid = getpid();
+		FILE *pidfile = fopen(options.pidfile, "w");
+		if(pidfile == NULL) {
+			printf_e("Error: main(): Cannot open file \"%s\" to write a pid there: %s (errno: %i)\n",
+				options.pidfile, strerror(errno), errno);
+			ret = errno;
+		} else {
+			fprintf(pidfile, "%u\n", pid);
+			fclose(pidfile);
+		}
+	}
+
 	if(ret == 0)
 		ret = sync_run(&options);
+
+	if(options.pidfile != NULL) {
+		if(unlink(options.pidfile))
+			if(!ret)
+				printf_e("Error: main(): Cannot unlink pidfile \"%s\": %s (errno: %i)\n",
+					options.pidfile, strerror(errno), errno);
+	}
 
 	main_cleanup(&options);
 
