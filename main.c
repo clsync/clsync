@@ -571,7 +571,11 @@ int main(int argc, char *argv[]) {
 				options.pidfile, strerror(errno), errno);
 			ret = errno;
 		} else {
-			fprintf(pidfile, "%u\n", pid);
+			if(fprintf(pidfile, "%u\n", pid) < 0) {
+				printf_e("Error: main(): Cannot write pid into file \"%s\": %s (errno: %i)\n",
+					options.pidfile, strerror(errno), errno);
+				ret = errno;
+			}
 			fclose(pidfile);
 		}
 	}
