@@ -1,3 +1,4 @@
+0! [SECURITY] Drop privilegies. Preserve access to files via "capabilites".
 1. Remove pthreads metainfo GC
 2. Replace g_hash_table* with "tsearch" and so on.
 3. Remove all code with "#ifdef DOXYGEN"

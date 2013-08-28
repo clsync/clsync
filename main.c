@@ -75,7 +75,7 @@ int syntax() {
 		printf("\t--%-24s-%c%s\n", long_options[i].name, long_options[i].val, (long_options[i].has_arg == required_argument ? " argument" : ""));
 		i++;
 	}
-	exit(0);
+	exit(EINVAL);
 }
 
 int version() {
