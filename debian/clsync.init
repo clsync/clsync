@@ -25,7 +25,7 @@ SCRIPTNAME=/etc/init.d/$NAME
 # Read configuration variable file if it is present
 [ -r /etc/default/$NAME ] && . /etc/default/$NAME
 
-# It's need to set option "CLSYNC_OPTIONS" in "/etc/default/$NAME"
+[ "$CLSYNC_ENABLE" != "true" ] && exit 0
 
 . /lib/lsb/init-functions
 
@@ -36,7 +36,7 @@ do_start() {
 			|| return 1
 
 	start-stop-daemon --start --quiet --pidfile "$PIDFILE" \
-		--exec "$DAEMON" -- $ARGS $CLSYNC_OPTIONS \
+		--exec "$DAEMON" -- $ARGS $CLSYNC_ARGS \
 			|| return 2
 }
 

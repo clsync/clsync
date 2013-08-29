@@ -1,0 +1,14 @@
+#
+
+# clsync is not enabled by default. To enable it replace "false" with "true":
+CLSYNC_ENABLE=false
+
+
+# clsync's arguments:
+
+# proof of concept:
+CLSYNC_ARGS='-d /dev/shm/clsync -x 23 /var/www /usr/bin/rsync /dev/null /mnt/backup'
+
+# production example:
+#CLSYNC_ARGS='-d /dev/shm/clsync -x 24 /srv/lxc /opt/backup_engine/bin/sync-handler.sh /opt/backup_engine/etc/clsync.filter'
+
