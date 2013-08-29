@@ -16,7 +16,7 @@ DESC="syncer daemon"
 NAME=clsync
 DAEMON=/usr/bin/$NAME
 PIDFILE=/var/run/$NAME.pid
-ARGS="--pid-file ${PIDFILE}"
+ARGS="--pid-file ${PIDFILE} --background"
 SCRIPTNAME=/etc/init.d/$NAME
 
 # Exit if the package is not installed
