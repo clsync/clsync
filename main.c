@@ -585,9 +585,8 @@ int main(int argc, char *argv[]) {
 
 	if(options.pidfile != NULL) {
 		if(unlink(options.pidfile))
-			if(!ret)
-				printf_e("Error: main(): Cannot unlink pidfile \"%s\": %s (errno: %i)\n",
-					options.pidfile, strerror(errno), errno);
+			printf_e("Error: main(): Cannot unlink pidfile \"%s\": %s (errno: %i)\n",
+				options.pidfile, strerror(errno), errno);
 	}
 
 	main_cleanup(&options);
