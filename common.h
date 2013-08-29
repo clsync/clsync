@@ -55,6 +55,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <libgen.h>
+#include <pthread.h>
 
 #include "configuration.h"
 #ifdef HAVE_CONFIG_H
