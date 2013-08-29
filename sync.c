@@ -1307,7 +1307,7 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 				sync_idle_dosync_collectedevents_cleanup,
 				options_p->handlerfpath,
 				"--inplace",
-				"-avH", 
+				"-aH", 
 				"--delete-before",
 				*(dosync_arg_p->excf_path) ? "--exclude-from"		: "--include-from",
 				*(dosync_arg_p->excf_path) ? dosync_arg_p->excf_path	: dosync_arg_p->outf_path,
