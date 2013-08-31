@@ -67,6 +67,25 @@ AS_IF([test "x$with_mhash" = "xno"], [], [
         [AC_MSG_ERROR("Unable to find libmhash")])
 ])
 
+dnl capabilities check
+AC_ARG_WITH(capabilities,
+AS_HELP_STRING(--with-capabilities,
+[enable linux capabilities support, default: disabled]))
+
+AS_IF(
+    [test "x$with_capabilities" = "xyes"],
+
+    [
+        AC_CHECK_HEADER(
+            [sys/capability.h],
+            [CPPFLAGS+=" -DHAVE_CAPABILITIES"],
+            [AC_MSG_ERROR("Unable to find sys/capability.h")])
+    ],
+
+    []
+)
+
+
 LIBS="${GLIB_LIBS} ${LIBS}"
 AM_CPPFLAGS="${GLIB_CFLAGS}"
 AC_SUBST(AM_CPPFLAGS)

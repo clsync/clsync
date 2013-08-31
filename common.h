@@ -57,6 +57,11 @@
 #include <libgen.h>
 #include <pthread.h>
 
+#ifdef HAVE_CAPABILITIES
+#include <sys/capability.h>	// for capset()/capget() for --preserve-file-access
+#include <sys/prctl.h>		// for prctl() for --preserve-fil-access
+#endif
+
 #include "configuration.h"
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -94,6 +99,9 @@
 enum flags_enum {
 	HELP		= 'h',
 	BACKGROUND	= 'b',
+	UID		= 'u',
+	GID		= 'g',
+	CAP_PRESERVE_FILEACCESS = 'C',
 	PTHREAD		= 'p',
 	PIDFILE		= 'z',
 #ifdef CLUSTER_SUPPORT
@@ -167,6 +175,8 @@ struct queueinfo {
 typedef struct queueinfo queueinfo_t;
 
 struct options {
+	uid_t uid;
+	gid_t gid;
 	rule_t rules[MAXRULES];
 	int flags[1<<8];
 	char *label;

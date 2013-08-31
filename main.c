@@ -32,6 +32,11 @@ static struct option long_options[] =
 {
 	{"background",		no_argument,		NULL,	BACKGROUND},
 	{"pid-file",		required_argument,	NULL,	PIDFILE},
+	{"uid",			required_argument,	NULL,	UID},
+	{"gid",			required_argument,	NULL,	GID},
+#ifdef HAVE_CAPABILITIES
+	{"preserve-file-access",no_argument,		NULL,	CAP_PRESERVE_FILEACCESS},
+#endif
 	{"pthread",		no_argument,		NULL,	PTHREAD},
 #ifdef CLUSTER_SUPPORT
 	{"cluster-iface",	required_argument,	NULL,	CLUSTERIFACE},		// Not implemented, yet
@@ -109,6 +114,14 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 			case '?':
 			case HELP:
 				syntax();
+				break;
+			case GID:
+				options_p->gid = (unsigned int)atol(optarg);
+				options_p->flags[c]++;
+				break;
+			case UID:
+				options_p->uid = (unsigned int)atol(optarg);
+				options_p->flags[c]++;
 				break;
 			case PIDFILE:
 				options_p->pidfile             = optarg;
@@ -561,6 +574,69 @@ int main(int argc, char *argv[]) {
 		nret = becomedaemon();
 		if(nret)
 			ret = nret;
+	}
+
+#ifdef HAVE_CAPABILITIES
+	if(options.flags[CAP_PRESERVE_FILEACCESS]) {
+		// Doesn't work, yet :(
+		//
+		// Error: Cannot inotify_add_watch() on "/home/xaionaro/clsync/examples/testdir/from": Permission denied (errno: 13).
+
+		printf_d("Debug: main(): Preserving access to files with using linux capabilites\n");
+
+		struct __user_cap_header_struct	cap_hdr = {0};
+		struct __user_cap_data_struct	cap_dat = {0};
+
+		cap_hdr.version = _LINUX_CAPABILITY_VERSION;
+		if(capget(&cap_hdr, &cap_dat) < 0) {
+			printf_e("Error: main() cannot get capabilites with capget(): %s (errno: %i)\n", strerror(errno), errno);
+			ret = errno;
+
+			goto preserve_fileaccess_end;
+		}
+
+		// From "man 7 capabilities":
+		// CAP_DAC_OVERRIDE    - Bypass file read, write, and execute permission checks. 
+		// CAP_DAC_READ_SEARCH - Bypass file read permission checks and directory read and execute permission checks.
+
+		cap_dat.effective    =  (CAP_TO_MASK(CAP_DAC_OVERRIDE)|CAP_TO_MASK(CAP_DAC_READ_SEARCH)|CAP_TO_MASK(CAP_FOWNER)|CAP_TO_MASK(CAP_SYS_ADMIN)|CAP_TO_MASK(CAP_SETUID));
+		cap_dat.permitted    =  (CAP_TO_MASK(CAP_DAC_OVERRIDE)|CAP_TO_MASK(CAP_DAC_READ_SEARCH)|CAP_TO_MASK(CAP_FOWNER)|CAP_TO_MASK(CAP_SYS_ADMIN)|CAP_TO_MASK(CAP_SETUID));
+		cap_dat.inheritable  = 0;
+
+		printf_ddd("Debug3: main(): cap.eff == %p; cap.prm == %p.\n",
+			(void *)(long)cap_dat.effective, (void *)(long)cap_dat.permitted);
+
+		if(capset(&cap_hdr, &cap_dat) < 0) {
+			printf_e("Error: main(): Cannot set capabilities with capset(): %s (errno: %i).\n", strerror(errno), errno);
+			ret = errno;
+
+			goto preserve_fileaccess_end;
+		}
+
+		// Tell kernel not clear capabilities when dropping root 
+		if(prctl(PR_SET_KEEPCAPS, 1) < 0) {
+			printf_e("Error: main(): Cannot prctl(PR_SET_KEEPCAPS, 1) to preserve capabilities: %s (errno: %i)\n",
+				strerror(errno), errno);
+			ret = errno;
+
+			goto preserve_fileaccess_end;
+		}
+	}
+preserve_fileaccess_end:
+#endif
+
+	if(options.flags[UID]) {
+		if(setuid(options.uid)) {
+			printf_e("Error: main(): Cannot setuid(%u): %s (errno: %i)\n", options.uid, strerror(errno), errno);
+			ret = errno;
+		}
+	}
+
+	if(options.flags[GID]) {
+		if(setuid(options.gid)) {
+			printf_e("Error: main(): Cannot setgid(%u): %s (errno: %i)\n", options.gid, strerror(errno), errno);
+			ret = errno;
+		}
 	}
 
 	if(options.pidfile != NULL) {

@@ -50,6 +50,26 @@ Writes pid to file by path
 .PP
 .RE
 
+.B \-u, \-\-uid
+.I uid
+.RS 8
+Drop user privileges to uid
+.I uid
+with
+.BR setuid (2)
+.PP
+.RE
+
+.B \-g, \-\-gid
+.I gid
+.RS 8
+Drop group privileges to gid
+.I gid
+with
+.BR setgid (2)
+.PP
+.RE
+
 .B \-p, \-\-pthread
 .RS 8
 Use
