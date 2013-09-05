@@ -20,7 +20,7 @@ example_DATA = \
 
 revision.h:
 	(echo -n '#define REVISION "'; [ -d .git ] && \
-	(echo -n '.'$$(( $$(git log 2>/dev/null | grep -c ^commit | tr -d "\n") - 302 )) ) \
+	(echo -n '.'$$(( $$(git log 2>/dev/null | grep -c ^commit | tr -d "\n") - 308 )) ) \
 	|| echo -n '-release'; echo '"') > $@
 
 doc:
