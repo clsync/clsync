@@ -15,7 +15,7 @@ example_DATA = examples/clsync-actionscript-rsync.sh		\
 
 revision.h:
 	(echo -n '#define REVISION "'; [ -d .git ] && \
-	(echo -n '.'$$(( $$(git log 2>/dev/null | grep -c ^commit | tr -d "\n") - 137 )) ) \
+	(echo -n '.'$$(( $$(git log 2>/dev/null | grep -c ^commit | tr -d "\n") - 302 )) ) \
 	|| echo -n '-release'; echo '"') > $@
 
 doc:
