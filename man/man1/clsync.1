@@ -44,8 +44,7 @@ Daemonize, forcing clsync to fork() on start.
 .I path\-to\-pidfile
 .RS 8
 Writes pid to file by path
-.I path\-to\-pidfile
-\*S.
+.IR path\-to\-pidfile .
 
 .PP
 .RE
@@ -83,17 +82,18 @@ with option
 in conjunction with
 .B rsync
 with option
-.B \-\-backup
-, you may catch a bug due to nonatomicity of rsync's file replace operation.
+.BR \-\-backup ,
+you may catch a bug due to nonatomicity of rsync's file replace operation.
 (see
-.B DIAGNOSTICS
-)
+.BR DIAGNOSTICS )
 .RE
 
 .PP
 .B \-c, \-\-cluster\-iface
 .I interface\-ip
 .RS 8
+.B Not implemented, yet.
+
 .B DANGEROUS OPTION. This functionality wasn't tested well. You can lost your data.
 
 Enables inter-node notifing subsystem to prevent sync looping between nodes.
@@ -115,11 +115,12 @@ ip a s eth0 | awk '{if($1=="inet") {gsub("/.*", "", $2); print $2}}'
 .B \-m, \-\-cluster\-ip
 .I multicast\-ip
 .RS 8
+.B Not implemented yet.
+
 Sets IP-address for multicast group.
 
 This option can be used only in conjunction with
-.B \-\-cluster\-interface
-\*S.
+.BR \-\-cluster\-interface .
 
 Use IP-addresses from 224.0.0.0/4 for this option.
 
@@ -130,11 +131,12 @@ Default value is "227.108.115.121". [(128+"c")."l"."s"."y"]
 .B \-P, \-\-cluster\-port
 .I multicast\-port
 .RS 8
+.B Not implemented yet.
+
 Sets UDP-port number for multicast messages.
 
 This option can be used only in conjunction with
-.B \-\-cluster\-interface
-\*S.
+.BR \-\-cluster\-interface .
 
 .I multicast\-port
 should be greater than 0 and less than 65535.
@@ -146,6 +148,8 @@ Default value is "40079". [("n" << 8) + "c"]
 .B \-W, \-\-cluster\-timeout
 .I cluster\-timeout
 .RS 8
+.B Not implemented yet.
+
 Sets timeout (in milliseconds) of waiting answer from another nodes of the
 cluster. If there's no answer from some node, it will be excluded.
 
@@ -156,10 +160,11 @@ Default value is "1000". [1 second]
 .B \-n, \-\-cluster\-node\-name
 .I cluster\-node\-name
 .RS 8
+.B Not implemented yet.
+
 Sets the name of current node in the cluster. It will be used in action
 scripts of another nodes (see 
-.B SYNC HANDLER
-).
+.BR "SYNC HANDLER" ).
 
 Default value is $(uname \-n).
 .RE
@@ -169,8 +174,7 @@ Default value is $(uname \-n).
 .I hash\-dirlevel\-min
 .RS 8
 Sets minimal directory level for ctime hashing (see
-.B CLUSTERING
-).
+.BR CLUSTERING ).
 
 Default value is "1".
 .RE
@@ -179,9 +183,10 @@ Default value is "1".
 .B \-O, \-\-cluster\-hash\-dl\-max
 .I hash\-dirlevel\-max
 .RS 8
+.B Not implemented yet.
+
 Sets maximal directory level for ctime hashing (see
-.B CLUSTERING
-).
+.BR CLUSTERING ).
 
 Default value is "16".
 .RE
@@ -190,9 +195,10 @@ Default value is "16".
 .B \-O, \-\-cluster\-scan\-dl\-max
 .I scan\-dirlevel\-max
 .RS 8
+.B Not implemented yet.
+
 Sets maximal directory level for ctime scanning (see
-.B CLUSTERING
-).
+.BR CLUSTERING ).
 
 Default value is "32".
 .RE
@@ -236,8 +242,7 @@ Default value is "30".
 .I bigfiles\-delay
 .RS 8
 Sets the delay (in seconds) to collect events about "big files" (see
-.I \-\-threshold\-bigfile
-).
+.IR \-\-threshold\-bigfile ).
 
 Default value is "1800".
 .RE
@@ -273,8 +278,7 @@ will execute
 for every file in the aggregated event list (action "sync").
 
 See
-.B SYNC HANDLER
-\*S.
+.BR "SYNC HANDLER" .
 
 Is not set by default.
 .RE
@@ -285,8 +289,8 @@ Is not set by default.
 Forces
 .B clsync
 to use "rsynclist" action instead of "initialsync" and "synclist" (see 
-.B SYNC HANDLER
-). This option can be used only with
+.BR "SYNC HANDLER" ).
+This option can be used only with
 .I \-\-dir\-lists
 option.
 
@@ -294,10 +298,10 @@ Recommended option.
 
 You can use "\-RR" to run "rsync" directly, bypassing intermediate script
 (see
-.B SYNC HANDLER
+.B "SYNC HANDLER"
 case
-.B e
-). But you cannot use "\-\-cluster\-*" options in "\-RR" mode.
+.BR e ).
+But you cannot use "\-\-cluster\-*" options in "\-RR" mode.
 
 Is not set by default.
 .RE
@@ -307,8 +311,8 @@ Is not set by default.
 .I rsync\-includes\-line\-limit
 .RS 8
 Sets soft limit for lines count in files by path
-.I rsync\-listpath
-\*S. Unfortunately, rsync works very slowly with huge "\-\-include\-from"
+.IR rsync\-listpath .
+Unfortunately, rsync works very slowly with huge "\-\-include\-from"
 files. So,
 .B clsync
 splits that list with approximately
@@ -330,8 +334,7 @@ rsync on recursive syncing.
 See
 .B case d
 of
-.B SYNC HANDLER
-\*S.
+.BR "SYNC HANDLER" .
 
 This option is not recommended.
 
@@ -404,9 +407,10 @@ Suppresses error messages.
 .PP
 .B \-f, \-\-fanotify
 .RS 8
+.B Don't use this option!
+
 Switches monitor subsystem to "fanotify" [it's described for
 future\-compatibility].
-.I Don't_use_this_option!
 .RE
 
 .PP
@@ -453,11 +457,10 @@ is only a convenient way to run a syncing script.
 .B clsync
 can run
 .I sync\-handler
-in five ways. Which way will be used is depends on specified options (see
+in five ways. Which way will be used depends on specified options (see
 .I \-\-dir\-lists
 and
-.I \-\-rsync
-\*S).
+.IR \-\-rsync ).
 
 case
 .B a
@@ -469,8 +472,8 @@ sync
 In this case,
 .I sync\-handler
 is supposed to non\-recursively sync file or directory by
-.I path
-\*S. With
+.IR path .
+With
 .I evmask
 it's passed bitmask of events with the file or directory (see 
 "/usr/include/linux/inotify.h").
@@ -511,8 +514,8 @@ In this case,
 .I sync\-handler
 is supposed to non\-recursively sync files and directories from list in a file by
 path
-.I listpath
-\*S(see below). With
+.IR listpath (see below).
+With
 .I evmask
 it's passed bitmask of events with the file or directory (see 
 "/usr/include/linux/inotify.h").
@@ -610,8 +613,8 @@ sync
 
 Every lines is supposed to be proceed by external syncer to sync file or
 directory by path
-.I path
-\*S. With
+.IR path .
+With
 .I evmask
 it's passed bitmask of events with the file or directory (see
 "/usr/include/linux/inotify.h").
@@ -660,10 +663,9 @@ They will be passed to rsync's exclude list one by one.
 To diagnose it, you can use "\-U" option and look into 
 .I rsync\-exclude\-listpath
 file (see
-.B SYNC HANDLER
+.B "SYNC HANDLER"
 case 
-.B d
-)
+.BR d )
 
 To prevent this, it's recommended to write such rules for rsync directly 
 (not via clsync).
@@ -689,16 +691,15 @@ Error: Got non-zero exitcode
 returned non-zero exitcode. Probably, you should process exitcodes in it or
 your syncer process didn't worked well. I case of using rsync, you can find
 the exitcodes meanings in
-.B man 1 rsync
-\*S.
+.BR "man 1 rsync" .
 
 If
 .I exitcode
 equals to 23 and you're using
 .B clsync
 in conjunction with
-.B rsync
-, this may happend, for example in next cases:
+.BR rsync ,
+this may happend, for example in next cases:
 
 .RS
 
@@ -707,26 +708,24 @@ in conjunction with
 \- You're running clsync with 
 .B \-\-pthread
 and rsync with
-.B \-\-backup
-\*S. See bugreport by URL:
-.I https://bugzilla.samba.org/show_bug.cgi?id=10081
-\*S.
+.BR \-\-backup .
+See bugreport by URL:
+.IR https://bugzilla.samba.org/show_bug.cgi?id=10081 .
 
 .RE
 
 To confirm the problem, you can try to add "return 0" or "exit 0" into
 your
-.I sync\-handler
-\*S.
+.IR sync\-handler .
 
 .RE
 
 .SH CLUSTERING
 
-Not implemented, yet.
+Not implemented yet.
 .B Don't try to use cluster functionality.
 
-Not described, yet.
+Not described yet.
 
 .SH EXAMPLES
 Working example you can try out in "example/" or 
