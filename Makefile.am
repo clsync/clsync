@@ -6,7 +6,7 @@ main.o: revision.h
 
 man_MANS = man/man1/clsync.1
 
-doc_DATA = CONTRIB DEVELOPING LICENSE README.md TODO
+doc_DATA = CONTRIB DEVELOPING LICENSE PROTOCOL README.md TODO
 
 exampledir=$(docdir)/examples
 
