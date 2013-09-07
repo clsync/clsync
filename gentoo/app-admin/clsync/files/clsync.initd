@@ -1,0 +1,13 @@
+#!/sbin/runscript
+# Copyright 1999-2013 Gentoo Foundation
+# Distributed under the terms of the GNU General Public License v2
+# $Header: $
+
+command="/usr/bin/clsync"
+pidfile="/var/run/${SVCNAME}.pid"
+command_args="--background --pid-file=${pidfile} ${CLSYNC_OPTS}"
+retry="5"
+
+depend() {
+	use net
+}

@@ -2,6 +2,14 @@
 # Copyright 1999-2013 Gentoo Foundation; Distributed under the GPL v2
 # $Header: $
 
+*clsync-0.1 (07 Sep 2013)
+
+  07 Sep 2013; Andrew Savchenko <bircoph@gmail.com> +clsync-0.1.ebuild,
+  clsync-9999.ebuild, +files/clsync.confd, +files/clsync.initd, metadata.xml:
+ Version bump for 0.1 release. Add capabilities support. Install
+ init script and conf file. Keep config directory: rules are
+ supposed to be here. Add rsync hinting information.
+
   26 Aug 2013; Andrew Savchenko <bircoph@gmail.com> clsync-9999.ebuild,
   metadata.xml:
   Add mhash and clustering support.
