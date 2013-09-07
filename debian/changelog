@@ -1,5 +1,5 @@
-clsync (0.0-1) unstable; urgency=low
+clsync (0.1-1) unstable; urgency=low
 
   * Initial release (Closes: #718769 )
 
- -- Artyom A Anikeev <anikeev@ut.mephi.ru>  Wed, 17 Jul 2013 21:25:45 +0400
+ -- Barak A. Pearlmutter <bap@debian.org>  Sat, 07 Sep 2013 12:16:00 +0100
