@@ -56,6 +56,19 @@ dnl -lrt is needed on < glibc-2.17
 AC_SEARCH_LIBS([clock_getres], [rt], [],
     [AC_MSG_ERROR("Unable to find librt; clock_getres() is needed")])
 
+dnl capabilities check
+AC_ARG_WITH(capabilities,
+AS_HELP_STRING(--with-capabilities,
+[enable linux capabilities support, default: disabled]))
+
+AS_IF(
+    [test "x$with_capabilities" = "xyes"], [
+        AC_CHECK_HEADER(
+            [sys/capability.h],
+            [CPPFLAGS+=" -DHAVE_CAPABILITIES"],
+            [AC_MSG_ERROR("Unable to find sys/capability.h")])
+])
+
 dnl mhash check
 AC_ARG_WITH(mhash,
 AS_HELP_STRING(--with-mhash,
@@ -66,24 +79,6 @@ AS_IF([test "x$with_mhash" = "xno"], [], [
     AC_SEARCH_LIBS([mhash_init], [mhash], [CPPFLAGS+=" -DHAVE_MHASH"],
         [AC_MSG_ERROR("Unable to find libmhash")])
 ])
-
-dnl capabilities check
-AC_ARG_WITH(capabilities,
-AS_HELP_STRING(--with-capabilities,
-[enable linux capabilities support, default: disabled]))
-
-AS_IF(
-    [test "x$with_capabilities" = "xyes"],
-
-    [
-        AC_CHECK_HEADER(
-            [sys/capability.h],
-            [CPPFLAGS+=" -DHAVE_CAPABILITIES"],
-            [AC_MSG_ERROR("Unable to find sys/capability.h")])
-    ],
-
-    []
-)
 
 
 LIBS="${GLIB_LIBS} ${LIBS}"
