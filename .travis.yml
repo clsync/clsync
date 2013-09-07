@@ -1,5 +1,5 @@
 language: c
 before_install:
- - sudo apt-get install libglib2.0-dev libmhash-dev
+ - sudo apt-get install libcap-dev libglib2.0-dev libmhash-dev
 script:
  - ./.travis.sh
