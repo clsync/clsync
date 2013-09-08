@@ -1947,6 +1947,7 @@ int sync_switch_state(pthread_t pthread_parent, int newstate) {
 		while(1) {
 			struct timespec time_timeout;
 			clock_gettime(CLOCK_REALTIME, &time_timeout);
+			time_timeout.tv_sec++;
 	//		time_timeout.tv_sec  = now.tv_sec;
 
 			printf_ddd("Debug3: sync_switch_state(): pthread_cond_timedwait() until %li.%li\n", time_timeout.tv_sec, time_timeout.tv_nsec);
