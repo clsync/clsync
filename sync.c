@@ -648,6 +648,13 @@ static int sync_queuesync(const char *fpath, eventinfo_t *evinfo, options_t *opt
 	if(!queueinfo->stime)
 		queueinfo->stime = time(NULL);
 
+	// Filename can contain "\n" character that conflicts with event-row separator of list-files.
+	if(strchr(fpath, '\n')) {
+		// At the moment, we will just ignore events of such files :(
+		printf_ddd("Debug3: sync_queuesync(): There's \"\\n\" character in path \"%s\". Ignoring it :(. Feedback to: https://github.com/xaionaro/clsync/issues/12\n", fpath);
+		return 0;
+	}
+
 	eventinfo_t *evinfo_dup = (eventinfo_t *)xmalloc(sizeof(*evinfo_dup));
 	memcpy(evinfo_dup, evinfo, sizeof(*evinfo_dup));
 
