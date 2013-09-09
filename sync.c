@@ -801,10 +801,10 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 #endif
 
 		int ret = sync_initialsync_walk(options_p, path, indexes_p, queue_id, initsync);
-		if(ret) {
+		if(ret)
 			printf_e("Error: sync_initialsync(): Cannot get synclist: %s (errno: %i)\n", strerror(ret), ret);
-			return ret;
-		}
+
+		return ret;
 	}
 
 	// RSYNC case:
