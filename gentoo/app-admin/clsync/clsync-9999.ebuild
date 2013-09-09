@@ -1,5 +1,5 @@
 # Copyright 1999-2013 Gentoo Foundation
-# Distributed under the terms of the GNU General Public License v2
+# Distributed under the terms of the GNU General Public License v3
 # $Header: $
 
 EAPI=5
@@ -18,7 +18,7 @@ inherit autotools $_GIT
 
 DESCRIPTION="Live sync tool based on inotify, written in GNU C"
 HOMEPAGE="http://ut.mephi.ru/oss"
-LICENSE="GPL-3"
+LICENSE="GPL-3+"
 SLOT="0"
 IUSE="-caps -cluster debug doc +examples extra-hardened hardened +mhash"
 REQUIRED_USE="
