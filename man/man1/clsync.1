@@ -284,6 +284,28 @@ Is not set by default.
 .RE
 
 .PP
+.B \-S, \-\-initialsync\-enable
+.RS 8
+Enables "initialsync" action (see
+.B "SYNC HANDLER"
+case
+.BR c ).
+
+Is not set by default.
+.RE
+
+.PP
+.B \-Z, \-\-synclist\-simplify
+.RS 8
+Removes the first 3 parameters in list files of action "synclist" (see
+.B "SYNC HANDLER"
+case
+.BR b ).
+
+Is not set by default.
+.RE
+
+.PP
 .B \-R, \-\-rsync
 .RS 8
 Forces
@@ -487,16 +509,20 @@ case
 .B b
 .RS
 .I sync\-handler
-initialsync
-.I label dirpath [nodes]
+synclist
+.I label listpath [nodes]
 
 In this case,
 .I sync\-handler
-is supposed to recursively sync data from directory by path
-.I dirpath
-with manual excluding extra files.
+is supposed to non\-recursively sync files and directories from list in a file by
+path
+.IR listpath (see
+below). With
+.I evmask
+it's passed bitmask of events with the file or directory (see 
+"/usr/include/linux/inotify.h").
 
-This case will be used for initial sync, if option
+This case will be used if option
 .I \-\-dir\-lists
 is set, but option
 .I \-\-rsync
@@ -507,24 +533,20 @@ case
 .B c
 .RS
 .I sync\-handler
-synclist
-.I label listpath [nodes]
+initialsync
+.I label dirpath [nodes]
 
 In this case,
 .I sync\-handler
-is supposed to non\-recursively sync files and directories from list in a file by
-path
-.IR listpath (see below).
-With
-.I evmask
-it's passed bitmask of events with the file or directory (see 
-"/usr/include/linux/inotify.h").
+is supposed to recursively sync data from directory by path
+.I dirpath
+with manual excluding extra files.
 
-This case will be used not initial syncs, if option
+This case will be used for initial sync, if options
 .I \-\-dir\-lists
-is set, but option
-.I \-\-rsync
-is not set.
+and
+.I \-\-initialsync\-enable
+are set.
 .RE
 
 case
@@ -610,6 +632,17 @@ contains lines separated by NL (without CR) of next format:
 .RS
 sync
 .I label evmask path
+.RS
+if option
+.I \-\-synclist\-simplify
+is not set
+.RE
+.I path
+.RS
+if option
+.I \-\-synclist\-simplify
+is set
+.RE
 
 Every lines is supposed to be proceed by external syncer to sync file or
 directory by path

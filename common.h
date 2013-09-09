@@ -122,6 +122,8 @@ enum flags_enum {
 	QUIET		= 'q',
 	VERBOSE		= 'v',
 	OUTLISTSDIR	= 'd',
+	ENABLEINITIALSYNC = 'S',
+	SYNCLISTSIMPLIFY= 'Z',
 	RSYNC		= 'R',
 	RSYNCINCLIMIT	= 'L',
 	RSYNC_PREFERINCLUDE= 'I',

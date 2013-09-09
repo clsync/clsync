@@ -54,6 +54,8 @@ static struct option long_options[] =
 	{"delay-collect-bigfile",required_argument,	NULL,	BFILEDELAY},
 	{"threshold-bigfile",	required_argument,	NULL,	BFILETHRESHOLD},
 	{"dir-lists",		required_argument,	NULL,	OUTLISTSDIR},
+	{"initialsync-enable",	no_argument,		NULL,	ENABLEINITIALSYNC},
+	{"synclist-simplify",	no_argument,		NULL,	SYNCLISTSIMPLIFY},
 	{"rsync",		no_argument,		NULL,	RSYNC},
 	{"rsync-inclimit",	required_argument,	NULL,	RSYNCINCLIMIT},
 	{"rsync-prefer-include",no_argument,		NULL,	RSYNC_PREFERINCLUDE},
@@ -534,6 +536,26 @@ int main(int argc, char *argv[]) {
 				printf_e("Warning: Insecure: Others have access to directory \"%s\".\n", options.listoutdir);
 #endif
 			}
+	}
+
+	if(options.flags[ENABLEINITIALSYNC] && (options.listoutdir == NULL)) {
+		printf_e("Error: main(): Option \"--dir-lists\" should be set to use option \"--initialsync-enable\".\n");
+		ret = EINVAL;
+	}
+
+	if(options.flags[ENABLEINITIALSYNC] && options.flags[RSYNC]) {
+		printf_e("Error: main(): Options \"--initialsync-enable\" and \"--rsync\" are incompatable.\n");
+		ret = EINVAL;
+	}
+
+	if(options.flags[SYNCLISTSIMPLIFY] && (options.listoutdir == NULL)) {
+		printf_e("Error: main(): Option \"--dir-lists\" should be set to use option \"--synclist-simplify\".\n");
+		ret = EINVAL;
+	}
+
+	if(options.flags[SYNCLISTSIMPLIFY] && options.flags[RSYNC]) {
+		printf_e("Error: main(): Options \"--synclist-simplify\" and \"--rsync\" are incompatable.\n");
+		ret = EINVAL;
 	}
 
 #ifdef FANOTIFY_SUPPORT

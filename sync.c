@@ -659,14 +659,16 @@ static int sync_queuesync(const char *fpath, eventinfo_t *evinfo, options_t *opt
 	return indexes_queueevent(indexes_p, strdup(fpath), evinfo_dup, queue_id);
 }
 
-int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, indexes_t *indexes_p, queue_id_t queue_id, initsync_t initsync) {
+int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *indexes_p, queue_id_t queue_id, initsync_t initsync) {
 	const char *rootpaths[] = {dirpath, NULL};
 	eventinfo_t evinfo;
 	FTS *tree;
 	rule_t *rules_p = options_p->rules;
-	printf_dd("Debug2: sync_initialsync_rsync_walk(options_p, \"%s\", indexes_p, %i, %i).\n", dirpath, queue_id, initsync);
+	printf_dd("Debug2: sync_initialsync_walk(options_p, \"%s\", indexes_p, %i, %i).\n", dirpath, queue_id, initsync);
 
 	char skip_rules = (initsync==INITSYNC_FULL) && options_p->flags[INITFULL];
+
+	char rsync_and_prefer_excludes = options_p->flags[RSYNC] && !options_p->flags[RSYNC_PREFERINCLUDE];
 
 	if((!options_p->flags[RSYNC_PREFERINCLUDE]) && skip_rules)
 		return 0;
@@ -718,7 +720,7 @@ int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, index
 
 			if(action == RULE_REJECT) {
 				fts_set(tree, node, FTS_SKIP);
-				if(!options_p->flags[RSYNC_PREFERINCLUDE]) {
+				if(rsync_and_prefer_excludes) {
 					if(queue_id == QUEUE_AUTO) {
 						int i=0;
 						while(i<QUEUE_MAX)
@@ -741,8 +743,8 @@ int sync_initialsync_rsync_walk(options_t *options_p, const char *dirpath, index
 				break;
 		}
 
-		if(options_p->flags[RSYNC_PREFERINCLUDE]) {
-			printf_ddd("Debug2: sync_initialsync_rsync_walk(): queueing \"%s\" (depth: %i) with int-flags %p\n", node->fts_path, node->fts_level, (void *)(unsigned long)evinfo.flags);
+		if(!rsync_and_prefer_excludes) {
+			printf_ddd("Debug2: sync_initialsync_walk(): queueing \"%s\" (depth: %i) with int-flags %p\n", node->fts_path, node->fts_level, (void *)(unsigned long)evinfo.flags);
 			int ret = sync_queuesync(node->fts_path, &evinfo, options_p, indexes_p, queue_id);
 
 			if(ret) {
@@ -774,8 +776,10 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 	}
 #endif
 
+	queue_id_t queue_id = (initsync==INITSYNC_FULL) ? QUEUE_INSTANT : QUEUE_NORMAL;
+
+	// non-RSYNC case:
 	if(!options_p->flags[RSYNC]) {
-		// non-RSYNC case:
 		printf_ddd("Debug3: sync_initialsync(): syncing \"%s\"\n", path);
 /*
 		if(options_p->flags[PTHREAD])
@@ -783,16 +787,20 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 		else
 			return sync_exec       (options_p, NULL, options_p->handlerfpath, "initialsync", options_p->label, path, NULL);*/
 
-		return SYNC_EXEC(options_p, NULL, options_p->handlerfpath, "initialsync", options_p->label, path, NULL);
-
+		if(options_p->flags[ENABLEINITIALSYNC])
+			return SYNC_EXEC(options_p, NULL, options_p->handlerfpath, "initialsync", options_p->label, path, NULL);
 #ifdef DOXYGEN
 		sync_exec(NULL, NULL); sync_exec_thread(NULL, NULL);
 #endif
+
+		int ret = sync_initialsync_walk(options_p, path, indexes_p, queue_id, initsync);
+		if(ret) {
+			printf_e("Error: sync_initialsync(): Cannot get synclist: %s (errno: %i)\n", strerror(ret), ret);
+			return ret;
+		}
 	}
 
 	// RSYNC case:
-//	queue_id_t queue_id = initsync==INITSYNC_FIRST ? QUEUE_INSTANT : QUEUE_AUTO;
-	queue_id_t queue_id = (initsync==INITSYNC_FULL) ? QUEUE_INSTANT : QUEUE_NORMAL;
 
 	if(!options_p->flags[RSYNC_PREFERINCLUDE]) {
 		queueinfo_t *queueinfo = &options_p->_queues[queue_id];
@@ -806,9 +814,9 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 		evinfo->flags |= EVIF_RECURSIVELY;
 
 		// Searching for excludes
-		int ret = sync_initialsync_rsync_walk(options_p, path, indexes_p, queue_id, initsync);
+		int ret = sync_initialsync_walk(options_p, path, indexes_p, queue_id, initsync);
 		if(ret) {
-			printf_e("Error: Cannot get exclude what to exclude: %s (errno: %i)\n", strerror(ret), ret);
+			printf_e("Error: sync_initialsync(): Cannot get exclude what to exclude: %s (errno: %i)\n", strerror(ret), ret);
 			return ret;
 		}
 
@@ -820,7 +828,7 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 	}
 
 	// Searching for includes
-	return sync_initialsync_rsync_walk(options_p, path, indexes_p, queue_id, initsync);
+	return sync_initialsync_walk(options_p, path, indexes_p, queue_id, initsync);
 }
 
 int sync_notify_mark(int notify_d, options_t *options_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p) {
@@ -1348,7 +1356,10 @@ gboolean sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer e
 
 	if(!options_p->flags[RSYNC]) {
 		// non-RSYNC case
-		fprintf(outf, "sync %s %i %s\n", options_p->label, evinfo->evmask, fpath);
+		if(options_p->flags[SYNCLISTSIMPLIFY])
+			fprintf(outf, "%s\n", fpath);
+		else 
+			fprintf(outf, "sync %s %i %s\n", options_p->label, evinfo->evmask, fpath);
 		return TRUE;
 	}
 
