@@ -67,6 +67,7 @@ src_install() {
 
 	# filter rules and sync scripts are supposed to be here
 	keepdir "${EPREFIX}/etc/${PN}"
+	fperms 0700 "${EPREFIX}/etc/${PN}"
 
 	newinitd "${FILESDIR}/${PN}.initd" "${PN}"
 	newconfd "${FILESDIR}/${PN}.confd" "${PN}"
