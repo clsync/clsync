@@ -3,10 +3,8 @@
 # $Header: $
 
   09 Sep 2013; Andrew Savchenko <bircoph@gmail.com> clsync-9999.ebuild:
-  License update
-
-  09 Sep 2013; Andrew Savchenko <bircoph@gmail.com> clsync-9999.ebuild:
-  Force 0700 permissions or /etc/clsync
+  Force 0700 permissions or /etc/clsync. License update. Conf.d
+  recommendations update.
 
 *clsync-0.1 (07 Sep 2013)
 
