@@ -422,8 +422,10 @@ int thread_cleanup(options_t *options_p) {
 	printf_ddd("Debug3: thread_cleanup(): All threads are closed.\n");
 
 	// Freeing
-	if(threadsinfo_p->allocated)
+	if(threadsinfo_p->allocated) {
 		free(threadsinfo_p->threads);
+		free(threadsinfo_p->threadsstack);
+	}
 
 	if(threadsinfo_p->mutex_init) {
 		int i=0;
@@ -517,7 +519,7 @@ int exec_argv(char **argv, int *child_pid DEBUGV(, int _rand)) {
 	va_end(arglist);\
 }
 
-char *sync_path_abs2rel(options_t *options_p, const char *path_abs, size_t path_abs_len, size_t *path_rel_len_p) {
+char *sync_path_abs2rel(options_t *options_p, const char *path_abs, size_t path_abs_len, size_t *path_rel_len_p, char *path_rel_oldptr) {
 	if(path_abs == NULL)
 		return NULL;
 
@@ -525,7 +527,16 @@ char *sync_path_abs2rel(options_t *options_p, const char *path_abs, size_t path_
 		path_abs_len = strlen(path_abs);
 
 	size_t path_rel_len = path_abs_len - options_p->watchdirlen;
-	char  *path_rel = xmalloc(path_abs_len+1);
+	char  *path_rel;
+	if(path_rel_oldptr == NULL) {
+		path_rel = xmalloc(path_abs_len+1);
+	} else {
+		if(path_rel_len > *path_rel_len_p) {
+			path_rel = xrealloc(path_rel_oldptr, path_rel_len+1);
+		} else {
+			path_rel = path_rel_oldptr;
+		}
+	}
 
 	memcpy(path_rel, &path_abs[options_p->watchdirlen], path_rel_len+1);
 
@@ -665,9 +676,9 @@ static inline int sync_exec_thread(options_t *options_p, thread_callbackfunct_t 
 
 // } === SYNC_EXEC() ===
 
-static int sync_queuesync(const char *fpath, eventinfo_t *evinfo, options_t *options_p, indexes_t *indexes_p, queue_id_t queue_id) {
+static int sync_queuesync(const char *fpath_rel, eventinfo_t *evinfo, options_t *options_p, indexes_t *indexes_p, queue_id_t queue_id) {
 
-	printf_ddd("Debug3: sync_queuesync(\"%s\", ...): fsize == %lu; tres == %lu, queue_id == \n", fpath, evinfo->fsize, options_p->bfilethreshold, queue_id);
+	printf_ddd("Debug3: sync_queuesync(\"%s\", ...): fsize == %lu; tres == %lu, queue_id == \n", fpath_rel, evinfo->fsize, options_p->bfilethreshold, queue_id);
 	if(queue_id == QUEUE_AUTO)
 		queue_id = (evinfo->fsize > options_p->bfilethreshold) ? QUEUE_BIGFILE : QUEUE_NORMAL;
 
@@ -676,12 +687,12 @@ static int sync_queuesync(const char *fpath, eventinfo_t *evinfo, options_t *opt
 	if(!queueinfo->stime)
 		queueinfo->stime = time(NULL);
 
-	char *fpath_rel = sync_path_abs2rel(options_p, fpath, -1, NULL);
+//	char *fpath_rel = sync_path_abs2rel(options_p, fpath, -1, NULL, NULL);
 
 	// Filename can contain "\n" character that conflicts with event-row separator of list-files.
-	if(strchr(fpath, '\n')) {
+	if(strchr(fpath_rel, '\n')) {
 		// At the moment, we will just ignore events of such files :(
-		printf_ddd("Debug3: sync_queuesync(): There's \"\\n\" character in path \"%s\". Ignoring it :(. Feedback to: https://github.com/xaionaro/clsync/issues/12\n", fpath);
+		printf_ddd("Debug3: sync_queuesync(): There's \"\\n\" character in path \"%s\". Ignoring it :(. Feedback to: https://github.com/xaionaro/clsync/issues/12\n", fpath_rel);
 		return 0;
 	}
 
@@ -690,13 +701,14 @@ static int sync_queuesync(const char *fpath, eventinfo_t *evinfo, options_t *opt
 
 #ifdef CLUSTER_SUPPORT
 	if(options_p->cluster_iface)
-		cluster_capture(fpath);
+		cluster_capture(fpath_rel);
 #endif
 
-	return indexes_queueevent(indexes_p, fpath_rel, evinfo_dup, queue_id);
+	return indexes_queueevent(indexes_p, strdup(fpath_rel), evinfo_dup, queue_id);
 }
 
 int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *indexes_p, queue_id_t queue_id, initsync_t initsync) {
+	int ret = 0;
 	const char *rootpaths[] = {dirpath, NULL};
 	eventinfo_t evinfo;
 	FTS *tree;
@@ -720,6 +732,9 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 	memset(&evinfo, 0, sizeof(evinfo));
 
 	FTSENT *node;
+	char  *path_rel		= NULL;
+	size_t path_rel_len	= 0;
+
 	while((node = fts_read(tree))) {
 		switch(node->fts_info) {
 			// Duplicates:
@@ -744,16 +759,19 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 					continue;
 				} else {
 					printf_e("Error: Got error while fts_read(): %s (errno: %i; fts_info: %i).\n", strerror(errno), errno, node->fts_info);
-					return errno;
+					ret = errno;
+					goto l_sync_initialsync_walk_end;
 				}
 			default:
 
 				printf_e("Error: Got unknown fts_info vlaue while fts_read(): %i.\n", node->fts_info);
-				return EINVAL;
+				ret = EINVAL;
+				goto l_sync_initialsync_walk_end;
 		}
 
 		if(!skip_rules) {
-			ruleaction_t action = rules_check(node->fts_path, node->fts_statp->st_mode, rules_p);
+			path_rel = sync_path_abs2rel(options_p, node->fts_path, -1, &path_rel_len, path_rel);
+			ruleaction_t action = rules_check(path_rel, node->fts_statp->st_mode, rules_p);
 
 			if(action == RULE_REJECT) {
 				fts_set(tree, node, FTS_SKIP);
@@ -782,25 +800,31 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 
 		if(!rsync_and_prefer_excludes) {
 			printf_ddd("Debug2: sync_initialsync_walk(): queueing \"%s\" (depth: %i) with int-flags %p\n", node->fts_path, node->fts_level, (void *)(unsigned long)evinfo.flags);
-			int ret = sync_queuesync(node->fts_path, &evinfo, options_p, indexes_p, queue_id);
+			int _ret = sync_queuesync(path_rel, &evinfo, options_p, indexes_p, queue_id);
 
-			if(ret) {
+			if(_ret) {
 				printf_e("Error: Got error while queueing \"%s\": %s (errno: %i).\n", node->fts_path, strerror(errno), errno);
-				return errno;
+				ret = errno;
+				goto l_sync_initialsync_walk_end;
 			}
 		}
 	}
 	if(errno) {
 		printf_e("Error: Got error while fts_read() and related routines: %s (errno: %i).\n", strerror(errno), errno);
-		return errno;
+		ret = errno;
+		goto l_sync_initialsync_walk_end;
 	}
 
 	if(fts_close(tree)) {
 		printf_e("Error: Got error while fts_close(): %s (errno: %i).\n", strerror(errno), errno);
-		return errno;
+		ret = errno;
+		goto l_sync_initialsync_walk_end;
 	}
 
-	return 0;
+l_sync_initialsync_walk_end:
+	if(path_rel != NULL)
+		free(path_rel);
+	return ret;
 }
 
 int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_p, initsync_t initsync) {
@@ -859,7 +883,7 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 
 		printf_ddd("Debug3: sync_initialsync(): queueing \"%s\" with int-flags %p\n", path, (void *)(unsigned long)evinfo->flags);
 
-		char *path_rel = sync_path_abs2rel(options_p, path, -1, NULL);
+		char *path_rel = sync_path_abs2rel(options_p, path, -1, NULL, NULL);
 
 		return indexes_queueevent(indexes_p, path_rel, evinfo, queue_id);
 	}
@@ -930,6 +954,7 @@ static inline int sync_mark_walk_cluster_modtime_update(options_t *options_p, co
 #endif
 
 int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, indexes_t *indexes_p) {
+	int ret = 0;
 	const char *rootpaths[] = {dirpath, NULL};
 	FTS *tree;
 	rule_t *rules_p = options_p->rules;
@@ -944,6 +969,9 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 	}
 
 	FTSENT *node;
+	char  *path_rel		= NULL;
+	size_t path_rel_len	= 0;
+
 	while((node = fts_read(tree))) {
 #ifdef CLUSTER_SUPPORT
 		int ret;
@@ -961,7 +989,7 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 			case FTS_NSOK:
 #ifdef CLUSTER_SUPPORT
 				if((ret=sync_mark_walk_cluster_modtime_update(options_p, node->fts_path, node->fts_level, S_IFREG)))
-					return ret;
+					goto l_sync_mark_walk_end;
 #endif
 				continue;
 			// To mark:
@@ -969,7 +997,7 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 			case FTS_DOT:
 #ifdef CLUSTER_SUPPORT
 				if((ret=sync_mark_walk_cluster_modtime_update(options_p, node->fts_path, node->fts_level, S_IFDIR)))
-					return ret;
+					goto l_sync_mark_walk_end;
 #endif
 				break;
 			// Error cases:
@@ -982,14 +1010,17 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 					continue;
 				} else {
 					my_printf_e("Error: Got error while fts_read(): %s (errno: %i; fts_info: %i).\n", strerror(errno), errno, node->fts_info);
-					return errno;
+					ret = errno;
+					goto l_sync_mark_walk_end;
 				}
 			default:
 				my_printf_e("Error: Got unknown fts_info vlaue while fts_read(): %i.\n", node->fts_info);
-				return EINVAL;
+				ret = EINVAL;
+				goto l_sync_mark_walk_end;
 		}
 
-		ruleaction_t action = rules_check(node->fts_path, S_IFDIR, rules_p);
+		path_rel = sync_path_abs2rel(options_p, node->fts_path, -1, &path_rel_len, path_rel);
+		ruleaction_t action = rules_check(path_rel, S_IFDIR, rules_p);
 
 		if(action == RULE_REJECT) {
 			fts_set(tree, node, FTS_SKIP);
@@ -1000,21 +1031,27 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 		int wd = sync_notify_mark(notify_d, options_p, node->fts_accpath, node->fts_path, node->fts_pathlen, indexes_p);
 		if(wd == -1) {
 			my_printf_e("Error: Got error while notify-marking \"%s\": %s (errno: %i).\n", node->fts_path, strerror(errno), errno);
-			return errno;
+			ret = errno;
+			goto l_sync_mark_walk_end;
 		}
 		printf_dd("Debug2: watching descriptor is %i.\n", wd);
 	}
 	if(errno) {
 		my_printf_e("Error: Got error while fts_read() and related routines: %s (errno: %i).\n", strerror(errno), errno);
-		return errno;
+		ret = errno;
+		goto l_sync_mark_walk_end;
 	}
 
 	if(fts_close(tree)) {
 		my_printf_e("Error: Got error while fts_close(): %s (errno: %i).\n", strerror(errno), errno);
-		return errno;
+		ret = errno;
+		goto l_sync_mark_walk_end;
 	}
 
-	return 0;
+l_sync_mark_walk_end:
+	if(path_rel != NULL)
+		free(path_rel);
+	return ret;
 }
 
 int sync_notify_init(options_t *options_p) {
@@ -1579,7 +1616,7 @@ int sync_fanotify_loop(int fanotify_d, options_t *options_p, indexes_t *indexes_
 			if (metadata->fd != FAN_NOFD) {
 				if (metadata->fd >= 0) {
 					char *fpath = fd2fpath_malloc(metadata->fd);
-					sync_queuesync(fpath, 0, options_p, indexes_p, QUEUE_AUTO);
+					sync_queuesync(fpath_rel, 0, options_p, indexes_p, QUEUE_AUTO);
 					printf_dd("Debug2: Event %i on \"%s\".\n", metadata->mask, fpath);
 					free(fpath);
 				}
@@ -1678,12 +1715,12 @@ int sync_inotify_wait(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 }
 
 void sync_inotify_handle_dosync(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
-	char *fpath		  = (char *)fpath_gp;
+	char *fpath_rel		  = (char *)fpath_gp;
 	eventinfo_t *evinfo	  = (eventinfo_t *)evinfo_gp;
 	options_t *options_p 	  = ((struct dosync_arg *)arg_gp)->options_p;
 	indexes_t *indexes_p 	  = ((struct dosync_arg *)arg_gp)->indexes_p;
 
-	sync_queuesync(fpath, evinfo, options_p, indexes_p, QUEUE_AUTO);
+	sync_queuesync(fpath_rel, evinfo, options_p, indexes_p, QUEUE_AUTO);
 
 	return;
 }
@@ -1696,19 +1733,25 @@ void sync_inotify_handle_dosync(gpointer fpath_gp, gpointer evinfo_gp, gpointer 
 
 int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_p) {
 	static struct timeval tv={0};
+
 	int count = 0;
 
 	fd_set rfds;
 	FD_ZERO(&rfds);
 	FD_SET(inotify_d, &rfds);
 
+	char   *path_rel	= NULL;
+	size_t  path_rel_len	= 0;
+	char   *path_full	= 0;
+	size_t  path_full_size	= 0;
 	while(select(FD_SETSIZE, &rfds, NULL, NULL, &tv)) {
 
 		char buf[BUFSIZ + 1];
 		size_t r = read(inotify_d, buf, BUFSIZ);
 		if(r <= 0) {
 			printf_e("Error: Got error while reading events from inotify with read(): %s (errno: %i).\n", strerror(errno), errno);
-			return -1;
+			count = -1;
+			goto l_sync_inotify_handle_end;
 		}
 
 #ifdef PARANOID
@@ -1740,19 +1783,24 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 
 			// Getting full path
 
-			char *fpathfull = xmalloc(strlen(fpath) + event->len + 2);
+			size_t path_full_memreq = strlen(fpath) + event->len + 2;
+			if(path_full_size < path_full_memreq) {
+				path_full      = xrealloc(path_full, path_full_memreq);
+				path_full_size = path_full_memreq;
+			}
+
 			if(event->len>0)
-				sprintf(fpathfull, "%s/%s", fpath, event->name);
+				sprintf(path_full, "%s/%s", fpath, event->name);
 			else
-				sprintf(fpathfull, "%s", fpath);
+				sprintf(path_full, "%s", fpath);
 
 			// Getting infomation about file/dir/etc
 
 			struct stat64 lstat;
 			mode_t st_mode;
 			size_t st_size;
-			if(lstat64(fpathfull, &lstat)) {
-				printf_dd("Debug2: Cannot lstat(\"%s\", lstat): %s (errno: %i). Seems, that the object disappeared.\n", fpathfull, strerror(errno), errno);
+			if(lstat64(path_full, &lstat)) {
+				printf_dd("Debug2: Cannot lstat(\"%s\", lstat): %s (errno: %i). Seems, that the object disappeared.\n", path_full, strerror(errno), errno);
 				if(event->mask & IN_ISDIR)
 					st_mode = S_IFDIR;
 				else
@@ -1765,10 +1813,10 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 
 			// Checking by filter rules
 
-			ruleaction_t ruleaction = rules_check(fpathfull, st_mode, options_p->rules);
+			path_rel = sync_path_abs2rel(options_p, path_full, -1, &path_rel_len, path_rel);
+			ruleaction_t ruleaction = rules_check(path_rel, st_mode, options_p->rules);
 
 			if(ruleaction == RULE_REJECT) {
-				free(fpathfull);
 				SYNC_INOTIFY_HANDLE_CONTINUE;
 			}
 
@@ -1780,31 +1828,31 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 
 					int ret;
 
-					ret = sync_mark_walk(inotify_d, options_p, fpathfull, indexes_p);
+					ret = sync_mark_walk(inotify_d, options_p, path_full, indexes_p);
 					if(ret) {
-						printf_d("Debug: Seems, that directory \"%s\" disappeared, while trying to mark it.\n", fpathfull);
-						free(fpathfull);
+						printf_d("Debug: Seems, that directory \"%s\" disappeared, while trying to mark it.\n", path_full);
 						SYNC_INOTIFY_HANDLE_CONTINUE;
 					}
 					
-					ret = sync_initialsync(fpathfull, options_p, indexes_p, INITSYNC_SUBDIR);
+					ret = sync_initialsync(path_full, options_p, indexes_p, INITSYNC_SUBDIR);
 					if(ret) {
 						printf_e("Error: Got error from sync_initialsync(): %s (errno %i)\n", strerror(ret), ret);
-						return ret;
+						errno = ret;
+						count=-1;
+						goto l_sync_inotify_handle_end;
 					}
 
-					free(fpathfull);
 					SYNC_INOTIFY_HANDLE_CONTINUE;
 				} else 
 				if(event->mask & (IN_DELETE|IN_MOVED_FROM)) {	// Disappered
-					printf_dd("Debug2: Disappeared \"%s\".\n", fpathfull);
+					printf_dd("Debug2: Disappeared \"%s\".\n", path_full);
 				}
 			}
 
 			// Locally queueing the event
 
 			int isnew = 0;
-			eventinfo_t *evinfo = indexes_fpath2ei(indexes_p, fpathfull);
+			eventinfo_t *evinfo = indexes_fpath2ei(indexes_p, path_rel);
 			if(evinfo == NULL) {
 				evinfo = (eventinfo_t *)xmalloc(sizeof(*evinfo));
 				memset(evinfo, 0, sizeof(*evinfo));
@@ -1816,9 +1864,7 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 			evinfo->evmask |= event->mask;
 
 			if(isnew)
-				indexes_fpath2ei_add(indexes_p, fpathfull, evinfo);
-			else
-				free(fpathfull);
+				indexes_fpath2ei_add(indexes_p, strdup(path_rel), evinfo);
 
 			SYNC_INOTIFY_HANDLE_CONTINUE;
 		}
@@ -1834,6 +1880,13 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 		g_hash_table_foreach(indexes_p->fpath2ei_ht, sync_inotify_handle_dosync, &dosync_arg);
 		g_hash_table_remove_all(indexes_p->fpath2ei_ht);
 	}
+
+l_sync_inotify_handle_end:
+	if(path_full != NULL)
+		free(path_full);
+
+	if(path_rel  != NULL)
+		free(path_rel);
 
 	return count;
 }
