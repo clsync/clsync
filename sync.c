@@ -517,6 +517,34 @@ int exec_argv(char **argv, int *child_pid DEBUGV(, int _rand)) {
 	va_end(arglist);\
 }
 
+char *sync_path_abs2rel(options_t *options_p, const char *path_abs, size_t path_abs_len, size_t *path_rel_len_p) {
+	if(path_abs == NULL)
+		return NULL;
+
+	if(path_abs_len == -1)
+		path_abs_len = strlen(path_abs);
+
+	size_t path_rel_len = path_abs_len - options_p->watchdirlen;
+	char  *path_rel = xmalloc(path_abs_len+1);
+
+	memcpy(path_rel, &path_abs[options_p->watchdirlen], path_rel_len+1);
+
+#ifdef VERYPARANOID
+	// Removing "/" on the end
+	printf_ddd("Debug3: sync_path_abs2rel(): \"%s\" (len: %i) --%i--> \"%s\" (len: %i) + ", 
+		path_abs, path_abs_len, path_rel[path_rel_len - 1] == '/',
+		options_p->watchdir, options_p->watchdirlen);
+	if(path_rel[path_rel_len - 1] == '/')
+		path_rel[--path_rel_len] = 0x00;
+	printf_ddd("\"%s\" (len: %i)\n", path_rel, path_rel_len);
+#endif
+
+	if(path_rel_len_p != NULL)
+		*path_rel_len_p = path_rel_len;
+
+	return path_rel;
+}
+
 static inline int sync_exec(options_t *options_p, thread_callbackfunct_t callback, ...) {
 	printf_dd("Debug2: sync_exec()\n");
 
@@ -648,6 +676,8 @@ static int sync_queuesync(const char *fpath, eventinfo_t *evinfo, options_t *opt
 	if(!queueinfo->stime)
 		queueinfo->stime = time(NULL);
 
+	char *fpath_rel = sync_path_abs2rel(options_p, fpath, -1, NULL);
+
 	// Filename can contain "\n" character that conflicts with event-row separator of list-files.
 	if(strchr(fpath, '\n')) {
 		// At the moment, we will just ignore events of such files :(
@@ -663,7 +693,7 @@ static int sync_queuesync(const char *fpath, eventinfo_t *evinfo, options_t *opt
 		cluster_capture(fpath);
 #endif
 
-	return indexes_queueevent(indexes_p, strdup(fpath), evinfo_dup, queue_id);
+	return indexes_queueevent(indexes_p, fpath_rel, evinfo_dup, queue_id);
 }
 
 int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *indexes_p, queue_id_t queue_id, initsync_t initsync) {
@@ -829,9 +859,9 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 
 		printf_ddd("Debug3: sync_initialsync(): queueing \"%s\" with int-flags %p\n", path, (void *)(unsigned long)evinfo->flags);
 
-		
+		char *path_rel = sync_path_abs2rel(options_p, path, -1, NULL);
 
-		return indexes_queueevent(indexes_p, strdup(path), evinfo, queue_id);
+		return indexes_queueevent(indexes_p, path_rel, evinfo, queue_id);
 	}
 
 	// Searching for includes
@@ -1270,21 +1300,13 @@ gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, g
 	struct dosync_arg *dosync_arg_p = (struct dosync_arg *)arg_gp;
 	char *fpath		  = (char *)fpath_gp;
 	FILE *excf		  = dosync_arg_p->outf;
-	options_t *options_p 	  = dosync_arg_p->options_p;
+//	options_t *options_p 	  = dosync_arg_p->options_p;
 //	indexes_t *indexes_p	  = dosync_arg_p->indexes_p;
 	printf_ddd("Debug3: sync_idle_dosync_collectedevents_rsync_exclistpush(): \"%s\"\n", fpath);
 
-	// RSYNC case
-	size_t fpathlen = strlen(fpath);
-	char *fpath_rel_p = xmalloc(fpathlen+1);
-	char *fpath_rel = fpath_rel_p;
+	printf_ddd("Debug3: Adding to exclude-file: \"%s\"\n", fpath);
+	fprintf(excf, "%s\n", fpath);
 
-	memcpy(fpath_rel, &fpath[options_p->watchdirlen], fpathlen+1 - options_p->watchdirlen);
-
-	printf_ddd("Debug3: Adding to exclude-file: \"%s\"\n", fpath_rel);
-	fprintf(excf, "%s\n", fpath_rel);
-
-	free(fpath_rel_p);
 	return TRUE;
 }
 
@@ -1403,48 +1425,30 @@ gboolean sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer e
 		outf = dosync_arg_p->outf;
 	}
 
-	size_t fpath_len = strlen(fpath);
-	size_t fpath_rel_len = fpath_len - options_p->watchdirlen;
-	char *fpath_rel_p = xmalloc(fpath_len+1);
-	char *fpath_rel = fpath_rel_p;
-
-	memcpy(fpath_rel, &fpath[options_p->watchdirlen], fpath_rel_len+1);
-
-
-#ifdef VERYPARANOID
-	// Removing "/" on the end
-	printf_ddd("Debug3: \"%s\" (len: %i) --%i--> ", fpath_rel, fpath_rel_len, fpath_rel[fpath_rel_len - 1] == '/');
-	if(fpath_rel[fpath_rel_len - 1] == '/')
-		fpath_rel[--fpath_rel_len] = 0x00;
-	printf_ddd("\"%s\" (len: %i)\n", fpath_rel, fpath_rel_len);
-#endif
-
-	char *end=fpath_rel;
+	char *end=fpath;
 
 	if(evinfo->flags & EVIF_RECURSIVELY) {
-		printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): Recursively \"%s\": Adding to rsynclist: \"%s/***\".\n", fpath, fpath_rel);
-		fprintf(outf, "%s/***\n", fpath_rel);
+		printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): Recursively \"%s\": Adding to rsynclist: \"%s/***\".\n", fpath, fpath);
+		fprintf(outf, "%s/***\n", fpath);
 		(*linescount_p)++;
 	}
 
 
 	while(end != NULL) {
-		if(*fpath_rel == 0x00)
+		if(*fpath == 0x00)
 			break;
-		printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): Non-recursively \"%s\": Adding to rsynclist: \"%s\".\n", fpath, fpath_rel);
-		indexes_outaggr_add(indexes_p, strdup(fpath_rel_p));
-//		fprintf(outf, "%s\n", fpath_rel);
+		printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): Non-recursively \"%s\": Adding to rsynclist: \"%s\".\n", fpath, fpath);
+		indexes_outaggr_add(indexes_p, strdup(fpath));
 		(*linescount_p)++;
-		end = strrchr(fpath_rel, '/');
+		end = strrchr(fpath, '/');
 		if(end == NULL)
 			break;
-		if(end - fpath_rel <= 0)
+		if(end - fpath <= 0)
 			break;
 
 		*end = 0x00;
 	};
 
-	free(fpath_rel_p);
 	return TRUE;
 }
 
