@@ -90,15 +90,17 @@ static ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule
 				i,
 				(void *)(long)rule_p->perm, (void *)(long)rule_p->mask,
 				(void *)(unsigned long)ftype, (void *)(unsigned long)rule_p->objtype, 
-				!(rule_p->objtype && (rule_p->objtype != ftype))
+				(unsigned char)!(rule_p->objtype && (rule_p->objtype != ftype))
 			);
 
 		if(!(rule_p->mask & ruleaction)) {	// Checking wrong operation type
+			printf_ddd("Debug3: rules_search_getperm(): action-mask mismatch. Skipping.\n");
 			rule_p++;i++;// = &rules_p[++i];
 			continue;
 		}
 
 		if(rule_p->objtype && (rule_p->objtype != ftype)) {
+			printf_ddd("Debug3: rules_search_getperm(): objtype mismatch. Skipping.\n");
 			rule_p++;i++;// = &rules_p[++i];
 			continue;
 		}
@@ -106,6 +108,7 @@ static ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule
 		if(!regexec(&rule_p->expr, fpath, 0, NULL, 0))
 			break;
 
+		printf_ddd("Debug3: rules_search_getperm(): doesn't match regex. Skipping.\n");
 		rule_p++;i++;// = &rules_p[++i];
 
 	}
@@ -826,16 +829,20 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 				ret = EINVAL;
 				goto l_sync_initialsync_walk_end;
 		}
+		path_rel = sync_path_abs2rel(options_p, node->fts_path, -1, &path_rel_len, path_rel);
+
+		printf_ddd("Debug3: sync_initialsync_walk(): Pointing to \"%s\" (node->fts_info == %i)\n", path_rel, node->fts_info);
 
 		if(!skip_rules) {
-			path_rel = sync_path_abs2rel(options_p, node->fts_path, -1, &path_rel_len, path_rel);
-
 			ruleaction_t perm = rules_getperm(path_rel, node->fts_statp->st_mode, rules_p, RA_WALK|RA_MONITOR);
 
-			if(!(perm&RA_WALK))
+			if(!(perm&RA_WALK)) {
+				printf_ddd("Debug3: sync_initialsync_walk(): Rejecting to walk into \"%s\".\n", path_rel);
 				fts_set(tree, node, FTS_SKIP);
+			}
 
 			if(!(perm&RA_MONITOR)) {
+				printf_ddd("Debug3: sync_initialsync_walk(): Excluding \"%s\".\n", path_rel);
 				if(rsync_and_prefer_excludes) {
 					if(queue_id == QUEUE_AUTO) {
 						int i=0;
@@ -1875,9 +1882,9 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 			// Checking by filter rules
 
 			path_rel = sync_path_abs2rel(options_p, path_full, -1, &path_rel_len, path_rel);
-			ruleaction_t perm = rules_search_getperm(path_rel, st_mode, options_p->rules, RA_MONITOR, NULL);
+			ruleaction_t perm = rules_getperm(path_rel, st_mode, options_p->rules, RA_WALK|RA_MONITOR);
 
-			if(!(perm&RA_MONITOR)) {
+			if(!(perm&(RA_MONITOR|RA_WALK))) {
 				SYNC_INOTIFY_HANDLE_CONTINUE;
 			}
 
@@ -1889,18 +1896,20 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 
 					int ret;
 
-					ret = sync_mark_walk(inotify_d, options_p, path_full, indexes_p);
-					if(ret) {
-						printf_d("Debug: Seems, that directory \"%s\" disappeared, while trying to mark it.\n", path_full);
-						SYNC_INOTIFY_HANDLE_CONTINUE;
-					}
-					
-					ret = sync_initialsync(path_full, options_p, indexes_p, INITSYNC_SUBDIR);
-					if(ret) {
-						printf_e("Error: Got error from sync_initialsync(): %s (errno %i)\n", strerror(ret), ret);
-						errno = ret;
-						count=-1;
-						goto l_sync_inotify_handle_end;
+					if(perm & RA_WALK) {
+						ret = sync_mark_walk(inotify_d, options_p, path_full, indexes_p);
+						if(ret) {
+							printf_d("Debug: Seems, that directory \"%s\" disappeared, while trying to mark it.\n", path_full);
+							SYNC_INOTIFY_HANDLE_CONTINUE;
+						}
+
+						ret = sync_initialsync(path_full, options_p, indexes_p, INITSYNC_SUBDIR);
+						if(ret) {
+							printf_e("Error: Got error from sync_initialsync(): %s (errno %i)\n", strerror(ret), ret);
+							errno = ret;
+							count=-1;
+							goto l_sync_inotify_handle_end;
+						}
 					}
 
 					SYNC_INOTIFY_HANDLE_CONTINUE;
@@ -1908,6 +1917,10 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 				if(event->mask & (IN_DELETE|IN_MOVED_FROM)) {	// Disappered
 					printf_dd("Debug2: Disappeared \"%s\".\n", path_full);
 				}
+			}
+
+			if(!(perm&RA_WALK)) {
+				SYNC_INOTIFY_HANDLE_CONTINUE;
 			}
 
 			// Locally queueing the event

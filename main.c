@@ -220,6 +220,13 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 }
 
 int rule_complete(rule_t *rule_p, const char *expr) {
+#ifdef VERYPARANOID
+	if(rule_p->mask == RA_NONE) {
+		printf_e("Error: rule_complete(): Received a rule with rule_p->mask == 0x00. Exit.\n");
+		return EINVAL;
+	}
+#endif
+
 	char buf[BUFSIZ];
 	int ret = 0;
 	if(rule_p->num >= MAXRULES) {
@@ -282,6 +289,80 @@ int parse_rules_fromfile(options_t *options_p) {
 			line++;
 			linelen--;
 
+			// Parsing the second character of the line
+			*line |= 0x20;	// lower-casing
+
+			if(*line != 'w') {
+				// processing --auto-add-rules-w
+				if(options_p->flags[AUTORULESW] && (sign == RS_PERMIT)) {
+					// Preparing to add appropriate w-rules
+					char skip = 0;
+					char *expr = alloca(linelen+2);
+					memcpy(expr, line, linelen+1);
+					size_t exprlen = linelen;
+
+					// Making expr to be starting with '^'
+					if(line[1] == '^') {
+						expr++;
+						exprlen--;
+					} else
+						*expr = '^';
+
+					char *end;
+
+					if(*line == 'd' || *line == '*') {
+						// "d" rule already doing what we need, so we can skip the last level
+
+						end = &expr[exprlen];
+						if(end[-1] != '$')
+							*(end++) = '$';
+						*end = 0;
+
+//						printf_ddd("Debug3: parse_rules_fromfile(): Don't adding w-rule for \"%s\" due to [*d]-rule for \"%s\"\n",
+//							expr, &line[1]);
+						g_hash_table_insert(autowrules_ht, strdup(expr), GINT_TO_POINTER(1));
+
+					}
+
+					if(!skip) {
+
+						do {
+							// Decreasing directory level and make the '$' ending
+							end = strrchr(expr, '/');
+							if(end != NULL) {
+								if(end[-1] != '$')
+									*(end++) = '$';
+								*end = 0;
+								exprlen = (size_t)(end - expr);
+							} else {
+								expr[1] = '$';
+								exprlen = 2;
+							}
+
+							// Checking if it not already set
+							if(!g_hash_table_lookup(autowrules_ht, expr)) {
+
+								// Adding the rule
+
+								rule->objtype = S_IFDIR;
+								rule->mask    = RA_WALK;
+								rule->perm    = RA_WALK;
+
+								printf_d("Debug2: parse_rules_fromfile(): Rule #%i <+> <w> pattern <%s> (length: %i) [auto].\n", 
+									rule->num, expr, exprlen);
+								if((ret=rule_complete(rule, expr)))
+									goto l_parse_rules_fromfile_end;
+								g_hash_table_insert(autowrules_ht, strdup(expr), GINT_TO_POINTER(1));
+
+								// Switching to next rule:
+								rule = &rules[i];
+								rule->num = i++;
+							}
+						} while(end != NULL);
+					}
+				}
+			}
+
 			// Default rule->mask and rule->perm
 
 			// rule->mask - sets bitmask of operations that are affected by the rule
@@ -297,55 +378,6 @@ int parse_rules_fromfile(options_t *options_p) {
 					break;
 			}
 
-
-			// Parsing the second character of the line
-			*line |= 0x20;	// lower-casing
-
-			if(*line != 'w') {
-				// processing --auto-add-rules-w
-				if(options_p->flags[AUTORULESW] && (rule->perm != RA_NONE)) {
-					// Preparing to add appropriate w-rules
-					char *expr = alloca(linelen+2);
-					memcpy(expr, line, linelen+1);
-					size_t exprlen = linelen;
-
-					// Making expr to be starting with '^'
-					if(line[1] == '^')
-						expr++;
-					else
-						*expr = '^';
-
-					char *end;
-					do {
-						// Decreasing directory level and make the '$' ending
-						end = strrchr(expr, '/');
-						if(end != NULL) {
-							*(end++) = '$';
-							*(end  ) = 0;
-							exprlen = (size_t)(end - expr);
-						} else {
-							expr[1] = '$';
-							exprlen = 2;
-						}
-
-						// Checking if it not already set
-						if(!g_hash_table_lookup(autowrules_ht, expr)) {
-
-							// Adding the rule
-
-							printf_d("Debug2: Rule #%i <+> <w> pattern <%s> (length: %i) [auto].\n", 
-								rule->num+1, expr, exprlen);
-							if((ret=rule_complete(rule, expr)))
-								goto l_parse_rules_fromfile_end;
-							g_hash_table_insert(autowrules_ht, strdup(expr), GINT_TO_POINTER(1));
-
-							// Switching to next rule:
-							rule = &rules[i];
-							rule->num = i++;
-						}
-					} while(end != NULL);
-				}
-			}
 			switch(*line) {
 				case '*':
 					rule->objtype = 0;	// "0" - means "of any type"
@@ -391,7 +423,7 @@ int parse_rules_fromfile(options_t *options_p) {
 
 			// Parsing the rest part of the line
 
-			printf_d("Debug2: Rule #%i <%c> <%c> pattern <%s> (length: %i).\n", rule->num+1, line[-2], line[-1], line, linelen);
+			printf_d("Debug2: parse_rules_fromfile(): Rule #%i <%c> <%c> pattern <%s> (length: %i).\n", rule->num, line[-2], line[-1], line, linelen);
 			if((ret=rule_complete(rule, line)))
 				goto l_parse_rules_fromfile_end;
 		}
@@ -407,6 +439,14 @@ l_parse_rules_fromfile_end:
 	rules[i].perm   = DEFAULT_RULES_PERM;
 
 	g_hash_table_destroy(autowrules_ht);
+#ifdef _DEBUG
+	printf_ddd("Debug3: parse_rules_fromfile(): Total:\n");
+	i=0;
+	do {
+		printf_ddd("\t%i\t%i\t%p/%p\n", i, rules[i].objtype, (void *)(long)rules[i].perm, (void *)(long)rules[i].mask);
+		i++;
+	} while(rules[i].mask != RA_NONE);
+#endif
 	return ret;
 }
 
