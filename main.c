@@ -56,6 +56,7 @@ static struct option long_options[] =
 	{"dir-lists",		required_argument,	NULL,	OUTLISTSDIR},
 	{"initialsync-enable",	no_argument,		NULL,	ENABLEINITIALSYNC},
 	{"synclist-simplify",	no_argument,		NULL,	SYNCLISTSIMPLIFY},
+	{"auto-add-rules-w",	no_argument,		NULL,	AUTORULESW},
 	{"rsync",		no_argument,		NULL,	RSYNC},
 	{"rsync-inclimit",	required_argument,	NULL,	RSYNCINCLIMIT},
 	{"rsync-prefer-include",no_argument,		NULL,	RSYNC_PREFERINCLUDE},
@@ -218,11 +219,27 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 	return 0;
 }
 
+int rule_complete(rule_t *rule_p, const char *expr) {
+	char buf[BUFSIZ];
+	int ret = 0;
+	if(rule_p->num >= MAXRULES) {
+		printf_e("Error: Too many rules (%i >= %i).\n", rule_p->num, MAXRULES);
+		return ENOMEM;
+	}
+	if((ret = regcomp(&rule_p->expr, expr, REG_EXTENDED | REG_NOSUB))) {
+		regerror(ret, &rule_p->expr, buf, BUFSIZ);
+		printf_e("Error: Invalid regexp pattern <%s>: %s (regex-errno: %i).\n", expr, buf, ret);
+		return ret;
+	}
+
+	return ret;
+}
+
 int parse_rules_fromfile(options_t *options_p) {
+	int ret = 0;
 	char *rulfpath = options_p->rulfpath;
 	rule_t *rules  = options_p->rules;
 
-	char buf[BUFSIZ];
 	char *line_buf=NULL;
 	FILE *f = fopen(rulfpath, "r");
 	
@@ -233,6 +250,8 @@ int parse_rules_fromfile(options_t *options_p) {
 		return errno;
 	}
 
+	GHashTable *autowrules_ht = g_hash_table_new_full(g_str_hash,	g_str_equal,	free,    0);
+
 	int i=0;
 	size_t linelen, size=0;
 	while((linelen = getline(&line_buf, &size, f)) != -1) {
@@ -242,6 +261,7 @@ int parse_rules_fromfile(options_t *options_p) {
 			rule_t *rule;
 
 			rule = &rules[i];
+			rule->num = i++;
 			line[--linelen] = 0; 
 
 			// Parsing the first character of the line
@@ -280,6 +300,52 @@ int parse_rules_fromfile(options_t *options_p) {
 
 			// Parsing the second character of the line
 			*line |= 0x20;	// lower-casing
+
+			if(*line != 'w') {
+				// processing --auto-add-rules-w
+				if(options_p->flags[AUTORULESW] && (rule->perm != RA_NONE)) {
+					// Preparing to add appropriate w-rules
+					char *expr = alloca(linelen+2);
+					memcpy(expr, line, linelen+1);
+					size_t exprlen = linelen;
+
+					// Making expr to be starting with '^'
+					if(line[1] == '^')
+						expr++;
+					else
+						*expr = '^';
+
+					char *end;
+					do {
+						// Decreasing directory level and make the '$' ending
+						end = strrchr(expr, '/');
+						if(end != NULL) {
+							*(end++) = '$';
+							*(end  ) = 0;
+							exprlen = (size_t)(end - expr);
+						} else {
+							expr[1] = '$';
+							exprlen = 2;
+						}
+
+						// Checking if it not already set
+						if(!g_hash_table_lookup(autowrules_ht, expr)) {
+
+							// Adding the rule
+
+							printf_d("Debug2: Rule #%i <+> <w> pattern <%s> (length: %i) [auto].\n", 
+								rule->num+1, expr, exprlen);
+							if((ret=rule_complete(rule, expr)))
+								goto l_parse_rules_fromfile_end;
+							g_hash_table_insert(autowrules_ht, strdup(expr), GINT_TO_POINTER(1));
+
+							// Switching to next rule:
+							rule = &rules[i];
+							rule->num = i++;
+						}
+					} while(end != NULL);
+				}
+			}
 			switch(*line) {
 				case '*':
 					rule->objtype = 0;	// "0" - means "of any type"
@@ -291,14 +357,8 @@ int parse_rules_fromfile(options_t *options_p) {
 				case 'l':
 					rule->objtype = S_IFLNK;
 					break;
-				case 'f':
-					rule->objtype = S_IFREG;
-					break;
 				case 'b':
 					rule->objtype = S_IFBLK;
-					break;
-				case 'd':
-					rule->objtype = S_IFDIR;
 					break;
 				case 'c':
 					rule->objtype = S_IFCHR;
@@ -306,14 +366,13 @@ int parse_rules_fromfile(options_t *options_p) {
 				case 'p':
 					rule->objtype = S_IFIFO;
 					break;
-#else
+#endif
 				case 'f':
 					rule->objtype = S_IFREG;
 					break;
 				case 'd':
 					rule->objtype = S_IFDIR;
 					break;
-#endif
 				case 'w':	// accept or reject walking to directory
 					if(options_p->flags[RSYNC]) {
 						printf_e("parse_rules_fromfile(): Warning: Used \"w\" rule in \"--rsync\" case."
@@ -331,25 +390,14 @@ int parse_rules_fromfile(options_t *options_p) {
 			linelen--;
 
 			// Parsing the rest part of the line
-			printf_d("Debug2: Rule #%i <%c> <%c> pattern <%s> (length: %i).\n", i+1, line[-2], line[-1], line, linelen);
-			int ret;
-			if(i >= MAXRULES) {
-				printf_e("Error: Too many rules (%i >= %i).\n", i, MAXRULES);
-				rule->mask   = RA_NONE;			// Terminator. End of rules' chain.
-				rule->perm   = DEFAULT_RULES_PERM;
-				return ENOMEM;
-			}
-			if((ret = regcomp(&rule->expr, line, REG_EXTENDED | REG_NOSUB))) {
-				regerror(ret, &rule->expr, buf, BUFSIZ);
-				printf_e("Error: Invalid regexp pattern <%s>: %s (regex-errno: %i).\n", line, buf, ret);
-				rule->mask   = RA_NONE;			// Terminator. End of rules' chain.
-				rule->perm   = DEFAULT_RULES_PERM;
-				return ret;
-			}
 
-			rule->num = i++;
+			printf_d("Debug2: Rule #%i <%c> <%c> pattern <%s> (length: %i).\n", rule->num+1, line[-2], line[-1], line, linelen);
+			if((ret=rule_complete(rule, line)))
+				goto l_parse_rules_fromfile_end;
 		}
 	}
+
+l_parse_rules_fromfile_end:
 	if(size)
 		free(line_buf);
 
@@ -357,7 +405,9 @@ int parse_rules_fromfile(options_t *options_p) {
 
 	rules[i].mask   = RA_NONE;		// Terminator. End of rules' chain.
 	rules[i].perm   = DEFAULT_RULES_PERM;
-	return 0;
+
+	g_hash_table_destroy(autowrules_ht);
+	return ret;
 }
 
 int becomedaemon() {
@@ -393,9 +443,11 @@ int main_rehash(options_t *options_p) {
 
 	main_cleanup(options_p);
 
-	if(options_p->rulfpath != NULL)
+	if(options_p->rulfpath != NULL) {
 		ret = parse_rules_fromfile(options_p);
-	else {
+		if(ret)
+			printf_e("Error: main_rehash(): Got error from parse_rules_fromfile(): %s (errno: %i).\n", strerror(ret), ret);
+	} else {
 		options_p->rules[0].perm = DEFAULT_RULES_PERM;
 		options_p->rules[0].mask = RA_NONE;		// Terminator. End of rules.
 	}
@@ -547,6 +599,8 @@ int main(int argc, char *argv[]) {
 	}
 	if(options.flags[RSYNC_PREFERINCLUDE] && (!options.flags[RSYNC]))
 		printf_e("Warning: Option \"--rsyncpreferinclude\" is useless without \"--rsync\".\n");
+	if(options.flags[RSYNC] && options.flags[AUTORULESW])
+		printf_e("Warning: Option \"--auto-add-rules-w\" in conjunction with \"--rsync\" may cause unexpected problems.\n");
 
 	if(options.flags[DEBUG])
 		debug_print_flags();
@@ -718,6 +772,8 @@ preserve_fileaccess_end:
 		}
 	}
 
+	printf_ddd("Debug3: main(): Current errno is %i.\n", ret);
+
 	if(ret == 0)
 		ret = sync_run(&options);
 
@@ -744,7 +800,7 @@ preserve_fileaccess_end:
 		free(options.destdirwslash);
 
 	out_flush();
-	printf_d("Debug: finished, exitcode: %i.\n", ret);
+	printf_d("Debug: finished, exitcode: %i: %s.\n", ret, strerror(ret));
 	out_flush();
 	return ret;
 }

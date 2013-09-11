@@ -306,6 +306,19 @@ Is not set by default.
 .RE
 
 .PP
+.B \-A, \-\-auto\-add\-rules\-w
+.RS 8
+Forces clsync to create a "w\-rule" for every non-"w-rule" (see
+.BR RULES ).
+
+Not recommended to use in conjunction with
+.I \-\-rsync
+option.
+
+Is not set by default.
+.RE
+
+.PP
 .B \-R, \-\-rsync
 .RS 8
 Forces
@@ -691,35 +704,59 @@ rules in this cases.
 
 More examples:
 
-Syncing pwdb files (non-rsync case):
+Syncing pwdb files and sshd_config (non-rsync case):
 .RS
-	+f/passwd
+	+f^/passwd$
 .br
-	+f/group
+	+f^/group$
 .br
-	+f/shadow
+	+f^/shadow$
+.br
+	+f^/ssh/sshd_config$
 .br
 	+w^$
+.br
+	+w^/ssh$
 .br
 	-*
 .RE
 
-Syncing pwdb files (rsync case):
+Syncing pwdb files and sshd_config (non-rsync case with option
+.IR \-\-auto\-add\-rules\-w ):
 .RS
-	+f/passwd
+	+f^/passwd$
 .br
-	+f/group
+	+f^/group$
 .br
-	+f/shadow
+	+f^/shadow$
+.br
+	+f^/ssh/sshd_config$
+.br
+	-*
+.RE
+
+Syncing pwdb files and sshd_config (rsync case):
+.RS
+	+f^/passwd$
+.br
+	+f^/group$
+.br
+	+f^/shadow$
+.br
+	+f^/ssh/sshd_config$
 .br
 	+d^$
+.br
+	+d^/ssh$
 .br
 	-*
 .RE
 
 Syncing /srv/lxc tree (rsync case):
 .RS
-	-f/sess_*
+	-d/sess(ion)?s?$
+.br
+	-f/tmp/
 .br
 	+*
 .RE
