@@ -149,10 +149,17 @@ enum queue_enum {
 };
 typedef enum queue_enum queue_id_t;
 
+enum ruleactionsign_enum {
+	RS_REJECT	= 0,
+	RS_PERMIT	= 1
+};
+typedef enum ruleactionsign_enum ruleactionsign_t;
+
 enum ruleaction_enum {
-	RULE_END = 0,	// Terminator. To be able to end rules' chain
-	RULE_ACCEPT,
-	RULE_REJECT
+	RA_NONE		 = 0x00,
+	RA_MONITOR	 = 0x01,
+	RA_WALK		 = 0x02,
+	RA_ALL		 = 0xff
 };
 typedef enum ruleaction_enum ruleaction_t;
 
@@ -164,9 +171,11 @@ enum sigusr_enum {
 };
 
 struct rule {
+	int		num;
 	regex_t		expr;
 	mode_t		objtype;
-	ruleaction_t	action;
+	ruleaction_t	perm;
+	ruleaction_t	mask;
 };
 typedef struct rule rule_t;
 

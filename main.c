@@ -218,15 +218,17 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 	return 0;
 }
 
-int parse_rules_fromfile(const char *rulfpath, rule_t *rules) {
+int parse_rules_fromfile(options_t *options_p) {
+	char *rulfpath = options_p->rulfpath;
+	rule_t *rules  = options_p->rules;
+
 	char buf[BUFSIZ];
 	char *line_buf=NULL;
 	FILE *f = fopen(rulfpath, "r");
 	
 	if(f == NULL) {
-#ifdef PARANOID
-		rules->action = RULE_END;
-#endif
+		rules->mask   = RA_NONE;		// Terminator. End of rules' chain.
+		rules->perm   = DEFAULT_RULES_PERM;
 		printf_e("Error: Cannot open \"%s\" for reading: %s (errno: %i).\n", rulfpath, strerror(errno), errno);
 		return errno;
 	}
@@ -235,17 +237,20 @@ int parse_rules_fromfile(const char *rulfpath, rule_t *rules) {
 	size_t linelen, size=0;
 	while((linelen = getline(&line_buf, &size, f)) != -1) {
 		if(linelen>1) {
+			uint8_t sign = 0;
 			char *line = line_buf;
 			rule_t *rule;
 
 			rule = &rules[i];
 			line[--linelen] = 0; 
+
+			// Parsing the first character of the line
 			switch(*line) {
 				case '+':
-					rule->action = RULE_ACCEPT;
+					sign = RS_PERMIT;
 					break;
 				case '-':
-					rule->action = RULE_REJECT;
+					sign = RS_REJECT;
 					break;
 				case '#':	// Comment?
 					continue;
@@ -257,6 +262,23 @@ int parse_rules_fromfile(const char *rulfpath, rule_t *rules) {
 			line++;
 			linelen--;
 
+			// Default rule->mask and rule->perm
+
+			// rule->mask - sets bitmask of operations that are affected by the rule
+			// rule->perm - sets bitmask of permit/reject for every operation. Effect have only bits specified by the rule->mask.
+
+			rule->mask = RA_ALL;
+			switch(sign) {
+				case RS_REJECT:
+					rule->perm = RA_NONE;
+					break;
+				case RS_PERMIT:
+					rule->perm = RA_ALL;
+					break;
+			}
+
+
+			// Parsing the second character of the line
 			*line |= 0x20;	// lower-casing
 			switch(*line) {
 				case '*':
@@ -292,25 +314,40 @@ int parse_rules_fromfile(const char *rulfpath, rule_t *rules) {
 					rule->objtype = S_IFDIR;
 					break;
 #endif
+				case 'w':	// accept or reject walking to directory
+					if(options_p->flags[RSYNC]) {
+						printf_e("parse_rules_fromfile(): Warning: Used \"w\" rule in \"--rsync\" case."
+							" This may cause unexpected problems.\n");
+					}
+					rule->objtype = S_IFDIR;
+					rule->mask    = RA_WALK;
+					break;
+				default:
+					printf_e("parse_rules_fromfile(): Warning: Cannot parse the rule <%s>\n", &line[-1]);
+					continue;
 			}
 
 			line++;
 			linelen--;
 
+			// Parsing the rest part of the line
 			printf_d("Debug2: Rule #%i <%c> <%c> pattern <%s> (length: %i).\n", i+1, line[-2], line[-1], line, linelen);
 			int ret;
 			if(i >= MAXRULES) {
 				printf_e("Error: Too many rules (%i >= %i).\n", i, MAXRULES);
-				rule->action = RULE_END;
+				rule->mask   = RA_NONE;			// Terminator. End of rules' chain.
+				rule->perm   = DEFAULT_RULES_PERM;
 				return ENOMEM;
 			}
 			if((ret = regcomp(&rule->expr, line, REG_EXTENDED | REG_NOSUB))) {
 				regerror(ret, &rule->expr, buf, BUFSIZ);
 				printf_e("Error: Invalid regexp pattern <%s>: %s (regex-errno: %i).\n", line, buf, ret);
-				rule->action = RULE_END;
+				rule->mask   = RA_NONE;			// Terminator. End of rules' chain.
+				rule->perm   = DEFAULT_RULES_PERM;
 				return ret;
 			}
-			i++;
+
+			rule->num = i++;
 		}
 	}
 	if(size)
@@ -318,7 +355,8 @@ int parse_rules_fromfile(const char *rulfpath, rule_t *rules) {
 
 	fclose(f);
 
-	rules[i].action = RULE_END;	// Terminator. End of rules' chain.
+	rules[i].mask   = RA_NONE;		// Terminator. End of rules' chain.
+	rules[i].perm   = DEFAULT_RULES_PERM;
 	return 0;
 }
 
@@ -341,7 +379,7 @@ int becomedaemon() {
 
 int main_cleanup(options_t *options_p) {
 	int i=0;
-	while((i < MAXRULES) && (options_p->rules[i].action != RULE_END))
+	while((i < MAXRULES) && (options_p->rules[i].mask != RA_NONE))
 		regfree(&options_p->rules[i++].expr);
 
 	printf_ddd("Debug3: main_cleanup(): %i %i %i %i\n", options_p->watchdirsize, options_p->watchdirwslashsize, options_p->destdirsize, options_p->destdirwslashsize);
@@ -356,9 +394,11 @@ int main_rehash(options_t *options_p) {
 	main_cleanup(options_p);
 
 	if(options_p->rulfpath != NULL)
-		ret = parse_rules_fromfile(options_p->rulfpath, options_p->rules);
-	else
-		options_p->rules[0].action = RULE_END;
+		ret = parse_rules_fromfile(options_p);
+	else {
+		options_p->rules[0].perm = DEFAULT_RULES_PERM;
+		options_p->rules[0].mask = RA_NONE;		// Terminator. End of rules.
+	}
 
 	return ret;
 }

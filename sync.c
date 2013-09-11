@@ -50,38 +50,96 @@ int exitcode_process(options_t *options_p, int exitcode) {
 	return err;
 }
 
-// Checks file path by rules' expressions (from file)
-// Return: action for the "file path"
+/**
+ * @brief 			Checks file path by rules' expressions (parsed from file)
+ * 
+ * @param[in] 	fpath		Path to file of directory
+ * @param[in] 	st_mode		st_mode received via *stat() functions
+ * @param[in] 	rules_p		Pointer to start of rules array
+ * @param[in] 	ruleaction	Operaton ID (see ruleaction_t)
+ * @param[i/o] 	rule_pp		Pointer to pointer to rule, where the last search ended. Next search will be started from the specified rule. Can be "NULL" to disable this feature.
+ *
+ * @retval	perm		Permission bitmask
+ * 
+ */
+// Checks file path by rules' expressions (parsed from file)
+// Return: RS_PERMIT or RS_REJECT for the "file path" and specified ruleaction
 
-static ruleaction_t rules_check(const char *fpath, mode_t st_mode, rule_t *rules_p) {
-	ruleaction_t action = RULE_END;
-	printf_ddd("Debug3: rules_check(\"%s\", %p, rules_p)\n", fpath, (void *)(unsigned long)st_mode);
+static ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rules_p, ruleaction_t ruleaction, rule_t **rule_pp) {
+	printf_ddd("Debug3: rules_search_getperm(\"%s\", %p, rules_p, %p, %p)\n", 
+			fpath, (void *)(unsigned long)st_mode,
+			(void *)(long)ruleaction, (void *)(long)rule_pp
+		);
 
 	int i = 0;
 	rule_t *rule_p = rules_p;
 	mode_t ftype = st_mode & S_IFMT;
-	while(rule_p->action != RULE_END) {
-		printf_ddd("Debug3: rules_check(): %i->%i: type compare: %p, %p -> %p\n", i, rule_p->action, (void *)(unsigned long)ftype, (void *)(unsigned long)rule_p->objtype, !(rule_p->objtype && (rule_p->objtype != ftype)));
+
+	if(rule_pp != NULL)
+		if(*rule_pp != NULL) {
+			if(rule_p->mask == RA_NONE)
+				return rule_p->perm;
+
+			rule_p = ++(*rule_pp);
+			i = rule_p->num;
+		}
+
+	printf_ddd("Debug3: rules_search_getperm(): Starting from position %i\n", i);
+	while(rule_p->mask != RA_NONE) {
+		printf_ddd("Debug3: rules_search_getperm(): %i -> %p/%p: type compare: %p, %p -> %p\n", 
+				i,
+				(void *)(long)rule_p->perm, (void *)(long)rule_p->mask,
+				(void *)(unsigned long)ftype, (void *)(unsigned long)rule_p->objtype, 
+				!(rule_p->objtype && (rule_p->objtype != ftype))
+			);
+
+		if(!(rule_p->mask & ruleaction)) {	// Checking wrong operation type
+			rule_p++;i++;// = &rules_p[++i];
+			continue;
+		}
 
 		if(rule_p->objtype && (rule_p->objtype != ftype)) {
-			rule_p = &rules_p[++i];
+			rule_p++;i++;// = &rules_p[++i];
 			continue;
 		}
 
 		if(!regexec(&rule_p->expr, fpath, 0, NULL, 0))
 			break;
 
-		rule_p = &rules_p[++i];
+		rule_p++;i++;// = &rules_p[++i];
 
 	}
 
-	action = rule_p->action;
-	if(action == RULE_END)
-		action = RULE_DEFAULT;
+	printf_dd("Debug2: matched to rule #%u for \"%s\":\t%p/%p (queried: %p).\n", rule_p->mask==RA_NONE?-1:i, fpath, 
+			(void *)(long)rule_p->perm, (void *)(long)rule_p->mask,
+			(void *)(long)ruleaction
+		);
 
-	printf_dd("Debug2: matched to rule #%u for \"%s\":\t%i -> %i.\n", rule_p->action==RULE_END?-1:i, fpath, rule_p->action, action);
+	if(rule_pp != NULL)
+		*rule_pp = rule_p;
 
-	return action;
+	return rule_p->perm;
+}
+
+static inline ruleaction_t rules_getperm(const char *fpath, mode_t st_mode, rule_t *rules_p, ruleaction_t ruleactions) {
+	rule_t *rule_p = NULL;
+	ruleaction_t gotpermto  = 0;
+	ruleaction_t resultperm = 0;
+
+	while((gotpermto&ruleactions) != ruleactions) {
+		rules_search_getperm(fpath, st_mode, rules_p, ruleactions, &rule_p);
+		if(rule_p->mask == RA_NONE) { // End of rules' list 
+			resultperm |= rule_p->perm & ((gotpermto^RA_ALL)&rule_p->mask);
+			break;
+		}
+		resultperm |= rule_p->perm & ((gotpermto^rule_p->mask)&rule_p->mask);	// Adding perm bitmask of operations that was unknown before
+		gotpermto  |= rule_p->mask;						// Adding the mask
+	}
+
+	printf_ddd("Debug3: rules_getperm(\"%s\", %i, rules_p, %p): result perm is %p\n",
+		fpath, st_mode, (void *)(long)ruleactions, (void *)(long)resultperm);
+
+	return resultperm;
 }
 
 // Removes necessary rows from hash_tables if some watching descriptor closed
@@ -771,20 +829,23 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 
 		if(!skip_rules) {
 			path_rel = sync_path_abs2rel(options_p, node->fts_path, -1, &path_rel_len, path_rel);
-			ruleaction_t action = rules_check(path_rel, node->fts_statp->st_mode, rules_p);
 
-			if(action == RULE_REJECT) {
+			ruleaction_t perm = rules_getperm(path_rel, node->fts_statp->st_mode, rules_p, RA_WALK|RA_MONITOR);
+
+			if(!(perm&RA_WALK))
 				fts_set(tree, node, FTS_SKIP);
+
+			if(!(perm&RA_MONITOR)) {
 				if(rsync_and_prefer_excludes) {
 					if(queue_id == QUEUE_AUTO) {
 						int i=0;
 						while(i<QUEUE_MAX)
-							indexes_addexclude(indexes_p, strdup(node->fts_path), i++);
+							indexes_addexclude(indexes_p, strdup(path_rel), i++);
 					} else
-						indexes_addexclude(indexes_p, strdup(node->fts_path), queue_id);
+						indexes_addexclude(indexes_p, strdup(path_rel), queue_id);
 				}
-				continue;
 			}
+			continue;
 		}
 
 		evinfo.fsize = node->fts_statp->st_size;
@@ -1020,9 +1081,9 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 		}
 
 		path_rel = sync_path_abs2rel(options_p, node->fts_path, -1, &path_rel_len, path_rel);
-		ruleaction_t action = rules_check(path_rel, S_IFDIR, rules_p);
+		ruleaction_t perm = rules_search_getperm(path_rel, S_IFDIR, rules_p, RA_WALK, NULL);
 
-		if(action == RULE_REJECT) {
+		if(!(perm&RA_WALK)) {
 			fts_set(tree, node, FTS_SKIP);
 			continue;
 		}
@@ -1814,9 +1875,9 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 			// Checking by filter rules
 
 			path_rel = sync_path_abs2rel(options_p, path_full, -1, &path_rel_len, path_rel);
-			ruleaction_t ruleaction = rules_check(path_rel, st_mode, options_p->rules);
+			ruleaction_t perm = rules_search_getperm(path_rel, st_mode, options_p->rules, RA_MONITOR, NULL);
 
-			if(ruleaction == RULE_REJECT) {
+			if(!(perm&RA_MONITOR)) {
 				SYNC_INOTIFY_HANDLE_CONTINUE;
 			}
 
