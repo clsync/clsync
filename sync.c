@@ -2313,7 +2313,7 @@ int sync_run(options_t *options_p) {
 	}
 
 #ifdef CLUSTER_SUPPORT
-	if(options_p->cluster_iface == NULL) {
+	if(options_p->cluster_iface != NULL) {
 		int _ret;
 		_ret = cluster_deinit();
 		if(_ret) {
