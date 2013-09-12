@@ -220,6 +220,7 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 }
 
 int rule_complete(rule_t *rule_p, const char *expr) {
+	printf_ddd("Debug3: rule_complete(): <%s>.\n", expr);
 #ifdef VERYPARANOID
 	if(rule_p->mask == RA_NONE) {
 		printf_e("Error: rule_complete(): Received a rule with rule_p->mask == 0x00. Exit.\n");
@@ -347,6 +348,21 @@ int parse_rules_fromfile(options_t *options_p) {
 					continue;
 			}
 
+
+			line++;
+			linelen--;
+
+			// Parsing the rest part of the line
+
+			printf_d("Debug2: parse_rules_fromfile(): Rule #%i <%c> <%c> pattern <%s> (length: %i).\n", rule->num, line[-2], line[-1], line, linelen);
+			if((ret=rule_complete(rule, line)))
+				goto l_parse_rules_fromfile_end;
+
+			// Post-processing:
+
+			line--;
+			linelen++;
+
 			if(*line != 'w') {
 				// processing --auto-add-rules-w
 				if(options_p->flags[AUTORULESW] && (sign == RS_PERMIT)) {
@@ -391,11 +407,17 @@ int parse_rules_fromfile(options_t *options_p) {
 								exprlen = (size_t)(end - expr);
 							} else {
 								expr[1] = '$';
+								expr[2] = 0;
 								exprlen = 2;
 							}
 
 							// Checking if it not already set
 							if(!g_hash_table_lookup(autowrules_ht, expr)) {
+
+								// Switching to next rule:
+
+								rule = &rules[i];
+								rule->num = i++;
 
 								// Adding the rule
 
@@ -409,24 +431,11 @@ int parse_rules_fromfile(options_t *options_p) {
 									goto l_parse_rules_fromfile_end;
 								g_hash_table_insert(autowrules_ht, strdup(expr), GINT_TO_POINTER(1));
 
-								// Switching to next rule:
-								rule = &rules[i];
-								rule->num = i++;
 							}
 						} while(end != NULL);
 					}
 				}
 			}
-
-
-			line++;
-			linelen--;
-
-			// Parsing the rest part of the line
-
-			printf_d("Debug2: parse_rules_fromfile(): Rule #%i <%c> <%c> pattern <%s> (length: %i).\n", rule->num, line[-2], line[-1], line, linelen);
-			if((ret=rule_complete(rule, line)))
-				goto l_parse_rules_fromfile_end;
 		}
 	}
 
