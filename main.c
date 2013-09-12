@@ -291,6 +291,61 @@ int parse_rules_fromfile(options_t *options_p) {
 
 			// Parsing the second character of the line
 			*line |= 0x20;	// lower-casing
+			// Default rule->mask and rule->perm
+
+			// rule->mask - sets bitmask of operations that are affected by the rule
+			// rule->perm - sets bitmask of permit/reject for every operation. Effect have only bits specified by the rule->mask.
+
+			rule->mask = RA_ALL;
+			switch(sign) {
+				case RS_REJECT:
+					rule->perm = RA_NONE;
+					break;
+				case RS_PERMIT:
+					rule->perm = RA_ALL;
+					break;
+			}
+
+			switch(*line) {
+				case '*':
+					rule->objtype = 0;	// "0" - means "of any type"
+					break;
+#ifdef DETAILED_FTYPE
+				case 's':
+					rule->objtype = S_IFSOCK;
+					break;
+				case 'l':
+					rule->objtype = S_IFLNK;
+					break;
+				case 'b':
+					rule->objtype = S_IFBLK;
+					break;
+				case 'c':
+					rule->objtype = S_IFCHR;
+					break;
+				case 'p':
+					rule->objtype = S_IFIFO;
+					break;
+#endif
+				case 'f':
+					rule->objtype = S_IFREG;
+					break;
+				case 'd':
+					rule->objtype = S_IFDIR;
+					break;
+				case 'w':	// accept or reject walking to directory
+					if(options_p->flags[RSYNC]) {
+						printf_e("parse_rules_fromfile(): Warning: Used \"w\" rule in \"--rsync\" case."
+							" This may cause unexpected problems.\n");
+					}
+					rule->objtype = S_IFDIR;
+					rule->mask    = RA_WALK;
+					break;
+				default:
+					printf_e("parse_rules_fromfile(): Warning: Cannot parse the rule <%s>\n", &line[-1]);
+					i--;	// Don't adding the rule
+					continue;
+			}
 
 			if(*line != 'w') {
 				// processing --auto-add-rules-w
@@ -363,60 +418,6 @@ int parse_rules_fromfile(options_t *options_p) {
 				}
 			}
 
-			// Default rule->mask and rule->perm
-
-			// rule->mask - sets bitmask of operations that are affected by the rule
-			// rule->perm - sets bitmask of permit/reject for every operation. Effect have only bits specified by the rule->mask.
-
-			rule->mask = RA_ALL;
-			switch(sign) {
-				case RS_REJECT:
-					rule->perm = RA_NONE;
-					break;
-				case RS_PERMIT:
-					rule->perm = RA_ALL;
-					break;
-			}
-
-			switch(*line) {
-				case '*':
-					rule->objtype = 0;	// "0" - means "of any type"
-					break;
-#ifdef DETAILED_FTYPE
-				case 's':
-					rule->objtype = S_IFSOCK;
-					break;
-				case 'l':
-					rule->objtype = S_IFLNK;
-					break;
-				case 'b':
-					rule->objtype = S_IFBLK;
-					break;
-				case 'c':
-					rule->objtype = S_IFCHR;
-					break;
-				case 'p':
-					rule->objtype = S_IFIFO;
-					break;
-#endif
-				case 'f':
-					rule->objtype = S_IFREG;
-					break;
-				case 'd':
-					rule->objtype = S_IFDIR;
-					break;
-				case 'w':	// accept or reject walking to directory
-					if(options_p->flags[RSYNC]) {
-						printf_e("parse_rules_fromfile(): Warning: Used \"w\" rule in \"--rsync\" case."
-							" This may cause unexpected problems.\n");
-					}
-					rule->objtype = S_IFDIR;
-					rule->mask    = RA_WALK;
-					break;
-				default:
-					printf_e("parse_rules_fromfile(): Warning: Cannot parse the rule <%s>\n", &line[-1]);
-					continue;
-			}
 
 			line++;
 			linelen--;
