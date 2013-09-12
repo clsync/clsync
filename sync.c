@@ -851,8 +851,8 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 					} else
 						indexes_addexclude(indexes_p, strdup(path_rel), queue_id);
 				}
+				continue;
 			}
-			continue;
 		}
 
 		evinfo.fsize = node->fts_statp->st_size;
