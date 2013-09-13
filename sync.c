@@ -609,7 +609,7 @@ char *sync_path_abs2rel(options_t *options_p, const char *path_abs, size_t path_
 		return path_rel;
 	}
 
-	memcpy(path_rel, &path_abs[options_p->watchdirlen+1], path_rel_len);
+	memcpy(path_rel, &path_abs[options_p->watchdirlen+1], path_rel_len+1);
 
 #ifdef VERYPARANOID
 	// Removing "/" on the end
