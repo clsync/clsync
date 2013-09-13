@@ -587,8 +587,13 @@ char *sync_path_abs2rel(options_t *options_p, const char *path_abs, size_t path_
 	if(path_abs_len == -1)
 		path_abs_len = strlen(path_abs);
 
-	size_t path_rel_len = path_abs_len - options_p->watchdirlen;
+	size_t path_rel_len;
 	char  *path_rel;
+
+	signed long path_rel_len_signed = path_abs_len - (options_p->watchdirlen+1);
+
+	path_rel_len = (path_rel_len_signed > 0) ? path_rel_len_signed : 0;
+
 	if(path_rel_oldptr == NULL) {
 		path_rel = xmalloc(path_abs_len+1);
 	} else {
@@ -599,13 +604,18 @@ char *sync_path_abs2rel(options_t *options_p, const char *path_abs, size_t path_
 		}
 	}
 
-	memcpy(path_rel, &path_abs[options_p->watchdirlen], path_rel_len+1);
+	if(!path_rel_len) {
+		path_rel[0] = 0;
+		return path_rel;
+	}
+
+	memcpy(path_rel, &path_abs[options_p->watchdirlen+1], path_rel_len);
 
 #ifdef VERYPARANOID
 	// Removing "/" on the end
 	printf_ddd("Debug3: sync_path_abs2rel(): \"%s\" (len: %i) --%i--> \"%s\" (len: %i) + ", 
 		path_abs, path_abs_len, path_rel[path_rel_len - 1] == '/',
-		options_p->watchdir, options_p->watchdirlen);
+		options_p->watchdirwslash, options_p->watchdirlen+1);
 	if(path_rel[path_rel_len - 1] == '/')
 		path_rel[--path_rel_len] = 0x00;
 	printf_ddd("\"%s\" (len: %i)\n", path_rel, path_rel_len);
@@ -1498,6 +1508,20 @@ gboolean sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer e
 	}
 
 	// RSYNC case
+	size_t fpath_len = strlen(fpath);
+	char *fpathwslash;
+	if(fpath_len>0) {
+		// Prepending with the slash
+
+		fpathwslash = alloca(fpath_len+2);
+		fpathwslash[0] = '/';
+		memcpy(&fpathwslash[1], fpath, fpath_len+1);
+	} else {
+
+		// In this case slash is not required
+		fpathwslash = fpath;
+	}
+
 	if(options_p->rsyncinclimit && (*linescount_p >= options_p->rsyncinclimit)) {
 		int ret;
 
@@ -1530,25 +1554,25 @@ gboolean sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer e
 		outf = dosync_arg_p->outf;
 	}
 
-	char *end=fpath;
+	char *end=fpathwslash;
 
 	if(evinfo->flags & EVIF_RECURSIVELY) {
-		printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): Recursively \"%s\": Adding to rsynclist: \"%s/***\".\n", fpath, fpath);
-		fprintf(outf, "%s/***\n", fpath);
+		printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): Recursively \"%s\": Adding to rsynclist: \"%s/***\".\n", fpathwslash, fpathwslash);
+		fprintf(outf, "%s/***\n", fpathwslash);
 		(*linescount_p)++;
 	}
 
 
 	while(end != NULL) {
-		if(*fpath == 0x00)
+		if(*fpathwslash == 0x00)
 			break;
-		printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): Non-recursively \"%s\": Adding to rsynclist: \"%s\".\n", fpath, fpath);
-		indexes_outaggr_add(indexes_p, strdup(fpath));
+		printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): Non-recursively \"%s\": Adding to rsynclist: \"%s\".\n", fpathwslash, fpathwslash);
+		indexes_outaggr_add(indexes_p, strdup(fpathwslash));
 		(*linescount_p)++;
-		end = strrchr(fpath, '/');
+		end = strrchr(fpathwslash, '/');
 		if(end == NULL)
 			break;
-		if(end - fpath <= 0)
+		if(end - fpathwslash <= 0)
 			break;
 
 		*end = 0x00;
