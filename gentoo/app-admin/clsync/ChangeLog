@@ -2,6 +2,10 @@
 # Copyright 1999-2013 Gentoo Foundation; Distributed under the GPL v2
 # $Header: $
 
+  13 Sep 2013; Andrew Savchenko <bircoph@gmail.com> files/clsync.initd:
+  Remove non-standard retry approach, this bug is fixed now.
+  Add syslog support.
+
   09 Sep 2013; Andrew Savchenko <bircoph@gmail.com> clsync-9999.ebuild:
   Force 0700 permissions or /etc/clsync. License update. Conf.d
   recommendations update.

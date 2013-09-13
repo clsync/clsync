@@ -5,8 +5,7 @@
 
 command="/usr/bin/clsync"
 pidfile="/var/run/${SVCNAME}.pid"
-command_args="--background --pid-file=${pidfile} ${CLSYNC_OPTS}"
-retry="5"
+command_args="--background --syslog --pid-file=${pidfile} ${CLSYNC_OPTS}"
 
 depend() {
 	use net
