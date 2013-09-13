@@ -132,7 +132,7 @@ static inline ruleaction_t rules_getperm(const char *fpath, mode_t st_mode, rule
 	while((gotpermto&ruleactions) != ruleactions) {
 		rules_search_getperm(fpath, st_mode, rules_p, ruleactions, &rule_p);
 		if(rule_p->mask == RA_NONE) { // End of rules' list 
-			resultperm |= rule_p->perm & ((gotpermto^RA_ALL)&rule_p->mask);
+			resultperm |= rule_p->perm & (gotpermto^RA_ALL);
 			break;
 		}
 		resultperm |= rule_p->perm & ((gotpermto^rule_p->mask)&rule_p->mask);	// Adding perm bitmask of operations that was unknown before
