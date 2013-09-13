@@ -142,6 +142,13 @@ enum flags_enum {
 	INOTIFY		= 'i',
 	LABEL		= 'l',
 	SHOW_VERSION	= 'V',
+	CONFIGPATH	= 'H',
+
+	WATCHDIR	= 1,
+	SYNCHANDLER	= 2,
+	RULESPATH	= 3,
+	DESTDIR		= 4,
+
 };
 typedef enum flags_enum flags_t;
 
@@ -167,6 +174,13 @@ enum ruleaction_enum {
 	RA_ALL		 = 0xff
 };
 typedef enum ruleaction_enum ruleaction_t;
+
+enum paramsource_enum {
+	PS_UNKNOWN	 = 0,
+	PS_ARGUMENT,
+	PS_CONFIG
+};
+typedef enum paramsource_enum paramsource_t;
 
 // signals (man 7 signal)
 enum sigusr_enum {
@@ -195,12 +209,15 @@ struct options {
 	gid_t gid;
 	rule_t rules[MAXRULES];
 	int flags[1<<8];
+	int flags_set[1<<8];
+	char **config_paths;
 	char *label;
 	char *watchdir;
 	char *pidfile;
 	char *destdir;
 	char *watchdirwslash;
 	char *destdirwslash;
+	char *config_block;
 #ifdef CLUSTER_SUPPORT
 	char *cluster_iface;
 	char *cluster_mcastipaddr;

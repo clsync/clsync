@@ -28,6 +28,7 @@
 #define DEFAULT_CLUSTERHDLMIN		1
 #define DEFAULT_CLUSTERHDLMAX		16
 #define DEFAULT_CLUSTERSDLMAX		32
+#define DEFAULT_CONFIG_BLOCK		"default"
 
 #define FANOTIFY_FLAGS			(FAN_CLOEXEC|FAN_UNLIMITED_QUEUE|FAN_UNLIMITED_MARKS)
 #define FANOTIFY_EVFLAGS		(O_LARGEFILE|O_RDONLY|O_CLOEXEC)
@@ -48,4 +49,6 @@
 #define ALLOC_PORTION			(1<<10) /* 1  KiX */
 #define CLUSTER_WINDOW_BUFSIZE_PORTION	(1<<20) /* 1  MiB */
 #define CLUSTER_PACKET_MAXSIZE		(1<<24) /* 16 MiB */
+
+#define CONFIG_PATHS 			{ ".clsync.conf", "/etc/clsync.conf", NULL } /* "~/.clsync.conf" and "/etc/clsync.conf" */
 

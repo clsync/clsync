@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.59])
-AC_INIT([clsync],[0.0],[Dmitry Yu Okunev <dyokunev@ut.mephi.ru>],,[https://github.com/xaionaro/clsync])
+AC_INIT([clsync],[0.2],[Dmitry Yu Okunev <dyokunev@ut.mephi.ru>],,[https://github.com/xaionaro/clsync])
 AC_CONFIG_SRCDIR([sync.c])
 AM_INIT_AUTOMAKE([1.11 foreign -Wall])
 AC_CONFIG_HEADERS([config.h])

@@ -72,6 +72,14 @@ static struct option long_options[] =
 	{"label",		required_argument,	NULL,	LABEL},
 	{"help",		no_argument,		NULL,	HELP},
 	{"version",		no_argument,		NULL,	SHOW_VERSION},
+
+	{"config-path",		required_argument,	NULL,	CONFIGPATH},
+
+	{"watch-dir",		required_argument,	NULL,	WATCHDIR},
+	{"sync-handler",	required_argument,	NULL,	SYNCHANDLER},
+	{"rules-path",		required_argument,	NULL,	RULESPATH},
+	{"dir-destination",	required_argument,	NULL,	DESTDIR},
+
 	{NULL,			0,			NULL,	0}
 };
 
@@ -79,7 +87,8 @@ int syntax() {
 	printf("syntax: clsync [flags] <watch dir> <action script> [file with rules regexps] [destination directory]\npossible options:\n");
 	int i=0;
 	while(long_options[i].name != NULL) {
-		printf("\t--%-24s-%c%s\n", long_options[i].name, long_options[i].val, (long_options[i].has_arg == required_argument ? " argument" : ""));
+		if(long_options[i].val >= 32)
+			printf("\t--%-24s-%c%s\n", long_options[i].name, long_options[i].val, (long_options[i].has_arg == required_argument ? " argument" : ""));
 		i++;
 	}
 	exit(EINVAL);
@@ -88,6 +97,124 @@ int syntax() {
 int version() {
 	printf(PROGRAM" v%i.%i"REVISION"\n\t"AUTHOR"\n", VERSION_MAJ, VERSION_MIN);
 	exit(0);
+}
+
+static inline int parse_parameter(options_t *options_p, uint8_t param_id, char *arg, paramsource_t paramsource) {
+#ifdef _DEBUG
+	fprintf(stderr, "Force-Debug: parse_parameter(): %i: %i = \"%s\"\n", paramsource, param_id, arg);
+#endif
+	switch(paramsource) {
+		case PS_ARGUMENT:
+			options_p->flags_set[param_id] = 1;
+			break;
+		case PS_CONFIG:
+			if(options_p->flags_set[param_id])
+				return 0;
+			break;
+		default:
+			printf_e("Warning: Unknown parameter #%i source (value \"%s\").\n", param_id, arg!=NULL ? arg : "");
+			break;
+	}
+	switch(param_id) {
+		case '?':
+		case HELP:
+			syntax();
+			break;
+		case GID:
+			options_p->gid = (unsigned int)atol(arg);
+			options_p->flags[param_id]++;
+			break;
+		case UID:
+			options_p->uid = (unsigned int)atol(arg);
+			options_p->flags[param_id]++;
+			break;
+		case PIDFILE:
+			options_p->pidfile             = arg;
+			break;
+#ifdef CLUSTER_SUPPORT
+		case CLUSTERIFACE:
+			options_p->cluster_iface       = arg;
+			break;
+		case CLUSTERMCASTIPADDR:
+			options_p->cluster_mcastipaddr = arg;
+			break;
+		case CLUSTERMCASTIPPORT:
+			options_p->cluster_mcastipport = (uint16_t)atoi(arg);
+			break;
+		case CLUSTERTIMEOUT:
+			options_p->cluster_timeout     = (unsigned int)atol(arg);
+			break;
+		case CLUSTERNODENAME:
+			options_p->cluster_nodename    = arg;
+			break;
+		case CLUSTERHDLMIN:
+			options_p->cluster_hash_dl_min = (uint16_t)atoi(arg);
+			break;
+		case CLUSTERHDLMAX:
+			options_p->cluster_hash_dl_max = (uint16_t)atoi(arg);
+			break;
+		case CLUSTERSDLMAX:
+			options_p->cluster_scan_dl_max = (uint16_t)atoi(arg);
+			break;
+#endif
+		case OUTLISTSDIR:
+			options_p->listoutdir   = arg;
+			break;
+		case LABEL:
+			options_p->label        = arg;
+			break;
+		case SYNCDELAY: 
+			options_p->syncdelay  = (unsigned int)atol(arg);
+			break;
+		case DELAY:
+			options_p->_queues[QUEUE_NORMAL].collectdelay = (unsigned int)atol(arg);
+			break;
+		case BFILEDELAY:
+			options_p->_queues[QUEUE_BIGFILE].collectdelay = (unsigned int)atol(arg);
+			break;
+		case BFILETHRESHOLD:
+			options_p->bfilethreshold = (unsigned long)atol(arg);
+			break;
+#ifdef FANOTIFY_SUPPORT
+		case FANOTIFY:
+			options_p->notifyengine = NE_FANOTIFY;
+			break;
+#endif
+		case INOTIFY:
+			options_p->notifyengine = NE_INOTIFY;
+			break;
+		case RSYNCINCLIMIT:
+			options_p->rsyncinclimit = (unsigned int)atol(arg);
+			break;
+		case SYNCTIMEOUT:
+			options_p->synctimeout = (unsigned int)atol(arg);
+			break;
+		case IGNOREEXITCODE:
+			options_p->isignoredexitcode[(unsigned char)atoi(arg)] = 1;
+			break;
+		case SHOW_VERSION:
+			version();
+			break;
+		case WATCHDIR:
+			options_p->watchdir = arg;
+			break;
+		case SYNCHANDLER:
+			options_p->handlerfpath = arg;
+			break;
+		case RULESPATH:
+			options_p->rulfpath = arg;
+			break;
+		case DESTDIR:
+			options_p->destdir = arg;
+			break;
+		default:
+			if(arg == NULL)
+				options_p->flags[param_id]++;
+			else
+				options_p->flags[param_id] = atoi(arg);
+			break;
+	}
+	return 0;
 }
 
 int parse_arguments(int argc, char *argv[], struct options *options_p) {
@@ -100,102 +227,30 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 
 	struct option *lo_ptr = long_options;
 	while(lo_ptr->name != NULL) {
-		*(optstring_ptr++) = lo_ptr->val;
-		if(lo_ptr->has_arg == required_argument)
-			*(optstring_ptr++) = ':';
+		if(lo_ptr->val >= 32) {
+			*(optstring_ptr++) = lo_ptr->val;
+
+			if(lo_ptr->has_arg == required_argument)
+				*(optstring_ptr++) = ':';
+
+			if(lo_ptr->has_arg == optional_argument) {
+				*(optstring_ptr++) = ':';
+				*(optstring_ptr++) = ':';
+			}
+		}
 		lo_ptr++;
 	}
 	*optstring_ptr = 0;
+#ifdef _DEBUG
+	fprintf(stderr, "Force-Debug: %s\n", optstring);
+#endif
 
 	// Parsing arguments
 	while(1) {
 		c = getopt_long(argc, argv, optstring, long_options, &option_index);
 	
 		if (c == -1) break;
-		switch (c) {
-			case '?':
-			case HELP:
-				syntax();
-				break;
-			case GID:
-				options_p->gid = (unsigned int)atol(optarg);
-				options_p->flags[c]++;
-				break;
-			case UID:
-				options_p->uid = (unsigned int)atol(optarg);
-				options_p->flags[c]++;
-				break;
-			case PIDFILE:
-				options_p->pidfile             = optarg;
-				break;
-#ifdef CLUSTER_SUPPORT
-			case CLUSTERIFACE:
-				options_p->cluster_iface       = optarg;
-				break;
-			case CLUSTERMCASTIPADDR:
-				options_p->cluster_mcastipaddr = optarg;
-				break;
-			case CLUSTERMCASTIPPORT:
-				options_p->cluster_mcastipport = (uint16_t)atoi(optarg);
-				break;
-			case CLUSTERTIMEOUT:
-				options_p->cluster_timeout     = (unsigned int)atol(optarg);
-				break;
-			case CLUSTERNODENAME:
-				options_p->cluster_nodename    = optarg;
-				break;
-			case CLUSTERHDLMIN:
-				options_p->cluster_hash_dl_min = (uint16_t)atoi(optarg);
-				break;
-			case CLUSTERHDLMAX:
-				options_p->cluster_hash_dl_max = (uint16_t)atoi(optarg);
-				break;
-			case CLUSTERSDLMAX:
-				options_p->cluster_scan_dl_max = (uint16_t)atoi(optarg);
-				break;
-#endif
-			case OUTLISTSDIR:
-				options_p->listoutdir   = optarg;
-				break;
-			case LABEL:
-				options_p->label        = optarg;
-				break;
-			case SYNCDELAY: 
-				options_p->syncdelay  = (unsigned int)atol(optarg);
-				break;
-			case DELAY:
-				options_p->_queues[QUEUE_NORMAL].collectdelay = (unsigned int)atol(optarg);
-				break;
-			case BFILEDELAY:
-				options_p->_queues[QUEUE_BIGFILE].collectdelay = (unsigned int)atol(optarg);
-				break;
-			case BFILETHRESHOLD:
-				options_p->bfilethreshold = (unsigned long)atol(optarg);
-				break;
-#ifdef FANOTIFY_SUPPORT
-			case FANOTIFY:
-				options_p->notifyengine = NE_FANOTIFY;
-				break;
-#endif
-			case INOTIFY:
-				options_p->notifyengine = NE_INOTIFY;
-				break;
-			case RSYNCINCLIMIT:
-				options_p->rsyncinclimit = (unsigned int)atol(optarg);
-				break;
-			case SYNCTIMEOUT:
-				options_p->synctimeout = (unsigned int)atol(optarg);
-				break;
-			case IGNOREEXITCODE:
-				options_p->isignoredexitcode[(unsigned char)atoi(optarg)] = 1;
-				break;
-			case SHOW_VERSION:
-				version();
-				break;
-			default:
-				options_p->flags[c]++;
-				break;
-		}
+		parse_parameter(options_p, c, optarg, PS_ARGUMENT);
 	}
 	if(optind+1 >= argc)
 		syntax();
@@ -215,6 +270,60 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 
 	options_p->watchdir    = argv[optind];
 	options_p->watchdirlen = strlen(options_p->watchdir);
+	return 0;
+}
+
+int parse_configs(options_t *options_p) {
+	char **config_path, *config_path_real = xmalloc(PATH_MAX);
+	size_t config_path_real_size=PATH_MAX;
+	
+	GKeyFile *gkf;
+
+	gkf = g_key_file_new();
+
+	char *homedir = getenv("HOME");
+	size_t homedir_len = strlen(homedir);
+
+	config_path = options_p->config_paths;
+	while(*config_path != NULL) {
+		size_t config_path_len = strlen(*config_path);
+
+		if(config_path_len+homedir_len+3 > config_path_real_size) {
+			config_path_real_size = config_path_len+homedir_len+3;
+			config_path_real      = xmalloc(config_path_real_size);
+		}
+
+		if(*config_path[0] != '/') {
+			memcpy(config_path_real, homedir, homedir_len);
+			config_path_real[homedir_len] = '/';
+			memcpy(&config_path_real[homedir_len+1], *config_path, config_path_len+1);
+		} else 
+			memcpy(config_path_real, *config_path, config_path_len+1);
+
+#ifdef _DEBUG
+		fprintf(stderr, "Force-Debug: parse_configs(): Trying config-file \"%s\"\n", config_path_real);
+#endif
+		if(!g_key_file_load_from_file(gkf, config_path_real, G_KEY_FILE_NONE, NULL)) {
+#ifdef _DEBUG
+			fprintf(stderr, "Force-Debug: parse_configs(): Cannot open/parse file \"%s\"\n", config_path_real);
+#endif
+			config_path++;
+			continue;
+		}
+
+		struct option *lo_ptr = long_options;
+		while(lo_ptr->name != NULL) {
+			gchar *value = g_key_file_get_value(gkf, options_p->config_block, lo_ptr->name, NULL);
+			if(value != NULL)
+				parse_parameter(options_p, lo_ptr->val, value, PS_CONFIG);
+			lo_ptr++;
+		}
+
+		break;
+	}
+
+	g_key_file_free(gkf);
+
 	return 0;
 }
 
@@ -505,6 +614,7 @@ int main_rehash(options_t *options_p) {
 }
 
 int main(int argc, char *argv[]) {
+	char *config_paths[] = CONFIG_PATHS;
 	struct options options;
 #ifdef CLUSTER_SUPPORT
 	struct utsname utsname;
@@ -525,8 +635,12 @@ int main(int argc, char *argv[]) {
 	options.cluster_hash_dl_max		   = DEFAULT_CLUSTERHDLMAX;
 	options.cluster_scan_dl_max		   = DEFAULT_CLUSTERSDLMAX;
 #endif
+	options.config_paths = config_paths;
+	options.config_block = DEFAULT_CONFIG_BLOCK;
 
 	parse_arguments(argc, argv, &options);
+	parse_configs(&options);
+
 	out_init(options.flags);
 	if((options.flags[RSYNC]>1) && (options.destdir == NULL)) {
 		printf_e("Error: Option \"-RR\" cannot be used without specifying \"destination directory\".\n");
