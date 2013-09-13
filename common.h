@@ -21,6 +21,9 @@
 #define _XOPEN_SOURCE 700
 #define _LARGEFILE64_SOURCE
 
+#define PROGRAM "clsync"
+#define VERSION_MAJ	0
+#define VERSION_MIN	1
 #define AUTHOR "Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C"
 
 #include <stdio.h>
@@ -103,6 +106,7 @@ enum flags_enum {
 	GID		= 'g',
 	CAP_PRESERVE_FILEACCESS = 'C',
 	PTHREAD		= 'p',
+	SYSLOG		= 'Y',
 	PIDFILE		= 'z',
 #ifdef CLUSTER_SUPPORT
 	CLUSTERIFACE	= 'c',

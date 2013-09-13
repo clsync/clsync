@@ -24,8 +24,6 @@
 #include "cluster.h"
 #include "fileutils.h"
 
-#define VERSION_MAJ	0
-#define VERSION_MIN	1
 #include "revision.h"
 
 static struct option long_options[] =
@@ -38,6 +36,7 @@ static struct option long_options[] =
 	{"preserve-file-access",no_argument,		NULL,	CAP_PRESERVE_FILEACCESS},
 #endif
 	{"pthread",		no_argument,		NULL,	PTHREAD},
+	{"syslog",		no_argument,		NULL,	SYSLOG},
 #ifdef CLUSTER_SUPPORT
 	{"cluster-iface",	required_argument,	NULL,	CLUSTERIFACE},		// Not implemented, yet
 	{"cluster-ip",		required_argument,	NULL,	CLUSTERMCASTIPADDR},	// Not implemented, yet
@@ -87,7 +86,7 @@ int syntax() {
 }
 
 int version() {
-	printf("clsync v%i.%i"REVISION"\n\t"AUTHOR"\n", VERSION_MAJ, VERSION_MIN);
+	printf(PROGRAM" v%i.%i"REVISION"\n\t"AUTHOR"\n", VERSION_MAJ, VERSION_MIN);
 	exit(0);
 }
 
@@ -852,6 +851,7 @@ preserve_fileaccess_end:
 	out_flush();
 	printf_d("Debug: finished, exitcode: %i: %s.\n", ret, strerror(ret));
 	out_flush();
+	out_deinit();
 	return ret;
 }
 
