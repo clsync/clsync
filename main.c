@@ -266,6 +266,7 @@ int arguments_parse(int argc, char *argv[], struct options *options_p) {
 		if (c == -1) break;
 		parse_parameter(options_p, c, optarg, PS_ARGUMENT);
 	}
+/*
 	if(optind+1 >= argc)
 		syntax();
 
@@ -283,7 +284,38 @@ int arguments_parse(int argc, char *argv[], struct options *options_p) {
 	}
 
 	options_p->watchdir    = argv[optind];
-	options_p->watchdirlen = strlen(options_p->watchdir);
+	options_p->watchdirlen = strlen(options_p->watchdir);*/
+
+	if(optind+0 < argc) {
+		options_p->watchdir     = argv[optind];
+		options_p->watchdirlen  = strlen(options_p->watchdir);
+	} else {
+		options_p->watchdir     = NULL;
+		options_p->watchdirlen  = 0;
+	}
+
+	if(optind+1 < argc) {
+		options_p->handlerfpath = argv[optind+1];
+	} else {
+		options_p->handlerfpath = NULL;
+	}
+
+	if(optind+2 < argc) {
+		options_p->rulfpath = argv[optind+2];
+		if(!strcmp(options_p->rulfpath, ""))
+			options_p->rulfpath = NULL;
+	} else {
+		options_p->rulfpath = NULL;
+	}
+
+	if(optind+3 < argc) {
+		options_p->destdir    = argv[optind+3];
+		options_p->destdirlen = strlen(options_p->destdir);
+	} else {
+		options_p->destdir    = NULL;
+		options_p->destdirlen = 0;
+	}
+
 	return 0;
 }
 
@@ -696,6 +728,16 @@ int main(int argc, char *argv[]) {
 	nret = configs_parse(&options);
 	if(!ret) ret = nret;
 	out_init(options.flags);
+
+	if(options.watchdir == NULL) {
+		printf_e("Error: watchdir is not set.\n");
+		ret = EINVAL;
+	}
+
+	if(options.handlerfpath == NULL) {
+		printf_e("Error: sync-handler path is not set.\n");
+		ret = EINVAL;
+	}
 
 	if(options.flags[SYNCHANDLER] && options.flags[RSYNC]) {
 		printf_e("Error: Option \"--rsync\" cannot be used in conjunction with \"--synchandler-so-module\".\n");
