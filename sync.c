@@ -1442,8 +1442,22 @@ gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, g
 //	indexes_t *indexes_p	  = dosync_arg_p->indexes_p;
 	printf_ddd("Debug3: sync_idle_dosync_collectedevents_rsync_exclistpush(): \"%s\"\n", fpath);
 
-	printf_ddd("Debug3: Adding to exclude-file: \"%s\"\n", fpath);
-	fprintf(excf, "%s\n", fpath);
+	size_t fpath_len = strlen(fpath);
+	char *fpathwslash;
+	if(fpath_len>0) {
+		// Prepending with the slash
+
+		fpathwslash = alloca(fpath_len+2);
+		fpathwslash[0] = '/';
+		memcpy(&fpathwslash[1], fpath, fpath_len+1);
+	} else {
+
+		// In this case slash is not required
+		fpathwslash = fpath;
+	}
+
+	printf_ddd("Debug3: Adding to exclude-file: \"%s\"\n", fpathwslash);
+	fprintf(excf, "%s\n", fpathwslash);
 
 	return TRUE;
 }
