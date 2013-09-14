@@ -428,8 +428,12 @@ int parse_rules_fromfile(options_t *options_p) {
 			rule_t *rule;
 
 			rule = &rules[i];
+#ifdef VERYPARANOID
+			memset(rule, 0, sizeof(*rule));
+#endif
 			rule->num = i++;
 			line[--linelen] = 0; 
+
 
 			// Parsing the first character of the line
 			switch(*line) {

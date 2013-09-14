@@ -68,13 +68,14 @@ int exitcode_process(options_t *options_p, int exitcode) {
 // Checks file path by rules' expressions (parsed from file)
 // Return: RS_PERMIT or RS_REJECT for the "file path" and specified ruleaction
 
-static ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rules_p, ruleaction_t ruleaction, rule_t **rule_pp) {
+ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rules_p, ruleaction_t ruleaction, rule_t **rule_pp) {
 	printf_ddd("Debug3: rules_search_getperm(\"%s\", %p, rules_p, %p, %p)\n", 
 			fpath, (void *)(unsigned long)st_mode,
 			(void *)(long)ruleaction, (void *)(long)rule_pp
 		);
 
-	int i = 0;
+	int i;
+	i = 0;
 	rule_t *rule_p = rules_p;
 	mode_t ftype = st_mode & S_IFMT;
 
@@ -559,6 +560,27 @@ int exec_argv(char **argv, int *child_pid DEBUGV(, int _rand)) {
 	return exitcode;
 }
 
+static inline void so_call_sync_finished(int n, api_eventinfo_t *ei) {
+	int i = 0;
+	api_eventinfo_t *ei_i = ei;
+	while(i < n) {
+#ifdef PARANOID
+		if(ei_i->path == NULL) {
+			printf_e("Warning: so_call_sync_finished(): ei_i->path == NULL\n");
+			i++;
+			continue;
+		}
+#endif
+		free((char *)ei_i->path);
+		ei_i++;
+		i++;
+	}
+	if(ei != NULL)
+		free(ei);
+
+	return;
+}
+
 int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 	printf_ddd("Debug3: so_call_exec_thread(): thread_num == %i; threadinfo_p == %p; i_p->pthread %p; thread %p\n", 
 			threadinfo_p->thread_num, threadinfo_p, threadinfo_p->pthread, pthread_self());
@@ -567,14 +589,23 @@ int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 	int n			= threadinfo_p->n;
 	api_eventinfo_t *ei	= threadinfo_p->ei;
 
-	return options_p->handler_funct.sync(n, ei);
+	int ret = options_p->handler_funct.sync(n, ei);
+	so_call_sync_finished(n, ei);
+
+	threadinfo_p->state    = STATE_TERM;
+	pthread_kill(pthread_sighandler, SIGUSR_PTHREAD_GC);
+
+	return ret;
 }
 
 static inline int so_call_sync(options_t *options_p, int n, api_eventinfo_t *ei) {
 	printf_dd("Debug2: so_call_exec(): n == %i\n", n);
 
-	if(!options_p->flags[PTHREAD])
-		return options_p->handler_funct.sync(n, ei);
+	if(!options_p->flags[PTHREAD]) {
+		int ret = options_p->handler_funct.sync(n, ei);
+		so_call_sync_finished(n, ei);
+		return ret;
+	}
 
 	threadinfo_t *threadinfo_p = thread_new();
 	if(threadinfo_p == NULL)
@@ -977,7 +1008,7 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 				ei.evmask    = IN_CREATE|IN_ISDIR;
 				ei.flags     = EVIF_RECURSIVELY;
 				ei.path_len  = strlen(path);
-				ei.path      = path;
+				ei.path      = strdup(path);
 
 				return so_call_sync(options_p, 1, &ei);
 			} else {
@@ -1505,9 +1536,12 @@ gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, g
 
 int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p) {
 	options_t *options_p = dosync_arg_p->options_p;
-	printf_ddd("Debug3: Committing the file (flags[RSYNC] == %i)\n", options_p->flags[RSYNC]);
-	fclose(dosync_arg_p->outf);
-	dosync_arg_p->outf = NULL;
+	printf_ddd("Debug3: Committing the file (flags[RSYNC] == %i; flags[SYNCHANDLERSO] == %i)\n", options_p->flags[RSYNC], options_p->flags[SYNCHANDLERSO]);
+
+	if(!options_p->flags[SYNCHANDLERSO]) {
+		fclose(dosync_arg_p->outf);
+		dosync_arg_p->outf = NULL;
+	}
 
 	if(dosync_arg_p->evcount > 0) {
 /*
@@ -1534,24 +1568,7 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 
 		if(options_p->flags[SYNCHANDLERSO]) {
 			api_eventinfo_t *ei = dosync_arg_p->api_ei;
-			int _ret = so_call_sync(options_p, dosync_arg_p->evcount, ei);
-			int i = 0, evcount = dosync_arg_p->evcount;
-			while(i < evcount) {
-#ifdef PARANOID
-				if(ei->path == NULL) {
-					printf_e("Warning: sync_idle_dosync_collectedevents_commitpart(): ei->path == NULL\n");
-					continue;
-				}
-#endif
-				free((char *)ei->path);
-				i++;
-			}
-			if(dosync_arg_p->api_ei_size) {
-				free(dosync_arg_p->api_ei);
-				dosync_arg_p->api_ei_size=0;
-			}
-			dosync_arg_p->evcount = 0;
-			return _ret;
+			return so_call_sync(options_p, dosync_arg_p->evcount, ei);
 		}
 
 		if(options_p->flags[RSYNC] >= 2)
@@ -1591,22 +1608,18 @@ gboolean sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer e
 	struct dosync_arg *dosync_arg_p = (struct dosync_arg *)arg_gp;
 	char *fpath		  = (char *)fpath_gp;
 	eventinfo_t *evinfo	  = (eventinfo_t *)evinfo_gp;
-	int *evcount_p		  =&dosync_arg_p->evcount;
+	//int *evcount_p		  =&dosync_arg_p->evcount;
 	FILE *outf		  = dosync_arg_p->outf;
 	options_t *options_p 	  = dosync_arg_p->options_p;
 	int *linescount_p	  =&dosync_arg_p->linescount;
 	indexes_t *indexes_p 	  = dosync_arg_p->indexes_p;
 	api_eventinfo_t **api_ei_p=&dosync_arg_p->api_ei;
-	size_t *api_ei_size_p 	  =&dosync_arg_p->api_ei_size;
+	int *api_ei_count_p 	  =&dosync_arg_p->api_ei_count;
 	printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): \"%s\" with int-flags %p\n", fpath, (void *)(unsigned long)evinfo->flags);
 
 	// so-module case:
 	if(options_p->flags[SYNCHANDLERSO]) {
-		if(*evcount_p >= *api_ei_size_p) {
-			*api_ei_size_p += ALLOC_PORTION;
-			*api_ei_p       = (api_eventinfo_t *)xrealloc((char *)*api_ei_p, *api_ei_size_p);
-		}
-		api_eventinfo_t *ei = &(*api_ei_p)[(*evcount_p)++];
+		api_eventinfo_t *ei = &(*api_ei_p)[(*api_ei_count_p)++];
 		ei->evmask   = evinfo->evmask;
 		ei->flags    = evinfo->flags;
 		ei->path_len = strlen(fpath);
@@ -1701,11 +1714,10 @@ gboolean sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer e
 
 int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p) {
 	printf_ddd("Debug3: sync_idle_dosync_collectedevents()\n");
-	struct dosync_arg dosync_arg;
-	dosync_arg.evcount	= 0;
+	struct dosync_arg dosync_arg = {0};
+
 	dosync_arg.options_p 	= options_p;
 	dosync_arg.indexes_p	= indexes_p;
-	dosync_arg.outf		= NULL;
 
 	char isrsyncpreferexclude = options_p->flags[RSYNC] && (!options_p->flags[RSYNC_PREFERINCLUDE]);
 
@@ -1743,6 +1755,13 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 		return 0;
 	}
 
+
+	if(options_p->flags[SYNCHANDLERSO]) {
+		//dosync_arg.evcount = g_hash_table_size(indexes_p->fpath2ei_ht);
+		printf_ddd("Debug3: sync_idle_dosync_collectedevents(): There's %i events. Processing.\n", dosync_arg.evcount);
+		dosync_arg.api_ei = (api_eventinfo_t *)xmalloc(dosync_arg.evcount * sizeof(*dosync_arg.api_ei));
+	}
+
 	if(options_p->listoutdir != NULL) {
 		int ret;
 
@@ -1778,6 +1797,7 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 
 		if((ret=sync_idle_dosync_collectedevents_commitpart(&dosync_arg))) {
 			printf_e("Error: Cannot submit to sync the list \"%s\": %s (errno: %i)\n", dosync_arg.outf_path, strerror(ret), ret);
+			// TODO: free dosync_arg.api_ei on case of error
 			return ret;
 		}
 
@@ -2404,7 +2424,7 @@ int sync_run(options_t *options_p) {
 
 	// Loading dynamical libraries
 	if(options_p->flags[SYNCHANDLERSO]) {
-		void *synchandler_handle = dlopen(options_p->handlerfpath, RTLD_LOCAL);
+		void *synchandler_handle = dlopen(options_p->handlerfpath, RTLD_NOW|RTLD_LOCAL);
 		if(synchandler_handle == NULL) {
 			printf_e("Error: sync_run(): Cannot load shared object file \"%s\": %s\n", options_p->handlerfpath, dlerror());
 			return -1;

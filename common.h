@@ -368,7 +368,7 @@ struct dosync_arg {
 	void *data;
 	int linescount;
 	api_eventinfo_t *api_ei;
-	size_t api_ei_size;
+	int api_ei_count;
 	char buf[BUFSIZ+1];
 };
 

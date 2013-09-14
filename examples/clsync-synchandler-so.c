@@ -5,7 +5,7 @@ options_t *options_p = NULL;
 indexes_t *indexes_p = NULL;
 
 int clsyncapi_init(options_t *_options_p, indexes_t *_indexes_p) {
-	printf_ddd("Debug3: clsyncapi_init(): Hello world!\n");
+	printf("clsyncapi_init(): Hello world!\n");
 
 	options_p = _options_p;
 	indexes_p = _indexes_p;
@@ -14,12 +14,14 @@ int clsyncapi_init(options_t *_options_p, indexes_t *_indexes_p) {
 }
 
 int clsyncapi_sync(int n, api_eventinfo_t *ei) {
-	printf_ddd("Debug3: clsyncapi_init(): ei->path == \"%s\"\n", ei->path);
+	printf("clsyncapi_sync(): n == %i;\tei->path == \"%s\"\n", n, ei->path);
 
 	return 0;
 }
 
 int clsyncapi_deinit() {
+	printf("clsyncapi_init(): Hello world!\n");
+
 	return 0;
 }
 
