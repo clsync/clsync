@@ -893,6 +893,7 @@ is accessable and parsable,
 .B clsync
 will not try to open
 .BR /etc/clsync.conf .
+Command line options have precedence over config file options.
 
 Configuration file is parsed with glib's g_key_file_* API. That means,
 that config should consits from groups (blocks) of key-value lines as in the
@@ -900,7 +901,7 @@ example:
 .RS
 [default]
 .br
-backgroun=1
+background=1
 .br
 rsync=1
 .br
