@@ -333,6 +333,10 @@ struct threadinfo {
 	time_t			  starttime;
 	time_t			  expiretime;
 	int			  child_pid;
+
+	// for so-synchandler
+	int			  n;
+	api_eventinfo_t		 *ei;
 };
 typedef struct threadinfo threadinfo_t;
 

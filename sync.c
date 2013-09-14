@@ -559,6 +559,47 @@ int exec_argv(char **argv, int *child_pid DEBUGV(, int _rand)) {
 	return exitcode;
 }
 
+int so_call_sync_thread(threadinfo_t *threadinfo_p) {
+	printf_ddd("Debug3: so_call_exec_thread(): thread_num == %i; threadinfo_p == %p; i_p->pthread %p; thread %p\n", 
+			threadinfo_p->thread_num, threadinfo_p, threadinfo_p->pthread, pthread_self());
+
+	options_t *options_p	= threadinfo_p->options_p;
+	int n			= threadinfo_p->n;
+	api_eventinfo_t *ei	= threadinfo_p->ei;
+
+	return options_p->handler_funct.sync(n, ei);
+}
+
+static inline int so_call_sync(options_t *options_p, int n, api_eventinfo_t *ei) {
+	printf_dd("Debug2: so_call_exec(): n == %i\n", n);
+
+	if(!options_p->flags[PTHREAD])
+		return options_p->handler_funct.sync(n, ei);
+
+	threadinfo_t *threadinfo_p = thread_new();
+	if(threadinfo_p == NULL)
+		return errno;
+
+	threadinfo_p->callback   = NULL;
+	threadinfo_p->argv       = NULL;
+	threadinfo_p->options_p  = options_p;
+	threadinfo_p->starttime	 = time(NULL);
+	threadinfo_p->n          = n;
+	threadinfo_p->ei         = ei;
+
+	if(options_p->synctimeout)
+		threadinfo_p->expiretime = threadinfo_p->starttime + options_p->synctimeout;
+
+	if(pthread_create(&threadinfo_p->pthread, NULL, (void *(*)(void *))so_call_sync_thread, threadinfo_p)) {
+		printf_e("Error: Cannot pthread_create(): %s (errno: %i).\n", strerror(errno), errno);
+		return errno;
+	}
+	printf_ddd("Debug3: sync_exec_thread(): thread %p\n", threadinfo_p->pthread);
+	return 0;
+
+}
+
+
 // === SYNC_EXEC() === {
 
 #define SYNC_EXEC(...) (options_p->flags[PTHREAD]?sync_exec_thread:sync_exec)(__VA_ARGS__)
@@ -938,7 +979,7 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 				ei.path_len  = strlen(path);
 				ei.path      = path;
 
-				return options_p->handler_funct.sync(1, &ei);
+				return so_call_sync(options_p, 1, &ei);
 			} else {
 				return SYNC_EXEC(
 						options_p,
@@ -1493,7 +1534,7 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 
 		if(options_p->flags[SYNCHANDLERSO]) {
 			api_eventinfo_t *ei = dosync_arg_p->api_ei;
-			int _ret = options_p->handler_funct.sync(dosync_arg_p->evcount, ei);
+			int _ret = so_call_sync(options_p, dosync_arg_p->evcount, ei);
 			int i = 0, evcount = dosync_arg_p->evcount;
 			while(i < evcount) {
 #ifdef PARANOID
@@ -1504,6 +1545,10 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 #endif
 				free((char *)ei->path);
 				i++;
+			}
+			if(dosync_arg_p->api_ei_size) {
+				free(dosync_arg_p->api_ei);
+				dosync_arg_p->api_ei_size=0;
 			}
 			dosync_arg_p->evcount = 0;
 			return _ret;
