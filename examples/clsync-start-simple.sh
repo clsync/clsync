@@ -1,7 +1,5 @@
 #!/bin/bash
 
-. ./build.sh
-
 mkdir -m 700 -p testdir/{from,to,listdir}
 
 cat > rules <<EOF
@@ -9,5 +7,5 @@ cat > rules <<EOF
 +*.*
 EOF
 
-../clsync -R2 -d ./testdir/listdir -w2 -p -t5 ./testdir/from `which rsync` rules ./testdir/to
+clsync -R2 -d ./testdir/listdir -w2 -p -t5 ./testdir/from `which rsync` rules ./testdir/to
 
