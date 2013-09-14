@@ -31,4 +31,4 @@ doc:
 CLEANFILES = revision.h
 CLEANFILES += examples/rules
 clean-local:
-	-rm -rf examples/testdir doc
+	-rm -rf examples/testdir examples/*.o examples/*.so doc

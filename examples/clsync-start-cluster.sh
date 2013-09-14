@@ -20,7 +20,7 @@ fi
 mkdir -m 700 -p testdir/{from,to,listdir}
 
 cat > rules <<EOF
--d/[Dd]ont[Ss]ync\$
+-d^[Dd]ont[Ss]ync\$
 +*.*
 EOF
 
