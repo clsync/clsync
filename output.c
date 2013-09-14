@@ -96,16 +96,17 @@ void out_deinit() {
 
 int debug_print_flags() {
 	int flag=0;
-	printf("Debug: current flags: ");
+
+	printf_d("Debug: current flags: ");
 	while(flag < (1<<8)) {
 		if(flags[flag]) {
 			int i=0;
 			while(i++ < flags[flag]) 
-				printf("%c", flag);
+				printf_d("%c", flag);
 		}
 		flag++;
 	}
-	printf("\n");
+	printf_d("\n");
 
 	return 0;
 }

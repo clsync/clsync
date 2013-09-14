@@ -11,8 +11,10 @@ doc_DATA = CONTRIB DEVELOPING LICENSE PROTOCOL README.md TODO
 exampledir=$(docdir)/examples
 
 example_DATA = \
+ examples/clsync-synchandler-so.c \
  examples/clsync-synchandler-rsync.sh \
  examples/clsync-synchandler-production.sh \
+ examples/clsync-start-so.sh \
  examples/clsync-start-rsync.sh \
  examples/clsync-start-simple.sh \
  examples/clsync-start-cluster.sh \

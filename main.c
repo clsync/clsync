@@ -58,6 +58,7 @@ static struct option long_options[] =
 	{"initialsync-enable",	optional_argument,	NULL,	ENABLEINITIALSYNC},
 	{"synclist-simplify",	optional_argument,	NULL,	SYNCLISTSIMPLIFY},
 	{"auto-add-rules-w",	optional_argument,	NULL,	AUTORULESW},
+	{"synchandler-so-module",optional_argument,	NULL,	SYNCHANDLERSO},
 	{"rsync",		optional_argument,	NULL,	RSYNC},
 	{"rsync-inclimit",	required_argument,	NULL,	RSYNCINCLIMIT},
 	{"rsync-prefer-include",optional_argument,	NULL,	RSYNC_PREFERINCLUDE},
@@ -692,14 +693,25 @@ int main(int argc, char *argv[]) {
 	if(!ret) ret = nret;
 	out_init(options.flags);
 
+	if(options.flags[SYNCHANDLER] && options.flags[RSYNC]) {
+		printf_e("Error: Option \"--rsync\" cannot be used in conjunction with \"--synchandler-so-module\".\n");
+		ret = EINVAL;
+	}
+
+	if(options.flags[SYNCHANDLER] && (options.listoutdir != NULL))
+		printf_e("Warning: Option \"--dir-lists\" has no effect conjunction with \"--synchandler-so-module\".\n");
+
+	if(options.flags[SYNCHANDLER] && (options.destdir != NULL))
+		printf_e("Warning: Destination directory argument has no effect conjunction with \"--synchandler-so-module\".\n");
+
 	if((options.flags[RSYNC]>1) && (options.destdir == NULL)) {
-		printf_e("Error: Option \"-RR\" cannot be used without specifying \"destination directory\".\n");
+		printf_e("Error: Option \"-R2\" cannot be used without specifying \"destination directory\".\n");
 		ret = EINVAL;
 	}
 
 #ifdef CLUSTER_SUPPORT
 	if((options.flags[RSYNC]>1) && (options.cluster_iface != NULL)) {
-		printf_e("Error: Option \"-RR\" cannot be used in conjunction with \"--cluster-iface\".\n");
+		printf_e("Error: Option \"-R2\" cannot be used in conjunction with \"--cluster-iface\".\n");
 		ret = EINVAL;
 	}
 

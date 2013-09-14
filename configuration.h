@@ -52,3 +52,4 @@
 
 #define CONFIG_PATHS 			{ ".clsync.conf", "/etc/clsync/clsync.conf", NULL } /* "~/.clsync.conf" and "/etc/clsync/clsync.conf" */
 
+#define API_PREFIX			"clsyncapi_"

@@ -132,6 +132,7 @@ enum flags_enum {
 	ENABLEINITIALSYNC = 'S',
 	SYNCLISTSIMPLIFY= 'Z',
 	AUTORULESW	= 'A',
+	SYNCHANDLERSO	= 'M',
 	RSYNC		= 'R',
 	RSYNCINCLIMIT	= 'L',
 	RSYNC_PREFERINCLUDE= 'I',
@@ -206,6 +207,27 @@ struct queueinfo {
 };
 typedef struct queueinfo queueinfo_t;
 
+struct api_eventinfo {
+	uint32_t	 evmask;
+	uint32_t	 flags;
+	size_t		 path_len;
+	const char	*path;
+};
+typedef struct api_eventinfo api_eventinfo_t;
+
+struct options;
+struct indexes;
+typedef int(*api_funct_init)  (struct options *, struct indexes *);
+typedef int(*api_funct_sync)  (int n, api_eventinfo_t *);
+typedef int(*api_funct_deinit)();
+
+struct api_functs {
+	api_funct_init   init;
+	api_funct_sync   sync;
+	api_funct_deinit deinit;
+};
+typedef struct api_functs api_functs_t;
+
 struct options {
 	uid_t uid;
 	gid_t gid;
@@ -239,6 +261,8 @@ struct options {
 	size_t destdirwslashsize;
 	short int watchdir_dirlevel;
 	char *handlerfpath;
+	void *handler_handle;
+	api_functs_t handler_funct;
 	char *rulfpath;
 	char *listoutdir;
 	int notifyengine;
@@ -339,6 +363,8 @@ struct dosync_arg {
 	indexes_t *indexes_p;
 	void *data;
 	int linescount;
+	api_eventinfo_t *api_ei;
+	size_t api_ei_size;
 	char buf[BUFSIZ+1];
 };
 

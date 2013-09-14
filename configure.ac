@@ -47,6 +47,12 @@ AC_PROG_INSTALL
 PKG_PROG_PKG_CONFIG([0.20])
 
 # Checks for libraries.
+dnl libdl
+AC_CHECK_HEADER([dlfcn.h], [], [AC_MSG_ERROR("Unable to find dlfcn.h")])
+AC_SEARCH_LIBS([dlopen], [dl], [],
+[AC_MSG_ERROR("Unable to find libdl")])
+
+dnl pthread
 AC_CHECK_LIB([pthread], [pthread_create],
     [CPPFLAGS+=" -pthread" LDFLAGS+=" -pthread"],
     [AC_MSG_ERROR("Pthread support is mandatory")])

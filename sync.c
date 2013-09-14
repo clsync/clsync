@@ -17,6 +17,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+
 #include "common.h"
 #include "main.h"
 #include "output.h"
@@ -24,6 +25,8 @@
 #include "malloc.h"
 #include "cluster.h"
 #include "sync.h"
+
+#include <dlfcn.h>
 
 pthread_t pthread_sighandler;
 
@@ -926,8 +929,28 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 		else
 			return sync_exec       (options_p, NULL, options_p->handlerfpath, "initialsync", options_p->label, path, NULL);*/
 
-		if(options_p->flags[ENABLEINITIALSYNC])
-			return SYNC_EXEC(options_p, NULL, options_p->handlerfpath, "initialsync", options_p->label, path, NULL);
+		if(options_p->flags[ENABLEINITIALSYNC]) {
+			if(options_p->flags[SYNCHANDLERSO]) {
+				api_eventinfo_t ei = {0};
+
+				ei.evmask    = IN_CREATE|IN_ISDIR;
+				ei.flags     = EVIF_RECURSIVELY;
+				ei.path_len  = strlen(path);
+				ei.path      = path;
+
+				return options_p->handler_funct.sync(1, &ei);
+			} else {
+				return SYNC_EXEC(
+						options_p,
+						NULL,
+						options_p->handlerfpath, 
+						"initialsync",
+						options_p->label,
+						path,
+						NULL
+					);
+			}
+		}
 #ifdef DOXYGEN
 		sync_exec(NULL, NULL); sync_exec_thread(NULL, NULL);
 #endif
@@ -1454,6 +1477,24 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 		printf_ddd("Debug3: %s [%s] (%p) -> %s [%s]\n", options_p->watchdir, options_p->watchdirwslash, options_p->watchdirwslash, 
 								options_p->destdir?options_p->destdir:"", options_p->destdirwslash?options_p->destdirwslash:"");
 
+		if(options_p->flags[SYNCHANDLERSO]) {
+			api_eventinfo_t *ei = dosync_arg_p->api_ei;
+			int _ret = options_p->handler_funct.sync(dosync_arg_p->evcount, ei);
+			int i = 0, evcount = dosync_arg_p->evcount;
+			while(i < evcount) {
+#ifdef PARANOID
+				if(ei->path == NULL) {
+					printf_e("Warning: sync_idle_dosync_collectedevents_commitpart(): ei->path == NULL\n");
+					continue;
+				}
+#endif
+				free((char *)ei->path);
+				i++;
+			}
+			dosync_arg_p->evcount = 0;
+			return _ret;
+		}
+
 		if(options_p->flags[RSYNC] >= 2)
 			return SYNC_EXEC(options_p,
 				sync_idle_dosync_collectedevents_cleanup,
@@ -1491,12 +1532,28 @@ gboolean sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer e
 	struct dosync_arg *dosync_arg_p = (struct dosync_arg *)arg_gp;
 	char *fpath		  = (char *)fpath_gp;
 	eventinfo_t *evinfo	  = (eventinfo_t *)evinfo_gp;
-//	int *evcount_p		  =&dosync_arg_p->evcount;
+	int *evcount_p		  =&dosync_arg_p->evcount;
 	FILE *outf		  = dosync_arg_p->outf;
 	options_t *options_p 	  = dosync_arg_p->options_p;
 	int *linescount_p	  =&dosync_arg_p->linescount;
 	indexes_t *indexes_p 	  = dosync_arg_p->indexes_p;
+	api_eventinfo_t **api_ei_p=&dosync_arg_p->api_ei;
+	size_t *api_ei_size_p 	  =&dosync_arg_p->api_ei_size;
 	printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): \"%s\" with int-flags %p\n", fpath, (void *)(unsigned long)evinfo->flags);
+
+	// so-module case:
+	if(options_p->flags[SYNCHANDLERSO]) {
+		if(*evcount_p >= *api_ei_size_p) {
+			*api_ei_size_p += ALLOC_PORTION;
+			*api_ei_p       = (api_eventinfo_t *)xrealloc((char *)*api_ei_p, *api_ei_size_p);
+		}
+		api_eventinfo_t *ei = &(*api_ei_p)[(*evcount_p)++];
+		ei->evmask   = evinfo->evmask;
+		ei->flags    = evinfo->flags;
+		ei->path_len = strlen(fpath);
+		ei->path     = strdup(fpath);
+		return TRUE;
+	}
 
 	if(!options_p->flags[RSYNC]) {
 		// non-RSYNC case
@@ -1630,32 +1687,35 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 	if(options_p->listoutdir != NULL) {
 		int ret;
 
-		*(dosync_arg.excf_path) = 0x00;
-		if(isrsyncpreferexclude) {
-			if((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "exclist"))) {
+		if(!options_p->flags[SYNCHANDLERSO]) {
+			*(dosync_arg.excf_path) = 0x00;
+			if(isrsyncpreferexclude) {
+				if((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "exclist"))) {
+					printf_e("Error: Cannot create list-file: %s (errno: %i)\n", strerror(ret), ret);
+					return ret;
+				}
+
+#ifdef PARANOID
+				g_hash_table_remove_all(indexes_p->out_lines_aggr_ht);
+#endif
+				g_hash_table_foreach_remove(indexes_p->exc_fpath_ht, sync_idle_dosync_collectedevents_rsync_exclistpush, &dosync_arg);
+				g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, sync_idle_dosync_collectedevents_aggrout, &dosync_arg);
+				fclose(dosync_arg.outf);
+				strcpy(dosync_arg.excf_path, dosync_arg.outf_path);	// TODO: remove this strcpy()
+			}
+
+			if((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "list"))) {
 				printf_e("Error: Cannot create list-file: %s (errno: %i)\n", strerror(ret), ret);
 				return ret;
 			}
-
-#ifdef PARANOID
-			g_hash_table_remove_all(indexes_p->out_lines_aggr_ht);
-#endif
-			g_hash_table_foreach_remove(indexes_p->exc_fpath_ht, sync_idle_dosync_collectedevents_rsync_exclistpush, &dosync_arg);
-			g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, sync_idle_dosync_collectedevents_aggrout, &dosync_arg);
-			fclose(dosync_arg.outf);
-			strcpy(dosync_arg.excf_path, dosync_arg.outf_path);	// TODO: remove this strcpy()
-		}
-
-		if((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "list"))) {
-			printf_e("Error: Cannot create list-file: %s (errno: %i)\n", strerror(ret), ret);
-			return ret;
 		}
 
 #ifdef PARANOID
 		g_hash_table_remove_all(indexes_p->out_lines_aggr_ht);
 #endif
 		g_hash_table_foreach_remove(indexes_p->fpath2ei_ht, sync_idle_dosync_collectedevents_listpush, &dosync_arg);
-		g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, sync_idle_dosync_collectedevents_aggrout, &dosync_arg);
+		if(options_p->flags[RSYNC])
+			g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, sync_idle_dosync_collectedevents_aggrout, &dosync_arg);
 
 		if((ret=sync_idle_dosync_collectedevents_commitpart(&dosync_arg))) {
 			printf_e("Error: Cannot submit to sync the list \"%s\": %s (errno: %i)\n", dosync_arg.outf_path, strerror(ret), ret);
@@ -2283,6 +2343,24 @@ int sync_run(options_t *options_p) {
 		i++;
 	}
 
+	// Loading dynamical libraries
+	if(options_p->flags[SYNCHANDLERSO]) {
+		void *synchandler_handle = dlopen(options_p->handlerfpath, RTLD_LOCAL);
+		if(synchandler_handle == NULL) {
+			printf_e("Error: sync_run(): Cannot load shared object file \"%s\": %s\n", options_p->handlerfpath, dlerror());
+			return -1;
+		}
+		options_p->handler_handle = synchandler_handle;
+		options_p->handler_funct.init   = (api_funct_init)  dlsym(options_p->handler_handle, API_PREFIX"init");
+		options_p->handler_funct.sync   = (api_funct_sync)  dlsym(options_p->handler_handle, API_PREFIX"sync");
+		options_p->handler_funct.deinit = (api_funct_deinit)dlsym(options_p->handler_handle, API_PREFIX"deinit");
+
+		if((ret = options_p->handler_funct.init(options_p, &indexes))) {
+			printf_e("Error: sync_run(): Cannot init sync-handler module: %s (errno: %i).\n", strerror(ret), ret);
+			return ret;
+		}
+	}
+
 #ifdef CLUSTER_SUPPORT
 	// Initializing cluster subsystem
 
@@ -2323,6 +2401,22 @@ int sync_run(options_t *options_p) {
 	printf_ddd("sync_run(): Closing notify_d\n");
 	close(notify_d);
 
+	// Closing shared libraries
+	if(options_p->flags[SYNCHANDLERSO]) {
+		int _ret;
+		if((_ret = options_p->handler_funct.deinit())) {
+			printf_e("Error: sync_run(): Cannot deinit sync-handler module: %s (errno: %i).\n", strerror(ret), ret);
+			if(!ret) ret = _ret;
+		}
+
+		if(dlclose(options_p->handler_handle)) {
+			printf_e("Error: sync_run(): Cannot unload shared object file \"%s\": %s\n",
+				options_p->handlerfpath, dlerror());
+			if(!ret) ret = -1;
+		}
+	}
+
+	// Removing hash-tables
 	printf_ddd("sync_run(): Closing hash tables\n");
 	g_hash_table_destroy(indexes.wd2fpath_ht);
 	g_hash_table_destroy(indexes.fpath2wd_ht);
@@ -2336,6 +2430,7 @@ int sync_run(options_t *options_p) {
 		i++;
 	}
 
+	// Deinitializing cluster subsystem
 #ifdef CLUSTER_SUPPORT
 	if(options_p->cluster_iface != NULL) {
 		int _ret;
