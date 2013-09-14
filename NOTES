@@ -1,5 +1,5 @@
 v0.1 -> v0.2:
 
 * You cannot use "-DDD" anymore, you should use "-D3" or "-D -D -D" instead.
-* Paths a relative, now. You may want to fix "rules" and "sync-handler" files.
+* Paths are relative, now. You may want to fix "rules" and "sync-handler" files.
 
