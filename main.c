@@ -28,15 +28,17 @@
 
 static struct option long_options[] =
 {
-	{"background",		no_argument,		NULL,	BACKGROUND},
+	{"background",		optional_argument,	NULL,	BACKGROUND},
+	{"config-path",		required_argument,	NULL,	CONFIGPATH},
+	{"config-block",	required_argument,	NULL,	CONFIGBLOCK},
 	{"pid-file",		required_argument,	NULL,	PIDFILE},
 	{"uid",			required_argument,	NULL,	UID},
 	{"gid",			required_argument,	NULL,	GID},
 #ifdef HAVE_CAPABILITIES
-	{"preserve-file-access",no_argument,		NULL,	CAP_PRESERVE_FILEACCESS},
+	{"preserve-file-access",optional_argument,	NULL,	CAP_PRESERVE_FILEACCESS},
 #endif
-	{"pthread",		no_argument,		NULL,	PTHREAD},
-	{"syslog",		no_argument,		NULL,	SYSLOG},
+	{"pthread",		optional_argument,	NULL,	PTHREAD},
+	{"syslog",		optional_argument,	NULL,	SYSLOG},
 #ifdef CLUSTER_SUPPORT
 	{"cluster-iface",	required_argument,	NULL,	CLUSTERIFACE},		// Not implemented, yet
 	{"cluster-ip",		required_argument,	NULL,	CLUSTERMCASTIPADDR},	// Not implemented, yet
@@ -53,27 +55,25 @@ static struct option long_options[] =
 	{"delay-collect-bigfile",required_argument,	NULL,	BFILEDELAY},
 	{"threshold-bigfile",	required_argument,	NULL,	BFILETHRESHOLD},
 	{"dir-lists",		required_argument,	NULL,	OUTLISTSDIR},
-	{"initialsync-enable",	no_argument,		NULL,	ENABLEINITIALSYNC},
-	{"synclist-simplify",	no_argument,		NULL,	SYNCLISTSIMPLIFY},
-	{"auto-add-rules-w",	no_argument,		NULL,	AUTORULESW},
-	{"rsync",		no_argument,		NULL,	RSYNC},
+	{"initialsync-enable",	optional_argument,	NULL,	ENABLEINITIALSYNC},
+	{"synclist-simplify",	optional_argument,	NULL,	SYNCLISTSIMPLIFY},
+	{"auto-add-rules-w",	optional_argument,	NULL,	AUTORULESW},
+	{"rsync",		optional_argument,	NULL,	RSYNC},
 	{"rsync-inclimit",	required_argument,	NULL,	RSYNCINCLIMIT},
-	{"rsync-prefer-include",no_argument,		NULL,	RSYNC_PREFERINCLUDE},
+	{"rsync-prefer-include",optional_argument,	NULL,	RSYNC_PREFERINCLUDE},
 	{"ignore-exitcode",	required_argument,	NULL,	IGNOREEXITCODE},
-	{"dont-unlink-lists",	no_argument,		NULL,	DONTUNLINK},
-	{"full-initialsync",	no_argument,		NULL,	INITFULL},
-	{"verbose",		no_argument,		NULL,	VERBOSE},
-	{"debug",		no_argument,		NULL,	DEBUG},
-	{"quiet",		no_argument,		NULL,	QUIET},
+	{"dont-unlink-lists",	optional_argument,	NULL,	DONTUNLINK},
+	{"full-initialsync",	optional_argument,	NULL,	INITFULL},
+	{"verbose",		optional_argument,	NULL,	VERBOSE},
+	{"debug",		optional_argument,	NULL,	DEBUG},
+	{"quiet",		optional_argument,	NULL,	QUIET},
 #ifdef FANOTIFY_SUPPORT
-	{"fanotify",		no_argument,		NULL,	FANOTIFY},
-	{"inotify",		no_argument,		NULL,	INOTIFY},
+	{"fanotify",		optional_argument,	NULL,	FANOTIFY},
+	{"inotify",		optional_argument,	NULL,	INOTIFY},
 #endif
 	{"label",		required_argument,	NULL,	LABEL},
-	{"help",		no_argument,		NULL,	HELP},
-	{"version",		no_argument,		NULL,	SHOW_VERSION},
-
-	{"config-path",		required_argument,	NULL,	CONFIGPATH},
+	{"help",		optional_argument,	NULL,	HELP},
+	{"version",		optional_argument,	NULL,	SHOW_VERSION},
 
 	{"watch-dir",		required_argument,	NULL,	WATCHDIR},
 	{"sync-handler",	required_argument,	NULL,	SYNCHANDLER},
@@ -87,7 +87,7 @@ int syntax() {
 	printf("syntax: clsync [flags] <watch dir> <action script> [file with rules regexps] [destination directory]\npossible options:\n");
 	int i=0;
 	while(long_options[i].name != NULL) {
-		if(long_options[i].val >= 32)
+		if(!(long_options[i].val & OPTION_CONFIGONLY))
 			printf("\t--%-24s-%c%s\n", long_options[i].name, long_options[i].val, (long_options[i].has_arg == required_argument ? " argument" : ""));
 		i++;
 	}
@@ -99,12 +99,16 @@ int version() {
 	exit(0);
 }
 
-static inline int parse_parameter(options_t *options_p, uint8_t param_id, char *arg, paramsource_t paramsource) {
+static inline int parse_parameter(options_t *options_p, uint16_t param_id, char *arg, paramsource_t paramsource) {
 #ifdef _DEBUG
 	fprintf(stderr, "Force-Debug: parse_parameter(): %i: %i = \"%s\"\n", paramsource, param_id, arg);
 #endif
 	switch(paramsource) {
 		case PS_ARGUMENT:
+			if(param_id & OPTION_CONFIGONLY) {
+				syntax();
+				return 0;
+			}
 			options_p->flags_set[param_id] = 1;
 			break;
 		case PS_CONFIG:
@@ -119,6 +123,12 @@ static inline int parse_parameter(options_t *options_p, uint8_t param_id, char *
 		case '?':
 		case HELP:
 			syntax();
+			break;
+		case CONFIGPATH:
+			options_p->config_path  = arg;
+			break;
+		case CONFIGBLOCK:
+			options_p->config_block = arg;
 			break;
 		case GID:
 			options_p->gid = (unsigned int)atol(arg);
@@ -212,23 +222,26 @@ static inline int parse_parameter(options_t *options_p, uint8_t param_id, char *
 				options_p->flags[param_id]++;
 			else
 				options_p->flags[param_id] = atoi(arg);
+#ifdef _DEBUG
+			fprintf(stderr, "Force-Debug: flag %i is set to %i\n", param_id&0xff, options_p->flags[param_id]);
+#endif
 			break;
 	}
 	return 0;
 }
 
-int parse_arguments(int argc, char *argv[], struct options *options_p) {
+int arguments_parse(int argc, char *argv[], struct options *options_p) {
 	int c;
 	int option_index = 0;
 
 	// Generating "optstring" (man 3 getopt_long) with using information from struct array "long_options"
-	char *optstring     = alloca((('z'-'a'+1)*2 + '9'-'0'+1)*2 + 1);
+	char *optstring     = alloca((('z'-'a'+1)*3 + '9'-'0'+1)*3 + 1);
 	char *optstring_ptr = optstring;
 
 	struct option *lo_ptr = long_options;
 	while(lo_ptr->name != NULL) {
-		if(lo_ptr->val >= 32) {
-			*(optstring_ptr++) = lo_ptr->val;
+		if(!(lo_ptr->val & OPTION_CONFIGONLY)) {
+			*(optstring_ptr++) = lo_ptr->val & 0xff;
 
 			if(lo_ptr->has_arg == required_argument)
 				*(optstring_ptr++) = ':';
@@ -273,56 +286,93 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 	return 0;
 }
 
-int parse_configs(options_t *options_p) {
-	char **config_path, *config_path_real = xmalloc(PATH_MAX);
-	size_t config_path_real_size=PATH_MAX;
-	
+char *configs_parse_str[1<<8] = {0};
+
+void gkf_parse(options_t *options_p, GKeyFile *gkf) {
+	struct option *lo_ptr = long_options;
+	while(lo_ptr->name != NULL) {
+		gchar *value = g_key_file_get_value(gkf, options_p->config_block, lo_ptr->name, NULL);
+		if(value != NULL) {
+			unsigned char val_char = lo_ptr->val&0xff;
+
+			if(configs_parse_str[val_char])
+				free(configs_parse_str[val_char]);
+
+			configs_parse_str[val_char] = value;
+			parse_parameter(options_p, lo_ptr->val, value, PS_CONFIG);
+		}
+		lo_ptr++;
+	}
+
+	return;
+}
+
+int configs_parse(options_t *options_p) {
 	GKeyFile *gkf;
 
 	gkf = g_key_file_new();
 
-	char *homedir = getenv("HOME");
-	size_t homedir_len = strlen(homedir);
+	if(options_p->config_path) {
+		printf_d("Debug: configs_parse(): Trying config-file \"%s\"\n", options_p->config_path);
+		if(!g_key_file_load_from_file(gkf, options_p->config_path, G_KEY_FILE_NONE, NULL)) {
+			printf_d("Debug: configs_parse(): Cannot open/parse file \"%s\"\n", options_p->config_path);
+			g_key_file_free(gkf);
+			return -1;
+		} else
+			gkf_parse(options_p, gkf);
 
-	config_path = options_p->config_paths;
-	while(*config_path != NULL) {
-		size_t config_path_len = strlen(*config_path);
+	} else {
+		char *config_paths[] = CONFIG_PATHS;
+		char **config_path_p = config_paths, *config_path_real = xmalloc(PATH_MAX);
+		size_t config_path_real_size=PATH_MAX;
 
-		if(config_path_len+homedir_len+3 > config_path_real_size) {
-			config_path_real_size = config_path_len+homedir_len+3;
-			config_path_real      = xmalloc(config_path_real_size);
+		char *homedir = getenv("HOME");
+		size_t homedir_len = strlen(homedir);
+
+		while(*config_path_p != NULL) {
+			size_t config_path_len = strlen(*config_path_p);
+
+			if(config_path_len+homedir_len+3 > config_path_real_size) {
+				config_path_real_size = config_path_len+homedir_len+3;
+				config_path_real      = xmalloc(config_path_real_size);
+			}
+
+			if(*config_path_p[0] != '/') {
+				memcpy(config_path_real, homedir, homedir_len);
+				config_path_real[homedir_len] = '/';
+				memcpy(&config_path_real[homedir_len+1], *config_path_p, config_path_len+1);
+			} else 
+				memcpy(config_path_real, *config_path_p, config_path_len+1);
+
+			printf_d("Debug: configs_parse(): Trying config-file \"%s\"\n", config_path_real);
+			if(!g_key_file_load_from_file(gkf, config_path_real, G_KEY_FILE_NONE, NULL)) {
+				printf_d("Debug: configs_parse(): Cannot open/parse file \"%s\"\n", config_path_real);
+				config_path_p++;
+				continue;
+			}
+
+			gkf_parse(options_p, gkf);
+
+			break;
 		}
-
-		if(*config_path[0] != '/') {
-			memcpy(config_path_real, homedir, homedir_len);
-			config_path_real[homedir_len] = '/';
-			memcpy(&config_path_real[homedir_len+1], *config_path, config_path_len+1);
-		} else 
-			memcpy(config_path_real, *config_path, config_path_len+1);
-
-#ifdef _DEBUG
-		fprintf(stderr, "Force-Debug: parse_configs(): Trying config-file \"%s\"\n", config_path_real);
-#endif
-		if(!g_key_file_load_from_file(gkf, config_path_real, G_KEY_FILE_NONE, NULL)) {
-#ifdef _DEBUG
-			fprintf(stderr, "Force-Debug: parse_configs(): Cannot open/parse file \"%s\"\n", config_path_real);
-#endif
-			config_path++;
-			continue;
-		}
-
-		struct option *lo_ptr = long_options;
-		while(lo_ptr->name != NULL) {
-			gchar *value = g_key_file_get_value(gkf, options_p->config_block, lo_ptr->name, NULL);
-			if(value != NULL)
-				parse_parameter(options_p, lo_ptr->val, value, PS_CONFIG);
-			lo_ptr++;
-		}
-
-		break;
+		free(config_path_real);
 	}
 
 	g_key_file_free(gkf);
+
+	return 0;
+}
+
+int configs_cleanup() {
+	int i=0;
+
+	while(i < (1<<8)) {
+		if(configs_parse_str[i] != NULL) {
+			free(configs_parse_str[i]);
+			configs_parse_str[i] = NULL;
+		}
+		i++;
+	}
 
 	return 0;
 }
@@ -614,7 +664,6 @@ int main_rehash(options_t *options_p) {
 }
 
 int main(int argc, char *argv[]) {
-	char *config_paths[] = CONFIG_PATHS;
 	struct options options;
 #ifdef CLUSTER_SUPPORT
 	struct utsname utsname;
@@ -635,13 +684,14 @@ int main(int argc, char *argv[]) {
 	options.cluster_hash_dl_max		   = DEFAULT_CLUSTERHDLMAX;
 	options.cluster_scan_dl_max		   = DEFAULT_CLUSTERSDLMAX;
 #endif
-	options.config_paths = config_paths;
 	options.config_block = DEFAULT_CONFIG_BLOCK;
 
-	parse_arguments(argc, argv, &options);
-	parse_configs(&options);
-
+	arguments_parse(argc, argv, &options);
 	out_init(options.flags);
+	nret = configs_parse(&options);
+	if(!ret) ret = nret;
+	out_init(options.flags);
+
 	if((options.flags[RSYNC]>1) && (options.destdir == NULL)) {
 		printf_e("Error: Option \"-RR\" cannot be used without specifying \"destination directory\".\n");
 		ret = EINVAL;
@@ -962,6 +1012,7 @@ preserve_fileaccess_end:
 	if(options.destdirwslashsize)
 		free(options.destdirwslash);
 
+	configs_cleanup();
 	out_flush();
 	printf_d("Debug: finished, exitcode: %i: %s.\n", ret, strerror(ret));
 	out_flush();

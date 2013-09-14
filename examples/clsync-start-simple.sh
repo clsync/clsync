@@ -9,5 +9,5 @@ cat > rules <<EOF
 +*.*
 EOF
 
-../clsync -RR -d ./testdir/listdir -w 2 -p -t 5 ./testdir/from `which rsync` rules ./testdir/to
+../clsync -R2 -d ./testdir/listdir -w2 -p -t5 ./testdir/from `which rsync` rules ./testdir/to
 

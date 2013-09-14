@@ -40,6 +40,28 @@ Daemonize, forcing clsync to fork() on start.
 .PP
 .RE
 
+.B \-H, \-\-config\-file
+.I config\-file\-path
+.RS 8
+Use configuration from file
+.IR config\-file\-path .
+(see 
+.BR "CONFIGURATION FILE" )
+
+.PP
+.RE
+
+.B \-K, \-\-config\-block
+.I config\-block\-name
+.RS 8
+Use configuration block with name
+.IR config\-block\-name .
+(see 
+.BR "CONFIGURATION FILE" )
+
+.PP
+.RE
+
 .B \-z, \-\-pid\-file
 .I path\-to\-pidfile
 .RS 8
@@ -336,12 +358,12 @@ option.
 
 Recommended option.
 
-You can use "\-RR" to run "rsync" directly, bypassing intermediate script
+You can use "\-R2" to run "rsync" directly, bypassing intermediate script
 (see
 .B "SYNC HANDLER"
 case
 .BR e ).
-But you cannot use "\-\-cluster\-*" options in "\-RR" mode.
+But you cannot use "\-\-cluster\-*" options in "\-R2" mode.
 
 Is not set by default.
 .RE
@@ -435,7 +457,7 @@ This option is supposed to increase verbosity. But at the moment there's no
 .RS 8
 Increases debugging output. This may be supplied multiple times for more
 debugging information, up to a maximum of three "D" flags (more will do 
-nothing), for example: \-DDD
+nothing), for example "\-D \-D \-D" or "\-D3" (equivalent cases)
 .RE
 
 .PP
@@ -629,7 +651,8 @@ will be ignored in this case.
 
 This case will be used, if option
 .I \-\-rsync
-is set twice. This case is supposed to be used only as a proof of concept.
+is set twice (or equivalently "\-\-rsync=2"). This case is supposed to be used
+only as a proof of concept.
 .RE
 
 As can be noticed, in the first four cases clsync's
@@ -843,6 +866,65 @@ your
 .IR sync\-handler .
 
 .RE
+
+.SH CONFIGURATION FILE
+
+.B clsync
+supports configuration file.
+
+By default
+.B clsync
+tries to read next files (in specified order):
+.RS
+~/.clsync.conf
+.br
+/etc/clsync.conf
+.RE
+
+This may be overrided with option
+.IR \-\-config\-file .
+
+.B clsync
+reads only one configuration file. In other words, if option
+.I \-\-config\-file
+is not set and file
+.B ~/.clsync.conf
+is accessable and parsable,
+.B clsync
+will not try to open
+.BR /etc/clsync.conf .
+
+Configuration file is parsed with glib's g_key_file_* API. That means,
+that config should consits from groups (blocks) of key-value lines as in the
+example:
+.RS
+[default]
+.br
+backgroun=1
+.br
+rsync=1
+.br
+debug=0
+.br
+syslog=1
+.br
+pid-file=/var/run/clsync.pid
+.br
+
+.br
+[test]
+.br
+rsync=2
+.br
+debug=3
+.RE
+
+In this example there's 2 blocks are set - "default" and "test".
+
+By default
+.B clsync
+uses block with name "default". Block name can be set by option
+.IR \-\-config\-block .
 
 .SH CLUSTERING
 

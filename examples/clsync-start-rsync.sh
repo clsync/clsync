@@ -9,5 +9,5 @@ cat > rules <<EOF
 +*.*
 EOF
 
-../clsync -l test -R -d ./testdir/listdir -w 2 -p -t 5 ./testdir/from ./clsync-synchandler-rsync.sh rules
+../clsync -l test -R -d ./testdir/listdir -w2 -p -t5 ./testdir/from ./clsync-synchandler-rsync.sh rules
 

@@ -99,8 +99,11 @@
 
 #define COLLECTDELAY_INSTANT ((unsigned int)~0)
 
+#define OPTION_CONFIGONLY (1<<8)
 enum flags_enum {
 	HELP		= 'h',
+	CONFIGPATH	= 'H',
+	CONFIGBLOCK	= 'K',
 	BACKGROUND	= 'b',
 	UID		= 'u',
 	GID		= 'g',
@@ -142,12 +145,11 @@ enum flags_enum {
 	INOTIFY		= 'i',
 	LABEL		= 'l',
 	SHOW_VERSION	= 'V',
-	CONFIGPATH	= 'H',
 
-	WATCHDIR	= 1,
-	SYNCHANDLER	= 2,
-	RULESPATH	= 3,
-	DESTDIR		= 4,
+	WATCHDIR	= 0|OPTION_CONFIGONLY,
+	SYNCHANDLER	= 1|OPTION_CONFIGONLY,
+	RULESPATH	= 2|OPTION_CONFIGONLY,
+	DESTDIR		= 3|OPTION_CONFIGONLY,
 
 };
 typedef enum flags_enum flags_t;
@@ -208,16 +210,16 @@ struct options {
 	uid_t uid;
 	gid_t gid;
 	rule_t rules[MAXRULES];
-	int flags[1<<8];
-	int flags_set[1<<8];
-	char **config_paths;
+	int flags[1<<10];
+	int flags_set[1<<10];
+	char *config_path;
+	char *config_block;
 	char *label;
 	char *watchdir;
 	char *pidfile;
 	char *destdir;
 	char *watchdirwslash;
 	char *destdirwslash;
-	char *config_block;
 #ifdef CLUSTER_SUPPORT
 	char *cluster_iface;
 	char *cluster_mcastipaddr;

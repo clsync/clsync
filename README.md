@@ -128,10 +128,10 @@ manpage.
 However let's describe 4 situations:
 
 - The simpliest usage (syncing from "/tmp/fromdir" to "/tmp/todir" with delay about 30 seconds):
-> clsync -RR -d /dev/shm/clsync /tmp/fromdir $(which rsync) /dev/zero /tmp/todir
+> clsync -R2 -d /dev/shm/clsync /tmp/fromdir $(which rsync) /dev/zero /tmp/todir
 
 - You're backing-up over very slow channel:
-> clsync -l backup -R -d /dev/shm/clsync -t 600 -T 3600 -B $[1024 * 1024 * 16] /home/user /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules
+> clsync -l backup -R -d /dev/shm/clsync -t600 -T3600 -B$[1024 * 1024 * 16] /home/user /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules
 
 This will minimize network traffic. And pthread-ing is removed due to rarely
 updating.
