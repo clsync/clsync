@@ -319,7 +319,7 @@ int arguments_parse(int argc, char *argv[], struct options *options_p) {
 	return 0;
 }
 
-char *configs_parse_str[1<<8] = {0};
+char *configs_parse_str[1<<10] = {0};
 
 void gkf_parse(options_t *options_p, GKeyFile *gkf) {
 	struct option *lo_ptr = long_options;
