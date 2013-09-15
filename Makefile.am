@@ -1,6 +1,6 @@
 bin_PROGRAMS = clsync
 
-clsync_SOURCES = sync.c cluster.c main.c output.c fileutils.c malloc.c
+clsync_SOURCES = sync.c cluster.c main.c output.c fileutils.c malloc.c glibex.c
 
 main.o: revision.h
 

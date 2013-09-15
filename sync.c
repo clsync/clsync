@@ -25,10 +25,20 @@
 #include "malloc.h"
 #include "cluster.h"
 #include "sync.h"
+#include "glibex.h"
 
 #include <dlfcn.h>
 
 pthread_t pthread_sighandler;
+
+gpointer eidup(gpointer ei_gp) {
+	eventinfo_t *ei = (eventinfo_t *)ei_gp;
+
+	eventinfo_t *ei_dup = (eventinfo_t *)xmalloc(sizeof(*ei));
+	memcpy(ei_dup, ei, sizeof(*ei));
+
+	return (gpointer)ei_dup;
+}
 
 static inline int _exitcode_process(options_t *options_p, int exitcode) {
 	if(options_p->isignoredexitcode[(unsigned char)exitcode])
@@ -656,7 +666,7 @@ static inline int so_call_sync(options_t *options_p, indexes_t *indexes_p, int n
 	threadinfo_p->argv        = NULL;
 	threadinfo_p->options_p   = options_p;
 	threadinfo_p->starttime	  = time(NULL);
-	threadinfo_p->fpath2ei_ht = indexes_p->fpath2ei_ht;
+	threadinfo_p->fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
 	threadinfo_p->n           = n;
 	threadinfo_p->ei          = ei;
 
@@ -815,9 +825,7 @@ static inline int sync_exec_thread(options_t *options_p, indexes_t *indexes_p, t
 	threadinfo_p->argv        = argv;
 	threadinfo_p->options_p   = options_p;
 	threadinfo_p->starttime	  = time(NULL);
-	threadinfo_p->fpath2ei_ht = indexes_p->fpath2ei_ht;
-
-	indexes_p->fpath2ei_ht    = g_hash_table_new_full(g_str_hash,	g_str_equal,	free, free);
+	threadinfo_p->fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
 
 	if(options_p->synctimeout)
 		threadinfo_p->expiretime = threadinfo_p->starttime + options_p->synctimeout;
