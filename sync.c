@@ -560,6 +560,43 @@ int exec_argv(char **argv, int *child_pid DEBUGV(, int _rand)) {
 	return exitcode;
 }
 
+static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode DEBUGV(, int _rand)) {
+	int err;
+	threadinfo_p->exitcode = exitcode;
+
+#if _DEBUG | VERYPARANOID
+	if(threadinfo_p->pthread != pthread_self()) {
+		printf_e("Error: thread_exit(): pthread id mismatch! (i_p->p) %p != (p) %p"DEBUGV("; rand == %i")"\n", threadinfo_p->pthread, pthread_self() DEBUGV(, _rand));
+		return EINVAL;
+	}
+#endif
+
+	if((err=exitcode_process(threadinfo_p->options_p, threadinfo_p->exitcode))) {
+		printf_e("Error: thread_exit(): Bad exitcode %i (errcode %i)\n", exitcode, err);
+		threadinfo_p->errcode = err;
+	}
+
+	if((threadinfo_p->callback) && !(err)) {
+		if(threadinfo_p->options_p->flags[DEBUG]>2) {
+			printf_ddd("Debug3: thread_exit(): thread %p, argv: \n", threadinfo_p->pthread);
+			char **argv = threadinfo_p->argv;
+			while(*argv) {
+				printf_ddd("\t%p == %s\n", *argv, *argv);
+				argv++;
+			}
+		}
+		if((err=threadinfo_p->callback(threadinfo_p->options_p, threadinfo_p->argv))) {
+			printf_e("Error: Got error from callback function: %s (errno: %i).\n", strerror(err), err);
+			threadinfo_p->errcode = err;
+		}
+	}
+
+	// Notifying the parent-thread, that it's time to collect garbage threads
+	threadinfo_p->state    = STATE_TERM;
+	printf_ddd("Debug3: thread_exit(): thread %p is sending signal to sighandler to call GC\n", threadinfo_p->pthread);
+	return pthread_kill(pthread_sighandler, SIGUSR_PTHREAD_GC);
+}
+
 static inline void so_call_sync_finished(int n, api_eventinfo_t *ei) {
 	int i = 0;
 	api_eventinfo_t *ei_i = ei;
@@ -592,8 +629,11 @@ int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 	int ret = options_p->handler_funct.sync(n, ei);
 	so_call_sync_finished(n, ei);
 
-	threadinfo_p->state    = STATE_TERM;
-	pthread_kill(pthread_sighandler, SIGUSR_PTHREAD_GC);
+	int err;
+	if((err=thread_exit(threadinfo_p, ret DEBUGV(, 0)))) {
+		exitcode = err;	// This's global variable "exitcode"
+		pthread_kill(pthread_sighandler, SIGTERM);
+	}
 
 	return ret;
 }
@@ -731,43 +771,6 @@ static inline int sync_exec(options_t *options_p, thread_callbackfunct_t callbac
 l_sync_exec_end:
 	free(argv);
 	return ret;
-}
-
-static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode DEBUGV(, int _rand)) {
-	int err;
-	threadinfo_p->exitcode = exitcode;
-
-#if _DEBUG | VERYPARANOID
-	if(threadinfo_p->pthread != pthread_self()) {
-		printf_e("Error: thread_exit(): pthread id mismatch! (i_p->p) %p != (p) %p"DEBUGV("; rand == %i")"\n", threadinfo_p->pthread, pthread_self() DEBUGV(, _rand));
-		return EINVAL;
-	}
-#endif
-
-	if((err=exitcode_process(threadinfo_p->options_p, threadinfo_p->exitcode))) {
-		printf_e("Error: thread_exit(): Bad exitcode %i (errcode %i)\n", exitcode, err);
-		threadinfo_p->errcode = err;
-	}
-
-	if((threadinfo_p->callback) && !(err)) {
-		if(threadinfo_p->options_p->flags[DEBUG]>2) {
-			printf_ddd("Debug3: thread_exit(): thread %p, argv: \n", threadinfo_p->pthread);
-			char **argv = threadinfo_p->argv;
-			while(*argv) {
-				printf_ddd("\t%p == %s\n", *argv, *argv);
-				argv++;
-			}
-		}
-		if((err=threadinfo_p->callback(threadinfo_p->options_p, threadinfo_p->argv))) {
-			printf_e("Error: Got error from callback function: %s (errno: %i).\n", strerror(err), err);
-			threadinfo_p->errcode = err;
-		}
-	}
-
-	// Notifying the parent-thread, that it's time to collect garbage threads
-	threadinfo_p->state    = STATE_TERM;
-	printf_ddd("Debug3: thread_exit(): thread %p is sending signal to sighandler to call GC\n", threadinfo_p->pthread);
-	return pthread_kill(pthread_sighandler, SIGUSR_PTHREAD_GC);
 }
 
 int __sync_exec_thread(threadinfo_t *threadinfo_p) {

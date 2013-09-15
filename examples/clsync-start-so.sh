@@ -9,5 +9,5 @@ EOF
 
 gcc -ggdb $(pkg-config --cflags glib-2.0) -I../.. -fPIC -shared -o clsync-synchandler-so.so clsync-synchandler-so.c
 
-clsync -M -d ./testdir/listdir -w2 -p -t5 ./testdir/from ./clsync-synchandler-so.so rules
+clsync -M -d ./testdir/listdir -w2 -p -t5 ./testdir/from ./clsync-synchandler-so.so rules ./testdir/to
 

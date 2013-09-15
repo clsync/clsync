@@ -304,6 +304,10 @@ will execute
 .I sync\-handler
 for every file in the aggregated event list (action "sync").
 
+Cannot be used in conjunction with
+.IR \-\-synchandler\-so\-module
+.
+
 See
 .BR "SYNC HANDLER" .
 
@@ -346,12 +350,36 @@ Is not set by default.
 .RE
 
 .PP
+.B \-M, \-\-synchandler\-so\-module
+.RS 8
+.B clsync
+will load
+.I sync-handler
+as a shared library with
+.BR dlopen (3)
+and run syncing by calling function "clsyncapi_sync()" from
+this shared object file (see 
+.B "SYNC HANDLER"
+case
+.BR f ).
+
+Cannot be used in conjunction with
+.I \-\-rsync
+and/or
+.IR \-\-dir\-lists .
+
+Is not set by default.
+.RE
+
+.PP
 .B \-R, \-\-rsync
 .RS 8
 Forces
 .B clsync
 to use "rsynclist" action instead of "initialsync" and "synclist" (see 
-.BR "SYNC HANDLER" ).
+.B "SYNC HANDLER" 
+case 
+.BR d ).
 This option can be used only with
 .I \-\-dir\-lists
 option.
@@ -363,7 +391,15 @@ You can use "\-R2" to run "rsync" directly, bypassing intermediate script
 .B "SYNC HANDLER"
 case
 .BR e ).
-But you cannot use "\-\-cluster\-*" options in "\-R2" mode.
+
+Cannot be used in conjunction with 
+.IR \-\-synchandler\-so\-module .
+
+But you cannot use 
+.I \-\-cluster\-*
+options in 
+.I \-R2
+mode.
 
 Is not set by default.
 .RE
@@ -519,10 +555,12 @@ is only a convenient way to run a syncing script.
 .B clsync
 can run
 .I sync\-handler
-in five ways. Which way will be used depends on specified options (see
+in six ways. Which way will be used depends on specified options (see
 .I \-\-dir\-lists
-and
-.IR \-\-rsync ).
+,
+.I \-\-rsync
+and 
+.IR \-\-synchandler\-so\-module ).
 
 case
 .B a
@@ -542,7 +580,9 @@ it's passed bitmask of events with the file or directory (see
 
 This case will be used, if there is no
 .I \-\-dir\-lists
-options set.
+and
+.I \-\-synchandler\-so\-module
+options are set.
 .RE
 
 case
@@ -564,9 +604,11 @@ it's passed bitmask of events with the file or directory (see
 
 This case will be used if option
 .I \-\-dir\-lists
-is set, but option
+is set, but options
 .I \-\-rsync
-is not set.
+and
+.I \-\-synchandler\-so\-module
+are not set.
 .RE
 
 case
@@ -586,7 +628,9 @@ This case will be used for initial sync, if options
 .I \-\-dir\-lists
 and
 .I \-\-initialsync\-enable
-are set.
+are set, but option
+.I \-\-synchandler\-so\-module
+is not set.
 .RE
 
 case
@@ -653,6 +697,72 @@ This case will be used, if option
 .I \-\-rsync
 is set twice (or equivalently "\-\-rsync=2"). This case is supposed to be used
 only as a proof of concept.
+.RE
+
+case
+.B f
+.RS
+In this case there's no direct exec*() calling. In this case
+.B clsync
+loads
+.I sync-handler
+as a shared library with
+.BR dlopen (3)
+and calls function "int clsyncapi_sync(int n, api_eventinfo_t *ei)" from it
+for every sync.
+.B n
+is number of elements of
+.BR ei .
+.B ei
+is an array of structures with information about what and how to sync (see
+below).
+
+api_eventinfo_t is a structure:
+.RS
+struct api_eventinfo {
+.br
+        uint32_t    evmask;	// event bitmask for file/dir by path
+.BR path .
+.br
+        uint32_t    flags;	// flags of "how to sync" the file/dir
+.br
+        size_t      path_len;	// strlen(path)
+.br
+        const char *path;	// the path to file/dir need to be
+synced
+.br
+};
+.br
+typedef struct api_eventinfo api_eventinfo_t;
+.RE
+
+The event bitmask (evmask) values can be learned from
+"/usr/include/linux/inotify.h".
+
+There may be next flags' values (flags):
+.RS
+enum eventinfo_flags {
+.br
+        EVIF_RECURSIVELY = 0x00000001	// sync the file/dir recursively
+.br
+};
+.RE
+.br
+Flag "EVIF_RECURSIVELY" may be used if option
+.I\-\-initialsync\-enable
+is set.
+
+Also may be defined functions "int clsyncapi_init(options_t *, indexes_t *)"
+and "int clsyncapi_deinit()" to initialize and deinitialize the syncing
+process by this shared object.
+
+See example file "clsync-synchandler-so.c".
+
+This case will be used, if option
+.I \-\-synchandler\-so\-module
+is set.
+
+Recommended case.
 .RE
 
 As can be noticed, in the first four cases clsync's
