@@ -334,6 +334,8 @@ struct threadinfo {
 	time_t			  expiretime;
 	int			  child_pid;
 
+	GHashTable		 *fpath2ei_ht;		// file path -> event information
+
 	// for so-synchandler
 	int			  n;
 	api_eventinfo_t		 *ei;
