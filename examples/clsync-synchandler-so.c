@@ -20,7 +20,7 @@ int clsyncapi_sync(int n, api_eventinfo_t *ei) {
 }
 
 int clsyncapi_deinit() {
-	printf("clsyncapi_init(): Hello world!\n");
+	printf("clsyncapi_deinit(): Hello world!\n");
 
 	return 0;
 }
