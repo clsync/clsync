@@ -20,6 +20,9 @@ example_DATA = \
  examples/clsync-start-cluster.sh \
  examples/clsync-start-production.sh
 
+clsync_includedir = $(includedir)/clsync
+clsync_include_HEADERS = common.h configuration.h config.h
+
 revision.h:
 	(echo -n '#define REVISION "'; [ -d .git ] && \
 	(echo -n '.'$$(( $$(git log 2>/dev/null | grep -c ^commit | tr -d "\n") - 308 )) ) \
