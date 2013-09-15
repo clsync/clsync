@@ -2432,12 +2432,18 @@ int sync_run(options_t *options_p) {
 		options_p->handler_handle = synchandler_handle;
 		options_p->handler_funct.init   = (api_funct_init)  dlsym(options_p->handler_handle, API_PREFIX"init");
 		options_p->handler_funct.sync   = (api_funct_sync)  dlsym(options_p->handler_handle, API_PREFIX"sync");
+		if(options_p->handler_funct.sync == NULL) {
+			char *dlerror_str = dlerror();
+			printf_e("Error: sync_run(): Cannot resolve symbol "API_PREFIX"sync in shared object \"%s\": %s\n",
+				options_p->handlerfpath, dlerror_str != NULL ? dlerror_str : "No error description returned.");
+		}
 		options_p->handler_funct.deinit = (api_funct_deinit)dlsym(options_p->handler_handle, API_PREFIX"deinit");
 
-		if((ret = options_p->handler_funct.init(options_p, &indexes))) {
-			printf_e("Error: sync_run(): Cannot init sync-handler module: %s (errno: %i).\n", strerror(ret), ret);
-			return ret;
-		}
+		if(options_p->handler_funct.init != NULL)
+			if((ret = options_p->handler_funct.init(options_p, &indexes))) {
+				printf_e("Error: sync_run(): Cannot init sync-handler module: %s (errno: %i).\n", strerror(ret), ret);
+				return ret;
+			}
 	}
 
 #ifdef CLUSTER_SUPPORT
@@ -2483,10 +2489,11 @@ int sync_run(options_t *options_p) {
 	// Closing shared libraries
 	if(options_p->flags[SYNCHANDLERSO]) {
 		int _ret;
-		if((_ret = options_p->handler_funct.deinit())) {
-			printf_e("Error: sync_run(): Cannot deinit sync-handler module: %s (errno: %i).\n", strerror(ret), ret);
-			if(!ret) ret = _ret;
-		}
+		if(options_p->handler_funct.deinit != NULL)
+			if((_ret = options_p->handler_funct.deinit())) {
+				printf_e("Error: sync_run(): Cannot deinit sync-handler module: %s (errno: %i).\n", strerror(ret), ret);
+				if(!ret) ret = _ret;
+			}
 
 		if(dlclose(options_p->handler_handle)) {
 			printf_e("Error: sync_run(): Cannot unload shared object file \"%s\": %s\n",
