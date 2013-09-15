@@ -69,8 +69,8 @@ int exitcode_process(options_t *options_p, int exitcode) {
 // Return: RS_PERMIT or RS_REJECT for the "file path" and specified ruleaction
 
 ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rules_p, ruleaction_t ruleaction, rule_t **rule_pp) {
-	printf_ddd("Debug3: rules_search_getperm(\"%s\", %p, rules_p, %p, %p)\n", 
-			fpath, (void *)(unsigned long)st_mode,
+	printf_ddd("Debug3: rules_search_getperm(\"%s\", %p, %p, %p, %p)\n", 
+			fpath, (void *)(unsigned long)st_mode, rules_p,
 			(void *)(long)ruleaction, (void *)(long)rule_pp
 		);
 
@@ -81,6 +81,7 @@ ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rul
 
 	if(rule_pp != NULL)
 		if(*rule_pp != NULL) {
+			printf_ddd("Debug3: rules_search_getperm(): Previous position is set.\n");
 			if(rule_p->mask == RA_NONE)
 				return rule_p->perm;
 

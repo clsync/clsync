@@ -399,7 +399,7 @@ int configs_parse(options_t *options_p) {
 int configs_cleanup() {
 	int i=0;
 
-	while(i < (1<<8)) {
+	while(i < (1<<10)) {
 		if(configs_parse_str[i] != NULL) {
 			free(configs_parse_str[i]);
 			configs_parse_str[i] = NULL;
