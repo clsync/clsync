@@ -65,12 +65,13 @@ src_install() {
 	rm "${ED}/usr/share/doc/${PF}"/{LICENSE,TODO} || die
 	use examples || rm -r "${ED}/usr/share/doc/${PF}/examples" || die
 
-	# filter rules and sync scripts are supposed to be here
-	keepdir "${EPREFIX}/etc/${PN}"
-	fperms 0700 "${EPREFIX}/etc/${PN}"
-
 	newinitd "${FILESDIR}/${PN}.initd" "${PN}"
 	newconfd "${FILESDIR}/${PN}.confd" "${PN}"
+
+	# filter rules and sync scripts are supposed to be here
+	keepdir "${EPREFIX}/etc/${PN}"
+	insinto "/etc/${PN}"
+	doins "${FILESDIR}/${PN}.conf"
 }
 
 pkg_postinst() {

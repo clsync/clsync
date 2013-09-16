@@ -3,12 +3,10 @@
 # Distributed under the terms of the GNU General Public License v2
 # $Header: $
 
-[[ -n "${CLSYNC_CONF}" ]] && conffile="--config-file ${CLSYNC_CONF}"
-
 command="/usr/bin/clsync"
 pidfile="/var/run/${SVCNAME}.pid"
-command_args="--background --syslog --pid-file=${pidfile} \
-${conffile} ${CLSYNC_OPTS}"
+command_args="--background --syslog --pid-file=${pidfile} ${CLSYNC_OPTS}"
+retry=5
 
 depend() {
 	use net

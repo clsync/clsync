@@ -1,0 +1,15 @@
+# /etc/conf.d/clsync: config file for /etc/init.d/clsync
+
+# See man pages of clsync for valid cmdline options.
+# Also check examples directory (/usr/share/doc/clsync-*/examples).
+#
+# General recommendations:
+# 1. Put --dir-lists on tmpfs.
+# 2. Use --uid and --gid to drop privileges whenever possible.
+# 3. Keeep your clsync rules and sync scripts in /etc/clsync/.
+
+#CLSYNC_OPTS=""
+
+# Example of direct rsync usage:
+#CLSYNC_OPTS="--dir-lists /tmp/clsync -RR -p /source/dir
+#/usr/bin/rsync /etc/clsync/rules /destination/dir"
