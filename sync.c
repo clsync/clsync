@@ -1021,14 +1021,17 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 
 		if(options_p->flags[ENABLEINITIALSYNC]) {
 			if(options_p->flags[SYNCHANDLERSO]) {
-				api_eventinfo_t ei = {0};
+				api_eventinfo_t *ei = (api_eventinfo_t *)xmalloc(sizeof(*ei));
+#ifdef PARANIOD
+				memset(ei, 0, sizeof(*ei));
+#endif
 
-				ei.evmask    = IN_CREATE|IN_ISDIR;
-				ei.flags     = EVIF_RECURSIVELY;
-				ei.path_len  = strlen(path);
-				ei.path      = strdup(path);
+				ei->evmask    = IN_CREATE|IN_ISDIR;
+				ei->flags     = EVIF_RECURSIVELY;
+				ei->path_len  = strlen(path);
+				ei->path      = strdup(path);
 
-				return so_call_sync(options_p, indexes_p, 1, &ei);
+				return so_call_sync(options_p, indexes_p, 1, ei);
 			} else {
 				return SYNC_EXEC(
 						options_p,
