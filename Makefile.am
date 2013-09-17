@@ -21,7 +21,7 @@ example_DATA = \
  examples/clsync-start-production.sh
 
 clsync_includedir = $(includedir)/clsync
-clsync_include_HEADERS = common.h configuration.h config.h
+clsync_include_HEADERS = clsync.h options.h indexes.h output.h configuration.h
 
 revision.h:
 	(echo -n '#define REVISION "'; [ -d .git ] && \

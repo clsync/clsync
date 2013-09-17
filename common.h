@@ -41,7 +41,6 @@
 #include <sys/mman.h>
 #include <errno.h>
 #include <ctype.h>
-#include <regex.h>
 #include <signal.h>
 #include <wait.h>
 #include <fts.h>
@@ -69,6 +68,10 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
+
+#include "clsync.h"
+#include "options.h"
+#include "indexes.h"
 
 #ifndef MIN
 #define MIN(a,b) ((a)>(b)?(b):(a))
@@ -99,84 +102,6 @@
 
 #define COLLECTDELAY_INSTANT ((unsigned int)~0)
 
-#define OPTION_CONFIGONLY (1<<8)
-enum flags_enum {
-	HELP		= 'h',
-	CONFIGPATH	= 'H',
-	CONFIGBLOCK	= 'K',
-	BACKGROUND	= 'b',
-	UID		= 'u',
-	GID		= 'g',
-	CAP_PRESERVE_FILEACCESS = 'C',
-	PTHREAD		= 'p',
-	SYSLOG		= 'Y',
-	PIDFILE		= 'z',
-#ifdef CLUSTER_SUPPORT
-	CLUSTERIFACE	= 'c',
-	CLUSTERMCASTIPADDR = 'm',
-	CLUSTERMCASTIPPORT = 'P',
-	CLUSTERTIMEOUT	= 'W',
-	CLUSTERNODENAME = 'n',
-	CLUSTERHDLMIN	= 'o',
-	CLUSTERHDLMAX	= 'O',
-	CLUSTERSDLMAX	= 's',
-#endif
-	DELAY		= 't',
-	BFILEDELAY	= 'T',
-	SYNCDELAY	= 'w',
-	BFILETHRESHOLD	= 'B',
-	DEBUG		= 'D',
-	QUIET		= 'q',
-	VERBOSE		= 'v',
-	OUTLISTSDIR	= 'd',
-	ENABLEINITIALSYNC = 'S',
-	SYNCLISTSIMPLIFY= 'Z',
-	AUTORULESW	= 'A',
-	SYNCHANDLERSO	= 'M',
-	RSYNC		= 'R',
-	RSYNCINCLIMIT	= 'L',
-	RSYNC_PREFERINCLUDE= 'I',
-	IGNOREEXITCODE	= 'x',
-	DONTUNLINK	= 'U',
-	INITFULL	= 'F',
-	SYNCTIMEOUT	= 'k',
-#ifdef FANOTIFY_SUPPORT
-	FANOTIFY	= 'f',
-#endif
-	INOTIFY		= 'i',
-	LABEL		= 'l',
-	SHOW_VERSION	= 'V',
-
-	WATCHDIR	= 0|OPTION_CONFIGONLY,
-	SYNCHANDLER	= 1|OPTION_CONFIGONLY,
-	RULESPATH	= 2|OPTION_CONFIGONLY,
-	DESTDIR		= 3|OPTION_CONFIGONLY,
-
-};
-typedef enum flags_enum flags_t;
-
-enum queue_enum {
-	QUEUE_NORMAL,
-	QUEUE_BIGFILE,
-	QUEUE_INSTANT,
-	QUEUE_MAX,
-	QUEUE_AUTO
-};
-typedef enum queue_enum queue_id_t;
-
-enum ruleactionsign_enum {
-	RS_REJECT	= 0,
-	RS_PERMIT	= 1
-};
-typedef enum ruleactionsign_enum ruleactionsign_t;
-
-enum ruleaction_enum {
-	RA_NONE		 = 0x00,
-	RA_MONITOR	 = 0x01,
-	RA_WALK		 = 0x02,
-	RA_ALL		 = 0xff
-};
-typedef enum ruleaction_enum ruleaction_t;
 
 enum paramsource_enum {
 	PS_UNKNOWN	 = 0,
@@ -185,97 +110,6 @@ enum paramsource_enum {
 };
 typedef enum paramsource_enum paramsource_t;
 
-// signals (man 7 signal)
-enum sigusr_enum {
-	SIGUSR_PTHREAD_GC	= 10,
-	SIGUSR_INITSYNC  	= 12,
-	SIGUSR_BLOPINT		= 16
-};
-
-struct rule {
-	int		num;
-	regex_t		expr;
-	mode_t		objtype;
-	ruleaction_t	perm;
-	ruleaction_t	mask;
-};
-typedef struct rule rule_t;
-
-struct queueinfo {
-	unsigned int 	collectdelay;
-	time_t		stime;
-};
-typedef struct queueinfo queueinfo_t;
-
-struct api_eventinfo {
-	uint32_t	 evmask;
-	uint32_t	 flags;
-	size_t		 path_len;
-	const char	*path;
-};
-typedef struct api_eventinfo api_eventinfo_t;
-
-struct options;
-struct indexes;
-typedef int(*api_funct_init)  (struct options *, struct indexes *);
-typedef int(*api_funct_sync)  (int n, api_eventinfo_t *);
-typedef int(*api_funct_deinit)();
-
-struct api_functs {
-	api_funct_init   init;
-	api_funct_sync   sync;
-	api_funct_deinit deinit;
-};
-typedef struct api_functs api_functs_t;
-
-struct options {
-	uid_t uid;
-	gid_t gid;
-	rule_t rules[MAXRULES];
-	int flags[1<<10];
-	int flags_set[1<<10];
-	char *config_path;
-	char *config_block;
-	char *label;
-	char *watchdir;
-	char *pidfile;
-	char *destdir;
-	char *watchdirwslash;
-	char *destdirwslash;
-#ifdef CLUSTER_SUPPORT
-	char *cluster_iface;
-	char *cluster_mcastipaddr;
-	char *cluster_nodename;
-	uint32_t cluster_nodename_len;
-	uint16_t cluster_mcastipport;
-	uint16_t cluster_hash_dl_min;
-	uint16_t cluster_hash_dl_max;
-	uint16_t cluster_scan_dl_max;
-	unsigned int cluster_timeout;
-#endif
-	size_t watchdirlen;
-	size_t destdirlen;
-	size_t watchdirsize;
-	size_t destdirsize;
-	size_t watchdirwslashsize;
-	size_t destdirwslashsize;
-	short int watchdir_dirlevel;
-	char *handlerfpath;
-	void *handler_handle;
-	api_functs_t handler_funct;
-	char *rulfpath;
-	char *listoutdir;
-	int notifyengine;
-	size_t bfilethreshold;
-	unsigned int syncdelay;
-	queueinfo_t _queues[QUEUE_MAX];	// TODO: remove this from here
-	unsigned int rsyncinclimit;
-	time_t synctime;
-	unsigned int synctimeout;
-	sigset_t *sigset;
-	char isignoredexitcode[(1<<8)];
-};
-typedef struct options options_t;
 
 enum notifyengine_enum {
 	NE_UNDEFINED = 0,
@@ -297,9 +131,6 @@ enum state_enum {
 };
 typedef enum state_enum state_t;
 
-enum eventinfo_flags {
-	EVIF_RECURSIVELY	= 0x00000001
-};
 
 struct eventinfo {
 	uint32_t	evmask;
@@ -309,16 +140,6 @@ struct eventinfo {
 };
 typedef struct eventinfo eventinfo_t;
 
-struct indexes {
-	GHashTable *wd2fpath_ht;			// watching descriptor -> file path
-	GHashTable *fpath2wd_ht;			// file path -> watching descriptor
-	GHashTable *fpath2ei_ht;			// file path -> event information
-	GHashTable *exc_fpath_ht;			// excluded file path
-	GHashTable *exc_fpath_coll_ht[QUEUE_MAX];	// excluded file path aggregation hashtable for every queue
-	GHashTable *fpath2ei_coll_ht[QUEUE_MAX];	// "file path -> event information" aggregation hashtable for every queue
-	GHashTable *out_lines_aggr_ht;			// output lines aggregation hashtable
-};
-typedef struct indexes indexes_t;
 
 typedef int (*thread_callbackfunct_t)(options_t *options_p, char **argv);
 struct threadinfo {

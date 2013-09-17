@@ -49,7 +49,7 @@ PKG_PROG_PKG_CONFIG([0.20])
 # Checks for libraries.
 dnl libdl
 AC_CHECK_HEADER([dlfcn.h], [], [AC_MSG_ERROR("Unable to find dlfcn.h")])
-AC_SEARCH_LIBS([dlopen], [dl], [],
+AC_SEARCH_LIBS([dlopen], [dl], [LDFLAGS+=' -rdynamic'],
 [AC_MSG_ERROR("Unable to find libdl")])
 
 dnl pthread
