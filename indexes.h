@@ -17,6 +17,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
 
 struct indexes {
 	GHashTable *wd2fpath_ht;			// watching descriptor -> file path

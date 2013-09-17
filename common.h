@@ -50,7 +50,6 @@
 #include <sys/inotify.h>
 #include <sys/time.h>
 #include <dirent.h>
-#include <glib.h>
 #include <sys/utsname.h>
 #include <sys/types.h>
 #include <sys/socket.h>
