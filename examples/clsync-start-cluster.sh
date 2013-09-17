@@ -22,5 +22,5 @@ cat > rules <<EOF
 +*.*
 EOF
 
-clsync -c "$IPADDR" -R -d ./testdir/listdir -w 2 -p -t 5 ./testdir/from ./clsync-synchandler-rsync.sh rules
+clsync -K example-cluster -c "$IPADDR" -R -d ./testdir/listdir -w 2 -p -t 5 ./testdir/from ./clsync-synchandler-rsync.sh rules
 
