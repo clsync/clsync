@@ -1337,7 +1337,7 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 
 	printf_ddd("Debug3: _sync_idle_dosync_collectedevents(): queue_id == %i.\n", queue_id);
 
-	if(options_p->listoutdir == NULL) {
+	if((options_p->listoutdir == NULL) && (!options_p->flags[SYNCHANDLERSO])) {
 		printf_ddd("Debug3: _sync_idle_dosync_collectedevents(): calling sync_dosync()\n");
 		int ret;
 		if((ret=sync_dosync(fpath, evinfo->evmask, options_p, indexes_p))) {
@@ -1786,7 +1786,7 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 		dosync_arg.api_ei = (api_eventinfo_t *)xmalloc(dosync_arg.evcount * sizeof(*dosync_arg.api_ei));
 	}
 
-	if(options_p->listoutdir != NULL) {
+	if((options_p->listoutdir != NULL) || (options_p->flags[SYNCHANDLERSO])) {
 		int ret;
 
 		if(!options_p->flags[SYNCHANDLERSO]) {
