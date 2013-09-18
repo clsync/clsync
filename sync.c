@@ -2451,6 +2451,33 @@ int sync_run(options_t *options_p) {
 
 	// Loading dynamical libraries
 	if(options_p->flags[SYNCHANDLERSO]) {
+                /* security checks before dlopen */
+                struct stat so_stat;
+                if (stat(options_p->handlerfpath, &so_stat) == -1) {
+                    printf_e("Can't stat shared object file \"%s\": %s\n", options_p->handlerfpath, strerror(errno));
+                    return errno;
+                }
+                // allow normal files only (stat will follow symlinks)
+                if (!S_ISREG(so_stat.st_mode)) {
+                    printf_e("Shared object \"%s\" must be a regular file (or symlink to a regular file).\n",
+                        options_p->handlerfpath, so_stat.st_uid);
+                    return EPERM;
+                }
+                // allowed owners are: root and real uid (who started clsync prior to setuid)
+                if (so_stat.st_uid && so_stat.st_uid != getuid()) {
+                    printf_e("Wrong owner for shared object \"%s\": %i\n"
+                             "Only root and user started clsync are allowed.\n",
+                        options_p->handlerfpath, so_stat.st_uid);
+                    return EPERM;
+                }
+                // do not allow special bits and g+w,o+w
+                if (so_stat.st_mode & (S_ISUID | S_ISGID | S_ISVTX | S_IWGRP | S_IWOTH)) {
+                    printf_e("Wrong shared object \"%s\" permissions: %#lo\n"
+                             "Special bits, group and world writable are not allowed.\n",
+                        options_p->handlerfpath, so_stat.st_mode & 07777);
+                    return EPERM;
+                }
+
 		void *synchandler_handle = dlopen(options_p->handlerfpath, RTLD_NOW|RTLD_LOCAL);
 		if(synchandler_handle == NULL) {
 			printf_e("Error: sync_run(): Cannot load shared object file \"%s\": %s\n", options_p->handlerfpath, dlerror());
