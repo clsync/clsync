@@ -40,8 +40,8 @@ int clsyncapi_init(struct options *_options_p, struct indexes *_indexes_p) {
 int clsyncapi_sync(int n, api_eventinfo_t *ei) {
 	printf_d("clsyncapi_sync(): n == %i\n", n, ei->path);
 
-	if(n+3 > argv_size) {
-		argv_size = n+3 + ALLOC_PORTION;
+	if(n+4 > argv_size) {	// "/bin/cp" + "-pf" + n paths + options_p->destdir + NULL  -->  n+4
+		argv_size = n+4 + ALLOC_PORTION;
 		argv      = realloc(argv, argv_size * sizeof(char *));
 	}
 
