@@ -2476,7 +2476,7 @@ int sync_run(options_t *options_p) {
                     }
                     if (ret == -1 || so_stat.st_uid != cl_stat.st_uid) {
                         printf_e("Wrong owner for shared object \"%s\": %i\n"
-                                 "Only root and user started clsync are allowed.\n",
+                                 "Only root, clsync file owner and user started the program are allowed.\n",
                             options_p->handlerfpath, so_stat.st_uid);
                         return EPERM;
                     }
