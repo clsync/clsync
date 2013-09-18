@@ -49,7 +49,8 @@ int clsyncapi_sync(int n, api_eventinfo_t *ei) {
 	int ei_i=0;
 	while(ei_i < n) {
 		if(ei[ei_i].path_len > 0) {
-			printf_d("clsyncapi_sync(): ei[%i].path == \"%s\" (len == %i)\n", ei_i, ei[ei_i].path, ei[ei_i].path_len);
+			printf_d("clsyncapi_sync(): ei[%i].path == \"%s\" (len == %i, type_o == %i, type_n == %i)\n",
+				ei_i, ei[ei_i].path, ei[ei_i].path_len, ei[ei_i].objtype_old, ei[ei_i].objtype_new);
 			argv[argv_i++] = (char *)ei[ei_i].path;
 		}
 		ei_i++;

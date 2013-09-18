@@ -130,9 +130,10 @@ enum state_enum {
 };
 typedef enum state_enum state_t;
 
-
 struct eventinfo {
 	uint32_t	evmask;
+	eventobjtype_t	objtype_old;
+	eventobjtype_t	objtype_new;
 	int		wd;
 	size_t		fsize;
 	uint32_t	flags;

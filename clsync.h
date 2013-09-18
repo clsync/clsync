@@ -20,11 +20,21 @@
 #include <stdint.h>
 #include <sys/types.h>
 
+enum eventobjtype {
+	EOT_UNKNOWN	= 0,		// Unknown
+	EOT_DOESNTEXIST	= 1,		// Doesn't exists (not created yet or already deleted)
+	EOT_FILE	= 2,		// File
+	EOT_DIR		= 3,		// Directory
+};
+typedef enum eventobjtype eventobjtype_t;
+
 struct api_eventinfo {
-	uint32_t	 evmask;
-	uint32_t	 flags;
-	size_t		 path_len;
-	const char	*path;
+	uint32_t	 evmask;	// event mask, see /usr/include/linux/inotify.h
+	uint32_t	 flags;		// flags, see "enum eventinfo_flags"
+	size_t		 path_len;	// strlen(path)
+	const char	*path;		// path
+	eventobjtype_t   objtype_old;	// type of object by path "path" before the event
+	eventobjtype_t   objtype_new;	// type of object by path "path" after  the event
 };
 typedef struct api_eventinfo api_eventinfo_t;
 
@@ -35,7 +45,7 @@ typedef int(*api_funct_sync)  (int n, api_eventinfo_t *);
 typedef int(*api_funct_deinit)();
 
 enum eventinfo_flags {
-	EVIF_NONE		= 0x00000000,
-	EVIF_RECURSIVELY	= 0x00000001,
+	EVIF_NONE		= 0x00000000,	// No modifier
+	EVIF_RECURSIVELY	= 0x00000001,	// Need to be synced recursively
 };
 

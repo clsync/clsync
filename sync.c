@@ -958,6 +958,8 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 			}
 		}
 
+		evinfo.objtype_new = EOT_DOESNTEXIST;
+		evinfo.objtype_new = node->fts_info==FTS_D ? EOT_DIR : EOT_FILE;
 		evinfo.fsize = node->fts_statp->st_size;
 		switch(options_p->notifyengine) {
 #ifdef FANOTIFY_SUPPORT
@@ -966,6 +968,9 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 #endif
 			case NE_INOTIFY:
 				evinfo.evmask = IN_CREATE_SELF;
+				if(node->fts_info==FTS_D) {
+					evinfo.evmask |= IN_ISDIR;
+				}
 				break;
 		}
 
@@ -1026,10 +1031,12 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 				memset(ei, 0, sizeof(*ei));
 #endif
 
-				ei->evmask    = IN_CREATE|IN_ISDIR;
-				ei->flags     = EVIF_RECURSIVELY;
-				ei->path_len  = strlen(path);
-				ei->path      = strdup(path);
+				ei->evmask      = IN_CREATE|IN_ISDIR;
+				ei->flags       = EVIF_RECURSIVELY;
+				ei->path_len    = strlen(path);
+				ei->path        = strdup(path);
+				ei->objtype_old = EOT_DOESNTEXIST;
+				ei->objtype_new = EOT_DIR;
 
 				return so_call_sync(options_p, indexes_p, 1, ei);
 			} else {
@@ -1068,6 +1075,8 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 		eventinfo_t *evinfo = (eventinfo_t *)xmalloc(sizeof(*evinfo));
 		memset(evinfo, 0, sizeof(*evinfo));
 		evinfo->flags |= EVIF_RECURSIVELY;
+		evinfo->objtype_old = EOT_DOESNTEXIST;
+		evinfo->objtype_new = EOT_DIR;
 
 		// Searching for excludes
 		int ret = sync_initialsync_walk(options_p, path, indexes_p, queue_id, initsync);
@@ -1367,8 +1376,12 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 		isnew++;
 		(*evcount_p)++;
 	}
-	evinfo_idx->evmask |= evinfo->evmask;
-	evinfo_idx->flags  |= evinfo->flags;
+	evinfo_idx->evmask      |= evinfo->evmask;
+	evinfo_idx->flags       |= evinfo->flags;
+
+	// TODO: this should be OR-ed! We should use the oldiest variant for "_old" and the newest variant for "_new".
+	evinfo_idx->objtype_old |= evinfo->objtype_old;
+	evinfo_idx->objtype_new |= evinfo->objtype_new;
 
 	if(isnew)
 		indexes_fpath2ei_add(indexes_p, strdup(fpath), evinfo_idx);
@@ -1644,10 +1657,12 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 	// so-module case:
 	if(options_p->flags[SYNCHANDLERSO]) {
 		api_eventinfo_t *ei = &(*api_ei_p)[(*api_ei_count_p)++];
-		ei->evmask   = evinfo->evmask;
-		ei->flags    = evinfo->flags;
-		ei->path_len = strlen(fpath);
-		ei->path     = strdup(fpath);
+		ei->evmask      = evinfo->evmask;
+		ei->flags       = evinfo->flags;
+		ei->objtype_old = evinfo->objtype_old;
+		ei->objtype_new = evinfo->objtype_new;
+		ei->path_len    = strlen(fpath);
+		ei->path        = strdup(fpath);
 		return;
 	}
 
@@ -2120,10 +2135,17 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 			if(evinfo == NULL) {
 				evinfo = (eventinfo_t *)xmalloc(sizeof(*evinfo));
 				memset(evinfo, 0, sizeof(*evinfo));
-				evinfo->fsize  = st_size;
-				evinfo->wd     = event->wd;
+				evinfo->fsize       = st_size;
+				evinfo->wd          = event->wd;
+				evinfo->objtype_old = (event->mask & IN_CREATE) 		? EOT_DOESNTEXIST	:
+				                      (event->mask & IN_ISDIR) 			? EOT_DIR 		:
+				                      EOT_FILE;
 				isnew++;
 				printf_ddd("Debug3: sync_inotify_handle(): new event: fsize == %i; wd == %i\n", evinfo->fsize, evinfo->wd);
+			} else {
+				evinfo->objtype_new = (event->mask & (IN_DELETE_SELF|IN_DELETE)) ? EOT_DOESNTEXIST 	:
+				                      (event->mask & IN_ISDIR) 			 ? EOT_DIR 		: 
+				                      EOT_FILE;
 			}
 			evinfo->evmask |= event->mask;
 

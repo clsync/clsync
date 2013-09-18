@@ -721,15 +721,25 @@ api_eventinfo_t is a structure:
 .RS
 struct api_eventinfo {
 .br
-        uint32_t    evmask;	// event bitmask for file/dir by path
+        uint32_t         evmask;		// event bitmask for file/dir
+by path
 .BR path .
 .br
-        uint32_t    flags;	// flags of "how to sync" the file/dir
+        uint32_t         flags;		// flags of "how to sync" the file/dir
 .br
-        size_t      path_len;	// strlen(path)
+        size_t           path_len;		// strlen(path)
 .br
-        const char *path;	// the path to file/dir need to be
-synced
+        const char      *path;		// the
+.B path
+to file/dir need to be synced
+.br
+        eventobjtype_t   objtype_old;	// type of object by path
+.B path
+before the event.
+.br
+        eventobjtype_t   objtype_new;	// type of object by path
+.B path
+after the event.
 .br
 };
 .br
@@ -743,6 +753,8 @@ There may be next flags' values (flags):
 .RS
 enum eventinfo_flags {
 .br
+        EVIF_NONE        = 0x00000000,	// No modifier
+.br
         EVIF_RECURSIVELY = 0x00000001	// sync the file/dir recursively
 .br
 };
@@ -751,6 +763,40 @@ enum eventinfo_flags {
 Flag "EVIF_RECURSIVELY" may be used if option
 .I\-\-initialsync\-enable
 is set.
+
+Is that a file or directory by path
+.B path
+can be determined with
+.B objtype_old
+and
+.BR objtype_new .
+.br
+.B objtype_old
+reports about which type was the object by the path before the event.
+.br
+.B objtype_new
+reports about which type was the object by the path after the event.
+
+.B objtype_old
+and
+.BR objtype_new
+have type
+.BR eventobjtype_t .
+
+.RS
+enum eventobjtype {
+.br
+        EOT_UNKNOWN     = 0,	// Unknown
+.br
+        EOT_DOESNTEXIST = 1,	// Doesn't exist (not created yet or already deleted)
+.br
+        EOT_FILE        = 2,	// File
+.br
+        EOT_DIR         = 3,	// Directory
+.br
+}
+typedef enum eventobjtype eventobjtype_t;
+.RE
 
 Also may be defined functions "int clsyncapi_init(options_t *, indexes_t *)"
 and "int clsyncapi_deinit()" to initialize and deinitialize the syncing
