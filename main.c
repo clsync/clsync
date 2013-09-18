@@ -739,15 +739,15 @@ int main(int argc, char *argv[]) {
 		ret = EINVAL;
 	}
 
-	if(options.flags[SYNCHANDLER] && options.flags[RSYNC]) {
+	if(options.flags[SYNCHANDLERSO] && options.flags[RSYNC]) {
 		printf_e("Error: Option \"--rsync\" cannot be used in conjunction with \"--synchandler-so-module\".\n");
 		ret = EINVAL;
 	}
 
-	if(options.flags[SYNCHANDLER] && (options.listoutdir != NULL))
+	if(options.flags[SYNCHANDLERSO] && (options.listoutdir != NULL))
 		printf_e("Warning: Option \"--dir-lists\" has no effect conjunction with \"--synchandler-so-module\".\n");
 
-	if(options.flags[SYNCHANDLER] && (options.destdir != NULL))
+	if(options.flags[SYNCHANDLERSO] && (options.destdir != NULL))
 		printf_e("Warning: Destination directory argument has no effect conjunction with \"--synchandler-so-module\".\n");
 
 	if((options.flags[RSYNC]>1) && (options.destdir == NULL)) {
