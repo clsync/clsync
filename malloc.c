@@ -21,10 +21,10 @@
 #include "malloc.h"
 #include "output.h"
 
-char *xmalloc(size_t size) {
+void *xmalloc(size_t size) {
 	size++;	// Just in case
 
-	char *ret = (char *)malloc(size);
+	void *ret = malloc(size);
 
 	if(ret == NULL) {
 		printf_e("xmalloc(%i): Cannot allocate memory (#%i: %s).\n", size, errno, strerror(errno));
@@ -37,11 +37,11 @@ char *xmalloc(size_t size) {
 	return ret;
 }
 
-char *xcalloc(size_t nmemb, size_t size) {
+void *xcalloc(size_t nmemb, size_t size) {
 	nmemb++; // Just in case
 	size++;	 // Just in case
 
-	char *ret = (char *)calloc(nmemb, size);
+	void *ret = calloc(nmemb, size);
 
 	if(ret == NULL) {
 		printf_e("xcalloc(%i): Cannot allocate memory (#%i: %s).\n", size, errno, strerror(errno));
@@ -52,10 +52,10 @@ char *xcalloc(size_t nmemb, size_t size) {
 	return ret;
 }
 
-char *xrealloc(char *oldptr, size_t size) {
+void *xrealloc(void *oldptr, size_t size) {
 	size++;	// Just in case
 
-	char *ret = (char *)realloc(oldptr, size);
+	void *ret = realloc(oldptr, size);
 
 	if(ret == NULL) {
 		printf_e("xrealloc(%p, %i): Cannot reallocate memory (#%i: %s).\n", oldptr, size, errno, strerror(errno));
