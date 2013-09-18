@@ -2465,10 +2465,21 @@ int sync_run(options_t *options_p) {
                 }
                 // allowed owners are: root and real uid (who started clsync prior to setuid)
                 if (so_stat.st_uid && so_stat.st_uid != getuid()) {
-                    printf_e("Wrong owner for shared object \"%s\": %i\n"
-                             "Only root and user started clsync are allowed.\n",
-                        options_p->handlerfpath, so_stat.st_uid);
-                    return EPERM;
+                    /* check for rare case when clsync binary owner is neither root nor current uid */
+                    struct stat cl_stat;
+                    char *cl_str = alloca(20); // allocate for "/proc/PID/exe"
+                    int ret;
+                    snprintf(cl_str, 20, "/proc/%i/exe", getpid());
+                    // stat clsync binary itself to get its owner's uid
+                    if ((ret = stat(cl_str, &cl_stat)) == -1) {
+                        printf_e("Can't stat clsync binary file \"%s\": %s\n", cl_str, strerror(errno));
+                    }
+                    if (ret == -1 || so_stat.st_uid != cl_stat.st_uid) {
+                        printf_e("Wrong owner for shared object \"%s\": %i\n"
+                                 "Only root and user started clsync are allowed.\n",
+                            options_p->handlerfpath, so_stat.st_uid);
+                        return EPERM;
+                    }
                 }
                 // do not allow special bits and g+w,o+w
                 if (so_stat.st_mode & (S_ISUID | S_ISGID | S_ISVTX | S_IWGRP | S_IWOTH)) {
