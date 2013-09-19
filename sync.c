@@ -2473,49 +2473,52 @@ int sync_run(options_t *options_p) {
 
 	// Loading dynamical libraries
 	if(options_p->flags[SYNCHANDLERSO]) {
-                /* security checks before dlopen */
-                struct stat so_stat;
-                if (stat(options_p->handlerfpath, &so_stat) == -1) {
-                    printf_e("Can't stat shared object file \"%s\": %s\n", options_p->handlerfpath, strerror(errno));
-                    return errno;
-                }
-                // allow normal files only (stat will follow symlinks)
-                if (!S_ISREG(so_stat.st_mode)) {
-                    printf_e("Shared object \"%s\" must be a regular file (or symlink to a regular file).\n",
-                        options_p->handlerfpath, so_stat.st_uid);
-                    return EPERM;
-                }
-                // allowed owners are: root and real uid (who started clsync prior to setuid)
-                if (so_stat.st_uid && so_stat.st_uid != getuid()) {
-                    /* check for rare case when clsync binary owner is neither root nor current uid */
-                    struct stat cl_stat;
-                    char *cl_str = alloca(20); // allocate for "/proc/PID/exe"
-                    int ret;
-                    snprintf(cl_str, 20, "/proc/%i/exe", getpid());
-                    // stat clsync binary itself to get its owner's uid
-                    if ((ret = stat(cl_str, &cl_stat)) == -1) {
-                        printf_e("Can't stat clsync binary file \"%s\": %s\n", cl_str, strerror(errno));
-                    }
-                    if (ret == -1 || so_stat.st_uid != cl_stat.st_uid) {
-                        printf_e("Wrong owner for shared object \"%s\": %i\n"
-                                 "Only root, clsync file owner and user started the program are allowed.\n",
-                            options_p->handlerfpath, so_stat.st_uid);
-                        return EPERM;
-                    }
-                }
-                // do not allow special bits and g+w,o+w
-                if (so_stat.st_mode & (S_ISUID | S_ISGID | S_ISVTX | S_IWGRP | S_IWOTH)) {
-                    printf_e("Wrong shared object \"%s\" permissions: %#lo\n"
-                             "Special bits, group and world writable are not allowed.\n",
-                        options_p->handlerfpath, so_stat.st_mode & 07777);
-                    return EPERM;
-                }
+		/* security checks before dlopen */
+		struct stat so_stat;
+		if (stat(options_p->handlerfpath, &so_stat) == -1) {
+			printf_e("Can't stat shared object file \"%s\": %s\n", options_p->handlerfpath, strerror(errno));
+			return errno;
+		}
+		// allow normal files only (stat will follow symlinks)
+		if (!S_ISREG(so_stat.st_mode)) {
+			printf_e("Shared object \"%s\" must be a regular file (or symlink to a regular file).\n",
+				options_p->handlerfpath, so_stat.st_uid);
+			return EPERM;
+		}
+		// allowed owners are: root and real uid (who started clsync prior to setuid)
+		if (so_stat.st_uid && so_stat.st_uid != getuid()) {
+			/* check for rare case when clsync binary owner is neither root nor current uid */
+			struct stat cl_stat;
+			char *cl_str = alloca(20); // allocate for "/proc/PID/exe"
+			int ret;
+			snprintf(cl_str, 20, "/proc/%i/exe", getpid());
+			// stat clsync binary itself to get its owner's uid
+			if ((ret = stat(cl_str, &cl_stat)) == -1) {
+				printf_e("Can't stat clsync binary file \"%s\": %s\n", cl_str, strerror(errno));
+			}
+			if (ret == -1 || so_stat.st_uid != cl_stat.st_uid) {
+				printf_e("Wrong owner for shared object \"%s\": %i\n"
+					"Only root, clsync file owner and user started the program are allowed.\n",
+				options_p->handlerfpath, so_stat.st_uid);
+				return EPERM;
+			}
+		}
+		// do not allow special bits and g+w,o+w
+		if (so_stat.st_mode & (S_ISUID | S_ISGID | S_ISVTX | S_IWGRP | S_IWOTH)) {
+			printf_e("Wrong shared object \"%s\" permissions: %#lo\n"
+				"Special bits, group and world writable are not allowed.\n",
+				options_p->handlerfpath, so_stat.st_mode & 07777);
+			return EPERM;
+		}
 
+		// dlopen()
 		void *synchandler_handle = dlopen(options_p->handlerfpath, RTLD_NOW|RTLD_LOCAL);
 		if(synchandler_handle == NULL) {
 			printf_e("Error: sync_run(): Cannot load shared object file \"%s\": %s\n", options_p->handlerfpath, dlerror());
 			return -1;
 		}
+
+		// resolving init, sync and deinit functions' handlers
 		options_p->handler_handle = synchandler_handle;
 		options_p->handler_funct.init   = (api_funct_init)  dlsym(options_p->handler_handle, API_PREFIX"init");
 		options_p->handler_funct.sync   = (api_funct_sync)  dlsym(options_p->handler_handle, API_PREFIX"sync");
@@ -2526,6 +2529,7 @@ int sync_run(options_t *options_p) {
 		}
 		options_p->handler_funct.deinit = (api_funct_deinit)dlsym(options_p->handler_handle, API_PREFIX"deinit");
 
+		// running init function
 		if(options_p->handler_funct.init != NULL)
 			if((ret = options_p->handler_funct.init(options_p, &indexes))) {
 				printf_e("Error: sync_run(): Cannot init sync-handler module: %s (errno: %i).\n", strerror(ret), ret);
