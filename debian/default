@@ -7,8 +7,8 @@ CLSYNC_ENABLE=false
 # clsync's arguments:
 
 # proof of concept:
-CLSYNC_ARGS='-d /dev/shm/clsync -x 23 /var/www -RR /usr/bin/rsync /dev/null /mnt/backup'
+CLSYNC_ARGS='-Y -d /dev/shm/clsync -x 23 /var/www -R2 /usr/bin/rsync /dev/null /mnt/backup'
 
 # production example:
-#CLSYNC_ARGS='-d /dev/shm/clsync -x 24 /srv/lxc -R /opt/backup_engine/bin/sync-handler.sh /opt/backup_engine/etc/clsync.filter'
+#CLSYNC_ARGS='-Y -d /dev/shm/clsync -x 24 /srv/lxc -R /opt/backup_engine/bin/sync-handler.sh /opt/backup_engine/etc/clsync.filter'
 
