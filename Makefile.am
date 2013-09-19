@@ -12,11 +12,11 @@ exampledir=$(docdir)/examples
 
 example_DATA = \
  examples/clsync-synchandler-so.c \
- examples/clsync-synchandler-rsync.sh \
+ examples/clsync-synchandler-rsyncshell.sh \
  examples/clsync-synchandler-production.sh \
  examples/clsync-start-so.sh \
- examples/clsync-start-rsync.sh \
- examples/clsync-start-simple.sh \
+ examples/clsync-start-rsyncshell.sh \
+ examples/clsync-start-rsyncdirect.sh \
  examples/clsync-start-cluster.sh \
  examples/clsync-start-production.sh
 
