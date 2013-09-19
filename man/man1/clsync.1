@@ -7,15 +7,7 @@
 .SH NAME
 clsync \- live sync tool, written in GNU C
 .SH SYNOPSIS
-.B clsync [ options ] 
-.I watch\-dir
-.I sync\-handler
-.B [
-.I rules\-file
-.B ]
-.B [
-.I dest-dir
-.B ]
+.B clsync [ ... ] 
 .SH DESCRIPTION
 .B clsync
 executes
@@ -32,6 +24,85 @@ directories to sync may be placed in
 
 
 .SH OPTIONS
+
+.B \-W, \-\-watch\-dir
+.I watch\-dir
+.RS 8
+Root directory to be monitored by
+.BR clsync .
+
+Required.
+.PP
+.RE
+
+.B \-S, \-\-sync\-handler
+.I sync\-handler
+.RS 8
+Path to
+.I sync\-handler
+to be used for syncing by
+.BR clsync .
+(see 
+.IR \-\-mode )
+
+Required.
+.PP
+.RE
+
+.B \-R, \-\-rules\-path
+.I rules\-file
+.RS 8
+Path to file with filter rules of objects to be monitored. (see 
+.BR RULES )
+
+.PP
+.RE
+
+.B \-D, \-\-dir\-destination
+.I destination\-directory
+.RS 8
+Defines directory to sync to for modes "rsyncdirect" and "so". (see 
+.IR \-\-mode )
+
+.PP
+.RE
+
+.B \-M, \-\-mode
+.I mode
+.RS 8
+Sets syncing mode. Possible values:
+.RS
+simple      \- calls
+.I sync\-handler
+for every event
+.br
+shell       \- calls
+.I sync\-handler
+for every sync
+.br
+rsyncdirect \- calls rsync by path
+.I sync\-handler
+directly (inflexible and unreliable, should be used only as a proof of
+concept)
+.br
+rsyncshell  \- calls
+.I sync\-handler
+that supposed to run rsync for every sync (recommended
+mode)
+.br
+so          \- loads shared object by path
+.I sync\-handler
+with
+.BR dlopen (3)
+and calls function
+.B clsyncapi_sync
+function for every sync
+.RE
+
+See
+.B SYNC HANDLER MODES
+.PP
+.RE
 
 .B \-b, \-\-background
 .RS 8
@@ -191,7 +262,7 @@ Default value is "1000". [1 second]
 
 Sets the name of current node in the cluster. It will be used in action
 scripts of another nodes (see 
-.BR "SYNC HANDLER" ).
+.BR "SYNC HANDLER MODES" ).
 
 Default value is $(uname \-n).
 .RE
@@ -309,16 +380,16 @@ Cannot be used in conjunction with
 .
 
 See
-.BR "SYNC HANDLER" .
+.BR "SYNC HANDLER MODES" .
 
 Is not set by default.
 .RE
 
 .PP
-.B \-S, \-\-initialsync\-enable
+.B \-\-have\-recursive\-sync
 .RS 8
-Use action "initialsync" instead of "synclist" for directories that were just marked (see
-.B "SYNC HANDLER"
+Use action "recursivesync" instead of "synclist" for directories that were just marked (see
+.B "SYNC HANDLER MODES"
 case
 .BR c ).
 
@@ -326,10 +397,10 @@ Is not set by default.
 .RE
 
 .PP
-.B \-Z, \-\-synclist\-simplify
+.B \-\-synclist\-simplify
 .RS 8
 Removes the first 3 parameters in list files of action "synclist" (see
-.B "SYNC HANDLER"
+.B "SYNC HANDLER MODES"
 case
 .BR b ).
 
@@ -359,7 +430,7 @@ as a shared library with
 .BR dlopen (3)
 and run syncing by calling function "clsyncapi_sync()" from
 this shared object file (see 
-.B "SYNC HANDLER"
+.B "SYNC HANDLER MODES"
 case
 .BR f ).
 
@@ -376,8 +447,8 @@ Is not set by default.
 .RS 8
 Forces
 .B clsync
-to use "rsynclist" action instead of "initialsync" and "synclist" (see 
-.B "SYNC HANDLER" 
+to use "rsynclist" action instead of "recursivesync" and "synclist" (see 
+.B "SYNC HANDLER MODES" 
 case 
 .BR d ).
 This option can be used only with
@@ -388,7 +459,7 @@ Recommended option.
 
 You can use "\-R2" to run "rsync" directly, bypassing intermediate script
 (see
-.B "SYNC HANDLER"
+.B "SYNC HANDLER MODES"
 case
 .BR e ).
 
@@ -405,7 +476,7 @@ Is not set by default.
 .RE
 
 .PP
-.B \-L, \-\-rsync\-inclimit
+.B \-\-rsync\-inclimit
 .I rsync\-includes\-line\-limit
 .RS 8
 Sets soft limit for lines count in files by path
@@ -422,7 +493,7 @@ Default value is "20000".
 .RE
 
 .PP
-.B \-I, \-\-rsync\-prefer\-include
+.B \-\-rsync\-prefer\-include
 .RS 8
 Forces
 .B clsync
@@ -432,7 +503,7 @@ rsync on recursive syncing.
 See
 .B case d
 of
-.BR "SYNC HANDLER" .
+.BR "SYNC HANDLER MODES" .
 
 This option is not recommended.
 
@@ -544,7 +615,7 @@ Outputs options list and exits with exitcode "0".
 Outputs clsync version and exits with exitcode "0".
 .RE
 
-.SH SYNC HANDLER
+.SH SYNC HANDLER MODES
 .B clsync
 executes
 .I sync\-handler
@@ -555,16 +626,14 @@ is only a convenient way to run a syncing script.
 .B clsync
 can run
 .I sync\-handler
-in six ways. Which way will be used depends on specified options (see
-.I \-\-dir\-lists
-,
-.I \-\-rsync
-and 
-.IR \-\-synchandler\-so\-module ).
+in six ways. Which way will be used depends on specified mode (see
+.IR \-\-mode )
 
 case
-.B a
+.B simple
 .RS
+Executes for every event:
+.br
 .I sync\-handler
 sync
 .I label evmask path [nodes]
@@ -577,65 +646,76 @@ With
 .I evmask
 it's passed bitmask of events with the file or directory (see 
 "/usr/include/linux/inotify.h").
-
-This case will be used, if there is no
-.I \-\-dir\-lists
-and
-.I \-\-synchandler\-so\-module
-options are set.
 .RE
 
 case
-.B b
+.B shell
 .RS
+Executes for every sync (if 
+.B recursivesync
+is not used instead):
+.br
 .I sync\-handler
 synclist
 .I label listpath [nodes]
 
-In this case,
+Executes for initial syncs if option
+.I \-\-have\-recursive\-sync
+is set:
+.br
 .I sync\-handler
-is supposed to non\-recursively sync files and directories from list in a file by
-path
-.IR listpath (see
-below). With
-.I evmask
-it's passed bitmask of events with the file or directory (see 
-"/usr/include/linux/inotify.h").
-
-This case will be used if option
-.I \-\-dir\-lists
-is set, but options
-.I \-\-rsync
-and
-.I \-\-synchandler\-so\-module
-are not set.
-.RE
-
-case
-.B c
-.RS
-.I sync\-handler
-initialsync
+recursivesync
 .I label dirpath [nodes]
 
 In this case,
 .I sync\-handler
+is supposed to non\-recursively sync files and directories from list in a file
+by path
+.I listpath
+(see below). With
+.I evmask
+it's passed bitmask of events with the file or directory (see 
+"/usr/include/linux/inotify.h").
+
+Also
+.I sync\-handler
 is supposed to recursively sync data from directory by path
 .I dirpath
 with manual excluding extra files.
-
-This case will be used for initial sync, if options
-.I \-\-dir\-lists
-and
-.I \-\-initialsync\-enable
-are set, but option
-.I \-\-synchandler\-so\-module
-is not set.
 .RE
 
 case
-.B d
+.B rsyncdirect
 .RS
+Executes for every sync:
+.br
+.I sync\-handler
+\-\-inplace \-aH \-\-delete\-before [\-\-exclude\-from
+.I rsync\-exclude\-listpath
+]
+\-\-include\-from
+.I rsync\-listpath
+\-\-exclude '*'
+.I watch-dir/ dest-dir/
+
+In this case,
+.I sync\-handler
+is supposed to be a path to
+.B rsync
+binary.
+
+Error code "24" from
+.I sync\-handler
+will be ignored in this case.
+
+This case is supposed to be used only as a proof of concept.
+.RE
+
+case
+.B rsyncshell
+.RS
+Executes for every sync:
+.br
 .I sync\-handler
 rsynclist
 .I label rsync\-listpath [nodes] [rsync\-exclude\-listpath]
@@ -664,43 +744,11 @@ if option
 .I \-\-rsync\-prefer\-include
 is disabled.
 
-This case will be used, if option
-.I \-\-rsync
-is set once.
-
 Recommended case.
 .RE
 
 case
-.B e
-.RS
-.I sync\-handler
-\-\-inplace \-aH \-\-delete\-before [\-\-exclude\-from
-.I rsync\-exclude\-listpath
-]
-\-\-include\-from
-.I rsync\-listpath
-\-\-exclude '*'
-.I watch-dir/ dest-dir/
-
-In this case,
-.I sync\-handler
-is supposed to be a path to
-.B rsync
-binary.
-
-Error code "24" from
-.I sync\-handler
-will be ignored in this case.
-
-This case will be used, if option
-.I \-\-rsync
-is set twice (or equivalently "\-\-rsync=2"). This case is supposed to be used
-only as a proof of concept.
-.RE
-
-case
-.B f
+.B so
 .RS
 In this case there's no direct exec*() calling. In this case
 .B clsync
@@ -761,7 +809,7 @@ enum eventinfo_flags {
 .RE
 .br
 Flag "EVIF_RECURSIVELY" may be used if option
-.I\-\-initialsync\-enable
+.I\-\-have\-recursive\-sync
 is set.
 
 Is that a file or directory by path
