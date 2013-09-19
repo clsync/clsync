@@ -744,11 +744,11 @@ int main(int argc, char *argv[]) {
 		ret = EINVAL;
 	}
 
-	if(options.flags[SYNCHANDLERSO] && (options.listoutdir != NULL))
-		printf_e("Warning: Option \"--dir-lists\" has no effect conjunction with \"--synchandler-so-module\".\n");
+//	if(options.flags[SYNCHANDLERSO] && (options.listoutdir != NULL))
+//		printf_e("Warning: Option \"--dir-lists\" has no effect conjunction with \"--synchandler-so-module\".\n");
 
-	if(options.flags[SYNCHANDLERSO] && (options.destdir != NULL))
-		printf_e("Warning: Destination directory argument has no effect conjunction with \"--synchandler-so-module\".\n");
+//	if(options.flags[SYNCHANDLERSO] && (options.destdir != NULL))
+//		printf_e("Warning: Destination directory argument has no effect conjunction with \"--synchandler-so-module\".\n");
 
 	if((options.flags[RSYNC]>1) && (options.destdir == NULL)) {
 		printf_e("Error: Option \"-R2\" cannot be used without specifying \"destination directory\".\n");
