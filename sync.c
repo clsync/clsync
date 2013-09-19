@@ -84,7 +84,7 @@ static inline int _exitcode_process(options_t *options_p, int exitcode) {
 	if(options_p->isignoredexitcode[(unsigned char)exitcode])
 		return 0;
 
-	if(exitcode && !((options_p->flags[RSYNC]>=2) && (exitcode == 24))) {
+	if(exitcode && !((options_p->flags[MODE]==MODE_RSYNCDIRECT) && (exitcode == 24))) {
 		printf_e("Error: Got non-zero exitcode %i from __sync_exec().\n", exitcode);
 		return exitcode;
 	}
@@ -935,9 +935,14 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 
 	char skip_rules = (initsync==INITSYNC_FULL) && options_p->flags[INITFULL];
 
-	char rsync_and_prefer_excludes = options_p->flags[RSYNC] && !options_p->flags[RSYNC_PREFERINCLUDE];
+	char rsync_and_prefer_excludes =
+			(
+				(options_p->flags[MODE]==MODE_RSYNCDIRECT) ||
+				(options_p->flags[MODE]==MODE_RSYNCSHELL)
+			) && 
+			!options_p->flags[RSYNCPREFERINCLUDE];
 
-	if((!options_p->flags[RSYNC_PREFERINCLUDE]) && skip_rules)
+	if((!options_p->flags[RSYNCPREFERINCLUDE]) && skip_rules)
 		return 0;
 
 	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL, NULL);
@@ -1072,7 +1077,7 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 	queue_id_t queue_id = (initsync==INITSYNC_FULL) ? QUEUE_INSTANT : QUEUE_NORMAL;
 
 	// non-RSYNC case:
-	if(!options_p->flags[RSYNC]) {
+	if(!((options_p->flags[MODE]==MODE_RSYNCDIRECT)||(options_p->flags[MODE]==MODE_RSYNCSHELL))) {
 		printf_ddd("Debug3: sync_initialsync(): syncing \"%s\"\n", path);
 /*
 		if(options_p->flags[PTHREAD])
@@ -1080,8 +1085,8 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 		else
 			return sync_exec       (options_p, NULL, options_p->handlerfpath, "initialsync", options_p->label, path, NULL);*/
 
-		if(options_p->flags[ENABLEINITIALSYNC]) {
-			if(options_p->flags[SYNCHANDLERSO]) {
+		if(options_p->flags[HAVERECURSIVESYNC]) {
+			if(options_p->flags[MODE] == MODE_SO) {
 				api_eventinfo_t *ei = (api_eventinfo_t *)xmalloc(sizeof(*ei));
 #ifdef PARANIOD
 				memset(ei, 0, sizeof(*ei));
@@ -1121,7 +1126,7 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 
 	// RSYNC case:
 
-	if(!options_p->flags[RSYNC_PREFERINCLUDE]) {
+	if(!options_p->flags[RSYNCPREFERINCLUDE]) {
 		queueinfo_t *queueinfo = &options_p->_queues[queue_id];
 
 		if(!queueinfo->stime)
@@ -1404,7 +1409,7 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 
 	printf_ddd("Debug3: _sync_idle_dosync_collectedevents(): queue_id == %i.\n", queue_id);
 
-	if((options_p->listoutdir == NULL) && (!options_p->flags[SYNCHANDLERSO])) {
+	if((options_p->listoutdir == NULL) && (!(options_p->flags[MODE]==MODE_SO))) {
 		printf_ddd("Debug3: _sync_idle_dosync_collectedevents(): calling sync_dosync()\n");
 		int ret;
 		if((ret=sync_dosync(fpath, evinfo->evmask, options_p, indexes_p))) {
@@ -1464,7 +1469,7 @@ int sync_idle_dosync_collectedevents_cleanup(options_t *options_p, char **argv) 
 
 	printf_ddd("Debug3: sync_idle_dosync_collectedevents_cleanup(): thread %p\n", pthread_self());
 
-	if(options_p->flags[RSYNC] >= 2) {
+	if(options_p->flags[MODE] == MODE_RSYNCDIRECT) {
 		int ret0, ret1;
 		if(argv[5] == NULL) {
 			printf_e("Error: Unexpected *argv[] end.");
@@ -1474,7 +1479,7 @@ int sync_idle_dosync_collectedevents_cleanup(options_t *options_p, char **argv) 
 		printf_ddd("Debug3: unlink()-ing \"%s\"\n", argv[5]);
 		ret0 = unlink(argv[5]);
 
-		if(options_p->flags[RSYNC_PREFERINCLUDE])
+		if(options_p->flags[RSYNCPREFERINCLUDE])
 			return ret0;
 
 		if(argv[7] == NULL) {
@@ -1497,11 +1502,11 @@ int sync_idle_dosync_collectedevents_cleanup(options_t *options_p, char **argv) 
 	printf_ddd("Debug3: unlink()-ing \"%s\"\n", argv[3]);
 	ret0 = unlink(argv[3]);
 
-	if(options_p->flags[RSYNC]) {
+	if(options_p->flags[MODE] == MODE_RSYNCSHELL) {
 		int ret1;
 
 		// There's no exclude file-list if "--rsyncpreferinclude" is enabled, so return
-		if(options_p->flags[RSYNC_PREFERINCLUDE])
+		if(options_p->flags[RSYNCPREFERINCLUDE])
 			return ret0;
 
 		if(argv[4] == NULL) 
@@ -1543,7 +1548,7 @@ int sync_idle_dosync_collectedevents_aggrqueue(queue_id_t queue_id, options_t *o
 	g_hash_table_foreach(indexes_p->fpath2ei_coll_ht[queue_id], _sync_idle_dosync_collectedevents, dosync_arg);
 	g_hash_table_remove_all(indexes_p->fpath2ei_coll_ht[queue_id]);
 
-	if(!options_p->flags[RSYNC_PREFERINCLUDE]) {
+	if(!options_p->flags[RSYNCPREFERINCLUDE]) {
 		g_hash_table_foreach(indexes_p->exc_fpath_coll_ht[queue_id], _sync_idle_dosync_collectedexcludes, dosync_arg);
 		g_hash_table_remove_all(indexes_p->exc_fpath_coll_ht[queue_id]);
 	}
@@ -1640,9 +1645,9 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 	options_t *options_p = dosync_arg_p->options_p;
 	indexes_t *indexes_p = dosync_arg_p->indexes_p;
 
-	printf_ddd("Debug3: Committing the file (flags[RSYNC] == %i; flags[SYNCHANDLERSO] == %i)\n", options_p->flags[RSYNC], options_p->flags[SYNCHANDLERSO]);
+	printf_ddd("Debug3: Committing the file (flags[MODE] == %i)\n", options_p->flags[MODE]);
 
-	if(!options_p->flags[SYNCHANDLERSO]) {
+	if(!options_p->flags[MODE] == MODE_SO) {
 		fclose(dosync_arg_p->outf);
 		dosync_arg_p->outf = NULL;
 	}
@@ -1670,12 +1675,12 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 		printf_ddd("Debug3: %s [%s] (%p) -> %s [%s]\n", options_p->watchdir, options_p->watchdirwslash, options_p->watchdirwslash, 
 								options_p->destdir?options_p->destdir:"", options_p->destdirwslash?options_p->destdirwslash:"");
 
-		if(options_p->flags[SYNCHANDLERSO]) {
+		if(options_p->flags[MODE] == MODE_SO) {
 			api_eventinfo_t *ei = dosync_arg_p->api_ei;
 			return so_call_sync(options_p, indexes_p, dosync_arg_p->evcount, ei);
 		}
 
-		if(options_p->flags[RSYNC] >= 2)
+		if(options_p->flags[MODE] == MODE_RSYNCDIRECT)
 			return SYNC_EXEC(options_p, indexes_p,
 				sync_idle_dosync_collectedevents_cleanup,
 				options_p->handlerfpath,
@@ -1694,7 +1699,7 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 		return SYNC_EXEC(options_p, indexes_p,
 			sync_idle_dosync_collectedevents_cleanup,
 			options_p->handlerfpath,
-			options_p->flags[RSYNC]?"rsynclist":"synclist", 
+			options_p->flags[MODE]==MODE_RSYNCSHELL?"rsynclist":"synclist", 
 			options_p->label,
 			dosync_arg_p->outf_path,
 			*(dosync_arg_p->excf_path)?dosync_arg_p->excf_path:NULL,
@@ -1727,7 +1732,7 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 		);
 
 	// so-module case:
-	if(options_p->flags[SYNCHANDLERSO]) {
+	if(options_p->flags[MODE] == MODE_SO) {
 		api_eventinfo_t *ei = &(*api_ei_p)[(*api_ei_count_p)++];
 		ei->evmask      = evinfo->evmask;
 		ei->flags       = evinfo->flags;
@@ -1738,7 +1743,7 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 		return;
 	}
 
-	if(!options_p->flags[RSYNC]) {
+	if(!((options_p->flags[MODE] == MODE_RSYNCSHELL) || (options_p->flags[MODE] == MODE_RSYNCDIRECT))) {
 		// non-RSYNC case
 		if(options_p->flags[SYNCLISTSIMPLIFY])
 			fprintf(outf, "%s\n", fpath);
@@ -1830,7 +1835,11 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 	dosync_arg.options_p 	= options_p;
 	dosync_arg.indexes_p	= indexes_p;
 
-	char isrsyncpreferexclude = options_p->flags[RSYNC] && (!options_p->flags[RSYNC_PREFERINCLUDE]);
+	char isrsyncpreferexclude = 
+		(
+			(options_p->flags[MODE] == MODE_RSYNCDIRECT) ||
+			(options_p->flags[MODE] == MODE_RSYNCSHELL)
+		) && (!options_p->flags[RSYNCPREFERINCLUDE]);
 
 #ifdef PARANOID
 	if(options_p->listoutdir != NULL) {
@@ -1867,16 +1876,16 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 	}
 
 
-	if(options_p->flags[SYNCHANDLERSO]) {
+	if(options_p->flags[MODE] == MODE_SO) {
 		//dosync_arg.evcount = g_hash_table_size(indexes_p->fpath2ei_ht);
 		printf_ddd("Debug3: sync_idle_dosync_collectedevents(): There's %i events. Processing.\n", dosync_arg.evcount);
 		dosync_arg.api_ei = (api_eventinfo_t *)xmalloc(dosync_arg.evcount * sizeof(*dosync_arg.api_ei));
 	}
 
-	if((options_p->listoutdir != NULL) || (options_p->flags[SYNCHANDLERSO])) {
+	if((options_p->listoutdir != NULL) || (options_p->flags[MODE] == MODE_SO)) {
 		int ret;
 
-		if(!options_p->flags[SYNCHANDLERSO]) {
+		if(!(options_p->flags[MODE]==MODE_SO)) {
 			*(dosync_arg.excf_path) = 0x00;
 			if(isrsyncpreferexclude) {
 				if((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "exclist"))) {
@@ -1904,7 +1913,7 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 #endif
 
 		g_hash_table_foreach(indexes_p->fpath2ei_ht, sync_idle_dosync_collectedevents_listpush, &dosync_arg);
-		if(options_p->flags[RSYNC])
+		if((options_p->flags[MODE] == MODE_RSYNCDIRECT) || (options_p->flags[MODE] == MODE_RSYNCSHELL))
 			g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, sync_idle_dosync_collectedevents_aggrout, &dosync_arg);
 
 		if((ret=sync_idle_dosync_collectedevents_commitpart(&dosync_arg))) {
@@ -2554,7 +2563,7 @@ int sync_run(options_t *options_p) {
 	}
 
 	// Loading dynamical libraries
-	if(options_p->flags[SYNCHANDLERSO]) {
+	if(options_p->flags[MODE] == MODE_SO) {
 		/* security checks before dlopen */
 		struct stat so_stat;
 		if (stat(options_p->handlerfpath, &so_stat) == -1) {
@@ -2660,7 +2669,7 @@ int sync_run(options_t *options_p) {
 	close(notify_d);
 
 	// Closing shared libraries
-	if(options_p->flags[SYNCHANDLERSO]) {
+	if(options_p->flags[MODE] == MODE_SO) {
 		int _ret;
 		if(options_p->handler_funct.deinit != NULL)
 			if((_ret = options_p->handler_funct.deinit())) {

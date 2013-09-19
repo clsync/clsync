@@ -19,7 +19,8 @@
 
 #include <regex.h>
 
-#define OPTION_CONFIGONLY (1<<8)
+#define OPTION_LONGOPTONLY (1<<9)
+#define OPTION_CONFIGONLY  (1<<8)
 enum flags_enum {
 	HELP		= 'h',
 	CONFIGPATH	= 'H',
@@ -33,9 +34,9 @@ enum flags_enum {
 	PIDFILE		= 'z',
 #ifdef CLUSTER_SUPPORT
 	CLUSTERIFACE	= 'c',
-	CLUSTERMCASTIPADDR = 'm',
-	CLUSTERMCASTIPPORT = 'P',
-	CLUSTERTIMEOUT	= 'W',
+	CLUSTERMCASTIPADDR='m',
+	CLUSTERMCASTIPPORT='P',
+	CLUSTERTIMEOUT	= 'G',
 	CLUSTERNODENAME = 'n',
 	CLUSTERHDLMIN	= 'o',
 	CLUSTERHDLMAX	= 'O',
@@ -45,17 +46,12 @@ enum flags_enum {
 	BFILEDELAY	= 'T',
 	SYNCDELAY	= 'w',
 	BFILETHRESHOLD	= 'B',
-	DEBUG		= 'D',
+	DEBUG		= 'd',
 	QUIET		= 'q',
 	VERBOSE		= 'v',
-	OUTLISTSDIR	= 'd',
-	ENABLEINITIALSYNC = 'S',
-	SYNCLISTSIMPLIFY= 'Z',
+	OUTLISTSDIR	= 'L',
 	AUTORULESW	= 'A',
-	SYNCHANDLERSO	= 'M',
-	RSYNC		= 'R',
-	RSYNCINCLIMIT	= 'L',
-	RSYNC_PREFERINCLUDE= 'I',
+	MODE		= 'M',
 	IGNOREEXITCODE	= 'x',
 	DONTUNLINK	= 'U',
 	INITFULL	= 'F',
@@ -67,22 +63,36 @@ enum flags_enum {
 	LABEL		= 'l',
 	SHOW_VERSION	= 'V',
 
-	WATCHDIR	= 0|OPTION_CONFIGONLY,
-	SYNCHANDLER	= 1|OPTION_CONFIGONLY,
-	RULESPATH	= 2|OPTION_CONFIGONLY,
-	DESTDIR		= 3|OPTION_CONFIGONLY,
+	WATCHDIR	= 'W',
+	SYNCHANDLER	= 'S',
+	RULESPATH	= 'R',
+	DESTDIR		= 'D',
 
+	HAVERECURSIVESYNC 	= 0|OPTION_LONGOPTONLY,
+	RSYNCINCLIMIT		= 1|OPTION_LONGOPTONLY,
+	RSYNCPREFERINCLUDE	= 2|OPTION_LONGOPTONLY,
+	SYNCLISTSIMPLIFY	= 3|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
-enum queue_enum {
+enum mode_id {
+	MODE_UNSET	= 0,
+	MODE_SIMPLE,
+	MODE_SHELL,
+	MODE_RSYNCSHELL,
+	MODE_RSYNCDIRECT,
+	MODE_SO,
+};
+typedef enum mode_id mode_id_t;
+
+enum queue_id {
 	QUEUE_NORMAL,
 	QUEUE_BIGFILE,
 	QUEUE_INSTANT,
 	QUEUE_MAX,
 	QUEUE_AUTO
 };
-typedef enum queue_enum queue_id_t;
+typedef enum queue_id queue_id_t;
 
 enum ruleactionsign_enum {
 	RS_REJECT	= 0,

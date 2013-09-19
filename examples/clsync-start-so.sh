@@ -9,5 +9,5 @@ EOF
 
 gcc -ggdb3 -fPIC -shared -o clsync-synchandler-so.so clsync-synchandler-so.c &&
 
-clsync -K example-so -M -w2 -p -t5 ./testdir/from ./clsync-synchandler-so.so rules ./testdir/to
+clsync -K example-so -M so -w2 -p -t5 -W ./testdir/from -S ./clsync-synchandler-so.so -R rules -D ./testdir/to
 

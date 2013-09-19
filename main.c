@@ -26,8 +26,14 @@
 
 #include "revision.h"
 
-static struct option long_options[] =
+static const struct option long_options[] =
 {
+	{"watch-dir",		required_argument,	NULL,	WATCHDIR},
+	{"sync-handler",	required_argument,	NULL,	SYNCHANDLER},
+	{"rules-path",		required_argument,	NULL,	RULESPATH},
+	{"dir-destination",	required_argument,	NULL,	DESTDIR},
+	{"mode",		required_argument,	NULL,	MODE},
+
 	{"background",		optional_argument,	NULL,	BACKGROUND},
 	{"config-path",		required_argument,	NULL,	CONFIGPATH},
 	{"config-block",	required_argument,	NULL,	CONFIGBLOCK},
@@ -55,13 +61,11 @@ static struct option long_options[] =
 	{"delay-collect-bigfile",required_argument,	NULL,	BFILEDELAY},
 	{"threshold-bigfile",	required_argument,	NULL,	BFILETHRESHOLD},
 	{"dir-lists",		required_argument,	NULL,	OUTLISTSDIR},
-	{"initialsync-enable",	optional_argument,	NULL,	ENABLEINITIALSYNC},
+	{"have-recursive-sync",	optional_argument,	NULL,	HAVERECURSIVESYNC},
 	{"synclist-simplify",	optional_argument,	NULL,	SYNCLISTSIMPLIFY},
 	{"auto-add-rules-w",	optional_argument,	NULL,	AUTORULESW},
-	{"synchandler-so-module",optional_argument,	NULL,	SYNCHANDLERSO},
-	{"rsync",		optional_argument,	NULL,	RSYNC},
 	{"rsync-inclimit",	required_argument,	NULL,	RSYNCINCLIMIT},
-	{"rsync-prefer-include",optional_argument,	NULL,	RSYNC_PREFERINCLUDE},
+	{"rsync-prefer-include",optional_argument,	NULL,	RSYNCPREFERINCLUDE},
 	{"ignore-exitcode",	required_argument,	NULL,	IGNOREEXITCODE},
 	{"dont-unlink-lists",	optional_argument,	NULL,	DONTUNLINK},
 	{"full-initialsync",	optional_argument,	NULL,	INITFULL},
@@ -76,20 +80,28 @@ static struct option long_options[] =
 	{"help",		optional_argument,	NULL,	HELP},
 	{"version",		optional_argument,	NULL,	SHOW_VERSION},
 
-	{"watch-dir",		required_argument,	NULL,	WATCHDIR},
-	{"sync-handler",	required_argument,	NULL,	SYNCHANDLER},
-	{"rules-path",		required_argument,	NULL,	RULESPATH},
-	{"dir-destination",	required_argument,	NULL,	DESTDIR},
-
 	{NULL,			0,			NULL,	0}
 };
 
+static char *const modes[] = {
+	[MODE_UNSET]		= "",
+	[MODE_SIMPLE]		= "simple",
+	[MODE_SHELL]		= "shell",
+	[MODE_RSYNCSHELL]	= "rsyncshell",
+	[MODE_RSYNCDIRECT]	= "rsyncdirect",
+	[MODE_SO]		= "so",
+	NULL
+};
+
 int syntax() {
-	printf("syntax: clsync [flags] <watch dir> <action script> [file with rules regexps] [destination directory]\npossible options:\n");
+	printf("possible options:\n");
 	int i=0;
 	while(long_options[i].name != NULL) {
 		if(!(long_options[i].val & OPTION_CONFIGONLY))
-			printf("\t--%-24s-%c%s\n", long_options[i].name, long_options[i].val, (long_options[i].has_arg == required_argument ? " argument" : ""));
+			printf("\t--%-24s%c%c%s\n", long_options[i].name, 
+				long_options[i].val & OPTION_LONGOPTONLY ? ' ' : '-', 
+				long_options[i].val & OPTION_LONGOPTONLY ? ' ' : long_options[i].val, 
+				(long_options[i].has_arg == required_argument ? " argument" : ""));
 		i++;
 	}
 	exit(EINVAL);
@@ -207,17 +219,28 @@ static inline int parse_parameter(options_t *options_p, uint16_t param_id, char 
 			version();
 			break;
 		case WATCHDIR:
-			options_p->watchdir = arg;
+			options_p->watchdir	= arg;
 			break;
 		case SYNCHANDLER:
-			options_p->handlerfpath = arg;
+			options_p->handlerfpath	= arg;
 			break;
 		case RULESPATH:
-			options_p->rulfpath = arg;
+			options_p->rulfpath	= arg;
 			break;
 		case DESTDIR:
-			options_p->destdir = arg;
+			options_p->destdir	= arg;
 			break;
+		case MODE: {
+			char *value;
+
+			
+			options_p->flags[MODE]  = getsubopt(&arg, modes, &value);
+			if(options_p->flags[MODE] == -1) {
+				fprintf(stderr, "Error: Wrong mode name entered: \"%s\"\n", arg);
+				return EINVAL;
+			}
+			break;
+		}
 		default:
 			if(arg == NULL)
 				options_p->flags[param_id]++;
@@ -239,9 +262,9 @@ int arguments_parse(int argc, char *argv[], struct options *options_p) {
 	char *optstring     = alloca((('z'-'a'+1)*3 + '9'-'0'+1)*3 + 1);
 	char *optstring_ptr = optstring;
 
-	struct option *lo_ptr = long_options;
+	const struct option *lo_ptr = long_options;
 	while(lo_ptr->name != NULL) {
-		if(!(lo_ptr->val & OPTION_CONFIGONLY)) {
+		if(!(lo_ptr->val & (OPTION_CONFIGONLY|OPTION_LONGOPTONLY))) {
 			*(optstring_ptr++) = lo_ptr->val & 0xff;
 
 			if(lo_ptr->has_arg == required_argument)
@@ -264,8 +287,11 @@ int arguments_parse(int argc, char *argv[], struct options *options_p) {
 		c = getopt_long(argc, argv, optstring, long_options, &option_index);
 	
 		if (c == -1) break;
-		parse_parameter(options_p, c, optarg, PS_ARGUMENT);
+		int ret = parse_parameter(options_p, c, optarg, PS_ARGUMENT);
+		if(ret) return ret;
 	}
+	if(optind+1 < argc)
+		syntax();
 /*
 	if(optind+1 >= argc)
 		syntax();
@@ -285,7 +311,7 @@ int arguments_parse(int argc, char *argv[], struct options *options_p) {
 
 	options_p->watchdir    = argv[optind];
 	options_p->watchdirlen = strlen(options_p->watchdir);*/
-
+/*
 	if(optind+0 < argc) {
 		options_p->watchdir     = argv[optind];
 		options_p->watchdirlen  = strlen(options_p->watchdir);
@@ -315,6 +341,7 @@ int arguments_parse(int argc, char *argv[], struct options *options_p) {
 		options_p->destdir    = NULL;
 		options_p->destdirlen = 0;
 	}
+*/
 
 	return 0;
 }
@@ -322,7 +349,7 @@ int arguments_parse(int argc, char *argv[], struct options *options_p) {
 char *configs_parse_str[1<<10] = {0};
 
 void gkf_parse(options_t *options_p, GKeyFile *gkf) {
-	struct option *lo_ptr = long_options;
+	const struct option *lo_ptr = long_options;
 	while(lo_ptr->name != NULL) {
 		gchar *value = g_key_file_get_value(gkf, options_p->config_block, lo_ptr->name, NULL);
 		if(value != NULL) {
@@ -332,7 +359,8 @@ void gkf_parse(options_t *options_p, GKeyFile *gkf) {
 				free(configs_parse_str[val_char]);
 
 			configs_parse_str[val_char] = value;
-			parse_parameter(options_p, lo_ptr->val, value, PS_CONFIG);
+			int ret = parse_parameter(options_p, lo_ptr->val, value, PS_CONFIG);
+			if(ret) exit(ret);
 		}
 		lo_ptr++;
 	}
@@ -530,7 +558,10 @@ int parse_rules_fromfile(options_t *options_p) {
 					rule->objtype = S_IFDIR;
 					break;
 				case 'w':	// accept or reject walking to directory
-					if(options_p->flags[RSYNC]) {
+					if(
+						(options_p->flags[MODE] == MODE_RSYNCDIRECT) ||
+						(options_p->flags[MODE] == MODE_RSYNCSHELL)
+					) {
 						printf_e("parse_rules_fromfile(): Warning: Used \"w\" rule in \"--rsync\" case."
 							" This may cause unexpected problems.\n");
 					}
@@ -714,7 +745,7 @@ int main(int argc, char *argv[]) {
 	options._queues[QUEUE_INSTANT].collectdelay= COLLECTDELAY_INSTANT;
 	options.bfilethreshold			   = DEFAULT_BFILETHRESHOLD;
 	options.label				   = DEFAULT_LABEL;
-	options.rsyncinclimit			   = DEFAULT_RSYNC_INCLUDELINESLIMIT;
+	options.rsyncinclimit			   = DEFAULT_RSYNCINCLUDELINESLIMIT;
 	options.synctimeout			   = DEFAULT_SYNCTIMEOUT;
 #ifdef CLUSTER_SUPPORT
 	options.cluster_hash_dl_min		   = DEFAULT_CLUSTERHDLMIN;
@@ -729,35 +760,40 @@ int main(int argc, char *argv[]) {
 	if(!ret) ret = nret;
 	out_init(options.flags);
 
+	if(options.flags[MODE] == MODE_UNSET) {
+		printf_e("Error: \"--mode\" is not set.\n");
+		ret = EINVAL;
+	}
+
 	if(options.watchdir == NULL) {
-		printf_e("Error: watchdir is not set.\n");
+		printf_e("Error: \"--watchdir\" is not set.\n");
 		ret = EINVAL;
 	}
 
 	if(options.handlerfpath == NULL) {
-		printf_e("Error: sync-handler path is not set.\n");
+		printf_e("Error: \"--sync-handler\" path is not set.\n");
 		ret = EINVAL;
 	}
-
+/*
 	if(options.flags[SYNCHANDLERSO] && options.flags[RSYNC]) {
 		printf_e("Error: Option \"--rsync\" cannot be used in conjunction with \"--synchandler-so-module\".\n");
 		ret = EINVAL;
 	}
-
+*/
 //	if(options.flags[SYNCHANDLERSO] && (options.listoutdir != NULL))
 //		printf_e("Warning: Option \"--dir-lists\" has no effect conjunction with \"--synchandler-so-module\".\n");
 
 //	if(options.flags[SYNCHANDLERSO] && (options.destdir != NULL))
 //		printf_e("Warning: Destination directory argument has no effect conjunction with \"--synchandler-so-module\".\n");
 
-	if((options.flags[RSYNC]>1) && (options.destdir == NULL)) {
-		printf_e("Error: Option \"-R2\" cannot be used without specifying \"destination directory\".\n");
+	if((options.flags[MODE] == MODE_RSYNCDIRECT) && (options.destdir == NULL)) {
+		printf_e("Error: Mode \"rsyncdirect\" cannot be used without specifying \"destination directory\".\n");
 		ret = EINVAL;
 	}
 
 #ifdef CLUSTER_SUPPORT
-	if((options.flags[RSYNC]>1) && (options.cluster_iface != NULL)) {
-		printf_e("Error: Option \"-R2\" cannot be used in conjunction with \"--cluster-iface\".\n");
+	if((options.flags[MODE] == MODE_RSYNCDIRECT ) && (options.cluster_iface != NULL)) {
+		printf_e("Error: Mode \"rsyncdirect\" cannot be used in conjunction with \"--cluster-iface\".\n");
 		ret = EINVAL;
 	}
 
@@ -864,14 +900,33 @@ int main(int argc, char *argv[]) {
 
 	printf_d("Debug: %s [%s] (%p) -> %s [%s]\n", options.watchdir, options.watchdirwslash, options.watchdirwslash, options.destdir?options.destdir:"", options.destdirwslash?options.destdirwslash:"");
 
-	if(options.flags[RSYNC] && (options.listoutdir == NULL)) {
-		printf_e("Error: Option \"--rsync\" cannot be used without \"--outlistsdir\".\n");
+	if(
+		(
+			(options.flags[MODE]==MODE_RSYNCDIRECT) || 
+			(options.flags[MODE]==MODE_RSYNCSHELL)
+		) && (options.listoutdir == NULL)
+	) {
+		printf_e("Error: Modes \"rsyncdirect\" and \"rsyncshell\" cannot be used without \"--outlistsdir\".\n");
 		ret = EINVAL;
 	}
-	if(options.flags[RSYNC_PREFERINCLUDE] && (!options.flags[RSYNC]))
-		printf_e("Warning: Option \"--rsyncpreferinclude\" is useless without \"--rsync\".\n");
-	if(options.flags[RSYNC] && options.flags[AUTORULESW])
-		printf_e("Warning: Option \"--auto-add-rules-w\" in conjunction with \"--rsync\" may cause unexpected problems.\n");
+
+	if(
+		options.flags[RSYNCPREFERINCLUDE] && 
+		!(
+			options.flags[MODE] == MODE_RSYNCDIRECT ||
+			options.flags[MODE] == MODE_RSYNCSHELL
+		)
+	)
+		printf_e("Warning: Option \"--rsyncpreferinclude\" is useless if mode is not \"rsyncdirect\" or \"rsyncshell\".\n");
+
+	if(
+		(
+			options.flags[MODE] == MODE_RSYNCDIRECT ||
+			options.flags[MODE] == MODE_RSYNCSHELL
+		)
+		&& options.flags[AUTORULESW]
+	)
+		printf_e("Warning: Option \"--auto-add-rules-w\" in modes \"rsyncdirect\" and \"rsyncshell\" may cause unexpected problems.\n");
 
 	if(options.flags[DEBUG])
 		debug_print_flags();
@@ -884,7 +939,7 @@ int main(int argc, char *argv[]) {
 				printf_e("Warning: Directory \"%s\" doesn't exist. Creating it.\n", options.listoutdir);
 				errno = 0;
 				if(mkdir(options.listoutdir, S_IRWXU)) {
-					printf_e("Error: main(): Cannot create directory \"%s\": %s (%i)", options.listoutdir, strerror(errno), errno);
+					printf_e("Error: main(): Cannot create directory \"%s\": %s (errno: %i).\n", options.listoutdir, strerror(errno), errno);
 					ret = errno;
 				}
 			} else {
@@ -903,13 +958,21 @@ int main(int argc, char *argv[]) {
 			}
 	}
 
-	if(options.flags[ENABLEINITIALSYNC] && (options.listoutdir == NULL)) {
-		printf_e("Error: main(): Option \"--dir-lists\" should be set to use option \"--initialsync-enable\".\n");
+/*
+	if(options.flags[HAVERECURSIVESYNC] && (options.listoutdir == NULL)) {
+		printf_e("Error: main(): Option \"--dir-lists\" should be set to use option \"--have-recursive-sync\".\n");
 		ret = EINVAL;
 	}
+*/
 
-	if(options.flags[ENABLEINITIALSYNC] && options.flags[RSYNC]) {
-		printf_e("Error: main(): Options \"--initialsync-enable\" and \"--rsync\" are incompatable.\n");
+	if(
+		options.flags[HAVERECURSIVESYNC] &&
+		(
+			options.flags[MODE] == MODE_RSYNCDIRECT ||
+			options.flags[MODE] == MODE_RSYNCSHELL
+		)
+	) {
+		printf_e("Error: main(): Option \"--have-recursive-sync\" with nodes \"rsyncdirect\" and \"rsyncshell\" are incompatable.\n");
 		ret = EINVAL;
 	}
 
@@ -918,8 +981,14 @@ int main(int argc, char *argv[]) {
 		ret = EINVAL;
 	}
 
-	if(options.flags[SYNCLISTSIMPLIFY] && options.flags[RSYNC]) {
-		printf_e("Error: main(): Options \"--synclist-simplify\" and \"--rsync\" are incompatable.\n");
+	if(
+		options.flags[SYNCLISTSIMPLIFY] && 
+		(
+			options.flags[MODE] == MODE_RSYNCDIRECT ||
+			options.flags[MODE] == MODE_RSYNCSHELL
+		)
+	) {
+		printf_e("Error: main(): Option \"--synclist-simplify\" with nodes \"rsyncdirect\" and \"rsyncshell\" are incompatable.\n");
 		ret = EINVAL;
 	}
 
