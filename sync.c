@@ -29,7 +29,24 @@
 
 #include <dlfcn.h>
 
+
+
 pthread_t pthread_sighandler;
+
+// seqid - is a counter of main loop. But it may overflow and it's required to compare
+// seqid-values anyway.
+// So if (a-b) is too big, let's assume, that "b<a".
+#define SEQID_WINDOW (((unsigned int)~0)>>1)
+#define SEQID_EQ(a, b) ((a)==(b))
+#define SEQID_GE(a, b) ((a)-(b) < SEQID_WINDOW)
+#define SEQID_LE(a, b) ((b)-(a) < SEQID_WINDOW)
+#define SEQID_GT(a, b) ((!SEQID_EQ(a, b)) && (SEQID_GE(a, b)))
+#define SEQID_LT(a, b) ((!SEQID_EQ(a, b)) && (SEQID_LE(a, b)))
+static unsigned int _sync_seqid_value=0;
+static inline unsigned int sync_seqid() {
+	return _sync_seqid_value++;
+}
+
 
 gpointer eidup(gpointer ei_gp) {
 	eventinfo_t *ei = (eventinfo_t *)ei_gp;
@@ -38,6 +55,29 @@ gpointer eidup(gpointer ei_gp) {
 	memcpy(ei_dup, ei, sizeof(*ei));
 
 	return (gpointer)ei_dup;
+}
+
+static inline void evinfo_merge(eventinfo_t *evinfo_dst, eventinfo_t *evinfo_src) {
+	printf_ddd("Debug3: evinfo_merge(): evinfo_dst: seqid_min == %u; seqid_max == %u; objtype_old == %i; objtype_new == %i; \t"
+			"evinfo_src: seqid_min == %u; seqid_max == %u; objtype_old == %i; objtype_new == %i\n",
+			evinfo_dst->seqid_min, evinfo_dst->seqid_max, evinfo_dst->objtype_old, evinfo_dst->objtype_new,
+			evinfo_src->seqid_min, evinfo_src->seqid_max, evinfo_src->objtype_old, evinfo_src->objtype_new
+		);
+
+	evinfo_dst->evmask |= evinfo_src->evmask;
+	evinfo_dst->flags  |= evinfo_src->flags;
+
+	if(SEQID_LE(evinfo_src->seqid_min, evinfo_dst->seqid_min)) {
+		evinfo_dst->objtype_old = evinfo_src->objtype_old;
+		evinfo_dst->seqid_min   = evinfo_src->seqid_min;
+	}
+
+	if(SEQID_GE(evinfo_src->seqid_max,  evinfo_dst->seqid_max))  {
+		evinfo_dst->objtype_new = evinfo_src->objtype_new;
+		evinfo_dst->seqid_max   = evinfo_src->seqid_max;
+	}
+
+	return;
 }
 
 static inline int _exitcode_process(options_t *options_p, int exitcode) {
@@ -225,6 +265,14 @@ static inline int indexes_queueevent(indexes_t *indexes_p, char *fpath, eventinf
 
 	printf_ddd("Debug3: indexes_queueevent(indexes_p, \"%s\", evinfo, %i). It's now %i events collected in queue %i.\n", fpath, queue_id, g_hash_table_size(indexes_p->fpath2ei_coll_ht[queue_id]), queue_id);
 	return 0;
+}
+
+static inline eventinfo_t *indexes_lookupinqueue(indexes_t *indexes_p, const char *fpath, queue_id_t queue_id) {
+	return (eventinfo_t *)g_hash_table_lookup(indexes_p->fpath2ei_coll_ht[queue_id], fpath);
+}
+
+static inline int indexes_queuelen(indexes_t *indexes_p, queue_id_t queue_id) {
+	return g_hash_table_size(indexes_p->fpath2ei_coll_ht[queue_id]);
 }
 
 static inline int indexes_removefromqueue(indexes_t *indexes_p, char *fpath, queue_id_t queue_id) {
@@ -842,7 +890,7 @@ static inline int sync_exec_thread(options_t *options_p, indexes_t *indexes_p, t
 
 static int sync_queuesync(const char *fpath_rel, eventinfo_t *evinfo, options_t *options_p, indexes_t *indexes_p, queue_id_t queue_id) {
 
-	printf_ddd("Debug3: sync_queuesync(\"%s\", ...): fsize == %lu; tres == %lu, queue_id == \n", fpath_rel, evinfo->fsize, options_p->bfilethreshold, queue_id);
+	printf_ddd("Debug3: sync_queuesync(\"%s\", ...): fsize == %lu; tres == %lu, queue_id == %u\n", fpath_rel, evinfo->fsize, options_p->bfilethreshold, queue_id);
 	if(queue_id == QUEUE_AUTO)
 		queue_id = (evinfo->fsize > options_p->bfilethreshold) ? QUEUE_BIGFILE : QUEUE_NORMAL;
 
@@ -860,15 +908,21 @@ static int sync_queuesync(const char *fpath_rel, eventinfo_t *evinfo, options_t 
 		return 0;
 	}
 
-	eventinfo_t *evinfo_dup = (eventinfo_t *)xmalloc(sizeof(*evinfo_dup));
-	memcpy(evinfo_dup, evinfo, sizeof(*evinfo_dup));
-
 #ifdef CLUSTER_SUPPORT
 	if(options_p->cluster_iface)
 		cluster_capture(fpath_rel);
 #endif
 
-	return indexes_queueevent(indexes_p, strdup(fpath_rel), evinfo_dup, queue_id);
+	eventinfo_t *evinfo_q   = indexes_lookupinqueue(indexes_p, fpath_rel, queue_id);
+	if(evinfo_q == NULL) {
+		eventinfo_t *evinfo_dup = (eventinfo_t *)xmalloc(sizeof(*evinfo_dup));
+		memcpy(evinfo_dup, evinfo, sizeof(*evinfo_dup));
+		return indexes_queueevent(indexes_p, strdup(fpath_rel), evinfo_dup, queue_id);
+	} else {
+		evinfo_merge(evinfo_q, evinfo);
+	}
+
+	return 0;
 }
 
 int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *indexes_p, queue_id_t queue_id, initsync_t initsync) {
@@ -958,9 +1012,11 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 			}
 		}
 
-		evinfo.objtype_new = EOT_DOESNTEXIST;
-		evinfo.objtype_new = node->fts_info==FTS_D ? EOT_DIR : EOT_FILE;
-		evinfo.fsize = node->fts_statp->st_size;
+		evinfo.seqid_min    = sync_seqid();
+		evinfo.seqid_max    = evinfo.seqid_min;
+		evinfo.objtype_old  = EOT_DOESNTEXIST;
+		evinfo.objtype_new  = node->fts_info==FTS_D ? EOT_DIR : EOT_FILE;
+		evinfo.fsize        = node->fts_statp->st_size;
 		switch(options_p->notifyengine) {
 #ifdef FANOTIFY_SUPPORT
 			case NE_FANOTIFY:
@@ -1075,8 +1131,10 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 		eventinfo_t *evinfo = (eventinfo_t *)xmalloc(sizeof(*evinfo));
 		memset(evinfo, 0, sizeof(*evinfo));
 		evinfo->flags |= EVIF_RECURSIVELY;
-		evinfo->objtype_old = EOT_DOESNTEXIST;
-		evinfo->objtype_new = EOT_DIR;
+		evinfo->seqid_min = sync_seqid();
+		evinfo->seqid_max = evinfo->seqid_min;
+		evinfo->objtype_old  = EOT_DOESNTEXIST;
+		evinfo->objtype_new  = EOT_DIR;
 
 		// Searching for excludes
 		int ret = sync_initialsync_walk(options_p, path, indexes_p, queue_id, initsync);
@@ -1358,30 +1416,39 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 	int isnew = 0;
 	eventinfo_t *evinfo_idx = indexes_fpath2ei(indexes_p, fpath);
 
+	if(evinfo_idx == NULL) {
+		evinfo_idx = (eventinfo_t *)xmalloc(sizeof(*evinfo_idx));
+		memset(evinfo_idx, 0, sizeof(*evinfo_idx));
+		isnew++;
+		(*evcount_p)++;
+
+		evinfo_idx->evmask       = evinfo->evmask;
+		evinfo_idx->flags        = evinfo->flags;
+		evinfo_idx->objtype_old  = evinfo->objtype_old;
+		evinfo_idx->objtype_new  = evinfo->objtype_new;
+		evinfo_idx->seqid_min    = evinfo->seqid_min;
+		evinfo_idx->seqid_max    = evinfo->seqid_max;
+	} else
+		evinfo_merge(evinfo_idx, evinfo);
+
+
 	int _queue_id = 0;
 	while(_queue_id < QUEUE_MAX) {
 		if(_queue_id == queue_id) {
 			_queue_id++;
 			continue;
 		}
-		indexes_removefromqueue(indexes_p, fpath, _queue_id);
-		if(!g_hash_table_size(indexes_p->fpath2ei_coll_ht[_queue_id]))
-			options_p->_queues[_queue_id].stime = 0;
+
+		eventinfo_t *evinfo_q = indexes_lookupinqueue(indexes_p, fpath, _queue_id);
+		if(evinfo_q != NULL) {
+			evinfo_merge(evinfo_idx, evinfo_q);
+
+			indexes_removefromqueue(indexes_p, fpath, _queue_id);
+			if(!indexes_queuelen(indexes_p, _queue_id))
+				options_p->_queues[_queue_id].stime = 0;
+		}
 		_queue_id++;
 	}
-
-	if(evinfo_idx == NULL) {
-		evinfo_idx = (eventinfo_t *)xmalloc(sizeof(*evinfo_idx));
-		memset(evinfo_idx, 0, sizeof(*evinfo_idx));
-		isnew++;
-		(*evcount_p)++;
-	}
-	evinfo_idx->evmask      |= evinfo->evmask;
-	evinfo_idx->flags       |= evinfo->flags;
-
-	// TODO: this should be OR-ed! We should use the oldiest variant for "_old" and the newest variant for "_new".
-	evinfo_idx->objtype_old |= evinfo->objtype_old;
-	evinfo_idx->objtype_new |= evinfo->objtype_new;
 
 	if(isnew)
 		indexes_fpath2ei_add(indexes_p, strdup(fpath), evinfo_idx);
@@ -1652,7 +1719,12 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 	indexes_t *indexes_p 	   =  dosync_arg_p->indexes_p;
 	api_eventinfo_t **api_ei_p = &dosync_arg_p->api_ei;
 	int *api_ei_count_p 	   = &dosync_arg_p->api_ei_count;
-	printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): \"%s\" with int-flags %p\n", fpath, (void *)(unsigned long)evinfo->flags);
+	printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): \"%s\" with int-flags %p. "
+			"evinfo: seqid_min == %u, seqid_max == %u type_o == %i, type_n == %i\n", 
+			fpath, (void *)(unsigned long)evinfo->flags,
+			evinfo->seqid_min,   evinfo->seqid_max,
+			evinfo->objtype_old, evinfo->objtype_new
+		);
 
 	// so-module case:
 	if(options_p->flags[SYNCHANDLERSO]) {
@@ -2119,7 +2191,7 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 
 					SYNC_INOTIFY_HANDLE_CONTINUE;
 				} else 
-				if(event->mask & (IN_DELETE|IN_MOVED_FROM)) {	// Disappered
+				if(event->mask & (IN_DELETE_SELF|IN_DELETE|IN_MOVED_FROM)) {	// Disappered
 					printf_dd("Debug2: Disappeared \"%s\".\n", path_full);
 				}
 			}
@@ -2135,19 +2207,29 @@ int sync_inotify_handle(int inotify_d, options_t *options_p, indexes_t *indexes_
 			if(evinfo == NULL) {
 				evinfo = (eventinfo_t *)xmalloc(sizeof(*evinfo));
 				memset(evinfo, 0, sizeof(*evinfo));
-				evinfo->fsize       = st_size;
-				evinfo->wd          = event->wd;
-				evinfo->objtype_old = (event->mask & IN_CREATE) 		? EOT_DOESNTEXIST	:
-				                      (event->mask & IN_ISDIR) 			? EOT_DIR 		:
-				                      EOT_FILE;
+				evinfo->fsize        = st_size;
+				evinfo->wd           = event->wd;
+				evinfo->seqid_min    = sync_seqid();
+				evinfo->seqid_max    = evinfo->seqid_min;
+				evinfo->objtype_old  = (event->mask & IN_CREATE) 	? EOT_DOESNTEXIST	:
+				                       (event->mask & IN_ISDIR) 	? EOT_DIR 		:
+				                       EOT_FILE;
 				isnew++;
 				printf_ddd("Debug3: sync_inotify_handle(): new event: fsize == %i; wd == %i\n", evinfo->fsize, evinfo->wd);
 			} else {
-				evinfo->objtype_new = (event->mask & (IN_DELETE_SELF|IN_DELETE)) ? EOT_DOESNTEXIST 	:
-				                      (event->mask & IN_ISDIR) 			 ? EOT_DIR 		: 
-				                      EOT_FILE;
+				evinfo->seqid_max    = sync_seqid();
 			}
 			evinfo->evmask |= event->mask;
+
+			evinfo->objtype_new = (event->mask & (IN_DELETE_SELF|IN_DELETE|IN_MOVED_FROM))	? EOT_DOESNTEXIST :
+			                      (event->mask & IN_ISDIR)					? EOT_DIR 	  : 
+			                      EOT_FILE;
+
+			printf_dd("Debug2: sync_inotify_handle(): path_rel == \"%s\"; evinfo->objtype_old == %i; evinfo->objtype_new == %i; "
+					"evinfo->seqid_min == %u; evinfo->seqid_max == %u\n", 
+					path_rel, evinfo->objtype_old, evinfo->objtype_new,
+					evinfo->seqid_min, evinfo->seqid_max
+				);
 
 			if(isnew)
 				indexes_fpath2ei_add(indexes_p, strdup(path_rel), evinfo);
