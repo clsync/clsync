@@ -549,7 +549,7 @@ int parse_rules_fromfile(options_t *options_p) {
 
 			// Parsing the rest part of the line
 
-			printf_d("Debug2: parse_rules_fromfile(): Rule #%i <%c> <%c> pattern <%s> (length: %i).\n", rule->num, line[-2], line[-1], line, linelen);
+			printf_d("Debug: parse_rules_fromfile(): Rule #%i <%c> <%c> pattern <%s> (length: %i).\n", rule->num, line[-2], line[-1], line, linelen);
 			if((ret=rule_complete(rule, line)))
 				goto l_parse_rules_fromfile_end;
 
@@ -620,7 +620,7 @@ int parse_rules_fromfile(options_t *options_p) {
 								rule->mask    = RA_WALK;
 								rule->perm    = RA_WALK;
 
-								printf_d("Debug2: parse_rules_fromfile(): Rule #%i <+> <w> pattern <%s> (length: %i) [auto].\n", 
+								printf_d("Debug: parse_rules_fromfile(): Rule #%i <+> <w> pattern <%s> (length: %i) [auto].\n", 
 									rule->num, expr, exprlen);
 								if((ret=rule_complete(rule, expr)))
 									goto l_parse_rules_fromfile_end;
