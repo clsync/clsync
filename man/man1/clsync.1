@@ -375,9 +375,7 @@ will execute
 .I sync\-handler
 for every file in the aggregated event list (action "sync").
 
-Cannot be used in conjunction with
-.IR \-\-synchandler\-so\-module
-.
+Cannot be used in mode "so".
 
 See
 .BR "SYNC HANDLER MODES" .
@@ -413,64 +411,7 @@ Is not set by default.
 Forces clsync to create a "w\-rule" for every non-"w-rule" (see
 .BR RULES ).
 
-Not recommended to use in conjunction with
-.I \-\-rsync
-option.
-
-Is not set by default.
-.RE
-
-.PP
-.B \-M, \-\-synchandler\-so\-module
-.RS 8
-.B clsync
-will load
-.I sync-handler
-as a shared library with
-.BR dlopen (3)
-and run syncing by calling function "clsyncapi_sync()" from
-this shared object file (see 
-.B "SYNC HANDLER MODES"
-case
-.BR f ).
-
-Cannot be used in conjunction with
-.I \-\-rsync
-and/or
-.IR \-\-dir\-lists .
-
-Is not set by default.
-.RE
-
-.PP
-.B \-R, \-\-rsync
-.RS 8
-Forces
-.B clsync
-to use "rsynclist" action instead of "recursivesync" and "synclist" (see 
-.B "SYNC HANDLER MODES" 
-case 
-.BR d ).
-This option can be used only with
-.I \-\-dir\-lists
-option.
-
-Recommended option.
-
-You can use "\-R2" to run "rsync" directly, bypassing intermediate script
-(see
-.B "SYNC HANDLER MODES"
-case
-.BR e ).
-
-Cannot be used in conjunction with 
-.IR \-\-synchandler\-so\-module .
-
-But you cannot use 
-.I \-\-cluster\-*
-options in 
-.I \-R2
-mode.
+Not recommended to use in modes "rsyncdirect" and "rsyncshell"
 
 Is not set by default.
 .RE
@@ -852,10 +793,6 @@ process by this shared object.
 
 See example file "clsync-synchandler-so.c".
 
-This case will be used, if option
-.I \-\-synchandler\-so\-module
-is set.
-
 Recommended case.
 .RE
 
@@ -924,9 +861,7 @@ For example: \-*^/[Tt]est
 
 It's not recommended to use
 .I w
-rules for
-.I \-\-rsync
-cases.
+rules in modes "rsyncdirect" and "rsyncshell".
 .BR rsync (1)
 allows to set syncing and walking only together in "\-\-include" rules
 ("\-\-files\-from" is not appropriate due to problem with syncing files
@@ -1107,7 +1042,7 @@ example:
 .br
 background=1
 .br
-rsync=1
+mode=rsyncshell
 .br
 debug=0
 .br
@@ -1119,7 +1054,7 @@ pid-file=/var/run/clsync.pid
 .br
 [test]
 .br
-rsync=2
+mode=rsyncdirect
 .br
 debug=3
 .RE
