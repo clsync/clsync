@@ -20,9 +20,10 @@ DESCRIPTION="Live sync tool based on inotify, written in GNU C"
 HOMEPAGE="http://ut.mephi.ru/oss"
 LICENSE="GPL-3+"
 SLOT="0"
-IUSE="-caps -cluster debug doc +examples extra-hardened hardened +mhash"
+IUSE="-caps -cluster debug doc +examples extra-hardened hardened mhash"
 REQUIRED_USE="
-	extra-hardened? ( hardened )"
+	extra-hardened? ( hardened )
+	mhash? ( cluster )"
 
 RDEPEND="
 	caps? ( sys-libs/libcap )
@@ -79,4 +80,7 @@ pkg_postinst() {
 	einfo "it doesn't copy data itself, so you need to install software to do actual"
 	einfo "data transfer. Usually net-misc/rsync is a good choise, but ${PN} is"
 	einfo "is flexible enough to use any user tool, see manual page for details."
+	einfo
+	einfo "${PN} init script can now be multiplexed, to use symlink init script to"
+	einfo "othername and use conf.d/othername to configure it."
 }
