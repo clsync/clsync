@@ -12,7 +12,19 @@ AC_ARG_ENABLE(cluster,
 AS_HELP_STRING(--enable-cluster,
 [enable clustering support (not yet implemented), default: no]))
 
-AS_IF([test "x$enable_cluster" = "xyes"], [CPPFLAGS+=" -DCLUSTER_SUPPORT"])
+AS_IF([test "x$enable_cluster" = "xyes"], [CPPFLAGS+=" -DCLUSTER_SUPPORT"
+
+	dnl mhash check
+	AC_ARG_WITH(mhash,
+	AS_HELP_STRING(--with-mhash,
+	[use mhash instead of internal version of hash algo, default: enabled]))
+
+	AS_IF([test "x$with_mhash" = "xno"], [], [
+	AC_CHECK_HEADER([mhash.h], [], [AC_MSG_ERROR("Unable to find mhash.h")])
+	AC_SEARCH_LIBS([mhash_init], [mhash], [CPPFLAGS+=" -DHAVE_MHASH"],
+		[AC_MSG_ERROR("Unable to find libmhash")])
+	])
+])
 
 dnl --enable-debug
 AC_ARG_ENABLE(debug,
@@ -75,16 +87,6 @@ AS_IF(
             [AC_MSG_ERROR("Unable to find sys/capability.h")])
 ])
 
-dnl mhash check
-AC_ARG_WITH(mhash,
-AS_HELP_STRING(--with-mhash,
-[use mhash instead of internal version of hash algo, default: enabled]))
-
-AS_IF([test "x$with_mhash" = "xno"], [], [
-    AC_CHECK_HEADER([mhash.h], [], [AC_MSG_ERROR("Unable to find mhash.h")])
-    AC_SEARCH_LIBS([mhash_init], [mhash], [CPPFLAGS+=" -DHAVE_MHASH"],
-        [AC_MSG_ERROR("Unable to find libmhash")])
-])
 
 
 LIBS="${GLIB_LIBS} ${LIBS}"
