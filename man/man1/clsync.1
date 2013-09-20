@@ -22,7 +22,6 @@ Extended regex\-rules to filter what files and
 directories to sync may be placed in
 .I rules\-file
 
-
 .SH OPTIONS
 
 .B \-W, \-\-watch\-dir
@@ -358,7 +357,7 @@ Default value is "134217728" ["128 MiB"].
 .RE
 
 .PP
-.B \-d, \-\-dir\-lists
+.B \-L, \-\-dir\-lists
 .I tmpdir\-path
 .RS 8
 Sets directory path to output temporary events\-lists files.
@@ -1007,6 +1006,9 @@ your
 
 .RE
 
+To get support see
+.BR SUPPORT .
+
 .SH CONFIGURATION FILE
 
 .B clsync
@@ -1083,6 +1085,12 @@ files/directories modifications in "example/testdir/from" will be synced to
 .RE
 .SH AUTHOR
 Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
+.SH SUPPORT
+You can get support on official IRC-channel in Freenode "#clsync" or on
+github's issue tracking system of repository
+"https://github.com/xaionaro/clsync".
+
+Don't be afraid to ask about clsync configuration, ;). 
 .SH "SEE ALSO"
 .BR rsync (1),
 .BR pthreads (7),
