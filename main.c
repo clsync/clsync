@@ -855,7 +855,7 @@ int main(int argc, char *argv[]) {
 
 #ifdef VERYPARANOID
 			if(options.watchdirlen == 1) {
-				printf_e("Error: watchdir is supposed to be not \"/\".\n");
+				printf_e("Very-Paranoid: --watch-dir is supposed to be not \"/\".\n");
 				ret = EINVAL;
 			}
 #endif
