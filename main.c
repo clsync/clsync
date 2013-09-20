@@ -30,8 +30,8 @@ static const struct option long_options[] =
 {
 	{"watch-dir",		required_argument,	NULL,	WATCHDIR},
 	{"sync-handler",	required_argument,	NULL,	SYNCHANDLER},
-	{"rules-path",		required_argument,	NULL,	RULESPATH},
-	{"dir-destination",	required_argument,	NULL,	DESTDIR},
+	{"rules-file",		required_argument,	NULL,	RULESFILE},
+	{"destination-dir",	required_argument,	NULL,	DESTDIR},
 	{"mode",		required_argument,	NULL,	MODE},
 
 	{"background",		optional_argument,	NULL,	BACKGROUND},
@@ -224,7 +224,7 @@ static inline int parse_parameter(options_t *options_p, uint16_t param_id, char 
 		case SYNCHANDLER:
 			options_p->handlerfpath	= arg;
 			break;
-		case RULESPATH:
+		case RULESFILE:
 			options_p->rulfpath	= arg;
 			break;
 		case DESTDIR:

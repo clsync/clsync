@@ -22,6 +22,11 @@
 #define OPTION_LONGOPTONLY (1<<9)
 #define OPTION_CONFIGONLY  (1<<8)
 enum flags_enum {
+	WATCHDIR	= 'W',
+	SYNCHANDLER	= 'S',
+	RULESFILE	= 'R',
+	DESTDIR		= 'D',
+
 	HELP		= 'h',
 	CONFIGFILE	= 'H',
 	CONFIGBLOCK	= 'K',
@@ -62,11 +67,6 @@ enum flags_enum {
 	INOTIFY		= 'i',
 	LABEL		= 'l',
 	SHOW_VERSION	= 'V',
-
-	WATCHDIR	= 'W',
-	SYNCHANDLER	= 'S',
-	RULESPATH	= 'R',
-	DESTDIR		= 'D',
 
 	HAVERECURSIVESYNC 	= 0|OPTION_LONGOPTONLY,
 	RSYNCINCLIMIT		= 1|OPTION_LONGOPTONLY,
