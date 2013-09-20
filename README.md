@@ -11,11 +11,10 @@ Contents
 4.  Installing
 5.  How to use
 6.  Example of usage
-7.  Recommended configuration
-8.  Clustering
-9.  Known issues
-10. Support
-11. Developing
+7.  Clustering
+8.  Known issues
+9.  Support
+10. Developing
 
 
 1. Name
@@ -115,36 +114,12 @@ personally (see "Support").
 -------------------
 
 Example of usage, that works on my PC is in directory "examples". Just run
-"clsync-start-simple.sh" and try to create/modify/delete files/dirs in
+"clsync-start-rsyncdirect.sh" and try to create/modify/delete files/dirs in
 "example/testdir/from". All modifications should appear (with some delay) in
 directory "example/testdir/to" ;)
 
 
-7. Recommended configuration
-----------------------------
-
-First of all, recommended and not recommended options are notices in the
-manpage.
-
-However let's describe 4 situations:
-
-- The simpliest usage (syncing from "/tmp/fromdir" to "/tmp/todir" with delay about 30 seconds):
-> clsync -R2 -d /dev/shm/clsync /tmp/fromdir $(which rsync) /dev/zero /tmp/todir
-
-- You're backing-up over very slow channel:
-> clsync -l backup -R -d /dev/shm/clsync -t600 -T3600 -B$[1024 * 1024 * 16] /home/user /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules
-
-This will minimize network traffic. And pthread-ing is removed due to rarely
-updating.
-
-- You're syncing ordinary web-server over 1Gbs channel:
-> clsync -l mirror -p -R -d /dev/shm/clsync /var/www /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules
-
-- You're syncing only few files from huge file tree (with a great lot of
-excludes):
-> clsync -l mirror -p -R -d /dev/shm/clsync -I /home/user /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules
-
-8. Clustering
+7. Clustering
 -------------
 
 I've started to implement support of bi-directional syncing with using
@@ -175,14 +150,14 @@ split-brain, that can be solved two ways:
 Example of the script is just a script that calls "find" on both sides to
 determine which side has the latest changes :)
 
-9. Known building issues
+8. Known building issues
 ------------------------
 
 May be problems with "configuring" or compilation. In this case just try
 next command:
 > gcc -std=gnu99 -D\_FORTIFY\_SOURCE=2 -DPARANOID -pthread -DHAVE\_MHASH  -pipe -Wall -ggdb3 --param ssp-buffer-size=4 -fstack-check -fstack-protector-all -Xlinker -zrelro -pthread $(pkg-config --cflags glib-2.0) $(pkg-config --libs glib-2.0) -ldl -lmhash \*.c -o /tmp/clsync
 
-10. Support
+9. Support
 -----------
 
 To get support, you can contact with me this ways:
@@ -190,7 +165,7 @@ To get support, you can contact with me this ways:
 - Where else can you find me: IRC:SSL+UTF-8 irc.campus.mephi.ru:6695#mephi,xaionaro,xai
 - And e-mail: <dyokunev@ut.mephi.ru>, <xaionaro@gmail.com>; PGP pubkey: 0x8E30679C
 
-11. Developing
+10. Developing
 --------------
 
 I started to write "DEVELOPING" and "PROTOCOL" files.
