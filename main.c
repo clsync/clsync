@@ -60,7 +60,7 @@ static const struct option long_options[] =
 	{"delay-collect",	required_argument,	NULL,	DELAY},
 	{"delay-collect-bigfile",required_argument,	NULL,	BFILEDELAY},
 	{"threshold-bigfile",	required_argument,	NULL,	BFILETHRESHOLD},
-	{"dir-lists",		required_argument,	NULL,	OUTLISTSDIR},
+	{"lists-dir",		required_argument,	NULL,	OUTLISTSDIR},
 	{"have-recursive-sync",	optional_argument,	NULL,	HAVERECURSIVESYNC},
 	{"synclist-simplify",	optional_argument,	NULL,	SYNCLISTSIMPLIFY},
 	{"auto-add-rules-w",	optional_argument,	NULL,	AUTORULESW},
@@ -906,7 +906,7 @@ int main(int argc, char *argv[]) {
 			(options.flags[MODE]==MODE_RSYNCSHELL)
 		) && (options.listoutdir == NULL)
 	) {
-		printf_e("Error: Modes \"rsyncdirect\" and \"rsyncshell\" cannot be used without \"--destination-dir\".\n");
+		printf_e("Error: Modes \"rsyncdirect\" and \"rsyncshell\" cannot be used without \"--lists-dir\".\n");
 		ret = EINVAL;
 	}
 
