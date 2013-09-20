@@ -23,7 +23,7 @@
 #define OPTION_CONFIGONLY  (1<<8)
 enum flags_enum {
 	HELP		= 'h',
-	CONFIGPATH	= 'H',
+	CONFIGFILE	= 'H',
 	CONFIGBLOCK	= 'K',
 	BACKGROUND	= 'b',
 	UID		= 'u',

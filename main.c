@@ -35,7 +35,7 @@ static const struct option long_options[] =
 	{"mode",		required_argument,	NULL,	MODE},
 
 	{"background",		optional_argument,	NULL,	BACKGROUND},
-	{"config-path",		required_argument,	NULL,	CONFIGPATH},
+	{"config-file",		required_argument,	NULL,	CONFIGFILE},
 	{"config-block",	required_argument,	NULL,	CONFIGBLOCK},
 	{"pid-file",		required_argument,	NULL,	PIDFILE},
 	{"uid",			required_argument,	NULL,	UID},
@@ -137,7 +137,7 @@ static inline int parse_parameter(options_t *options_p, uint16_t param_id, char 
 		case HELP:
 			syntax();
 			break;
-		case CONFIGPATH:
+		case CONFIGFILE:
 			options_p->config_path  = arg;
 			break;
 		case CONFIGBLOCK:
