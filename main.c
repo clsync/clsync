@@ -376,7 +376,7 @@ int configs_parse(options_t *options_p) {
 	if(options_p->config_path) {
 		printf_d("Debug: configs_parse(): Trying config-file \"%s\"\n", options_p->config_path);
 		if(!g_key_file_load_from_file(gkf, options_p->config_path, G_KEY_FILE_NONE, NULL)) {
-			printf_d("Debug: configs_parse(): Cannot open/parse file \"%s\"\n", options_p->config_path);
+			printf_e("Error: configs_parse(): Cannot open/parse file \"%s\"\n", options_p->config_path);
 			g_key_file_free(gkf);
 			return -1;
 		} else
@@ -757,7 +757,7 @@ int main(int argc, char *argv[]) {
 	arguments_parse(argc, argv, &options);
 	out_init(options.flags);
 	nret = configs_parse(&options);
-	if(!nret) ret = nret;
+	if(nret) ret = nret;
 	out_init(options.flags);
 
 	if(options.flags[MODE] == MODE_UNSET) {
