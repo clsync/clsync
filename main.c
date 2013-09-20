@@ -906,7 +906,7 @@ int main(int argc, char *argv[]) {
 			(options.flags[MODE]==MODE_RSYNCSHELL)
 		) && (options.listoutdir == NULL)
 	) {
-		printf_e("Error: Modes \"rsyncdirect\" and \"rsyncshell\" cannot be used without \"--outlistsdir\".\n");
+		printf_e("Error: Modes \"rsyncdirect\" and \"rsyncshell\" cannot be used without \"--destination-dir\".\n");
 		ret = EINVAL;
 	}
 
