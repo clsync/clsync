@@ -1647,7 +1647,7 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 
 	printf_ddd("Debug3: Committing the file (flags[MODE] == %i)\n", options_p->flags[MODE]);
 
-	if(!options_p->flags[MODE] == MODE_SO) {
+	if(options_p->flags[MODE] != MODE_SO) {
 		fclose(dosync_arg_p->outf);
 		dosync_arg_p->outf = NULL;
 	}
