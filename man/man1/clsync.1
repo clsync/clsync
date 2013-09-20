@@ -567,13 +567,13 @@ is only a convenient way to run a syncing script.
 .B clsync
 can run
 .I sync\-handler
-in six ways. Which way will be used depends on specified mode (see
+in five ways. Which way will be used depends on specified mode (see
 .IR \-\-mode )
 
 case
 .B simple
 .RS
-Executes for every event:
+Executes for every syncing file/dir:
 .br
 .I sync\-handler
 sync
@@ -587,6 +587,8 @@ With
 .I evmask
 it's passed bitmask of events with the file or directory (see 
 "/usr/include/linux/inotify.h").
+
+Not recommended. Not well tested.
 .RE
 
 case
@@ -623,6 +625,8 @@ Also
 is supposed to recursively sync data from directory by path
 .I dirpath
 with manual excluding extra files.
+
+Not recommended. Not well tested.
 .RE
 
 case
@@ -796,17 +800,14 @@ See example file "clsync-synchandler-so.c".
 Recommended case.
 .RE
 
-As can be noticed, in the first four cases clsync's
+About the
 .I label
-(see 
-.I \-\-label
-) and
-.I nodes
-are passed (or can be passed).
+see
+.IR \-\-label .
+.br
 .I nodes
 is comma-separated list of cluster nodes names where to sync to (see
-.I \-\-cluster-node-name
-)
+.IR \-\-cluster-node-name)
 
 The listfile by path
 .I listpath
