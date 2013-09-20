@@ -757,7 +757,7 @@ int main(int argc, char *argv[]) {
 	arguments_parse(argc, argv, &options);
 	out_init(options.flags);
 	nret = configs_parse(&options);
-	if(!ret) ret = nret;
+	if(!nret) ret = nret;
 	out_init(options.flags);
 
 	if(options.flags[MODE] == MODE_UNSET) {
