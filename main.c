@@ -852,21 +852,29 @@ int main(int argc, char *argv[]) {
 			options.watchdirlen  = strlen(options.watchdir);
 			options.watchdirsize = options.watchdirlen;
 
+#ifdef VERYPARANOID
 			if(options.watchdirlen == 1) {
 				printf_e("Error: watchdir is supposed to be not \"/\".\n");
 				ret = EINVAL;
 			}
+#endif
 		}
 
 		if(!ret) {
-			size_t size = options.watchdirlen + 2;
-			char *newwatchdir = xmalloc(size);
-			memcpy( newwatchdir, options.watchdir, options.watchdirlen);
-			options.watchdirwslash     = newwatchdir;
-			options.watchdirwslashsize = size;
-			memcpy(&options.watchdirwslash[options.watchdirlen], "/", 2);
+			if(options.watchdirlen == 1) {
+				options.watchdirwslash     = options.watchdir;
+				options.watchdirwslashsize = 0;
+				options.watchdir_dirlevel  = 0;
+			} else {
+				size_t size = options.watchdirlen + 2;
+				char *newwatchdir = xmalloc(size);
+				memcpy( newwatchdir, options.watchdir, options.watchdirlen);
+				options.watchdirwslash     = newwatchdir;
+				options.watchdirwslashsize = size;
+				memcpy(&options.watchdirwslash[options.watchdirlen], "/", 2);
 
-			options.watchdir_dirlevel  = fileutils_calcdirlevel(options.watchdirwslash);
+				options.watchdir_dirlevel  = fileutils_calcdirlevel(options.watchdirwslash);
+			}
 		}
 	}
 
