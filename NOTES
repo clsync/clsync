@@ -2,4 +2,9 @@ v0.1 -> v0.2:
 
 * You cannot use "-DDD" anymore, you should use "-D3" or "-D -D -D" instead.
 * Paths are relative, now. You may want to fix "rules" and "sync-handler" files.
+* Paths to "watch-dir", "sync-handler", "rules" and "dest-dir" are passed as options (see manpage)
+* sync-handler mode is selectable via "--mode" option (not "-R", "-d", "-M", "-S")
+* "-d" shorthand replaced with "-L"
+* removed shorthands for "--synclist-simplify", "--rsync-inclimit", "--rsync-prefer-include"
+* option "--initialsync-enable" renamed to "--have-recursive-sync"
 
