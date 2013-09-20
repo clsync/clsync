@@ -45,6 +45,7 @@ static const struct option long_options[] =
 #endif
 	{"pthread",		optional_argument,	NULL,	PTHREAD},
 	{"syslog",		optional_argument,	NULL,	SYSLOG},
+	{"one-file-system",	optional_argument,	NULL,	ONEFILESYSTEM},
 #ifdef CLUSTER_SUPPORT
 	{"cluster-iface",	required_argument,	NULL,	CLUSTERIFACE},		// Not implemented, yet
 	{"cluster-ip",		required_argument,	NULL,	CLUSTERMCASTIPADDR},	// Not implemented, yet

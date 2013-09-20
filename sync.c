@@ -945,7 +945,7 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 	if((!options_p->flags[RSYNCPREFERINCLUDE]) && skip_rules)
 		return 0;
 
-	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL, NULL);
+	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL|(options_p->flags[ONEFILESYSTEM]?FTS_XDEV:0), NULL);
 
 	if(tree == NULL) {
 		printf_e("Error: Cannot fts_open() on \"%s\": %s (errno: %i).\n", dirpath, strerror(errno), errno);
@@ -1228,7 +1228,7 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 	printf_dd("Debug2: sync_mark_walk(%i, options_p, \"%s\", indexes_p).\n", notify_d, dirpath);
 	printf_funct my_printf_e = STATE_STARTING(state_p) ? printf_e : _printf_dd;
 
-	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL|FTS_NOSTAT, NULL);
+	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL|FTS_NOSTAT|(options_p->flags[ONEFILESYSTEM]?FTS_XDEV:0), NULL);
 
 	if(tree == NULL) {
 		my_printf_e("Error: Cannot fts_open() on \"%s\": %s (errno: %i).\n", dirpath, strerror(errno), errno);

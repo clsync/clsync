@@ -185,6 +185,14 @@ you may catch a bug due to nonatomicity of rsync's file replace operation.
 Use syslog instead of stderr for logging
 .RE
 
+.B \-X, \-\-one-file-system
+.RS 8
+Don't follow to different devices' mount points. This option just adds option
+"FTS_XDEV" for
+.BR fts_open (3)
+function.
+.RE
+
 .PP
 .B \-c, \-\-cluster\-iface
 .I interface\-ip

@@ -36,6 +36,7 @@ enum flags_enum {
 	CAP_PRESERVE_FILEACCESS = 'C',
 	PTHREAD		= 'p',
 	SYSLOG		= 'Y',
+	ONEFILESYSTEM	= 'X',
 	PIDFILE		= 'z',
 #ifdef CLUSTER_SUPPORT
 	CLUSTERIFACE	= 'c',
