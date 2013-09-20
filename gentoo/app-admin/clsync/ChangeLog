@@ -2,6 +2,10 @@
 # Copyright 1999-2013 Gentoo Foundation; Distributed under the GPL v2
 # $Header: $
 
+  20 Sep 2013; Andrew Savchenko <bircoph@gmail.com> clsync-9999.ebuild:
+  Depend mhash on clsync. Inform users about multiplexed init script.
+  Update options names.
+
   16 Sep 2013; Andrew Savchenko <bircoph@gmail.com> clsync-9999.ebuild,
   +files/clsync-0.1.confd, +files/clsync-0.1.initd,  +files/clsync.conf,
   files/clsync.confd, files/clsync.initd:
