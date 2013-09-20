@@ -971,7 +971,8 @@ directly (e.g with «\-\-exclude "sess_*"»).
 
 The following diagnostics may be issued on stderr:
 
-Error: Cannot inotify_add_watch() on [...]
+Error: Cannot inotify_add_watch() on [...]: No space left on device (errno:
+28)
 .RS
 Not enough inotify watching descriptors is allowed. It can be fixed
 by increasing value of "sysctl fs.inotify.max_user_watches"

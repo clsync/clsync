@@ -213,9 +213,18 @@ static inline int parse_parameter(options_t *options_p, uint16_t param_id, char 
 		case SYNCTIMEOUT:
 			options_p->synctimeout = (unsigned int)atol(arg);
 			break;
-		case IGNOREEXITCODE:
-			options_p->isignoredexitcode[(unsigned char)atoi(arg)] = 1;
+		case IGNOREEXITCODE: {
+			unsigned char exitcode = (unsigned char)atoi(arg);
+			if(exitcode == 0) {
+				// flushing the setting
+				int i = 0;
+				while(i < 256)
+					options_p->isignoredexitcode[i++] = 0;
+			} else {
+				options_p->isignoredexitcode[exitcode] = 1;
+			}
 			break;
+		}
 		case SHOW_VERSION:
 			version();
 			break;
