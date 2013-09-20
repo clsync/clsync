@@ -764,8 +764,10 @@ char *sync_path_abs2rel(options_t *options_p, const char *path_abs, size_t path_
 
 	size_t path_rel_len;
 	char  *path_rel;
+	size_t watchdirlen = (options_p->watchdir == options_p->watchdirwslash /* if watch-dir == "/" */) 
+				? 0 : options_p->watchdirlen;
 
-	signed long path_rel_len_signed = path_abs_len - (options_p->watchdirlen+1);
+	signed long path_rel_len_signed = path_abs_len - (watchdirlen+1);
 
 	path_rel_len = (path_rel_len_signed > 0) ? path_rel_len_signed : 0;
 
@@ -784,13 +786,13 @@ char *sync_path_abs2rel(options_t *options_p, const char *path_abs, size_t path_
 		return path_rel;
 	}
 
-	memcpy(path_rel, &path_abs[options_p->watchdirlen+1], path_rel_len+1);
+	memcpy(path_rel, &path_abs[watchdirlen+1], path_rel_len+1);
 
 #ifdef VERYPARANOID
 	// Removing "/" on the end
 	printf_ddd("Debug3: sync_path_abs2rel(): \"%s\" (len: %i) --%i--> \"%s\" (len: %i) + ", 
 		path_abs, path_abs_len, path_rel[path_rel_len - 1] == '/',
-		options_p->watchdirwslash, options_p->watchdirlen+1);
+		options_p->watchdirwslash, watchdirlen+1);
 	if(path_rel[path_rel_len - 1] == '/')
 		path_rel[--path_rel_len] = 0x00;
 	printf_ddd("\"%s\" (len: %i)\n", path_rel, path_rel_len);
