@@ -2,7 +2,7 @@
 
 # config file, default is /etc/clsync/clsync.conf.
 # to disable set to /dev/null
-#CLSYNC_CONF=""
+#CLSYNC_CONF="/etc/clsync/clsync.conf"
 
 # clsync options, have precedence over config file,
 # see man clsync and $docdir/examples for details
@@ -12,3 +12,9 @@
 #CLSYNC_OPTS="--lists-dir /tmp/clsync --mode rsyncshell
 #--watch-dir /source/dir --sync-handler /usr/bin/rsync 
 #--rules-file /etc/clsync/rules --distination-dir /destination/dir"
+
+# Change clsync nice level (default is unset)
+#CLSYNC_NICE="0"
+
+# Change clsync ionice level (default is unset)
+#CLSYNC_IONICE="2:7"

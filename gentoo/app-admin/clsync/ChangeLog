@@ -2,9 +2,17 @@
 # Copyright 1999-2013 Gentoo Foundation; Distributed under the GPL v2
 # $Header: $
 
-  20 Sep 2013; Andrew Savchenko <bircoph@gmail.com> clsync-9999.ebuild:
+  21 Sep 2013; Andrew Savchenko <bircoph@gmail.com> files/clsync.initd:
+  Terminate clsync offsprings which are still alive after clsync
+  termination. clsync send signals to its childs, but not to further
+  offsprings (grandchildren and so on), so this offsprings may not
+  die properly in childs doesn't handle this. Thus sophisticated
+  measures are required for cleanup.
+
+  20 Sep 2013; Andrew Savchenko <bircoph@gmail.com> clsync-9999.ebuild,
+  files/clsync.confd, files/clsync.initd:
   Depend mhash on clsync. Inform users about multiplexed init script.
-  Update options names.
+  Update options names. Add nice, ionice and retry support.
 
   16 Sep 2013; Andrew Savchenko <bircoph@gmail.com> clsync-9999.ebuild,
   +files/clsync-0.1.confd, +files/clsync-0.1.initd,  +files/clsync.conf,
