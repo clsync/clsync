@@ -191,6 +191,14 @@ Don't follow to different devices' mount points. This option just adds option
 "FTS_XDEV" for
 .BR fts_open (3)
 function.
+
+.B Warning!
+If you're using this option
+.B clsync
+will write neither includes nor excludes of content of mount points.
+.br
+This may cause problems e.g. you're using rsync for sync-handler without
+similar option "--one-file-system".
 .RE
 
 .PP
