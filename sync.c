@@ -1650,6 +1650,51 @@ gboolean sync_idle_dosync_collectedevents_aggrout(gpointer outline_gp, gpointer 
 	return TRUE;
 }
 
+char *rsync_escape(char *path) {
+	return path;
+
+	size_t sc_coords_size = ALLOC_PORTION;
+	size_t *sc_coords     = malloc(sizeof(*sc_coords) * sc_coords_size);
+	size_t sc_count       = 0;
+
+	size_t i = 0;
+
+	while(path[i]) {
+		case(path[i]) {
+			case '[':
+			case ']':
+			case '*':
+			case '?':
+				if(sc_count >= sc_coords_size-1) {
+					sc_coords_size += ALLOC_PORTION;
+					sc_coords       = realloc(sc_coords, sizeof(*sc_coords) * sc_coords_size);
+				}
+				sc_coords[sc_count++] = i;
+		}
+		i++;
+	};
+
+	if(sc_count) {
+		path=realloc(path, i+sc_count+1);
+
+		size_t end = i+sc_count;
+
+		sc_coords[sc_count] = end;
+
+		while(sc_count) {
+			char *from, *to;
+			sc_count--;
+
+			to   = &path[sc_coords[sc_count]+sc_count];
+			from = &path[sc_coords[sc_count]+1];
+
+			memcpy(to, from, sc_coords[sc_count+1]-sc_coords[sc_count]-1);
+		}
+	}
+
+	return path;
+}
+
 gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, gpointer flags_gp, gpointer arg_gp) {
 	struct dosync_arg *dosync_arg_p = (struct dosync_arg *)arg_gp;
 	char *fpath		  = (char *)fpath_gp;
@@ -1674,14 +1719,14 @@ gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, g
 	}
 
 	if(flags&EVIF_RECURSIVELY) {
-		printf_ddd("Debug3: Adding to exclude-file: \"%s/***\"\n", fpathwslash);
+		printf_ddd("Debug3: Adding to exclude-file: \"%s/***\"\n",	rsync_escape(fpathwslash));
 		fprintf(excf, "%s/***\n", fpathwslash);
 	} else
 	if(flags&EVIF_CONTENTRECURSIVELY) {
-		printf_ddd("Debug3: Adding to exclude-file: \"%s/**\"\n", fpathwslash);
+		printf_ddd("Debug3: Adding to exclude-file: \"%s/**\"\n",	rsync_escape(fpathwslash));
 		fprintf(excf, "%s/**\n", fpathwslash);
 	} else {
-		printf_ddd("Debug3: Adding to exclude-file: \"%s\"\n", fpathwslash);
+		printf_ddd("Debug3: Adding to exclude-file: \"%s\"\n",		rsync_escape(fpathwslash));
 		fprintf(excf, "%s\n", fpathwslash);
 	}
 
@@ -1847,6 +1892,8 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 	}
 
 	char *end=fpathwslash;
+
+	rpathwslash = rsync_escape(rpathwslash);
 
 	if(evinfo->flags & EVIF_RECURSIVELY) {
 		printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): Recursively \"%s\": Adding to rsynclist: \"%s/***\".\n", fpathwslash, fpathwslash);
