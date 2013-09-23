@@ -49,5 +49,7 @@ typedef int(*api_funct_deinit)();
 enum eventinfo_flags {
 	EVIF_NONE		= 0x00000000,	// No modifier
 	EVIF_RECURSIVELY	= 0x00000001,	// Need to be synced recursively
+	EVIF_CONTENTRECURSIVELY	= 0x00000002,	// Affects recursively only on content of this dir
 };
+typedef enum eventinfo_flags eventinfo_flags_t;
 

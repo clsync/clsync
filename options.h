@@ -36,7 +36,7 @@ enum flags_enum {
 	CAP_PRESERVE_FILEACCESS = 'C',
 	PTHREAD		= 'p',
 	SYSLOG		= 'Y',
-	ONEFILESYSTEM	= 'X',
+	EXCLUDEFILESYSTEMS= 'X',
 	PIDFILE		= 'z',
 #ifdef CLUSTER_SUPPORT
 	CLUSTERIFACE	= 'c',
@@ -73,6 +73,7 @@ enum flags_enum {
 	RSYNCINCLIMIT		= 1|OPTION_LONGOPTONLY,
 	RSYNCPREFERINCLUDE	= 2|OPTION_LONGOPTONLY,
 	SYNCLISTSIMPLIFY	= 3|OPTION_LONGOPTONLY,
+	ONEFILESYSTEM		= 4|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -142,6 +143,7 @@ struct options {
 	uid_t uid;
 	gid_t gid;
 	rule_t rules[MAXRULES];
+	dev_t st_dev;
 	int flags[1<<10];
 	int flags_set[1<<10];
 	char *config_path;

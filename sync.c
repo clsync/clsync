@@ -284,17 +284,27 @@ static inline int indexes_removefromqueue(indexes_t *indexes_p, char *fpath, que
 	return 0;
 }
 
-static inline int indexes_addexclude(indexes_t *indexes_p, char *fpath, queue_id_t queue_id) {
-	g_hash_table_replace(indexes_p->exc_fpath_coll_ht[queue_id], fpath, GINT_TO_POINTER(1));
+static inline int indexes_addexclude(indexes_t *indexes_p, char *fpath, eventinfo_flags_t flags, queue_id_t queue_id) {
+	g_hash_table_replace(indexes_p->exc_fpath_coll_ht[queue_id], fpath, GINT_TO_POINTER(flags));
 
 	printf_ddd("Debug3: indexes_addexclude(indexes_p, \"%s\", %i). It's now %i events collected in queue %i.\n", fpath, queue_id, g_hash_table_size(indexes_p->exc_fpath_coll_ht[queue_id]), queue_id);
 	return 0;
 }
 
-static inline int indexes_addexclude_aggr(indexes_t *indexes_p, char *fpath) {
-	g_hash_table_replace(indexes_p->exc_fpath_ht, fpath, GINT_TO_POINTER(1));
+static inline int indexes_addexclude_aggr(indexes_t *indexes_p, char *fpath, eventinfo_flags_t flags) {
+	printf_ddd("Debug3: indexes_addexclude_aggr(indexes_p, \"%s\", %u).\n", fpath, flags);
 
-	printf_ddd("Debug3: indexes_addexclude_aggr(indexes_p, \"%s\").\n", fpath);
+	gpointer flags_gp = g_hash_table_lookup(indexes_p->exc_fpath_ht, fpath);
+	if(flags_gp != NULL)
+		flags |= GPOINTER_TO_INT(flags_gp);
+
+	// Removing extra flags
+	if((flags&(EVIF_RECURSIVELY | EVIF_CONTENTRECURSIVELY)) == (EVIF_RECURSIVELY | EVIF_CONTENTRECURSIVELY))
+		flags &= ~EVIF_CONTENTRECURSIVELY;
+
+	g_hash_table_replace(indexes_p->exc_fpath_ht, fpath, GINT_TO_POINTER(flags));
+
+	printf_ddd("Debug3: indexes_addexclude_aggr(indexes_p, \"%s\", flags): %u.\n", fpath, flags);
 	return 0;
 }
 
@@ -947,7 +957,15 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 	if((!options_p->flags[RSYNCPREFERINCLUDE]) && skip_rules)
 		return 0;
 
-	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL|(options_p->flags[ONEFILESYSTEM]?FTS_XDEV:0), NULL);
+	char fts_no_stat = (initsync==INITSYNC_FULL) && !(options_p->flags[EXCLUDEFILESYSTEMS]);
+
+	tree = fts_open(
+			(char *const *)&rootpaths,
+			FTS_NOCHDIR | FTS_PHYSICAL | 
+			(fts_no_stat				? FTS_NOSTAT	: 0) | 
+			(options_p->flags[ONEFILESYSTEM] 	? FTS_XDEV	: 0), 
+			NULL
+		);
 
 	if(tree == NULL) {
 		printf_e("Error: Cannot fts_open() on \"%s\": %s (errno: %i).\n", dirpath, strerror(errno), errno);
@@ -997,8 +1015,25 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 
 		printf_ddd("Debug3: sync_initialsync_walk(): Pointing to \"%s\" (node->fts_info == %i)\n", path_rel, node->fts_info);
 
+		if(options_p->flags[EXCLUDEFILESYSTEMS] && node->fts_info==FTS_D) {
+			if(rsync_and_prefer_excludes) {
+				if(node->fts_statp->st_dev != options_p->st_dev) {
+					if(queue_id == QUEUE_AUTO) {
+						int i=0;
+						while(i<QUEUE_MAX)
+							indexes_addexclude(indexes_p, strdup(path_rel), EVIF_CONTENTRECURSIVELY, i++);
+					} else
+						indexes_addexclude(indexes_p, strdup(path_rel), EVIF_CONTENTRECURSIVELY, queue_id);
+				}
+			} else {
+				printf_e("Error: sync_initialsync_walk(): Excluding mount points is not implentemted for non \"rsync*\" modes.");
+			}
+		}
+
+		mode_t st_mode = fts_no_stat ? (node->fts_info==FTS_D ? S_IFDIR : S_IFREG) : node->fts_statp->st_mode;
+
 		if(!skip_rules) {
-			ruleaction_t perm = rules_getperm(path_rel, node->fts_statp->st_mode, rules_p, RA_WALK|RA_MONITOR);
+			ruleaction_t perm = rules_getperm(path_rel, st_mode, rules_p, RA_WALK|RA_MONITOR);
 
 			if(!(perm&RA_WALK)) {
 				printf_ddd("Debug3: sync_initialsync_walk(): Rejecting to walk into \"%s\".\n", path_rel);
@@ -1011,9 +1046,9 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 					if(queue_id == QUEUE_AUTO) {
 						int i=0;
 						while(i<QUEUE_MAX)
-							indexes_addexclude(indexes_p, strdup(path_rel), i++);
+							indexes_addexclude(indexes_p, strdup(path_rel), EVIF_NONE, i++);
 					} else
-						indexes_addexclude(indexes_p, strdup(path_rel), queue_id);
+						indexes_addexclude(indexes_p, strdup(path_rel), EVIF_NONE, queue_id);
 				}
 				continue;
 			}
@@ -1023,7 +1058,7 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 		evinfo.seqid_max    = evinfo.seqid_min;
 		evinfo.objtype_old  = EOT_DOESNTEXIST;
 		evinfo.objtype_new  = node->fts_info==FTS_D ? EOT_DIR : EOT_FILE;
-		evinfo.fsize        = node->fts_statp->st_size;
+		evinfo.fsize        = fts_no_stat ? 0 : node->fts_statp->st_size;
 		switch(options_p->notifyengine) {
 #ifdef FANOTIFY_SUPPORT
 			case NE_FANOTIFY:
@@ -1389,13 +1424,13 @@ static int sync_dosync(const char *fpath, uint32_t evmask, options_t *options_p,
 	return ret;
 }
 
-void _sync_idle_dosync_collectedexcludes(gpointer fpath_gp, gpointer dummy, gpointer arg_gp) {
+void _sync_idle_dosync_collectedexcludes(gpointer fpath_gp, gpointer flags_gp, gpointer arg_gp) {
 	char *fpath		  = (char *)fpath_gp;
 	indexes_t *indexes_p 	  = ((struct dosync_arg *)arg_gp)->indexes_p;
 
-	printf_ddd("Debug3: _sync_idle_dosync_collectedexcludes(): \"%s\".\n", fpath);
+	printf_ddd("Debug3: _sync_idle_dosync_collectedexcludes(): \"%s\", %u (%p).\n", fpath, GPOINTER_TO_INT(flags_gp), flags_gp);
 
-	indexes_addexclude_aggr(indexes_p, strdup(fpath));
+	indexes_addexclude_aggr(indexes_p, strdup(fpath), (eventinfo_flags_t)GPOINTER_TO_INT(flags_gp));
 
 	return;
 }
@@ -1615,10 +1650,11 @@ gboolean sync_idle_dosync_collectedevents_aggrout(gpointer outline_gp, gpointer 
 	return TRUE;
 }
 
-gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
+gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, gpointer flags_gp, gpointer arg_gp) {
 	struct dosync_arg *dosync_arg_p = (struct dosync_arg *)arg_gp;
 	char *fpath		  = (char *)fpath_gp;
 	FILE *excf		  = dosync_arg_p->outf;
+	eventinfo_flags_t flags	  = GPOINTER_TO_INT(flags_gp);
 //	options_t *options_p 	  = dosync_arg_p->options_p;
 //	indexes_t *indexes_p	  = dosync_arg_p->indexes_p;
 	printf_ddd("Debug3: sync_idle_dosync_collectedevents_rsync_exclistpush(): \"%s\"\n", fpath);
@@ -1637,8 +1673,17 @@ gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, g
 		fpathwslash = fpath;
 	}
 
-	printf_ddd("Debug3: Adding to exclude-file: \"%s\"\n", fpathwslash);
-	fprintf(excf, "%s\n", fpathwslash);
+	if(flags&EVIF_RECURSIVELY) {
+		printf_ddd("Debug3: Adding to exclude-file: \"%s/***\"\n", fpathwslash);
+		fprintf(excf, "%s/***\n", fpathwslash);
+	} else
+	if(flags&EVIF_CONTENTRECURSIVELY) {
+		printf_ddd("Debug3: Adding to exclude-file: \"%s/**\"\n", fpathwslash);
+		fprintf(excf, "%s/**\n", fpathwslash);
+	} else {
+		printf_ddd("Debug3: Adding to exclude-file: \"%s\"\n", fpathwslash);
+		fprintf(excf, "%s\n", fpathwslash);
+	}
 
 	return TRUE;
 }

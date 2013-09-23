@@ -185,21 +185,25 @@ you may catch a bug due to nonatomicity of rsync's file replace operation.
 Use syslog instead of stderr for logging
 .RE
 
-.B \-X, \-\-one-file-system
+.B \-\-one\-file\-system
 .RS 8
 Don't follow to different devices' mount points. This option just adds option
 "FTS_XDEV" for
 .BR fts_open (3)
 function.
-
-.B Warning!
-If you're using this option
-.B clsync
-will write neither includes nor excludes of content of mount points.
-.br
-This may cause problems e.g. you're using rsync for sync-handler without
-similar option "--one-file-system".
 .RE
+
+.B \-X, \-\-exclude\-other\-file\-systems
+.RS 8
+Forces
+.I \-\-one\-file\-system
+but also add excludes to do not sync mount points.
+
+This requires to do
+.BR stat (2)
+syscalls on every dir and can reduce performance.
+.RE
+
 
 .PP
 .B \-c, \-\-cluster\-iface

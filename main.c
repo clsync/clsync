@@ -46,6 +46,7 @@ static const struct option long_options[] =
 	{"pthread",		optional_argument,	NULL,	PTHREAD},
 	{"syslog",		optional_argument,	NULL,	SYSLOG},
 	{"one-file-system",	optional_argument,	NULL,	ONEFILESYSTEM},
+	{"exclude-file-systems",optional_argument,	NULL,	EXCLUDEFILESYSTEMS},
 #ifdef CLUSTER_SUPPORT
 	{"cluster-iface",	required_argument,	NULL,	CLUSTERIFACE},		// Not implemented, yet
 	{"cluster-ip",		required_argument,	NULL,	CLUSTERMCASTIPADDR},	// Not implemented, yet
@@ -770,6 +771,9 @@ int main(int argc, char *argv[]) {
 	if(nret) ret = nret;
 	out_init(options.flags);
 
+	if(options.flags[EXCLUDEFILESYSTEMS])
+		options.flags[ONEFILESYSTEM]=1;
+
 	if(options.flags[MODE] == MODE_UNSET) {
 		printf_e("Error: \"--mode\" is not set.\n");
 		ret = EINVAL;
@@ -1021,13 +1025,15 @@ int main(int argc, char *argv[]) {
 		ret = errno;
 	}
 
-#ifdef VERYPARANOID
 	{
 		struct stat64 stat64={0};
 		if(lstat64(options.watchdir, &stat64)) {
 			printf_e("Error: main(): Cannot lstat64() on \"%s\": %s (errno: %i)\n", options.watchdir, strerror(errno), errno);
 			ret = errno;
 		} else {
+			if(options.flags[EXCLUDEFILESYSTEMS])
+				options.st_dev = stat64.st_dev;
+#ifdef VERYPARANOID
 			if((stat64.st_mode & S_IFMT) == S_IFLNK) {
 				// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
 				// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
@@ -1036,9 +1042,9 @@ int main(int argc, char *argv[]) {
 				printf_e("Error: Watch dir cannot be symlink, but \"%s\" is a symlink.\n", options.watchdir);
 				ret = EINVAL;
 			}
+#endif
 		}
 	}
-#endif
 
 	nret=main_rehash(&options);
 	if(nret)

@@ -130,6 +130,15 @@ enum state_enum {
 };
 typedef enum state_enum state_t;
 
+struct excludeinfo {
+	unsigned int	seqid_min;
+	unsigned int	seqid_max;
+	eventobjtype_t	objtype_old;
+	eventobjtype_t	objtype_new;
+	uint32_t	flags;
+};
+typedef struct eventinfo eventinfo_t;
+
 struct eventinfo {
 	uint32_t	evmask;
 	unsigned int	seqid_min;
