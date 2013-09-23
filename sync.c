@@ -957,7 +957,7 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 	if((!options_p->flags[RSYNCPREFERINCLUDE]) && skip_rules)
 		return 0;
 
-	char fts_no_stat = (initsync==INITSYNC_FULL) && !(options_p->flags[EXCLUDEFILESYSTEMS]);
+	char fts_no_stat = (initsync==INITSYNC_FULL) && !(options_p->flags[EXCLUDEMOUNTPOINTS]);
 
 	tree = fts_open(
 			(char *const *)&rootpaths,
@@ -1015,7 +1015,7 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 
 		printf_ddd("Debug3: sync_initialsync_walk(): Pointing to \"%s\" (node->fts_info == %i)\n", path_rel, node->fts_info);
 
-		if(options_p->flags[EXCLUDEFILESYSTEMS] && node->fts_info==FTS_D) {
+		if(options_p->flags[EXCLUDEMOUNTPOINTS] && node->fts_info==FTS_D) {
 			if(rsync_and_prefer_excludes) {
 				if(node->fts_statp->st_dev != options_p->st_dev) {
 					if(queue_id == QUEUE_AUTO) {

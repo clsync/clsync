@@ -46,7 +46,7 @@ static const struct option long_options[] =
 	{"pthread",		optional_argument,	NULL,	PTHREAD},
 	{"syslog",		optional_argument,	NULL,	SYSLOG},
 	{"one-file-system",	optional_argument,	NULL,	ONEFILESYSTEM},
-	{"exclude-file-systems",optional_argument,	NULL,	EXCLUDEFILESYSTEMS},
+	{"exclude-mount-points",optional_argument,	NULL,	EXCLUDEMOUNTPOINTS},
 #ifdef CLUSTER_SUPPORT
 	{"cluster-iface",	required_argument,	NULL,	CLUSTERIFACE},		// Not implemented, yet
 	{"cluster-ip",		required_argument,	NULL,	CLUSTERMCASTIPADDR},	// Not implemented, yet
@@ -771,7 +771,7 @@ int main(int argc, char *argv[]) {
 	if(nret) ret = nret;
 	out_init(options.flags);
 
-	if(options.flags[EXCLUDEFILESYSTEMS])
+	if(options.flags[EXCLUDEMOUNTPOINTS])
 		options.flags[ONEFILESYSTEM]=1;
 
 	if(options.flags[MODE] == MODE_UNSET) {
@@ -1031,7 +1031,7 @@ int main(int argc, char *argv[]) {
 			printf_e("Error: main(): Cannot lstat64() on \"%s\": %s (errno: %i)\n", options.watchdir, strerror(errno), errno);
 			ret = errno;
 		} else {
-			if(options.flags[EXCLUDEFILESYSTEMS])
+			if(options.flags[EXCLUDEMOUNTPOINTS])
 				options.st_dev = stat64.st_dev;
 #ifdef VERYPARANOID
 			if((stat64.st_mode & S_IFMT) == S_IFLNK) {

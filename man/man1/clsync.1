@@ -193,7 +193,7 @@ Don't follow to different devices' mount points. This option just adds option
 function.
 
 .B Warning!
-If you're using this option (but no \-\-exclude\-file\-systems)
+If you're using this option (but no \-\-exclude\-mount\-points)
 .B clsync
 will write neither includes nor excludes of content of mount points.
 .br
@@ -201,7 +201,7 @@ This may cause problems e.g. you're using rsync for sync-handler without
 similar option "--one-file-system".
 .RE
 
-.B \-X, \-\-exclude\-file\-systems
+.B \-X, \-\-exclude\-mount\-points
 .RS 8
 Forces
 .I \-\-one\-file\-system
