@@ -1660,7 +1660,7 @@ char *rsync_escape(char *path) {
 	size_t i = 0;
 
 	while(path[i]) {
-		case(path[i]) {
+		switch(path[i]) {
 			case '[':
 			case ']':
 			case '*':
@@ -1891,9 +1891,9 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 		outf = dosync_arg_p->outf;
 	}
 
-	char *end=fpathwslash;
+	fpathwslash = rsync_escape(fpathwslash);
 
-	rpathwslash = rsync_escape(rpathwslash);
+	char *end=fpathwslash;
 
 	if(evinfo->flags & EVIF_RECURSIVELY) {
 		printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): Recursively \"%s\": Adding to rsynclist: \"%s/***\".\n", fpathwslash, fpathwslash);
