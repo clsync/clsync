@@ -27,6 +27,12 @@ SCRIPTNAME=/etc/init.d/$NAME
 
 [ "$CLSYNC_ENABLE" != "true" ] && exit 0
 
+if [ "$CLSYNC_IONICE_CLASS" != "" ]; then
+	IONICE="$(which ionice) -c $CLSYNC_IONICE_CLASS"
+else
+	IONICE="$(which ionice) -c 3"
+fi
+
 . /lib/lsb/init-functions
 
 do_start() {
@@ -36,7 +42,7 @@ do_start() {
 			|| return 1
 
 	start-stop-daemon --start --quiet --pidfile "$PIDFILE" \
-		--exec "$DAEMON" -- $ARGS $CLSYNC_ARGS \
+		--exec $IONICE -- "$DAEMON" $ARGS $CLSYNC_ARGS \
 			|| return 2
 }
 

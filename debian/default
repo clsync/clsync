@@ -3,6 +3,8 @@
 # clsync is not enabled by default. To enable it replace "false" with "true":
 CLSYNC_ENABLE=false
 
+CLSYNC_IONICE_CLASS=3
+
 
 # clsync's arguments:
 
