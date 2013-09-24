@@ -1651,33 +1651,55 @@ gboolean sync_idle_dosync_collectedevents_aggrout(gpointer outline_gp, gpointer 
 }
 
 char *rsync_escape(char *path) {
-	return path;
-
-	size_t sc_coords_size = ALLOC_PORTION;
-	size_t *sc_coords     = malloc(sizeof(*sc_coords) * sc_coords_size);
+//	size_t sc_coords_size = ALLOC_PORTION;
+//	size_t *sc_coords     = malloc(sizeof(*sc_coords) * sc_coords_size);
 	size_t sc_count       = 0;
 
 	size_t i = 0;
 
-	while(path[i]) {
+	while(1) {
 		switch(path[i]) {
+			case 0:
+				goto l_rsync_escape_loop0_end;
 			case '[':
 			case ']':
 			case '*':
 			case '?':
+/*
 				if(sc_count >= sc_coords_size-1) {
 					sc_coords_size += ALLOC_PORTION;
 					sc_coords       = realloc(sc_coords, sizeof(*sc_coords) * sc_coords_size);
 				}
 				sc_coords[sc_count++] = i;
+*/
+				sc_count++;
 		}
 		i++;
 	};
+l_rsync_escape_loop0_end:
 
 	if(sc_count) {
 		path=realloc(path, i+sc_count+1);
+		char *from, *to;
 
-		size_t end = i+sc_count;
+		// TODO: Optimize this. Second "switch" is a bad way.
+		while(i--) {
+			path[i+sc_count] = path[i];
+
+			switch(path[i]) {
+				case '[':
+				case ']':
+				case '*':
+				case '?':
+					sc_count--;
+					path[i+sc_count] = '\\';
+					if(!sc_count)
+						goto l_rsync_escape_loop1_end;
+					break;
+			}
+		} 
+
+/*		size_t end = i+sc_count;
 
 		sc_coords[sc_count] = end;
 
@@ -1688,9 +1710,11 @@ char *rsync_escape(char *path) {
 			to   = &path[sc_coords[sc_count]+sc_count];
 			from = &path[sc_coords[sc_count]+1];
 
-			memcpy(to, from, sc_coords[sc_count+1]-sc_coords[sc_count]-1);
+			memmove(to, from, sc_coords[sc_count+1]-sc_coords[sc_count]-1);
 		}
+*/
 	}
+l_rsync_escape_loop1_end:
 
 	return path;
 }
