@@ -9,8 +9,8 @@ CLSYNC_IONICE_CLASS=3
 # clsync's arguments:
 
 # proof of concept:
-CLSYNC_ARGS='-M rsyncdirect -Y -d /dev/shm/clsync -x 23 -W /var/www -S /usr/bin/rsync -D /mnt/backup'
+CLSYNC_ARGS='-M rsyncdirect -Y -L /dev/shm/clsync -x 23 -W /var/www -S /usr/bin/rsync -D /mnt/backup'
 
 # production example:
-#CLSYNC_ARGS='-M rsyncshell -Y -d /dev/shm/clsync -x 24 -W /srv/lxc -S /opt/backup_engine/bin/sync-handler.sh -R /opt/backup_engine/etc/clsync.filter'
+#CLSYNC_ARGS='-M rsyncshell -Y -L /dev/shm/clsync -x 24 -W /srv/lxc -S /opt/backup_engine/bin/sync-handler.sh -R /opt/backup_engine/etc/clsync.filter'
 
