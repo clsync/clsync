@@ -1680,7 +1680,6 @@ l_rsync_escape_loop0_end:
 
 	if(sc_count) {
 		path=realloc(path, i+sc_count+1);
-		char *from, *to;
 
 		// TODO: Optimize this. Second "switch" is a bad way.
 		while(i--) {
@@ -1700,6 +1699,8 @@ l_rsync_escape_loop0_end:
 		} 
 
 /*		size_t end = i+sc_count;
+
+		char *from, *to;
 
 		sc_coords[sc_count] = end;
 
