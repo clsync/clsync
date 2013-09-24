@@ -17,7 +17,7 @@ function rsynclist() {
 		excludefrom="--exclude-from=${EXCLISTFILE}"
 	fi
 
-	rsync -avH --delete-before "$excludefrom" --include-from="${LISTFILE}" --exclude='*' "$FROM"/ "$TO"/
+	exec rsync -avH --delete-before "$excludefrom" --include-from="${LISTFILE}" --exclude='*' "$FROM"/ "$TO"/
 
 	return 0
 }
