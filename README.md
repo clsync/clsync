@@ -89,14 +89,14 @@ the program, like "directory creation" or "file deletion". So I switched to
 First of all, you should install dependencies to compile clsync. As you can
 see from GNUmakefile clsync depends only on "glib-2.0" and "mhash", so on
 debian-like systems you should execute something like
-"apt-get install libglib2.0-dev libmhash-dev".
+"apt-get install libglib2.0-dev libmhash-dev autoreconf".
 
 Next step is generating Makefile. To do that usually it's enought to execute
 "autoreconf -i && ./configure".
 
 Next step is compiling. To compile usually it's enough to execute "make".
 
-Next step in installing. To install usually it's enough to execute
+Next step is installing. To install usually it's enough to execute
 "su -c 'make install'".
 
 Also, debian-users can use my repository to install the clsync:
