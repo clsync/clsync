@@ -1650,7 +1650,15 @@ gboolean sync_idle_dosync_collectedevents_aggrout(gpointer outline_gp, gpointer 
 	return TRUE;
 }
 
-char *rsync_escape(char *path) {
+size_t rsync_escape_result_size = 0;
+char *rsync_escape_result 	= NULL;
+
+void rsync_escape_cleanup() {
+	if(rsync_escape_result_size)
+		free(rsync_escape_result);
+}
+
+char *rsync_escape(const char *path) {
 //	size_t sc_coords_size = ALLOC_PORTION;
 //	size_t *sc_coords     = malloc(sizeof(*sc_coords) * sc_coords_size);
 	size_t sc_count       = 0;
@@ -1665,6 +1673,7 @@ char *rsync_escape(char *path) {
 			case ']':
 			case '*':
 			case '?':
+			case '\\':
 /*
 				if(sc_count >= sc_coords_size-1) {
 					sc_coords_size += ALLOC_PORTION;
@@ -1679,21 +1688,27 @@ char *rsync_escape(char *path) {
 l_rsync_escape_loop0_end:
 
 	if(sc_count) {
-		path=realloc(path, i+sc_count+1);
+		size_t required_size = i+sc_count+1;
+		if(required_size >= rsync_escape_result_size) {
+			rsync_escape_result_size = required_size + ALLOC_PORTION;
+			rsync_escape_result	 = realloc(rsync_escape_result, rsync_escape_result_size);
+		}
 
 		// TODO: Optimize this. Second "switch" is a bad way.
+		i++;
 		while(i--) {
-			path[i+sc_count] = path[i];
+			rsync_escape_result[i+sc_count] = path[i];
 
 			switch(path[i]) {
 				case '[':
 				case ']':
 				case '*':
 				case '?':
+				case '\\':
 					sc_count--;
-					path[i+sc_count] = '\\';
-					if(!sc_count)
-						goto l_rsync_escape_loop1_end;
+					rsync_escape_result[i+sc_count] = '\\';
+//					if(!sc_count)
+//						goto l_rsync_escape_loop1_end;
 					break;
 			}
 		} 
@@ -1715,9 +1730,9 @@ l_rsync_escape_loop0_end:
 		}
 */
 	}
-l_rsync_escape_loop1_end:
+//l_rsync_escape_loop1_end:
 
-	return path;
+	return rsync_escape_result;
 }
 
 gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, gpointer flags_gp, gpointer arg_gp) {
@@ -1743,15 +1758,17 @@ gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, g
 		fpathwslash = fpath;
 	}
 
+	fpathwslash = rsync_escape(fpathwslash);
+
 	if(flags&EVIF_RECURSIVELY) {
-		printf_ddd("Debug3: Adding to exclude-file: \"%s/***\"\n",	rsync_escape(fpathwslash));
+		printf_ddd("Debug3: Adding to exclude-file: \"%s/***\"\n",	fpathwslash);
 		fprintf(excf, "%s/***\n", fpathwslash);
 	} else
 	if(flags&EVIF_CONTENTRECURSIVELY) {
-		printf_ddd("Debug3: Adding to exclude-file: \"%s/**\"\n",	rsync_escape(fpathwslash));
+		printf_ddd("Debug3: Adding to exclude-file: \"%s/**\"\n",	fpathwslash);
 		fprintf(excf, "%s/**\n", fpathwslash);
 	} else {
-		printf_ddd("Debug3: Adding to exclude-file: \"%s\"\n",		rsync_escape(fpathwslash));
+		printf_ddd("Debug3: Adding to exclude-file: \"%s\"\n",		fpathwslash);
 		fprintf(excf, "%s\n", fpathwslash);
 	}
 
@@ -2802,6 +2819,9 @@ int sync_run(options_t *options_p) {
 			if(!ret) ret = -1;
 		}
 	}
+
+	// Cleaning up run-time routines
+	rsync_escape_cleanup();
 
 	// Removing hash-tables
 	printf_ddd("sync_run(): Closing hash tables\n");
