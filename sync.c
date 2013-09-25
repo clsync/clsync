@@ -1652,13 +1652,13 @@ int sync_idle_dosync_collectedevents_listcreate(struct dosync_arg *dosync_arg_p,
 	return 0;
 }
 
-gboolean sync_idle_dosync_collectedevents_aggrout(gpointer outline_gp, gpointer evinfo_gp, gpointer arg_gp) {
+gboolean rsync_aggrout(gpointer outline_gp, gpointer evinfo_gp, gpointer arg_gp) {
 	struct dosync_arg *dosync_arg_p = (struct dosync_arg *)arg_gp;
 	char *outline		  = (char *)outline_gp;
 	FILE *outf		  = dosync_arg_p->outf;
 //	options_t *options_p 	  = dosync_arg_p->options_p;
 //	indexes_t *indexes_p	  = dosync_arg_p->indexes_p;
-	printf_ddd("Debug3: sync_idle_dosync_collectedevents_aggrout(): \"%s\"\n", outline);
+	printf_ddd("Debug3: rsync_aggrout(): \"%s\"\n", outline);
 
 	fprintf(outf, "%s\n", outline);
 
@@ -1797,6 +1797,9 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 
 	printf_ddd("Debug3: Committing the file (flags[MODE] == %i)\n", options_p->flags[MODE]);
 
+	if((options_p->flags[MODE] == MODE_RSYNCDIRECT) || (options_p->flags[MODE] == MODE_RSYNCSHELL))
+		g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, rsync_aggrout, dosync_arg_p);
+
 	if(options_p->flags[MODE] != MODE_SO) {
 		fclose(dosync_arg_p->outf);
 		dosync_arg_p->outf = NULL;
@@ -1863,6 +1866,53 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 #endif
 }
 
+static inline int rsync_listpush(indexes_t *indexes_p, char *fpath, size_t fpath_len, eventinfo_flags_t flags, int *linescount_p) {
+	char *fpathwslash;
+	if(fpath_len>0) {
+		// Prepending with the slash
+
+		fpathwslash = alloca(fpath_len+2);
+		fpathwslash[0] = '/';
+		memcpy(&fpathwslash[1], fpath, fpath_len+1);
+	} else {
+
+		// In this case slash is not required
+		fpathwslash = (char *)fpath;
+	}
+
+
+	fpathwslash = (char *)rsync_escape(fpathwslash);
+
+	char *end=fpathwslash;
+
+	if(flags & EVIF_RECURSIVELY) {
+		printf_ddd("Debug3: rsync_listpush(): Recursively \"%s\": Adding to rsynclist: \"%s/***\".\n", fpathwslash, fpathwslash);
+		//fprintf(outf, "%s/***\n", fpathwslash);
+		indexes_outaggr_add(indexes_p, strdup(fpathwslash));
+		if(linescount_p != NULL)
+			(*linescount_p)++;
+	}
+
+
+	while(end != NULL) {
+		if(*fpathwslash == 0x00)
+			break;
+		printf_ddd("Debug3: rsync_listpush(): Non-recursively \"%s\": Adding to rsynclist: \"%s\".\n", fpathwslash, fpathwslash);
+		indexes_outaggr_add(indexes_p, strdup(fpathwslash));
+		if(linescount_p != NULL)
+			(*linescount_p)++;
+		end = strrchr(fpathwslash, '/');
+		if(end == NULL)
+			break;
+		if(end - fpathwslash <= 0)
+			break;
+
+		*end = 0x00;
+	};
+
+	return 0;
+}
+
 void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
 	struct dosync_arg *dosync_arg_p = (struct dosync_arg *)arg_gp;
 	char *fpath		   =  (char *)fpath_gp;
@@ -1903,31 +1953,17 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 	}
 
 	// RSYNC case
-	size_t fpath_len = strlen(fpath);
-	char *fpathwslash;
-	if(fpath_len>0) {
-		// Prepending with the slash
-
-		fpathwslash = alloca(fpath_len+2);
-		fpathwslash[0] = '/';
-		memcpy(&fpathwslash[1], fpath, fpath_len+1);
-	} else {
-
-		// In this case slash is not required
-		fpathwslash = fpath;
-	}
-
 	if(options_p->rsyncinclimit && (*linescount_p >= options_p->rsyncinclimit)) {
 		int ret;
 
 		// TODO: optimize this out {
 		char newexc_path[PATH_MAX+1];
 		if((ret=sync_idle_dosync_collectedevents_uniqfname(options_p, newexc_path, "exclist"))) {
-			printf_e("Error: sync_idle_dosync_collectedevents_listcreate: Cannot get unique file name.\n");
+			printf_e("Error: sync_idle_dosync_collectedevents_listpush(): Cannot get unique file name.\n");
 			exit(ret);
 		}
 		if((ret=fileutils_copy(dosync_arg_p->excf_path, newexc_path))) {
-			printf_e("Error: sync_idle_dosync_collectedevents_listcreate: Cannot copy file \"%s\" to \"%s\".\n", dosync_arg_p->excf_path, newexc_path);
+			printf_e("Error: sync_idle_dosync_collectedevents_listpush(): Cannot copy file \"%s\" to \"%s\".\n", dosync_arg_p->excf_path, newexc_path);
 			exit(ret);
 		}
 		// }
@@ -1949,31 +1985,11 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 		outf = dosync_arg_p->outf;
 	}
 
-	fpathwslash = (char *)rsync_escape(fpathwslash);
-
-	char *end=fpathwslash;
-
-	if(evinfo->flags & EVIF_RECURSIVELY) {
-		printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): Recursively \"%s\": Adding to rsynclist: \"%s/***\".\n", fpathwslash, fpathwslash);
-		fprintf(outf, "%s/***\n", fpathwslash);
-		(*linescount_p)++;
+	int ret;
+	if((ret=rsync_listpush(indexes_p, fpath, strlen(fpath), evinfo->flags, linescount_p))) {
+		printf_e("Error: sync_idle_dosync_collectedevents_listpush(): Got error from rsync_listpush(). Exit.\n");
+		exit(ret);
 	}
-
-
-	while(end != NULL) {
-		if(*fpathwslash == 0x00)
-			break;
-		printf_ddd("Debug3: sync_idle_dosync_collectedevents_listpush(): Non-recursively \"%s\": Adding to rsynclist: \"%s\".\n", fpathwslash, fpathwslash);
-		indexes_outaggr_add(indexes_p, strdup(fpathwslash));
-		(*linescount_p)++;
-		end = strrchr(fpathwslash, '/');
-		if(end == NULL)
-			break;
-		if(end - fpathwslash <= 0)
-			break;
-
-		*end = 0x00;
-	};
 
 	return;
 }
@@ -2049,7 +2065,7 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 				g_hash_table_remove_all(indexes_p->out_lines_aggr_ht);
 #endif
 				g_hash_table_foreach_remove(indexes_p->exc_fpath_ht, sync_idle_dosync_collectedevents_rsync_exclistpush, &dosync_arg);
-				g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, sync_idle_dosync_collectedevents_aggrout, &dosync_arg);
+				g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, rsync_aggrout, &dosync_arg);
 				fclose(dosync_arg.outf);
 				strcpy(dosync_arg.excf_path, dosync_arg.outf_path);	// TODO: remove this strcpy()
 			}
@@ -2065,8 +2081,6 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 #endif
 
 		g_hash_table_foreach(indexes_p->fpath2ei_ht, sync_idle_dosync_collectedevents_listpush, &dosync_arg);
-		if((options_p->flags[MODE] == MODE_RSYNCDIRECT) || (options_p->flags[MODE] == MODE_RSYNCSHELL))
-			g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, sync_idle_dosync_collectedevents_aggrout, &dosync_arg);
 
 		if((ret=sync_idle_dosync_collectedevents_commitpart(&dosync_arg))) {
 			printf_e("Error: Cannot submit to sync the list \"%s\": %s (errno: %i)\n", dosync_arg.outf_path, strerror(ret), ret);
@@ -2077,6 +2091,28 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 
 		g_hash_table_remove_all(indexes_p->fpath2ei_ht);
 	}
+
+	return 0;
+}
+
+int apievinfo2rsynclist(indexes_t *indexes_p, int fd, int n, api_eventinfo_t *apievinfo) {
+	int i;
+
+	FILE *f = fdopen(fd, "w");
+	if(f == NULL) {
+		printf_e("Error: apievinfo2rsynclist(): Cannot fdopen(%i, \"w\"): %s (errno: %i)\n", fd, strerror(errno), errno);
+		return errno;
+	}
+
+	i=0;
+	while(i<n) 
+		rsync_listpush(indexes_p, f, apievinfo[i].path, apievinfo[i].path_len, apievinfo[i].flags);
+		i++;
+	}
+
+	struct dosync_arg dosync_arg = {0};
+	dosync_arg.outf = f;
+	g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, rsync_aggrout, &dosync_arg);
 
 	return 0;
 }

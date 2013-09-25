@@ -53,3 +53,16 @@ enum eventinfo_flags {
 };
 typedef enum eventinfo_flags eventinfo_flags_t;
 
+/**
+ * @brief 			Writes to file with descriptor "fd" list file for "--include-from" option of rsync using array of api_eventinfo_t
+ * 
+ * @param[in]	fd		File descriptor to write to
+ * @param[in]	n		Number of records in apievinfo
+ * @param[in]	apievinfo	Pointer to api_eventinfo_t records
+ * 
+ * @retval	zero		Successful
+ * @retval	non-zero	If got error while deleting the message. The error-code is placed into returned value.
+ * 
+ */
+int apievinfo2rsynclist(int fd, int n, api_eventinfo_t *apievinfo);
+
