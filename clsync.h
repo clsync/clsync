@@ -64,5 +64,5 @@ typedef enum eventinfo_flags eventinfo_flags_t;
  * @retval	non-zero	If got error while deleting the message. The error-code is placed into returned value.
  * 
  */
-int apievinfo2rsynclist(int fd, int n, api_eventinfo_t *apievinfo);
+int apievinfo2rsynclist(struct indexes *indexes_p, int fd, int n, api_eventinfo_t *apievinfo);
 

@@ -1866,7 +1866,7 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 #endif
 }
 
-static inline int rsync_listpush(indexes_t *indexes_p, char *fpath, size_t fpath_len, eventinfo_flags_t flags, int *linescount_p) {
+static inline int rsync_listpush(indexes_t *indexes_p, const char *fpath, size_t fpath_len, eventinfo_flags_t flags, int *linescount_p) {
 	char *fpathwslash;
 	if(fpath_len>0) {
 		// Prepending with the slash
@@ -2105,8 +2105,8 @@ int apievinfo2rsynclist(indexes_t *indexes_p, int fd, int n, api_eventinfo_t *ap
 	}
 
 	i=0;
-	while(i<n) 
-		rsync_listpush(indexes_p, f, apievinfo[i].path, apievinfo[i].path_len, apievinfo[i].flags);
+	while(i<n) {
+		rsync_listpush(indexes_p, apievinfo[i].path, apievinfo[i].path_len, apievinfo[i].flags, NULL);
 		i++;
 	}
 
