@@ -320,8 +320,16 @@ static inline int indexes_addexclude_aggr(indexes_t *indexes_p, char *fpath, eve
 	return 0;
 }
 
-static inline int indexes_outaggr_add(indexes_t *indexes_p, char *outline) {
-	g_hash_table_replace(indexes_p->out_lines_aggr_ht, outline, GINT_TO_POINTER(1));
+static inline int indexes_outaggr_add(indexes_t *indexes_p, char *outline, eventinfo_flags_t flags) {
+	gpointer flags_gp = g_hash_table_lookup(indexes_p->out_lines_aggr_ht, outline);
+	if(flags_gp != NULL)
+		flags |= GPOINTER_TO_INT(flags_gp);
+
+	// Removing extra flags
+	if((flags&(EVIF_RECURSIVELY | EVIF_CONTENTRECURSIVELY)) == (EVIF_RECURSIVELY | EVIF_CONTENTRECURSIVELY))
+		flags &= ~EVIF_CONTENTRECURSIVELY;
+
+	g_hash_table_replace(indexes_p->out_lines_aggr_ht, outline, GINT_TO_POINTER(flags));
 
 	printf_ddd("Debug3: indexes_outaggr_aggr(indexes_p, \"%s\").\n", outline);
 	return 0;
@@ -1652,19 +1660,6 @@ int sync_idle_dosync_collectedevents_listcreate(struct dosync_arg *dosync_arg_p,
 	return 0;
 }
 
-gboolean rsync_aggrout(gpointer outline_gp, gpointer evinfo_gp, gpointer arg_gp) {
-	struct dosync_arg *dosync_arg_p = (struct dosync_arg *)arg_gp;
-	char *outline		  = (char *)outline_gp;
-	FILE *outf		  = dosync_arg_p->outf;
-//	options_t *options_p 	  = dosync_arg_p->options_p;
-//	indexes_t *indexes_p	  = dosync_arg_p->indexes_p;
-	printf_ddd("Debug3: rsync_aggrout(): \"%s\"\n", outline);
-
-	fprintf(outf, "%s\n", outline);
-
-	return TRUE;
-}
-
 size_t rsync_escape_result_size = 0;
 char *rsync_escape_result 	= NULL;
 
@@ -1751,6 +1746,82 @@ l_rsync_escape_loop0_end:
 	return rsync_escape_result;
 }
 
+static inline int rsync_outline(FILE *outf, char *outline, eventinfo_flags_t flags) {
+	if(flags & EVIF_RECURSIVELY) {
+		printf_ddd("Debug3: rsync_aggrout(): Recursively \"%s\": Writing to rsynclist: \"%s/***\".\n", outline, outline);
+		fprintf(outf, "%s/***\n", outline);
+	} else
+	if(flags & EVIF_CONTENTRECURSIVELY) {
+		printf_ddd("Debug3: rsync_aggrout(): Content-recursively \"%s\": Writing to rsynclist: \"%s/**\".\n", outline, outline);
+		fprintf(outf, "%s/**\n", outline);
+	} else {
+		printf_ddd("Debug3: rsync_aggrout(): Non-recursively \"%s\": Writing to rsynclist: \"%s\".\n", outline, outline);
+		fprintf(outf, "%s\n", outline);
+	}
+
+	return 0;
+}
+
+gboolean rsync_aggrout(gpointer outline_gp, gpointer flags_gp, gpointer arg_gp) {
+	struct dosync_arg *dosync_arg_p = (struct dosync_arg *)arg_gp;
+	char *outline		  = (char *)outline_gp;
+	FILE *outf		  = dosync_arg_p->outf;
+	eventinfo_flags_t flags	 = (eventinfo_flags_t)GPOINTER_TO_INT(flags_gp);
+//	printf_ddd("Debug3: rsync_aggrout(): \"%s\"\n", outline);
+
+	int ret;
+	if((ret=rsync_outline(outf, outline, flags))) {
+		printf_e("Error: rsync_aggrout(): Got error from rsync_outline(). Exit.\n");
+		exit(ret);	// TODO: replace this with kill(0, ...)
+	}
+
+	return TRUE;
+}
+
+static inline int rsync_listpush(indexes_t *indexes_p, const char *fpath, size_t fpath_len, eventinfo_flags_t flags, int *linescount_p) {
+	char *fpathwslash;
+	if(fpath_len>0) {
+		// Prepending with the slash
+
+		fpathwslash = alloca(fpath_len+2);
+		fpathwslash[0] = '/';
+		memcpy(&fpathwslash[1], fpath, fpath_len+1);
+	} else {
+
+		// In this case slash is not required
+		fpathwslash = (char *)fpath;
+	}
+
+
+	fpathwslash = (char *)rsync_escape(fpathwslash);
+
+	char *end=fpathwslash;
+
+	printf_ddd("Debug3: rsync_listpush(): \"%s\": Adding to rsynclist: \"%s\" with flags %p.\n", 
+		fpathwslash, fpathwslash, (void *)(long)flags);
+	indexes_outaggr_add(indexes_p, strdup(fpathwslash), EVIF_CONTENTRECURSIVELY);
+	if(linescount_p != NULL)
+		(*linescount_p)++;
+
+	while(end != NULL) {
+		if(*fpathwslash == 0x00)
+			break;
+		printf_ddd("Debug3: rsync_listpush(): Non-recursively \"%s\": Adding to rsynclist: \"%s\".\n", fpathwslash, fpathwslash);
+		indexes_outaggr_add(indexes_p, strdup(fpathwslash), EVIF_NONE);
+		if(linescount_p != NULL)
+			(*linescount_p)++;
+		end = strrchr(fpathwslash, '/');
+		if(end == NULL)
+			break;
+		if(end - fpathwslash <= 0)
+			break;
+
+		*end = 0x00;
+	};
+
+	return 0;
+}
+
 gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, gpointer flags_gp, gpointer arg_gp) {
 	struct dosync_arg *dosync_arg_p = (struct dosync_arg *)arg_gp;
 	char *fpath		  = (char *)fpath_gp;
@@ -1776,16 +1847,10 @@ gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, g
 
 	fpathwslash = (char *)rsync_escape(fpathwslash);
 
-	if(flags&EVIF_RECURSIVELY) {
-		printf_ddd("Debug3: Adding to exclude-file: \"%s/***\"\n",	fpathwslash);
-		fprintf(excf, "%s/***\n", fpathwslash);
-	} else
-	if(flags&EVIF_CONTENTRECURSIVELY) {
-		printf_ddd("Debug3: Adding to exclude-file: \"%s/**\"\n",	fpathwslash);
-		fprintf(excf, "%s/**\n", fpathwslash);
-	} else {
-		printf_ddd("Debug3: Adding to exclude-file: \"%s\"\n",		fpathwslash);
-		fprintf(excf, "%s\n", fpathwslash);
+	int ret;
+	if((ret=rsync_outline(excf, fpathwslash, flags))) {
+		printf_e("Error: sync_idle_dosync_collectedevents_rsync_exclistpush(): Got error from rsync_outline(). Exit.\n");
+		exit(ret);	// TODO: replace this with kill(0, ...)
 	}
 
 	return TRUE;
@@ -1864,53 +1929,6 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 #ifdef DOXYGEN
 	sync_exec(NULL, NULL); sync_exec_thread(NULL, NULL);
 #endif
-}
-
-static inline int rsync_listpush(indexes_t *indexes_p, const char *fpath, size_t fpath_len, eventinfo_flags_t flags, int *linescount_p) {
-	char *fpathwslash;
-	if(fpath_len>0) {
-		// Prepending with the slash
-
-		fpathwslash = alloca(fpath_len+2);
-		fpathwslash[0] = '/';
-		memcpy(&fpathwslash[1], fpath, fpath_len+1);
-	} else {
-
-		// In this case slash is not required
-		fpathwslash = (char *)fpath;
-	}
-
-
-	fpathwslash = (char *)rsync_escape(fpathwslash);
-
-	char *end=fpathwslash;
-
-	if(flags & EVIF_RECURSIVELY) {
-		printf_ddd("Debug3: rsync_listpush(): Recursively \"%s\": Adding to rsynclist: \"%s/***\".\n", fpathwslash, fpathwslash);
-		//fprintf(outf, "%s/***\n", fpathwslash);
-		indexes_outaggr_add(indexes_p, strdup(fpathwslash));
-		if(linescount_p != NULL)
-			(*linescount_p)++;
-	}
-
-
-	while(end != NULL) {
-		if(*fpathwslash == 0x00)
-			break;
-		printf_ddd("Debug3: rsync_listpush(): Non-recursively \"%s\": Adding to rsynclist: \"%s\".\n", fpathwslash, fpathwslash);
-		indexes_outaggr_add(indexes_p, strdup(fpathwslash));
-		if(linescount_p != NULL)
-			(*linescount_p)++;
-		end = strrchr(fpathwslash, '/');
-		if(end == NULL)
-			break;
-		if(end - fpathwslash <= 0)
-			break;
-
-		*end = 0x00;
-	};
-
-	return 0;
 }
 
 void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
@@ -2095,13 +2113,12 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 	return 0;
 }
 
-int apievinfo2rsynclist(indexes_t *indexes_p, int fd, int n, api_eventinfo_t *apievinfo) {
+int apievinfo2rsynclist(indexes_t *indexes_p, FILE *listfile, int n, api_eventinfo_t *apievinfo) {
 	int i;
 
-	FILE *f = fdopen(fd, "w");
-	if(f == NULL) {
-		printf_e("Error: apievinfo2rsynclist(): Cannot fdopen(%i, \"w\"): %s (errno: %i)\n", fd, strerror(errno), errno);
-		return errno;
+	if(listfile == NULL) {
+		printf_e("Error: apievinfo2rsynclist(): listfile == NULL.\n");
+		return EINVAL;
 	}
 
 	i=0;
@@ -2111,7 +2128,7 @@ int apievinfo2rsynclist(indexes_t *indexes_p, int fd, int n, api_eventinfo_t *ap
 	}
 
 	struct dosync_arg dosync_arg = {0};
-	dosync_arg.outf = f;
+	dosync_arg.outf = listfile;
 	g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, rsync_aggrout, &dosync_arg);
 
 	return 0;
