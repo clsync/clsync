@@ -515,6 +515,7 @@ int parse_rules_fromfile(options_t *options_p) {
 					sign = RS_REJECT;
 					break;
 				case '#':	// Comment?
+					i--;	// Canceling new rule
 					continue;
 				default:
 					printf_e("Error: Wrong rule action <%c>.\n", *line);
@@ -581,7 +582,7 @@ int parse_rules_fromfile(options_t *options_p) {
 					break;
 				default:
 					printf_e("parse_rules_fromfile(): Warning: Cannot parse the rule <%s>\n", &line[-1]);
-					i--;	// Don't adding the rule
+					i--;	// Canceling new rule
 					continue;
 			}
 
@@ -681,6 +682,8 @@ l_parse_rules_fromfile_end:
 		free(line_buf);
 
 	fclose(f);
+
+	printf_e("Debug3: parse_rules_fromfile(): Adding tail-rule #%u (effective #%u).\n", -1, i);
 
 	rules[i].mask   = RA_NONE;		// Terminator. End of rules' chain.
 	rules[i].perm   = DEFAULT_RULES_PERM;
