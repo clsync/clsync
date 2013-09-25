@@ -129,6 +129,15 @@ ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rul
 	rule_t *rule_p = rules_p;
 	mode_t ftype = st_mode & S_IFMT;
 
+#ifdef _DEBUG
+	printf_ddd("Debug3: rules_search_getperm(): Rules (p == %p):\n", rules_p);
+	i=0;
+	do {
+		printf_ddd("\t%i\t%i\t%p/%p\n", i, rules_p[i].objtype, (void *)(long)rules_p[i].perm, (void *)(long)rules_p[i].mask);
+		i++;
+	} while(rules_p[i].mask != RA_NONE);
+#endif
+
 	if(rule_pp != NULL)
 		if(*rule_pp != NULL) {
 			printf_ddd("Debug3: rules_search_getperm(): Previous position is set.\n");

@@ -687,7 +687,7 @@ l_parse_rules_fromfile_end:
 
 	g_hash_table_destroy(autowrules_ht);
 #ifdef _DEBUG
-	printf_ddd("Debug3: parse_rules_fromfile(): Total:\n");
+	printf_ddd("Debug3: parse_rules_fromfile(): Total (p == %p):\n", rules);
 	i=0;
 	do {
 		printf_ddd("\t%i\t%i\t%p/%p\n", i, rules[i].objtype, (void *)(long)rules[i].perm, (void *)(long)rules[i].mask);
