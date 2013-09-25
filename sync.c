@@ -138,6 +138,7 @@ ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rul
 	} while(rules_p[i].mask != RA_NONE);
 #endif
 
+        i=0;
 	if(rule_pp != NULL)
 		if(*rule_pp != NULL) {
 			printf_ddd("Debug3: rules_search_getperm(): Previous position is set.\n");
@@ -188,12 +189,12 @@ ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rul
 	return rule_p->perm;
 }
 
-ruleaction_t rules_getperm(const char *fpath, mode_t st_mode, rule_t *rules_p, ruleaction_t ruleactions) {
+static inline ruleaction_t rules_getperm(const char *fpath, mode_t st_mode, rule_t *rules_p, ruleaction_t ruleactions) {
 	rule_t *rule_p = NULL;
 	ruleaction_t gotpermto  = 0;
 	ruleaction_t resultperm = 0;
-	printf_ddd("Debug3: rules_getperm(\"%s\", %p, %p, %p)\n", 
-		fpath, (void *)(long)st_mode, rules_p, (void *)(long)ruleactions);
+	printf_ddd("Debug3: rules_getperm(\"%s\", %p, %p (#%u), %p)\n", 
+		fpath, (void *)(long)st_mode, rules_p, rules_p->num, (void *)(long)ruleactions);
 
 	while((gotpermto&ruleactions) != ruleactions) {
 		rules_search_getperm(fpath, st_mode, rules_p, ruleactions, &rule_p);
@@ -970,13 +971,18 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 
 	char fts_no_stat = (initsync==INITSYNC_FULL) && !(options_p->flags[EXCLUDEMOUNTPOINTS]);
 
-	tree = fts_open(
-			(char *const *)&rootpaths,
-			FTS_NOCHDIR | FTS_PHYSICAL | 
+        int fts_opts =  FTS_NOCHDIR | FTS_PHYSICAL | 
 			(fts_no_stat				? FTS_NOSTAT	: 0) | 
-			(options_p->flags[ONEFILESYSTEM] 	? FTS_XDEV	: 0), 
-			NULL
-		);
+			(options_p->flags[ONEFILESYSTEM] 	? FTS_XDEV	: 0); 
+
+        printf_ddd("Debug3: sync_initialsync_walk() fts_opts == %p\n", (void *)(long)fts_opts);
+
+	tree = fts_open((char *const *)&rootpaths, fts_opts, NULL);
+
+
+
+
+
 
 	if(tree == NULL) {
 		printf_e("Error: Cannot fts_open() on \"%s\": %s (errno: %i).\n", dirpath, strerror(errno), errno);
@@ -1001,19 +1007,19 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 			case FTS_F:
 			case FTS_D:
 			case FTS_DOT:
+                        case FTS_DC:    // TODO: think about case of FTS_DC
+                        case FTS_NSOK:
 				break;
 			// Error cases:
 			case FTS_ERR:
 			case FTS_NS:
-			case FTS_NSOK:
 			case FTS_DNR:
-			case FTS_DC:
-				if(errno == ENOENT) {
-					printf_d("Debug: Got error while fts_read(): %s (errno: %i; fts_info: %i).\n", strerror(errno), errno, node->fts_info);
+				if(node->fts_errno == ENOENT) {
+					printf_d("Debug: Got error while fts_read(): %s (errno: %i; fts_info: %i).\n", strerror(node->fts_errno), node->fts_errno, node->fts_info);
 					continue;
 				} else {
-					printf_e("Error: Got error while fts_read(): %s (errno: %i; fts_info: %i).\n", strerror(errno), errno, node->fts_info);
-					ret = errno;
+					printf_e("Error: Got error while fts_read(): %s (errno: %i; fts_info: %i).\n", strerror(node->fts_errno), node->fts_errno, node->fts_info);
+					ret = node->fts_errno;
 					goto l_sync_initialsync_walk_end;
 				}
 			default:
@@ -1276,7 +1282,10 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 	printf_dd("Debug2: sync_mark_walk(%i, options_p, \"%s\", indexes_p).\n", notify_d, dirpath);
 	printf_funct my_printf_e = STATE_STARTING(state_p) ? printf_e : _printf_dd;
 
-	tree = fts_open((char *const *)&rootpaths, FTS_NOCHDIR|FTS_PHYSICAL|FTS_NOSTAT|(options_p->flags[ONEFILESYSTEM]?FTS_XDEV:0), NULL);
+        int fts_opts = FTS_NOCHDIR|FTS_PHYSICAL|FTS_NOSTAT|(options_p->flags[ONEFILESYSTEM]?FTS_XDEV:0);
+
+        printf_ddd("Debug3: sync_mark_walk() fts_opts == %p\n", (void *)(long)fts_opts);
+	tree = fts_open((char *const *)&rootpaths, fts_opts, NULL);
 
 	if(tree == NULL) {
 		my_printf_e("Error: Cannot fts_open() on \"%s\": %s (errno: %i).\n", dirpath, strerror(errno), errno);
@@ -1309,6 +1318,7 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 				continue;
 			// To mark:
 			case FTS_D:
+                        case FTS_DC:    // TODO: think about case of FTS_DC
 			case FTS_DOT:
 #ifdef CLUSTER_SUPPORT
 				if((ret=sync_mark_walk_cluster_modtime_update(options_p, node->fts_path, node->fts_level, S_IFDIR)))
@@ -1319,7 +1329,7 @@ int sync_mark_walk(int notify_d, options_t *options_p, const char *dirpath, inde
 			case FTS_ERR:
 			case FTS_NS:
 			case FTS_DNR:
-			case FTS_DC:
+			//case FTS_DC:
 				if(errno == ENOENT) {
 					printf_d("Debug: Got error while fts_read(): %s (errno: %i; fts_info: %i).\n", strerror(errno), errno, node->fts_info);
 					continue;
