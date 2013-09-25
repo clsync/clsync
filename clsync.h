@@ -44,6 +44,7 @@ struct options;
 struct indexes;
 typedef int(*api_funct_init)  (struct options *, struct indexes *);
 typedef int(*api_funct_sync)  (int n, api_eventinfo_t *);
+typedef int(*api_funct_rsync) (const char *inclist, const char *exclist);
 typedef int(*api_funct_deinit)();
 
 enum eventinfo_flags {
@@ -54,9 +55,10 @@ enum eventinfo_flags {
 typedef enum eventinfo_flags eventinfo_flags_t;
 
 /**
- * @brief 			Writes to file with descriptor "fd" list file for "--include-from" option of rsync using array of api_eventinfo_t
+ * @brief 			Writes the list to list-file for "--include-from" option of rsync using array of api_eventinfo_t
  * 
- * @param[in]	fd		File descriptor to write to
+ * @param[in]	indexes_p	Pointer to "indexes"
+ * @param[in]	listfile	File identifier to write to
  * @param[in]	n		Number of records in apievinfo
  * @param[in]	apievinfo	Pointer to api_eventinfo_t records
  * 
@@ -64,5 +66,5 @@ typedef enum eventinfo_flags eventinfo_flags_t;
  * @retval	non-zero	If got error while deleting the message. The error-code is placed into returned value.
  * 
  */
-extern int apievinfo2rsynclist(struct indexes *indexes_p, FILE *listfile, int n, api_eventinfo_t *apievinfo);
+extern int apievinfo2rsynclist(struct indexes *indexes_p, FILE *listfile, int n, api_eventinfo_t *apievinfo); // Not tested, yet
 

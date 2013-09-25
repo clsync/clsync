@@ -60,7 +60,7 @@ Path to file with filter rules of objects to be monitored. (see
 .B \-D, \-\-destination\-dir
 .I destination\-directory
 .RS 8
-Defines directory to sync to for modes "rsyncdirect" and "so". (see 
+Defines directory to sync to for modes "rsyncdirect", "rsyncso" and "so". (see
 .IR \-\-mode )
 
 .PP
@@ -88,6 +88,14 @@ rsyncshell  \- calls
 .I sync\-handler
 that supposed to run rsync for every sync (recommended
 mode)
+.br
+rsyncso     \- loads shared object by path
+.I sync\-handler
+with
+.BR dlopen (3)
+and calls function
+.B clsyncapi_rsync
+function for every sync
 .br
 so          \- loads shared object by path
 .I sync\-handler
@@ -438,7 +446,7 @@ Is not set by default.
 Forces clsync to create a "w\-rule" for every non-"w-rule" (see
 .BR RULES ).
 
-Not recommended to use in modes "rsyncdirect" and "rsyncshell"
+Not recommended to use in modes "rsyncdirect", "rsyncshell" and "rsyncso"
 
 Is not set by default.
 .RE
@@ -594,7 +602,7 @@ is only a convenient way to run a syncing script.
 .B clsync
 can run
 .I sync\-handler
-in five ways. Which way will be used depends on specified mode (see
+in six ways. Which way will be used depends on specified mode (see
 .IR \-\-mode )
 
 case
@@ -715,6 +723,35 @@ And with parameters:
 if option
 .I \-\-rsync\-prefer\-include
 is disabled.
+
+Recommended case.
+.RE
+
+case
+.B rsyncso
+.RS
+In this case there's no direct exec*() calling. In this case
+.B clsync
+loads
+.I sync-handler
+as a shared library with
+.BR dlopen (3)
+and calls function "int clsyncapi_rsync(const char *inclist, const char *exclist)" from it
+for every sync.
+.br
+.B inclist
+is a path to file with rules for "\-\-include-from" option of rsync.
+.br
+.B exclist
+is a path to file with rules for "\-\-exclude-from" option of rsync.
+.br
+.I "Excludes takes precedence over includes."
+
+Also may be defined functions "int clsyncapi_init(options_t *, indexes_t *)"
+and "int clsyncapi_deinit()" to initialize and deinitialize the syncing
+process by this shared object.
+
+See example file "clsync-synchandler-rsyncso.c".
 
 Recommended case.
 .RE
@@ -889,7 +926,7 @@ For example: \-*^/[Tt]est
 
 It's not recommended to use
 .I w
-rules in modes "rsyncdirect" and "rsyncshell".
+rules in modes "rsyncdirect", "rsyncshell" and "rsyncso".
 .BR rsync (1)
 allows to set syncing and walking only together in "\-\-include" rules
 ("\-\-files\-from" is not appropriate due to problem with syncing files

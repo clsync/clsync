@@ -970,7 +970,8 @@ int sync_initialsync_walk(options_t *options_p, const char *dirpath, indexes_t *
 	char rsync_and_prefer_excludes =
 			(
 				(options_p->flags[MODE]==MODE_RSYNCDIRECT) ||
-				(options_p->flags[MODE]==MODE_RSYNCSHELL)
+				(options_p->flags[MODE]==MODE_RSYNCSHELL)  ||
+				(options_p->flags[MODE]==MODE_RSYNCSO)
 			) && 
 			!options_p->flags[RSYNCPREFERINCLUDE];
 
@@ -1134,7 +1135,13 @@ int sync_initialsync(const char *path, options_t *options_p, indexes_t *indexes_
 	queue_id_t queue_id = (initsync==INITSYNC_FULL) ? QUEUE_INSTANT : QUEUE_NORMAL;
 
 	// non-RSYNC case:
-	if(!((options_p->flags[MODE]==MODE_RSYNCDIRECT)||(options_p->flags[MODE]==MODE_RSYNCSHELL))) {
+	if(
+		!(
+			(options_p->flags[MODE]==MODE_RSYNCDIRECT)	||
+			(options_p->flags[MODE]==MODE_RSYNCSHELL)	||
+			(options_p->flags[MODE]==MODE_RSYNCSO)
+		)
+	) {
 		printf_ddd("Debug3: sync_initialsync(): syncing \"%s\"\n", path);
 /*
 		if(options_p->flags[PTHREAD])
@@ -2817,11 +2824,20 @@ int sync_run(options_t *options_p) {
 		// resolving init, sync and deinit functions' handlers
 		options_p->handler_handle = synchandler_handle;
 		options_p->handler_funct.init   = (api_funct_init)  dlsym(options_p->handler_handle, API_PREFIX"init");
-		options_p->handler_funct.sync   = (api_funct_sync)  dlsym(options_p->handler_handle, API_PREFIX"sync");
-		if(options_p->handler_funct.sync == NULL) {
-			char *dlerror_str = dlerror();
-			printf_e("Error: sync_run(): Cannot resolve symbol "API_PREFIX"sync in shared object \"%s\": %s\n",
-				options_p->handlerfpath, dlerror_str != NULL ? dlerror_str : "No error description returned.");
+		if(options_p->flags[MODE] == MODE_RSYNCSO) {
+			options_p->handler_funct.rsync  = (api_funct_rsync)dlsym(options_p->handler_handle, API_PREFIX"rsync");
+			if(options_p->handler_funct.rsync == NULL) {
+				char *dlerror_str = dlerror();
+				printf_e("Error: sync_run(): Cannot resolve symbol "API_PREFIX"rsync in shared object \"%s\": %s\n",
+					options_p->handlerfpath, dlerror_str != NULL ? dlerror_str : "No error description returned.");
+			}
+		} else {
+			options_p->handler_funct.sync   =  (api_funct_sync)dlsym(options_p->handler_handle, API_PREFIX"sync");
+			if(options_p->handler_funct.sync == NULL) {
+				char *dlerror_str = dlerror();
+				printf_e("Error: sync_run(): Cannot resolve symbol "API_PREFIX"sync in shared object \"%s\": %s\n",
+					options_p->handlerfpath, dlerror_str != NULL ? dlerror_str : "No error description returned.");
+			}
 		}
 		options_p->handler_funct.deinit = (api_funct_deinit)dlsym(options_p->handler_handle, API_PREFIX"deinit");
 

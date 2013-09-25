@@ -91,6 +91,7 @@ static char *const modes[] = {
 	[MODE_SHELL]		= "shell",
 	[MODE_RSYNCSHELL]	= "rsyncshell",
 	[MODE_RSYNCDIRECT]	= "rsyncdirect",
+	[MODE_RSYNCSO]		= "rsyncso",
 	[MODE_SO]		= "so",
 	NULL
 };
@@ -572,7 +573,8 @@ int parse_rules_fromfile(options_t *options_p) {
 				case 'w':	// accept or reject walking to directory
 					if(
 						(options_p->flags[MODE] == MODE_RSYNCDIRECT) ||
-						(options_p->flags[MODE] == MODE_RSYNCSHELL)
+						(options_p->flags[MODE] == MODE_RSYNCSHELL)  ||
+						(options_p->flags[MODE] == MODE_RSYNCSO)
 					) {
 						printf_e("parse_rules_fromfile(): Warning: Used \"w\" rule in \"--rsync\" case."
 							" This may cause unexpected problems.\n");
@@ -928,10 +930,11 @@ int main(int argc, char *argv[]) {
 	if(
 		(
 			(options.flags[MODE]==MODE_RSYNCDIRECT) || 
-			(options.flags[MODE]==MODE_RSYNCSHELL)
+			(options.flags[MODE]==MODE_RSYNCSHELL)  ||
+			(options.flags[MODE]==MODE_RSYNCSO)
 		) && (options.listoutdir == NULL)
 	) {
-		printf_e("Error: Modes \"rsyncdirect\" and \"rsyncshell\" cannot be used without \"--lists-dir\".\n");
+		printf_e("Error: Modes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" cannot be used without \"--lists-dir\".\n");
 		ret = EINVAL;
 	}
 
@@ -939,19 +942,21 @@ int main(int argc, char *argv[]) {
 		options.flags[RSYNCPREFERINCLUDE] && 
 		!(
 			options.flags[MODE] == MODE_RSYNCDIRECT ||
-			options.flags[MODE] == MODE_RSYNCSHELL
+			options.flags[MODE] == MODE_RSYNCSHELL  ||
+			options.flags[MODE] == MODE_RSYNCSO
 		)
 	)
-		printf_e("Warning: Option \"--rsyncpreferinclude\" is useless if mode is not \"rsyncdirect\" or \"rsyncshell\".\n");
+		printf_e("Warning: Option \"--rsyncpreferinclude\" is useless if mode is not \"rsyncdirect\", \"rsyncshell\" or \"rsyncso\".\n");
 
 	if(
 		(
 			options.flags[MODE] == MODE_RSYNCDIRECT ||
-			options.flags[MODE] == MODE_RSYNCSHELL
+			options.flags[MODE] == MODE_RSYNCSHELL  ||
+			options.flags[MODE] == MODE_RSYNCSO
 		)
 		&& options.flags[AUTORULESW]
 	)
-		printf_e("Warning: Option \"--auto-add-rules-w\" in modes \"rsyncdirect\" and \"rsyncshell\" may cause unexpected problems.\n");
+		printf_e("Warning: Option \"--auto-add-rules-w\" in modes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" may cause unexpected problems.\n");
 
 	if(options.flags[DEBUG])
 		debug_print_flags();
@@ -994,10 +999,11 @@ int main(int argc, char *argv[]) {
 		options.flags[HAVERECURSIVESYNC] &&
 		(
 			options.flags[MODE] == MODE_RSYNCDIRECT ||
-			options.flags[MODE] == MODE_RSYNCSHELL
+			options.flags[MODE] == MODE_RSYNCSHELL  ||
+			options.flags[MODE] == MODE_RSYNCSO
 		)
 	) {
-		printf_e("Error: main(): Option \"--have-recursive-sync\" with nodes \"rsyncdirect\" and \"rsyncshell\" are incompatable.\n");
+		printf_e("Error: main(): Option \"--have-recursive-sync\" with nodes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" are incompatable.\n");
 		ret = EINVAL;
 	}
 
@@ -1010,7 +1016,8 @@ int main(int argc, char *argv[]) {
 		options.flags[SYNCLISTSIMPLIFY] && 
 		(
 			options.flags[MODE] == MODE_RSYNCDIRECT ||
-			options.flags[MODE] == MODE_RSYNCSHELL
+			options.flags[MODE] == MODE_RSYNCSHELL  ||
+			options.flags[MODE] == MODE_RSYNCSO
 		)
 	) {
 		printf_e("Error: main(): Option \"--synclist-simplify\" with nodes \"rsyncdirect\" and \"rsyncshell\" are incompatable.\n");

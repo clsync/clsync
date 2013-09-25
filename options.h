@@ -83,6 +83,7 @@ enum mode_id {
 	MODE_SHELL,
 	MODE_RSYNCSHELL,
 	MODE_RSYNCDIRECT,
+	MODE_RSYNCSO,
 	MODE_SO,
 };
 typedef enum mode_id mode_id_t;
@@ -135,6 +136,7 @@ typedef struct queueinfo queueinfo_t;
 struct api_functs {
 	api_funct_init   init;
 	api_funct_sync   sync;
+	api_funct_rsync   rsync;
 	api_funct_deinit deinit;
 };
 typedef struct api_functs api_functs_t;
