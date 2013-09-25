@@ -188,10 +188,12 @@ ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rul
 	return rule_p->perm;
 }
 
-static inline ruleaction_t rules_getperm(const char *fpath, mode_t st_mode, rule_t *rules_p, ruleaction_t ruleactions) {
+ruleaction_t rules_getperm(const char *fpath, mode_t st_mode, rule_t *rules_p, ruleaction_t ruleactions) {
 	rule_t *rule_p = NULL;
 	ruleaction_t gotpermto  = 0;
 	ruleaction_t resultperm = 0;
+	printf_ddd("Debug3: rules_getperm(\"%s\", %p, %p, %p)\n", 
+		fpath, (void *)(long)st_mode, rules_p, (void *)(long)ruleactions);
 
 	while((gotpermto&ruleactions) != ruleactions) {
 		rules_search_getperm(fpath, st_mode, rules_p, ruleactions, &rule_p);
@@ -203,8 +205,8 @@ static inline ruleaction_t rules_getperm(const char *fpath, mode_t st_mode, rule
 		gotpermto  |= rule_p->mask;						// Adding the mask
 	}
 
-	printf_ddd("Debug3: rules_getperm(\"%s\", %i, rules_p, %p): result perm is %p\n",
-		fpath, st_mode, (void *)(long)ruleactions, (void *)(long)resultperm);
+	printf_ddd("Debug3: rules_getperm(\"%s\", %p, rules_p, %p): result perm is %p\n",
+		fpath, (void *)(long)st_mode, (void *)(long)ruleactions, (void *)(long)resultperm);
 
 	return resultperm;
 }
