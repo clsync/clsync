@@ -684,7 +684,7 @@ l_parse_rules_fromfile_end:
 
 	fclose(f);
 
-	printf_e("Debug3: parse_rules_fromfile(): Adding tail-rule #%u (effective #%u).\n", -1, i);
+	printf_ddd("Debug3: parse_rules_fromfile(): Adding tail-rule #%u (effective #%u).\n", -1, i);
 
 	rules[i].mask   = RA_NONE;		// Terminator. End of rules' chain.
 	rules[i].perm   = DEFAULT_RULES_PERM;
