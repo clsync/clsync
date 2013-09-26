@@ -245,7 +245,6 @@ static inline int parse_parameter(options_t *options_p, uint16_t param_id, char 
 		case MODE: {
 			char *value;
 
-			
 			options_p->flags[MODE]  = getsubopt(&arg, modes, &value);
 			if(options_p->flags[MODE] == -1) {
 				fprintf(stderr, "Error: Wrong mode name entered: \"%s\"\n", arg);
