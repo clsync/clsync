@@ -11,14 +11,9 @@ doc_DATA = CONTRIB DEVELOPING LICENSE PROTOCOL README.md TODO
 exampledir=$(docdir)/examples
 
 example_DATA = \
- examples/clsync-synchandler-so.c \
- examples/clsync-synchandler-rsyncshell.sh \
- examples/clsync-synchandler-production.sh \
- examples/clsync-start-so.sh \
- examples/clsync-start-rsyncshell.sh \
- examples/clsync-start-rsyncdirect.sh \
- examples/clsync-start-cluster.sh \
- examples/clsync-start-production.sh
+ $(wildcard $(srcdir)/examples/*.c) \
+ $(wildcard $(srcdir)/examples/*.sh)
+
 
 clsync_includedir = $(includedir)/clsync
 clsync_include_HEADERS = clsync.h options.h indexes.h output.h configuration.h
@@ -31,7 +26,14 @@ revision.h:
 doc:
 	doxygen .doxygen
 
+install-data-local:
+	cp -R examples/production $(exampledir)/
+	chown -R root:root $(exampledir)/production
+
+uninstall-local:
+	rm -rf $(exampledir)/production
+
 CLEANFILES = revision.h
 CLEANFILES += examples/rules
 clean-local:
-	-rm -rf examples/testdir examples/*.o examples/*.so doc
+	-rm -rf examples/testdir examples/*.o examples/*.so examples/*.xz doc
