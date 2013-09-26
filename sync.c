@@ -760,9 +760,28 @@ static inline int so_call_sync(options_t *options_p, indexes_t *indexes_p, int n
 
 }
 
-static inline void so_call_rsync_finished(const char *inclistfile, const char *exclistfile) {
+static inline int so_call_rsync_finished(options_t *options_p, const char *inclistfile, const char *exclistfile) {
+	int ret0, ret1;
+	if(inclistfile == NULL) {
+		printf_e("Error: inclistfile == NULL.");
+		return EINVAL;
+	}
 
-	return;
+	printf_ddd("Debug3: unlink()-ing \"%s\"\n", inclistfile);
+	ret0 = unlink(inclistfile);
+
+	if(options_p->flags[RSYNCPREFERINCLUDE])
+		return ret0;
+
+	if(exclistfile == NULL) {
+		printf_e("Error: exclistfile == NULL.");
+		return EINVAL;
+	}
+
+	printf_ddd("Debug3: unlink()-ing \"%s\"\n", exclistfile);
+	ret1 = unlink(exclistfile);
+
+	return ret0 == 0 ? ret1 : ret0;
 }
 
 int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
@@ -773,13 +792,17 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 	char **argv		= threadinfo_p->argv;
 
 	int ret = options_p->handler_funct.rsync(argv[0], argv[1]);
-	so_call_rsync_finished(argv[0], argv[1]);
+	int err;
+
+	if((err=so_call_rsync_finished(options_p, argv[0], argv[1]))) {
+		exitcode = err;	// This's global variable "exitcode"
+		pthread_kill(pthread_sighandler, SIGTERM);
+	}
 
 	free(argv[0]);
 	free(argv[1]);
 	free(argv);
 
-	int err;
 	if((err=thread_exit(threadinfo_p, ret DEBUGV(, 0)))) {
 		exitcode = err;	// This's global variable "exitcode"
 		pthread_kill(pthread_sighandler, SIGTERM);
@@ -794,7 +817,9 @@ static inline int so_call_rsync(options_t *options_p, indexes_t *indexes_p, cons
 	if(!options_p->flags[PTHREAD]) {
 		printf_ddd("Debug3: so_call_rsync(): options_p->handler_funct.rsync == %p\n", options_p->handler_funct.rsync);
 		int ret = options_p->handler_funct.rsync(inclistfile, exclistfile);
-		so_call_rsync_finished(inclistfile, exclistfile);
+		int ret_cleanup;
+		if((ret_cleanup=so_call_rsync_finished(options_p, inclistfile, exclistfile)))
+			return ret ? ret : ret_cleanup;
 		return ret;
 	}
 
@@ -1598,30 +1623,6 @@ int sync_idle_dosync_collectedevents_cleanup(options_t *options_p, char **argv) 
 		return 0;
 
 	printf_ddd("Debug3: sync_idle_dosync_collectedevents_cleanup(): thread %p\n", pthread_self());
-
-	if(options_p->flags[MODE] == MODE_RSYNCSO) {
-		int ret0, ret1;
-		if(argv[0] == NULL) {
-			printf_e("Error: Unexpected *argv[] end.");
-			return EINVAL;
-		}
-
-		printf_ddd("Debug3: unlink()-ing \"%s\"\n", argv[0]);
-		ret0 = unlink(argv[0]);
-
-		if(options_p->flags[RSYNCPREFERINCLUDE])
-			return ret0;
-
-		if(argv[1] == NULL) {
-			printf_e("Error: Unexpected *argv[] end.");
-			return EINVAL;
-		}
-
-		printf_ddd("Debug3: unlink()-ing \"%s\"\n", argv[1]);
-		ret1 = unlink(argv[1]);
-
-		return ret0 == 0 ? ret1 : ret0;
-	}
 
 	if(options_p->flags[MODE] == MODE_RSYNCDIRECT) {
 		int ret0, ret1;
