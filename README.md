@@ -67,10 +67,13 @@ event. :(
 - Sometimes, it's too complex in configuration for our situation.
 - It can't set another event-collecting delay for big files. We don't
 want to sync big files (`>1GiB`) so often as ordinary files.
+- Shared object (.so file) cannot be used as rsync-wrapper.
 
 Sorry, if I'm wrong. Let me know if it is, please :). "lsyncd" - is really
 good and useful utility, just it's not appropriate for us.
 
+UPD.: Also clsync was used to replace incron/csync2/etc in HPC-clusters for
+syncing /etc/{passwd,shadow,group,shells} files.
 
 3. inotify vs fanotify:
 -----------------------
