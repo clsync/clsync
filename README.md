@@ -12,7 +12,7 @@ Contents
 5.  How to use
 6.  Example of usage
 7.  Clustering
-8.  Known issues
+8.  Known building issues
 9.  Support
 10. Developing
 
