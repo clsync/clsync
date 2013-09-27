@@ -27,11 +27,11 @@ doc:
 	doxygen .doxygen
 
 install-data-local:
-	cp -R examples/production $(exampledir)/
-	chown -R root:root $(exampledir)/production
+	mkdir -p $(DESTDIR)/$(exampledir)
+	cp -R examples/production $(DESTDIR)/$(exampledir)/
 
 uninstall-local:
-	rm -rf $(exampledir)/production
+	rm -rf $(DESTDIR)/$(exampledir)/production
 
 CLEANFILES = revision.h
 CLEANFILES += examples/rules
