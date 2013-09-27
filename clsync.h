@@ -69,3 +69,11 @@ typedef enum eventinfo_flags eventinfo_flags_t;
  */
 extern int apievinfo2rsynclist(struct indexes *indexes_p, FILE *listfile, int n, api_eventinfo_t *apievinfo); // Not tested, yet
 
+/**
+ * @brief 			Returns currect API version
+ * 
+ * @retval	api_version	Version of clsync's API
+ * 
+ */
+extern int clsyncapi_getapiversion();
+

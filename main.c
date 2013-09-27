@@ -115,6 +115,10 @@ int version() {
 	exit(0);
 }
 
+int clsyncapi_getapiversion() {
+	return CLSYNC_API_VERSION;
+}
+
 static inline int parse_parameter(options_t *options_p, uint16_t param_id, char *arg, paramsource_t paramsource) {
 #ifdef _DEBUG
 	fprintf(stderr, "Force-Debug: parse_parameter(): %i: %i = \"%s\"\n", paramsource, param_id, arg);

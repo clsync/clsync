@@ -18,7 +18,7 @@ size_t argv_size = 0;
 
 // Optional function, you can erase it.
 int clsyncapi_init(struct options *_options_p, struct indexes *_indexes_p) {
-	printf_d("clsyncapi_init(): Hello world!\n");
+	printf_d("clsyncapi_init(): Hello world! API version is %i\n", clsyncapi_getapiversion());
 
 	options_p = _options_p;
 	indexes_p = _indexes_p;
