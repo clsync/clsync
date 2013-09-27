@@ -11,41 +11,8 @@ command="/usr/bin/clsync"
 pidfile="/var/run/${SVCNAME}.pid"
 command_args="--background --syslog --pid-file=${pidfile} \
 ${conffile} ${CLSYNC_OPTS}"
-retry="TERM/10/KILL/5"
 start_stop_daemon_args="${cmd_nice} ${cmd_ionice}"
 
 depend() {
     use net
-}
-
-stop_pre() {
-    pid="$(cat ${pidfile})"
-    # save list of all clsync offsprings (not only childs)
-    [[ -n ${pid} ]] && childs_list="$(pstree ${pid} -p |
-    awk '{
-        gsub("[^)[:digit:]]","");
-        split($0,arr,"[)\n]");
-        for(i in arr) if ( length(arr[i])>0 ) print arr[i]
-    }')"
-}
-
-# kill with signal $1 after wait $2
-offspring_killer() {
-    # look for offsprings still alive
-    childs_alive="$(ps --no-headers -o pid ${childs_list})"
-    # and kill them
-    if [[ -n "${childs_alive}" ]]; then
-        sleep $2
-        # recheck for offsprings
-        childs_alive="$(ps --no-headers -o pid ${childs_list})"
-        if [[ -n "${childs_alive}" ]]; then
-            ewarn "Terminating stubborn offstrings with $1"
-            kill -s $1 ${childs_alive}
-        fi
-    fi
-}
-
-stop_post() {
-    offspring_killer TERM 0
-    offspring_killer KILL 5
 }
