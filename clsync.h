@@ -21,7 +21,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#define CLSYNC_API_VERSION 1
+#define CLSYNC_API_VERSION 2
 
 enum eventobjtype {
 	EOT_UNKNOWN	= 0,		// Unknown
