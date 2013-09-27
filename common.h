@@ -244,7 +244,7 @@ enum initsync {
 typedef enum initsync initsync_t;
 
 struct sighandler_arg {
-//	options_t *options_p;
+	options_t *options_p;
 //	indexes_t *indexes_p;
 	pthread_t  pthread_parent;
 	int	  *exitcode_p;

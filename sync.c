@@ -922,6 +922,7 @@ char *sync_path_abs2rel(options_t *options_p, const char *path_abs, size_t path_
 	return path_rel;
 }
 
+pid_t sync_exec_child_pid = 0;
 static inline int sync_exec(options_t *options_p, indexes_t *indexes_p, thread_callbackfunct_t callback, ...) {
 	printf_dd("Debug2: sync_exec()\n");
 
@@ -931,7 +932,14 @@ static inline int sync_exec(options_t *options_p, indexes_t *indexes_p, thread_c
 	_sync_exec_getargv(argv, callback, arg);
 
 	alarm(options_p->synctimeout);
-	int exitcode = exec_argv(argv, NULL DEBUGV(, 0));
+	int exitcode = exec_argv(argv, &sync_exec_child_pid DEBUGV(, 0));
+	sync_exec_child_pid = 0;	// TODO [TODO0]: solve problem with automicy.
+					// There's a time period between child death and this line,
+					// but this variable is used to detect is the child alive or not.
+					// So it may be false-positive
+					// and it may cause a signal to wrong process.
+					// At the moment every time it's need to recheck is it
+					// an alive child with this pid via waitpid(sync_exec_child_pid, NULL, NOHANG)
 	alarm(0);
 
 	int ret;
@@ -2759,7 +2767,7 @@ l_sync_parent_interrupt_end:
 int *sync_sighandler_exitcode_p = NULL;
 int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 	int signal, ret;
-//	options_t *options_p     = sighandler_arg_p->options_p;
+	options_t *options_p     = sighandler_arg_p->options_p;
 //	indexes_t *indexes_p     = sighandler_arg_p->indexes_p;
 	pthread_t pthread_parent = sighandler_arg_p->pthread_parent;
 	sigset_t *sigset_p	 = sighandler_arg_p->sigset_p;
@@ -2800,6 +2808,28 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 			case SIGTERM:
 			case SIGINT:
 				sync_switch_state(pthread_parent, STATE_TERM);
+				// bugfix of https://github.com/xaionaro/clsync/issues/44
+				if((!options_p->flags[PTHREAD]) && sync_exec_child_pid) {
+					if(waitpid(sync_exec_child_pid, NULL, WNOHANG)>=0) {
+						printf_ddd("Debug3: sync_run(): Sending signal %u to child process with pid %u.\n",
+							signal, sync_exec_child_pid);
+						kill(sync_exec_child_pid, signal);
+						sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
+					} else
+						break;
+					if(waitpid(sync_exec_child_pid, NULL, WNOHANG)>=0) {
+						printf_ddd("Debug3: sync_run(): Sending signal SIGQUIT to child process with pid %u.\n",
+							signal, sync_exec_child_pid);
+						kill(sync_exec_child_pid, SIGQUIT);
+						sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
+					} else
+						break;
+					if(waitpid(sync_exec_child_pid, NULL, WNOHANG)>=0) {
+						printf_ddd("Debug3: sync_run(): Sending signal SIGQUIT to child process with pid %u.\n",
+							signal, sync_exec_child_pid);
+						kill(sync_exec_child_pid, SIGKILL);
+					}
+				}
 				break;
 			case SIGHUP:
 				sync_switch_state(pthread_parent, STATE_REHASH);
@@ -2821,6 +2851,7 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 		}
 	}
 
+	printf_ddd("Debug3: sync_sighandler(): signal handler closed.\n");
 	return 0;
 }
 
@@ -2846,7 +2877,7 @@ int sync_run(options_t *options_p) {
 	ret = pthread_sigmask(SIG_BLOCK, &sigset_sighandler, NULL);
 	if(ret)	return ret;
 
-//	sighandler_arg.options_p        =  options_p;
+	sighandler_arg.options_p        =  options_p;
 //	sighandler_arg.indexes_p        = &indexes;
 	sighandler_arg.pthread_parent   =  pthread_self();
 	sighandler_arg.exitcode_p	= &ret;
@@ -2988,7 +3019,11 @@ int sync_run(options_t *options_p) {
 	pthread_kill(pthread_sighandler, SIGTERM);
 	pthread_join(pthread_sighandler, NULL);
 
+	// Killing children
+
 	thread_cleanup(options_p);
+
+	// Closing sockets and files
 
 	printf_ddd("sync_run(): Closing notify_d\n");
 	close(notify_d);
