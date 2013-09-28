@@ -731,7 +731,9 @@ static inline int so_call_sync(options_t *options_p, indexes_t *indexes_p, int n
 	printf_dd("Debug2: so_call_sync(): n == %i\n", n);
 
 	if(!options_p->flags[PTHREAD]) {
+		alarm(options_p->synctimeout);
 		int ret = options_p->handler_funct.sync(n, ei);
+		alarm(0);
 		so_call_sync_finished(n, ei);
 		return ret;
 	}
@@ -816,7 +818,9 @@ static inline int so_call_rsync(options_t *options_p, indexes_t *indexes_p, cons
 
 	if(!options_p->flags[PTHREAD]) {
 		printf_ddd("Debug3: so_call_rsync(): options_p->handler_funct.rsync == %p\n", options_p->handler_funct.rsync);
+		alarm(options_p->synctimeout);
 		int ret = options_p->handler_funct.rsync(inclistfile, exclistfile);
+		alarm(0);
 		int ret_cleanup;
 		if((ret_cleanup=so_call_rsync_finished(options_p, inclistfile, exclistfile)))
 			return ret ? ret : ret_cleanup;
