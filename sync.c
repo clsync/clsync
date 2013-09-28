@@ -927,8 +927,8 @@ char *sync_path_abs2rel(options_t *options_p, const char *path_abs, size_t path_
 }
 
 pid_t clsyncapi_fork(options_t *options_p) {
-	if(options_p->flags[PTHREAD])
-		return fork();
+//	if(options_p->flags[PTHREAD])
+//		return fork();
 
 	// Cleaning stale pids. TODO: Optimize this. Remove this GC.
 	int i=0;
@@ -2832,28 +2832,26 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 			case SIGINT:
 				sync_switch_state(pthread_parent, STATE_TERM);
 				// bugfix of https://github.com/xaionaro/clsync/issues/44
-				while(options_p->children--) {
-					pid_t child_pid = options_p->child_pid[options_p->children];
-					if((!options_p->flags[PTHREAD]) && child_pid) {
-						if(waitpid(child_pid, NULL, WNOHANG)>=0) {
-							printf_ddd("Debug3: sync_sighandler(): Sending signal %u to child process with pid %u.\n",
-								signal, child_pid);
-							kill(child_pid, signal);
-							sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
-						} else
-							break;
-						if(waitpid(child_pid, NULL, WNOHANG)>=0) {
-							printf_ddd("Debug3: sync_sighandler(): Sending signal SIGQUIT to child process with pid %u.\n",
-								child_pid);
-							kill(child_pid, SIGQUIT);
-							sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
-						} else
-							break;
-						if(waitpid(child_pid, NULL, WNOHANG)>=0) {
-							printf_ddd("Debug3: sync_sighandler(): Sending signal SIGKILL to child process with pid %u.\n",
-								child_pid);
-							kill(child_pid, SIGKILL);
-						}
+				while(options_p->children) { // Killing children if non-pthread mode or/and (mode=="so" or mode=="rsyncso")
+					pid_t child_pid = options_p->child_pid[--options_p->children];
+					if(waitpid(child_pid, NULL, WNOHANG)>=0) {
+						printf_ddd("Debug3: sync_sighandler(): Sending signal %u to child process with pid %u.\n",
+							signal, child_pid);
+						kill(child_pid, signal);
+						sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
+					} else
+						break;
+					if(waitpid(child_pid, NULL, WNOHANG)>=0) {
+						printf_ddd("Debug3: sync_sighandler(): Sending signal SIGQUIT to child process with pid %u.\n",
+							child_pid);
+						kill(child_pid, SIGQUIT);
+						sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
+					} else
+						break;
+					if(waitpid(child_pid, NULL, WNOHANG)>=0) {
+						printf_ddd("Debug3: sync_sighandler(): Sending signal SIGKILL to child process with pid %u.\n",
+							child_pid);
+						kill(child_pid, SIGKILL);
 					}
 				}
 				break;

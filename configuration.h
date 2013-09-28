@@ -13,7 +13,7 @@
 // clsync should be used, if there's more than 5-10 nodes. So the limit in 255 is quite enough. :)
 #define MAXNODES			((1<<8)-1)
 
-// children count limit for non-pthread mode
+// children count limit
 #define MAXCHILDREN			(1<<8)
 
 #define DEFAULT_RULES_PERM		RA_ALL
