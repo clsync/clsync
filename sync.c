@@ -2840,14 +2840,14 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 						kill(child_pid, signal);
 						sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
 					} else
-						break;
+						continue;
 					if(waitpid(child_pid, NULL, WNOHANG)>=0) {
 						printf_ddd("Debug3: sync_sighandler(): Sending signal SIGQUIT to child process with pid %u.\n",
 							child_pid);
 						kill(child_pid, SIGQUIT);
 						sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
 					} else
-						break;
+						continue;
 					if(waitpid(child_pid, NULL, WNOHANG)>=0) {
 						printf_ddd("Debug3: sync_sighandler(): Sending signal SIGKILL to child process with pid %u.\n",
 							child_pid);
