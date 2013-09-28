@@ -77,3 +77,15 @@ extern int apievinfo2rsynclist(struct indexes *indexes_p, FILE *listfile, int n,
  */
 extern int clsyncapi_getapiversion();
 
+/**
+ * @brief 			clsync's wrapper for function "fork()". Should be used instead of "fork()" directly, to notify clsync about child's pid.
+ *
+ * @param[in]	options_p	Pointer to "options"
+ * 
+ * @retval	-1		If error
+ * @retval	0		If child
+ * @retval	pid		Pid of child of parent. (see "man 2 fork")
+ * 
+ */
+extern pid_t clsyncapi_fork(struct options *options_p);
+

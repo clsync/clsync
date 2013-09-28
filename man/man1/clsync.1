@@ -740,16 +740,22 @@ and calls function "int clsyncapi_rsync(const char *inclist, const char *exclist
 for every sync.
 .br
 .B inclist
-is a path to file with rules for "\-\-include-from" option of rsync.
+is a path to file with rules for "\-\-include\-from" option of rsync. This argument is always not NULL.
 .br
 .B exclist
-is a path to file with rules for "\-\-exclude-from" option of rsync.
+is a path to file with rules for "\-\-exclude\-from" option of rsync. This argument is NULL if
+.B \-\-rsync\-prefer\-include
+is set.
 .br
 .I "Excludes takes precedence over includes."
 
 Also may be defined functions "int clsyncapi_init(options_t *, indexes_t *)"
 and "int clsyncapi_deinit()" to initialize and deinitialize the syncing
 process by this shared object.
+
+To fork the process should be used function
+"pid_t clsyncapi_fork(options_t *)" instead of "pid_t fork()" to make clsync
+be able to kill the child.
 
 See example file "clsync-synchandler-rsyncso.c".
 
@@ -858,6 +864,10 @@ typedef enum eventobjtype eventobjtype_t;
 Also may be defined functions "int clsyncapi_init(options_t *, indexes_t *)"
 and "int clsyncapi_deinit()" to initialize and deinitialize the syncing
 process by this shared object.
+
+To fork the process should be used function
+"pid_t clsyncapi_fork(options_t *)" instead of "pid_t fork()" to make clsync
+be able to kill the child.
 
 See example file "clsync-synchandler-so.c".
 

@@ -58,7 +58,7 @@ int clsyncapi_rsync(const char *inclistfile, const char *exclistfile) {
 	}
 
 	// Forking
-	int pid = fork();
+	int pid = clsyncapi_fork();
 	switch(pid) {
 		case -1: 
 			printf_e("Error: Cannot fork(): %s (errno: %i).\n", strerror(errno), errno);

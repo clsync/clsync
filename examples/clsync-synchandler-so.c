@@ -65,7 +65,7 @@ int clsyncapi_sync(int n, api_eventinfo_t *ei) {
 	argv[argv_i++] = NULL;
 
 	// Forking
-	int pid = fork();
+	int pid = clsyncapi_fork();
 	switch(pid) {
 		case -1: 
 			printf_e("Error: Cannot fork(): %s (errno: %i).\n", strerror(errno), errno);
