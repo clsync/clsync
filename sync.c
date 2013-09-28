@@ -734,7 +734,6 @@ static inline int so_call_sync(options_t *options_p, indexes_t *indexes_p, int n
 		alarm(options_p->synctimeout);
 		int ret = options_p->handler_funct.sync(n, ei);
 		alarm(0);
-		options_p->child_pid = 0;
 		so_call_sync_finished(n, ei);
 		return ret;
 	}
@@ -822,7 +821,6 @@ static inline int so_call_rsync(options_t *options_p, indexes_t *indexes_p, cons
 		alarm(options_p->synctimeout);
 		int ret = options_p->handler_funct.rsync(inclistfile, exclistfile);
 		alarm(0);
-		options_p->child_pid = 0;
 		int ret_cleanup;
 		if((ret_cleanup=so_call_rsync_finished(options_p, inclistfile, exclistfile)))
 			return ret ? ret : ret_cleanup;
@@ -929,11 +927,27 @@ char *sync_path_abs2rel(options_t *options_p, const char *path_abs, size_t path_
 }
 
 pid_t clsyncapi_fork(options_t *options_p) {
-	pid_t pid = fork();
-	if(!options_p->flags[PTHREAD]) {
-		if(pid>0)
-			options_p->child_pid = pid;
+	if(options_p->flags[PTHREAD])
+		return fork();
+
+	// Cleaning stale pids. TODO: Optimize this. Remove this GC.
+	int i=0;
+	while(i < options_p->children) {
+		if(waitpid(options_p->child_pid[i], NULL, WNOHANG)<0)
+			if(errno==ECHILD)
+				options_p->child_pid[i] = options_p->child_pid[--options_p->children];
+		i++;
 	}
+
+	// Too many children
+	if(options_p->children >= MAXCHILDREN) {
+		errno = ECANCELED;
+		return -1;
+	}
+
+	// Forking
+	pid_t pid = fork();
+	options_p->child_pid[options_p->children++] = pid;
 	return pid;
 }
 
@@ -946,14 +960,9 @@ static inline int sync_exec(options_t *options_p, indexes_t *indexes_p, thread_c
 	_sync_exec_getargv(argv, callback, arg);
 
 	alarm(options_p->synctimeout);
-	int exitcode = exec_argv(argv, &options_p->child_pid DEBUGV(, 0));
-	options_p->child_pid = 0;	// TODO [TODO0]: solve problem with automicy.
-					// There's a time period between child death and this line,
-					// but this variable is used to detect is the child alive or not.
-					// So it may be false-positive
-					// and it may cause a signal to wrong process.
-					// At the moment every time it's need to recheck is it
-					// an alive child with this pid via waitpid(options_p->child_pid, NULL, NOHANG)
+	options_p->children = 1;
+	int exitcode = exec_argv(argv, options_p->child_pid DEBUGV(, 0));
+	options_p->children = 0;
 	alarm(0);
 
 	int ret;
@@ -2823,26 +2832,28 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 			case SIGINT:
 				sync_switch_state(pthread_parent, STATE_TERM);
 				// bugfix of https://github.com/xaionaro/clsync/issues/44
-				pid_t child_pid = options_p->child_pid;
-				if((!options_p->flags[PTHREAD]) && child_pid) {
-					if(waitpid(child_pid, NULL, WNOHANG)>=0) {
-						printf_ddd("Debug3: sync_sighandler(): Sending signal %u to child process with pid %u.\n",
-							signal, child_pid);
-						kill(child_pid, signal);
-						sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
-					} else
-						break;
-					if(waitpid(child_pid, NULL, WNOHANG)>=0) {
-						printf_ddd("Debug3: sync_sighandler(): Sending signal SIGQUIT to child process with pid %u.\n",
-							child_pid);
-						kill(child_pid, SIGQUIT);
-						sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
-					} else
-						break;
-					if(waitpid(child_pid, NULL, WNOHANG)>=0) {
-						printf_ddd("Debug3: sync_sighandler(): Sending signal SIGKILL to child process with pid %u.\n",
-							child_pid);
-						kill(child_pid, SIGKILL);
+				while(options_p->children--) {
+					pid_t child_pid = options_p->child_pid[options_p->children];
+					if((!options_p->flags[PTHREAD]) && child_pid) {
+						if(waitpid(child_pid, NULL, WNOHANG)>=0) {
+							printf_ddd("Debug3: sync_sighandler(): Sending signal %u to child process with pid %u.\n",
+								signal, child_pid);
+							kill(child_pid, signal);
+							sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
+						} else
+							break;
+						if(waitpid(child_pid, NULL, WNOHANG)>=0) {
+							printf_ddd("Debug3: sync_sighandler(): Sending signal SIGQUIT to child process with pid %u.\n",
+								child_pid);
+							kill(child_pid, SIGQUIT);
+							sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
+						} else
+							break;
+						if(waitpid(child_pid, NULL, WNOHANG)>=0) {
+							printf_ddd("Debug3: sync_sighandler(): Sending signal SIGKILL to child process with pid %u.\n",
+								child_pid);
+							kill(child_pid, SIGKILL);
+						}
 					}
 				}
 				break;

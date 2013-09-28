@@ -82,7 +82,7 @@ extern int clsyncapi_getapiversion();
  *
  * @param[in]	options_p	Pointer to "options"
  * 
- * @retval	-1		If error
+ * @retval	-1		If error (see "man 2 fork", added error code "ECANCELED" if too many children)
  * @retval	0		If child
  * @retval	pid		Pid of child of parent. (see "man 2 fork")
  * 

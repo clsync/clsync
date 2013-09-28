@@ -144,7 +144,8 @@ typedef struct api_functs api_functs_t;
 struct options {
 	uid_t uid;
 	gid_t gid;
-	pid_t child_pid;	// Used only for non-pthread mode
+	pid_t child_pid[MAXCHILDREN];	// Used only for non-pthread mode
+	int   children;			// Used only for non-pthread mode
 	rule_t rules[MAXRULES];
 	dev_t st_dev;
 	int flags[1<<10];
