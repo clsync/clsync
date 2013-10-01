@@ -783,11 +783,9 @@ int main_status_update(options_t *options_p, state_t state) {
 	}
 #endif
 
-	size_t length = strlen(status_descr[state]);
-
 	int ret = 0;
 
-	if(fwrite(status_descr[state], length, 1, f) != 1) {
+	if(fprintf(f, "%s\n", status_descr[state]) <= 0) {
 		printf_e("Error: main_status_update(): Cannot write to file \"%s\": %s (errno: %u).\n",
 			options_p->statusfile, strerror(errno), errno);
 		ret = errno;
