@@ -508,7 +508,10 @@ as an error. You can set multiple ignores by passing this option multiple
 times.
 
 Recommended values for rsync case is "24". You can set multiple values with
-listing a lot of "-x" options, e.g.: "\-x 23 \-x 24".
+listing a lot of "-x" options (e.g. "\-x 23 \-x 24") or via commas
+(e.g. "\-x 23,24"). To drop the list use zero exitcode (e.g. "\-x 0"). For
+example you can use "\-x 0,23" to drop the list and set "23"-th exitcode to
+be ignored.
 .RE
 
 .PP
@@ -1145,6 +1148,12 @@ mode=rsyncdirect
 .br
 debug=3
 .RE
+
+Also glib's
+.B gkf
+API doesn't support multiple assignments. If you need to list some values
+(e.g. exitcodes) just list them with commas in single assignment
+(e.g. "ignore\-exitcode=23,24").
 
 In this example there's 2 blocks are set - "default" and "test".
 
