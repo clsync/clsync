@@ -74,6 +74,7 @@ enum flags_enum {
 	RSYNCPREFERINCLUDE	= 2|OPTION_LONGOPTONLY,
 	SYNCLISTSIMPLIFY	= 3|OPTION_LONGOPTONLY,
 	ONEFILESYSTEM		= 4|OPTION_LONGOPTONLY,
+	STATUSFILE		= 5|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -158,6 +159,7 @@ struct options {
 	char *destdir;
 	char *watchdirwslash;
 	char *destdirwslash;
+	char *statusfile;
 #ifdef CLUSTER_SUPPORT
 	char *cluster_iface;
 	char *cluster_mcastipaddr;

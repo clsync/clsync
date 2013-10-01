@@ -33,6 +33,7 @@ static const struct option long_options[] =
 	{"rules-file",		required_argument,	NULL,	RULESFILE},
 	{"destination-dir",	required_argument,	NULL,	DESTDIR},
 	{"mode",		required_argument,	NULL,	MODE},
+	{"status-file",		required_argument,	NULL,	STATUSFILE},
 
 	{"background",		optional_argument,	NULL,	BACKGROUND},
 	{"config-file",		required_argument,	NULL,	CONFIGFILE},
@@ -93,6 +94,17 @@ static char *const modes[] = {
 	[MODE_RSYNCDIRECT]	= "rsyncdirect",
 	[MODE_RSYNCSO]		= "rsyncso",
 	[MODE_SO]		= "so",
+	NULL
+};
+
+static char *const status_descr[] = {
+	[STATE_EXIT]		= "exiting",
+	[STATE_STARTING]	= "starting",
+	[STATE_RUNNING]		= "running",
+	[STATE_REHASH]		= "rehashing",
+	[STATE_TERM]		= "terminating",
+	[STATE_PTHREAD_GC]	= "pthread gc",
+	[STATE_INITSYNC]	= "initsync",
 	NULL
 };
 
@@ -245,6 +257,9 @@ static inline int parse_parameter(options_t *options_p, uint16_t param_id, char 
 			break;
 		case DESTDIR:
 			options_p->destdir	= arg;
+			break;
+		case STATUSFILE:
+			options_p->statusfile	= arg;
 			break;
 		case MODE: {
 			char *value;
@@ -750,6 +765,43 @@ int main_rehash(options_t *options_p) {
 	return ret;
 }
 
+int main_status_update(options_t *options_p, state_t state) {
+	if(options_p->statusfile == NULL)
+		return 0;
+
+	FILE *f = fopen(options_p->statusfile, "w");
+	if(f == NULL) {
+		printf_e("Error: main_status_update(): Cannot open file \"%s\" for writing: %s (errno: %u).\n", 
+			options_p->statusfile, strerror(errno), errno);
+		return errno;
+	}
+
+#ifdef VERYPARANOID
+	if(status_descr[state] == NULL) {
+		printf_e("Error: main_status_update(): status_descr[%u] == NULL.\n", state);
+		return EINVAL;
+	}
+#endif
+
+	size_t length = strlen(status_descr[state]);
+
+	int ret = 0;
+
+	if(fwrite(status_descr[state], length, 1, f) != 1) {
+		printf_e("Error: main_status_update(): Cannot write to file \"%s\": %s (errno: %u).\n",
+			options_p->statusfile, strerror(errno), errno);
+		ret = errno;
+	}
+
+	if(fclose(f)) {
+		printf_e("Error: main_status_update(): Cannot close file \"%s\": %s (errno: %u).\n", 
+			options_p->statusfile, strerror(errno), errno);
+		ret = errno;
+	}
+
+	return ret;
+}
+
 int main(int argc, char *argv[]) {
 	struct options options;
 #ifdef CLUSTER_SUPPORT
@@ -778,6 +830,8 @@ int main(int argc, char *argv[]) {
 	nret = configs_parse(&options);
 	if(nret) ret = nret;
 	out_init(options.flags);
+
+	main_status_update(&options, STATE_STARTING);
 
 	if(options.flags[EXCLUDEMOUNTPOINTS])
 		options.flags[ONEFILESYSTEM]=1;
@@ -1151,13 +1205,23 @@ preserve_fileaccess_end:
 
 	printf_ddd("Debug3: main(): Current errno is %i.\n", ret);
 
-	if(ret == 0)
+
+	if(ret == 0) {
 		ret = sync_run(&options);
+	}
 
 	if(options.pidfile != NULL) {
 		if(unlink(options.pidfile)) {
 			printf_e("Error: main(): Cannot unlink pidfile \"%s\": %s (errno: %i)\n",
 				options.pidfile, strerror(errno), errno);
+			ret = errno;
+		}
+	}
+
+	if(options.statusfile != NULL) {
+		if(unlink(options.statusfile)) {
+			printf_e("Error: main(): Cannot unlink status file \"%s\": %s (errno: %i)\n",
+				options.statusfile, strerror(errno), errno);
 			ret = errno;
 		}
 	}

@@ -122,6 +122,7 @@ typedef enum notifyengine_enum notifyenfine_t;
 #define STATE_STARTING(state_p) (state_p == NULL)
 enum state_enum {
 	STATE_EXIT 	= 0,
+	STATE_STARTING,
 	STATE_RUNNING,
 	STATE_REHASH,
 	STATE_TERM,

@@ -30,7 +30,6 @@
 #include <dlfcn.h>
 
 
-
 pthread_t pthread_sighandler;
 
 // seqid - is a counter of main loop. But it may overflow and it's required to compare
@@ -2641,6 +2640,7 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 		pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 		printf_ddd("Debug3: sync_inotify_loop(): current state is %i\n", state);
 		events = 0;
+		main_status_update(options_p, state);
 		switch(state) {
 			case STATE_PTHREAD_GC:
 				if(thread_gc(options_p)) {
@@ -2887,6 +2887,7 @@ int sync_term(int exitcode) {
 int sync_run(options_t *options_p) {
 	int ret, i;
 	sighandler_arg_t sighandler_arg = {0};
+
 
 	// Creating signal handler thread
 	sigset_t sigset_sighandler;
