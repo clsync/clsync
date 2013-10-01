@@ -28,6 +28,11 @@ int clsyncapi_init(struct options *_options_p, struct indexes *_indexes_p) {
 		return EINVAL;
 	}
 
+	if(options_p->flags[PTHREAD]) {
+		printf_e("Error: clsyncapi_init(): this handler is not pthread-safe.\n");
+		return EINVAL;
+	}
+
 	argv_size = ALLOC_PORTION;
 	argv      = malloc(argv_size * sizeof(char *));
 
@@ -65,7 +70,7 @@ int clsyncapi_sync(int n, api_eventinfo_t *ei) {
 	argv[argv_i++] = NULL;
 
 	// Forking
-	int pid = clsyncapi_fork();
+	int pid = clsyncapi_fork(options_p);
 	switch(pid) {
 		case -1: 
 			printf_e("Error: Cannot fork(): %s (errno: %i).\n", strerror(errno), errno);

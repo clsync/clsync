@@ -32,6 +32,11 @@ int clsyncapi_init(struct options *_options_p, struct indexes *_indexes_p) {
 		return EINVAL;
 	}
 
+	if(options_p->flags[PTHREAD]) {
+		printf_e("Error: clsyncapi_init(): this handler is not pthread-safe.\n");
+		return EINVAL;
+	}
+
 	argv[0] = "/usr/bin/rsync";
 	argv[1] = options_p->flags[DEBUG] >= 4 ? "-avvvvvvH" : "-aH";
 	argv[2] = "--exclude-from";
@@ -58,7 +63,7 @@ int clsyncapi_rsync(const char *inclistfile, const char *exclistfile) {
 	}
 
 	// Forking
-	int pid = clsyncapi_fork();
+	int pid = clsyncapi_fork(options_p);
 	switch(pid) {
 		case -1: 
 			printf_e("Error: Cannot fork(): %s (errno: %i).\n", strerror(errno), errno);
