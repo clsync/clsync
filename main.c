@@ -232,15 +232,32 @@ static inline int parse_parameter(options_t *options_p, uint16_t param_id, char 
 			options_p->synctimeout = (unsigned int)atol(arg);
 			break;
 		case IGNOREEXITCODE: {
-			unsigned char exitcode = (unsigned char)atoi(arg);
-			if(exitcode == 0) {
-				// flushing the setting
-				int i = 0;
-				while(i < 256)
-					options_p->isignoredexitcode[i++] = 0;
-			} else {
-				options_p->isignoredexitcode[exitcode] = 1;
-			}
+			char *ptr = arg, *start = arg;
+			unsigned char exitcode;
+			do {
+				switch(*ptr) {
+					case 0:
+					case ',':
+//						*ptr=0;
+						exitcode = (unsigned char)atoi(start);
+						if(exitcode == 0) {
+							// flushing the setting
+							int i = 0;
+							while(i < 256)
+								options_p->isignoredexitcode[i++] = 0;
+#ifdef _DEBUG
+							fprintf(stderr, "Force-Debug: parse_parameter(): Reset ignored exitcodes.\n");
+#endif
+						} else {
+							options_p->isignoredexitcode[exitcode] = 1;
+#ifdef _DEBUG
+							fprintf(stderr, "Force-Debug: parse_parameter(): Adding ignored exitcode %u.\n", exitcode);
+#endif
+						}
+						start = ptr+1;
+						break;
+				}
+			} while(*(ptr++));
 			break;
 		}
 		case SHOW_VERSION:
