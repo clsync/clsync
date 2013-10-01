@@ -769,6 +769,7 @@ int main_status_update(options_t *options_p, state_t state) {
 	if(options_p->statusfile == NULL)
 		return 0;
 
+
 	FILE *f = fopen(options_p->statusfile, "w");
 	if(f == NULL) {
 		printf_e("Error: main_status_update(): Cannot open file \"%s\" for writing: %s (errno: %u).\n", 
@@ -782,6 +783,8 @@ int main_status_update(options_t *options_p, state_t state) {
 		return EINVAL;
 	}
 #endif
+
+	printf_ddd("Debug3: main_status_update(): Setting status to %i: %s.\n", state, status_descr[state]);
 
 	int ret = 0;
 
