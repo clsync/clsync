@@ -2640,9 +2640,9 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 		pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 		printf_ddd("Debug3: sync_inotify_loop(): current state is %i\n", state);
 		events = 0;
-		main_status_update(options_p, state);
 		switch(state) {
 			case STATE_PTHREAD_GC:
+				main_status_update(options_p, state);
 				if(thread_gc(options_p)) {
 					state=STATE_EXIT;
 					break;
@@ -2650,6 +2650,7 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 				state = STATE_RUNNING;
 				SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
 			case STATE_INITSYNC:
+				main_status_update(options_p, state);
 				pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
 				pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 				ret = sync_initialsync(options_p->watchdir, options_p, indexes_p, INITSYNC_FULL);
@@ -2662,13 +2663,16 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 					SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
 				break;
 			case STATE_REHASH:
+				main_status_update(options_p, state);
 				printf_d("Debug: sync_inotify_loop(): rehashing.\n");
 				main_rehash(options_p);
 				state = STATE_RUNNING;
 				SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
 			case STATE_TERM:
+				main_status_update(options_p, state);
 				state = STATE_EXIT;
 			case STATE_EXIT:
+				main_status_update(options_p, state);
 				SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
 		}
 		pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
@@ -2689,6 +2693,7 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 			printf_e("Error: Cannot handle with inotify events: %s (errno: %i).\n", strerror(errno), errno);
 			return errno;
 		}
+		main_status_update(options_p, state);
 //		SYNC_INOTIFY_LOOP_IDLE;
 
 	}

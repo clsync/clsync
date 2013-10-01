@@ -18,4 +18,5 @@
  */
 
 extern int main_rehash(options_t *options_p);
+extern int main_status_update(options_t *options_p, state_t state);
 
