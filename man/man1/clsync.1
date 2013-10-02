@@ -54,6 +54,7 @@ Required.
 Path to file with filter rules of objects to be monitored. (see 
 .BR RULES )
 
+Is not set by default.
 .PP
 .RE
 
@@ -63,6 +64,7 @@ Path to file with filter rules of objects to be monitored. (see
 Defines directory to sync to for modes "rsyncdirect", "rsyncso" and "so". (see
 .IR \-\-mode )
 
+Is not set by default.
 .PP
 .RE
 
@@ -109,12 +111,15 @@ function for every sync
 See
 .B SYNC HANDLER MODES
 .PP
+
+Required.
 .RE
 
 .B \-b, \-\-background
 .RS 8
 Daemonize, forcing clsync to fork() on start.
 
+Is not set by default.
 .PP
 .RE
 
@@ -126,6 +131,7 @@ Use configuration from file
 (see 
 .BR "CONFIGURATION FILE" )
 
+Is not set by default.
 .PP
 .RE
 
@@ -137,6 +143,7 @@ Use configuration block with name
 (see 
 .BR "CONFIGURATION FILE" )
 
+Default value is "default".
 .PP
 .RE
 
@@ -146,6 +153,7 @@ Use configuration block with name
 Writes pid to file by path
 .IR path\-to\-pidfile .
 
+Is not set by default.
 .PP
 .RE
 
@@ -173,6 +181,8 @@ terminating \- received signal to die, preparing to die
 exiting     \- cleaning up [for 
 .BR valgrind (1)]
 .RE
+
+Is not set by default.
 .PP
 .RE
 
@@ -183,6 +193,8 @@ Drop user privileges to uid
 .I uid
 with
 .BR setuid (2)
+
+Is not set by default.
 .PP
 .RE
 
@@ -193,6 +205,8 @@ Drop group privileges to gid
 .I gid
 with
 .BR setgid (2)
+
+Is not set by default.
 .PP
 .RE
 
@@ -200,7 +214,8 @@ with
 .RS 8
 Use
 .BR pthreads (7)
-to parallelize syncing processes.
+to parallelize syncing processes. Every sync will be done asynchronous without
+blocking.
 
 If you're running
 .B clsync
@@ -213,11 +228,17 @@ with option
 you may catch a bug due to nonatomicity of rsync's file replace operation.
 (see
 .BR DIAGNOSTICS )
+
+Is not set by default.
+
+Don't use this option if not sure.
 .RE
 
 .B \-Y, \-\-syslog
 .RS 8
-Use syslog instead of stderr for logging
+Use syslog instead of stderr for logging.
+
+Is not set by default.
 .RE
 
 .B \-\-one\-file\-system
@@ -234,6 +255,8 @@ will write neither includes nor excludes of content of mount points.
 .br
 This may cause problems e.g. you're using rsync for sync-handler without
 similar option "--one-file-system".
+
+Is not set by default.
 .RE
 
 .B \-X, \-\-exclude\-mount\-points
@@ -245,6 +268,8 @@ but also add excludes to do not sync mount points.
 This requires to do
 .BR stat (2)
 syscalls on every dir and can reduce performance.
+
+Is not set by default.
 .RE
 
 
@@ -269,6 +294,8 @@ To find out the IP-address on interface "eth0", you can use for example next
 command:
 
 ip a s eth0 | awk '{if($1=="inet") {gsub("/.*", "", $2); print $2}}'
+
+Is not set by default.
 .RE
 
 .PP
@@ -531,6 +558,8 @@ listing a lot of "-x" options (e.g. "\-x 23 \-x 24") or via commas
 (e.g. "\-x 23,24"). To drop the list use zero exitcode (e.g. "\-x 0"). For
 example you can use "\-x 0,23" to drop the list and set "23"-th exitcode to
 be ignored.
+
+Is not set by default (or equally is set to "0").
 .RE
 
 .PP
@@ -559,10 +588,20 @@ Is not set by default.
 .RE
 
 .PP
+.B \-\-skip\-initialsync
+.RS 8
+Skip initial syncing on clsync start.
+
+Is not set by default.
+.RE
+
+.PP
 .B \-v, \-\-verbose
 .RS 8
 This option is supposed to increase verbosity. But at the moment there's no
 "verbose output" in the code, so the option does nothing. :)
+
+Is not set by default.
 .RE
 
 .PP
@@ -571,12 +610,16 @@ This option is supposed to increase verbosity. But at the moment there's no
 Increases debugging output. This may be supplied multiple times for more
 debugging information, up to a maximum of three "d" flags (more will do 
 nothing), for example "\-d \-d \-d" or "\-d3" (equivalent cases)
+
+Is not set by default.
 .RE
 
 .PP
 .B \-q, \-\-quiet
 .RS 8
 Suppresses error messages.
+
+Is not set by default.
 .RE
 
 .PP
@@ -586,6 +629,8 @@ Suppresses error messages.
 
 Switches monitor subsystem to "fanotify" [it's described for
 future\-compatibility].
+
+Is not set by default.
 .RE
 
 .PP
@@ -613,12 +658,16 @@ Default value is "nolabel".
 .B \-h, \-\-help
 .RS 8
 Outputs options list and exits with exitcode "0".
+
+Is not set by default.
 .RE
 
 .PP
 .B \-V, \-\-version
 .RS 8
 Outputs clsync version and exits with exitcode "0".
+
+Is not set by default.
 .RE
 
 .SH SYNC HANDLER MODES
@@ -1189,11 +1238,10 @@ Not implemented yet.
 Not described yet.
 
 .SH EXAMPLES
-Working example you can try out in "example/" or 
-"/usr/share/doc/clsync/example/" directory. Copy this directory somewhere
-(e.g. into "/tmp"). And try to run "clsync-start.sh" in there. Any
-files/directories modifications in "example/testdir/from" will be synced to
-"example/testdir/to" with few seconds delay.
+Working examples you can try out in "/usr/share/doc/clsync/examples/"
+directory. Copy this directory somewhere (e.g. into "/tmp"). And try to run
+"clsync-start-rsync.sh" in there. Any files/directories modifications in
+"testdir/from" will be synced to "testdir/to" with few seconds delay.
 .RE
 .SH AUTHOR
 Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C

@@ -72,6 +72,7 @@ static const struct option long_options[] =
 	{"ignore-exitcode",	required_argument,	NULL,	IGNOREEXITCODE},
 	{"dont-unlink-lists",	optional_argument,	NULL,	DONTUNLINK},
 	{"full-initialsync",	optional_argument,	NULL,	INITFULL},
+	{"skip-initialsync",	optional_argument,	NULL,	SKIPINITSYNC},
 	{"verbose",		optional_argument,	NULL,	VERBOSE},
 	{"debug",		optional_argument,	NULL,	DEBUG},
 	{"quiet",		optional_argument,	NULL,	QUIET},
@@ -851,6 +852,11 @@ int main(int argc, char *argv[]) {
 
 	main_status_update(&options, STATE_STARTING);
 
+	if(options.flags[INITFULL] && options.flags[SKIPINITSYNC]) {
+		printf_e("Error: Conflicting options: \"--full-initialsync\" and \"--skip-initialsync\" cannot be used together.\n");
+		ret = EINVAL;
+	}
+
 	if(options.flags[EXCLUDEMOUNTPOINTS])
 		options.flags[ONEFILESYSTEM]=1;
 
@@ -1107,14 +1113,16 @@ int main(int argc, char *argv[]) {
 
 	if(access(options.handlerfpath, X_OK) == -1) {
 		printf_e("Error: \"%s\" is not executable: %s (errno: %i).\n", options.handlerfpath, strerror(errno), errno);
-		ret = errno;
+		if(!ret)
+			ret = errno;
 	}
 
 	{
 		struct stat64 stat64={0};
 		if(lstat64(options.watchdir, &stat64)) {
 			printf_e("Error: main(): Cannot lstat64() on \"%s\": %s (errno: %i)\n", options.watchdir, strerror(errno), errno);
-			ret = errno;
+			if(!ret)
+				ret = errno;
 		} else {
 			if(options.flags[EXCLUDEMOUNTPOINTS])
 				options.st_dev = stat64.st_dev;

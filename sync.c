@@ -2629,7 +2629,7 @@ l_sync_inotify_handle_end:
 }
 
 int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p) {
-	int state = STATE_INITSYNC;
+	int state = options_p->flags[SKIPINITSYNC] ? STATE_RUNNING : STATE_INITSYNC;
 	int ret;
 	state_p = &state;
 
