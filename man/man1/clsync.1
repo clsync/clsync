@@ -154,6 +154,25 @@ Writes pid to file by path
 .RS 8
 Write status description into file with path
 .IR status\-file\-path .
+
+Possible statuses:
+.RS 8
+starting    \- initializing subsystems and marking file tree with FS monitor
+subsystem
+.br
+initsync    \- processing initial syncing
+.br
+running     \- waiting for events or syncing
+.br
+rehashing   \- reloading configuration files
+.br
+pthread gc  \- running threads' garbage collector
+.br
+terminating \- received signal to die, preparing to die
+.br
+exiting     \- cleaning up [for 
+.BR valgrind (1)]
+.RE
 .PP
 .RE
 
