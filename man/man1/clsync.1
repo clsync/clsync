@@ -478,7 +478,7 @@ Is not set by default.
 Use action "recursivesync" instead of "synclist" for directories that were just marked (see
 .B "SYNC HANDLER MODES"
 case
-.BR c ).
+.BR shell ).
 
 Is not set by default.
 .RE
@@ -489,7 +489,7 @@ Is not set by default.
 Removes the first 3 parameters in list files of action "synclist" (see
 .B "SYNC HANDLER MODES"
 case
-.BR b ).
+.BR shell ).
 
 Is not set by default.
 .RE
@@ -530,8 +530,11 @@ Forces
 to prefer a "lot of includes" method instead of a "excludes+includes" for
 rsync on recursive syncing.
 
-See
-.B case d
+See cases
+.BR rsyncshell ,
+.B rsyncdirect
+and
+.B rsyncso
 of
 .BR "SYNC HANDLER MODES" .
 
