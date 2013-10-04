@@ -31,15 +31,15 @@ function rsynclist() {
 			if [ ! -d "$TO" ]; then
 				mkdir -p "$TO"
 			fi
-			rsync -aH --timeout=300 --inplace --append-verify --delete-before --exclude-from="/etc/clsync/synchandler/lxc/rsync.exclude" "$excludefrom" --include-from="${LISTFILE}" --exclude='*' "$FROM"/ "$TO"/
+			rsync -aH --timeout=3600 --inplace --delete-before --exclude-from="/etc/clsync/synchandler/lxc/rsync.exclude" "$excludefrom" --include-from="${LISTFILE}" --exclude='*' "$FROM"/ "$TO"/
 			rc0="$?"
 		else
 			sleep $[ 3600 + $RANDOM % 1800 ]
-			rc0="23"
+			rc0="128"
 		fi
 	else
 		sleep $[ 3600 + $RANDOM % 1800 ]
-		rc0="23"
+		rc0="128"
 	fi
 
 	if mount | grep "$BACKUPMNT" > /dev/null; then
@@ -47,15 +47,15 @@ function rsynclist() {
 			if [ ! -d "$BACKUPDECR" ]; then
 				mkdir -p "$BACKUPDECR"
 			fi
-			rsync -aH --timeout=300 --inplace --append-verify --delete-before --exclude-from="/etc/clsync/synchandler/lxc/rsync.exclude" "$excludefrom" --include-from="${LISTFILE}" --exclude='*' --backup --backup-dir="$BACKUPDECR"/ "$FROM"/ "$BACKUPMIRROR"/ 
+			rsync -aH --timeout=3600 --inplace --delete-before --exclude-from="/etc/clsync/synchandler/lxc/rsync.exclude" "$excludefrom" --include-from="${LISTFILE}" --exclude='*' --backup --backup-dir="$BACKUPDECR"/ "$FROM"/ "$BACKUPMIRROR"/ 
 			rc1="$?"
 		else
 			sleep $[ 3600 + $RANDOM % 1800 ]
-			rc1="23"
+			rc1="128"
 		fi
 	else
 		sleep $[ 3600 + $RANDOM % 1800 ]
-		rc1='23'
+		rc1='128'
 	fi
 
 	case $rc0 in
