@@ -45,6 +45,7 @@ static const struct option long_options[] =
 	{"preserve-file-access",optional_argument,	NULL,	CAP_PRESERVE_FILEACCESS},
 #endif
 	{"pthread",		optional_argument,	NULL,	PTHREAD},
+	{"retries",		optional_argument,	NULL,	RETRIES},
 	{"syslog",		optional_argument,	NULL,	SYSLOG},
 	{"one-file-system",	optional_argument,	NULL,	ONEFILESYSTEM},
 	{"exclude-mount-points",optional_argument,	NULL,	EXCLUDEMOUNTPOINTS},
@@ -72,6 +73,7 @@ static const struct option long_options[] =
 	{"ignore-exitcode",	required_argument,	NULL,	IGNOREEXITCODE},
 	{"dont-unlink-lists",	optional_argument,	NULL,	DONTUNLINK},
 	{"full-initialsync",	optional_argument,	NULL,	INITFULL},
+	{"only-initialsync",	optional_argument,	NULL,	ONLYINITSYNC},
 	{"skip-initialsync",	optional_argument,	NULL,	SKIPINITSYNC},
 	{"verbose",		optional_argument,	NULL,	VERBOSE},
 	{"debug",		optional_argument,	NULL,	DEBUG},
@@ -172,42 +174,44 @@ static inline int parse_parameter(options_t *options_p, uint16_t param_id, char 
 			options_p->flags[param_id]++;
 			break;
 		case PIDFILE:
-			options_p->pidfile             = arg;
+			options_p->pidfile		= arg;
 			break;
+		case RETRIES:
+			options_p->retries		= (unsigned int)atol(arg);
 #ifdef CLUSTER_SUPPORT
 		case CLUSTERIFACE:
-			options_p->cluster_iface       = arg;
+			options_p->cluster_iface	= arg;
 			break;
 		case CLUSTERMCASTIPADDR:
-			options_p->cluster_mcastipaddr = arg;
+			options_p->cluster_mcastipaddr	= arg;
 			break;
 		case CLUSTERMCASTIPPORT:
-			options_p->cluster_mcastipport = (uint16_t)atoi(arg);
+			options_p->cluster_mcastipport	= (uint16_t)atoi(arg);
 			break;
 		case CLUSTERTIMEOUT:
-			options_p->cluster_timeout     = (unsigned int)atol(arg);
+			options_p->cluster_timeout	= (unsigned int)atol(arg);
 			break;
 		case CLUSTERNODENAME:
-			options_p->cluster_nodename    = arg;
+			options_p->cluster_nodename	= arg;
 			break;
 		case CLUSTERHDLMIN:
-			options_p->cluster_hash_dl_min = (uint16_t)atoi(arg);
+			options_p->cluster_hash_dl_min	= (uint16_t)atoi(arg);
 			break;
 		case CLUSTERHDLMAX:
-			options_p->cluster_hash_dl_max = (uint16_t)atoi(arg);
+			options_p->cluster_hash_dl_max	= (uint16_t)atoi(arg);
 			break;
 		case CLUSTERSDLMAX:
-			options_p->cluster_scan_dl_max = (uint16_t)atoi(arg);
+			options_p->cluster_scan_dl_max	= (uint16_t)atoi(arg);
 			break;
 #endif
 		case OUTLISTSDIR:
-			options_p->listoutdir   = arg;
+			options_p->listoutdir		= arg;
 			break;
 		case LABEL:
-			options_p->label        = arg;
+			options_p->label		= arg;
 			break;
 		case SYNCDELAY: 
-			options_p->syncdelay  = (unsigned int)atol(arg);
+			options_p->syncdelay		= (unsigned int)atol(arg);
 			break;
 		case DELAY:
 			options_p->_queues[QUEUE_NORMAL].collectdelay = (unsigned int)atol(arg);
@@ -230,7 +234,7 @@ static inline int parse_parameter(options_t *options_p, uint16_t param_id, char 
 			options_p->rsyncinclimit = (unsigned int)atol(arg);
 			break;
 		case SYNCTIMEOUT:
-			options_p->synctimeout = (unsigned int)atol(arg);
+			options_p->synctimeout   = (unsigned int)atol(arg);
 			break;
 		case IGNOREEXITCODE: {
 			char *ptr = arg, *start = arg;
@@ -842,7 +846,8 @@ int main(int argc, char *argv[]) {
 	options.cluster_hash_dl_max		   = DEFAULT_CLUSTERHDLMAX;
 	options.cluster_scan_dl_max		   = DEFAULT_CLUSTERSDLMAX;
 #endif
-	options.config_block = DEFAULT_CONFIG_BLOCK;
+	options.config_block			   = DEFAULT_CONFIG_BLOCK;
+	options.retries				   = DEFAULT_RETRIES;
 
 	arguments_parse(argc, argv, &options);
 	out_init(options.flags);
@@ -851,6 +856,16 @@ int main(int argc, char *argv[]) {
 	out_init(options.flags);
 
 	main_status_update(&options, STATE_STARTING);
+
+	if(options.flags[PTHREAD] && options.flags[ONLYINITSYNC]) {
+		printf_e("Error: Conflicting options: \"--pthread\" and \"--only-initialsync\" cannot be used together.\n");
+		ret = EINVAL;
+	}
+
+	if(options.flags[SKIPINITSYNC] && options.flags[ONLYINITSYNC]) {
+		printf_e("Error: Conflicting options: \"--skip-initialsync\" and \"--only-initialsync\" cannot be used together.\n");
+		ret = EINVAL;
+	}
 
 	if(options.flags[INITFULL] && options.flags[SKIPINITSYNC]) {
 		printf_e("Error: Conflicting options: \"--full-initialsync\" and \"--skip-initialsync\" cannot be used together.\n");

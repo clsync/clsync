@@ -35,6 +35,7 @@ enum flags_enum {
 	GID		= 'g',
 	CAP_PRESERVE_FILEACCESS = 'C',
 	PTHREAD		= 'p',
+	RETRIES		= 'r',
 	SYSLOG		= 'Y',
 	EXCLUDEMOUNTPOINTS= 'X',
 	PIDFILE		= 'z',
@@ -76,6 +77,7 @@ enum flags_enum {
 	ONEFILESYSTEM		= 4|OPTION_LONGOPTONLY,
 	STATUSFILE		= 5|OPTION_LONGOPTONLY,
 	SKIPINITSYNC		= 6|OPTION_LONGOPTONLY,
+	ONLYINITSYNC		= 7|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -185,6 +187,7 @@ struct options {
 	char *rulfpath;
 	char *listoutdir;
 	int notifyengine;
+	int retries;
 	size_t bfilethreshold;
 	unsigned int syncdelay;
 	queueinfo_t _queues[QUEUE_MAX];	// TODO: remove this from here

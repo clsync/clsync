@@ -649,7 +649,7 @@ int exec_argv(char **argv, int *child_pid DEBUGV(, int _rand)) {
 }
 
 static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode DEBUGV(, int _rand)) {
-	int err;
+	int err=0;
 	threadinfo_p->exitcode = exitcode;
 
 #if _DEBUG | VERYPARANOID
@@ -659,12 +659,7 @@ static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode DEBUGV(, 
 	}
 #endif
 
-	if((err=exitcode_process(threadinfo_p->options_p, threadinfo_p->exitcode))) {
-		printf_e("Error: thread_exit(): Bad exitcode %i (errcode %i)\n", exitcode, err);
-		threadinfo_p->errcode = err;
-	}
-
-	if((threadinfo_p->callback) && !(err)) {
+	if(threadinfo_p->callback) {
 		if(threadinfo_p->options_p->flags[DEBUG]>2) {
 			printf_ddd("Debug3: thread_exit(): thread %p, argv: \n", threadinfo_p->pthread);
 			char **argv = threadinfo_p->argv;
@@ -714,25 +709,52 @@ int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 	int n			= threadinfo_p->n;
 	api_eventinfo_t *ei	= threadinfo_p->ei;
 
-	int ret = options_p->handler_funct.sync(n, ei);
+	int err=0, rc=0;
+	do {
+		threadinfo_p->try_n++;
+
+		rc = options_p->handler_funct.sync(n, ei);
+
+		if((err=exitcode_process(threadinfo_p->options_p, rc)))
+			printf_d("Debug: so_call_sync_thread(): Bad exitcode %i (errcode %i)\n", rc, err);
+
+	} while(err && ((!options_p->flags[RETRIES]) || (threadinfo_p->try_n < options_p->flags[RETRIES])));
+
+	if(err) {
+		printf_e("Error: so_call_sync_thread(): Bad exitcode %i (errcode %i)\n", rc, err);
+		threadinfo_p->errcode = err;
+	}
+
 	so_call_sync_finished(n, ei);
 
-	int err;
-	if((err=thread_exit(threadinfo_p, ret DEBUGV(, 0)))) {
+	if((err=thread_exit(threadinfo_p, rc DEBUGV(, 0)))) {
 		exitcode = err;	// This's global variable "exitcode"
 		pthread_kill(pthread_sighandler, SIGTERM);
 	}
 
-	return ret;
+	return rc;
 }
 
 static inline int so_call_sync(options_t *options_p, indexes_t *indexes_p, int n, api_eventinfo_t *ei) {
 	printf_dd("Debug2: so_call_sync(): n == %i\n", n);
 
 	if(!options_p->flags[PTHREAD]) {
-		alarm(options_p->synctimeout);
-		int ret = options_p->handler_funct.sync(n, ei);
-		alarm(0);
+		int rc=0, ret=0, err=0;
+		int try_n=0;
+		do {
+			try_n++;
+
+			alarm(options_p->synctimeout);
+			rc = options_p->handler_funct.sync(n, ei);
+			alarm(0);
+
+			if((err=exitcode_process(options_p, rc)))
+				printf_d("Debug: so_call_sync(): Bad exitcode %i (errcode %i)\n", rc, err);
+		} while(err && ((!options_p->flags[RETRIES]) || (try_n < options_p->flags[RETRIES])));
+		if(err) {
+			printf_e("Error: so_call_sync(): Bad exitcode %i (errcode %i)\n", rc, err);
+			ret = err;
+		}
 		so_call_sync_finished(n, ei);
 		return ret;
 	}
@@ -741,6 +763,7 @@ static inline int so_call_sync(options_t *options_p, indexes_t *indexes_p, int n
 	if(threadinfo_p == NULL)
 		return errno;
 
+	threadinfo_p->try_n       = 0;
 	threadinfo_p->callback    = NULL;
 	threadinfo_p->argv        = NULL;
 	threadinfo_p->options_p   = options_p;
@@ -792,8 +815,20 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 	options_t *options_p	= threadinfo_p->options_p;
 	char **argv		= threadinfo_p->argv;
 
-	int ret = options_p->handler_funct.rsync(argv[0], argv[1]);
-	int err;
+	int err=0, rc=0;
+	do {
+		threadinfo_p->try_n++;
+
+		rc = options_p->handler_funct.rsync(argv[0], argv[1]);
+		if((err=exitcode_process(threadinfo_p->options_p, rc)))
+			printf_d("Debug: so_call_rsync_thread(): Bad exitcode %i (errcode %i)\n", rc, err);
+
+	} while(err && ((!options_p->flags[RETRIES]) || (threadinfo_p->try_n < options_p->flags[RETRIES])));
+
+	if(err) {
+		printf_e("Error: so_call_rsync_thread(): Bad exitcode %i (errcode %i)\n", rc, err);
+		threadinfo_p->errcode = err;
+	}
 
 	if((err=so_call_rsync_finished(options_p, argv[0], argv[1]))) {
 		exitcode = err;	// This's global variable "exitcode"
@@ -804,12 +839,12 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 	free(argv[1]);
 	free(argv);
 
-	if((err=thread_exit(threadinfo_p, ret DEBUGV(, 0)))) {
+	if((err=thread_exit(threadinfo_p, rc DEBUGV(, 0)))) {
 		exitcode = err;	// This's global variable "exitcode"
 		pthread_kill(pthread_sighandler, SIGTERM);
 	}
 
-	return ret;
+	return rc;
 }
 
 static inline int so_call_rsync(options_t *options_p, indexes_t *indexes_p, const char *inclistfile, const char *exclistfile) {
@@ -817,19 +852,35 @@ static inline int so_call_rsync(options_t *options_p, indexes_t *indexes_p, cons
 
 	if(!options_p->flags[PTHREAD]) {
 		printf_ddd("Debug3: so_call_rsync(): options_p->handler_funct.rsync == %p\n", options_p->handler_funct.rsync);
-		alarm(options_p->synctimeout);
-		int ret = options_p->handler_funct.rsync(inclistfile, exclistfile);
-		alarm(0);
+
+		int rc=0, err=0;
+		int try_n=0;
+		do {
+			try_n++;
+
+			alarm(options_p->synctimeout);
+			rc = options_p->handler_funct.rsync(inclistfile, exclistfile);
+			alarm(0);
+
+			if((err=exitcode_process(options_p, rc)))
+				printf_d("Debug: so_call_rsync(): Bad exitcode %i (errcode %i)\n", rc, err);
+		} while(err && ((!options_p->flags[RETRIES]) || (try_n < options_p->flags[RETRIES])));
+		if(err) {
+			printf_e("Error: so_call_rsync(): Bad exitcode %i (errcode %i)\n", rc, err);
+			rc = err;
+		}
+
 		int ret_cleanup;
 		if((ret_cleanup=so_call_rsync_finished(options_p, inclistfile, exclistfile)))
-			return ret ? ret : ret_cleanup;
-		return ret;
+			return rc ? rc : ret_cleanup;
+		return rc;
 	}
 
 	threadinfo_t *threadinfo_p = thread_new();
 	if(threadinfo_p == NULL)
 		return errno;
 
+	threadinfo_p->try_n       = 0;
 	threadinfo_p->callback    = NULL;
 	threadinfo_p->argv        = xmalloc(sizeof(char *) * 3);
 	threadinfo_p->options_p   = options_p;
@@ -958,33 +1009,44 @@ static inline int sync_exec(options_t *options_p, indexes_t *indexes_p, thread_c
 
 	_sync_exec_getargv(argv, callback, arg);
 
-	alarm(options_p->synctimeout);
-	options_p->children = 1;
-	int exitcode = exec_argv(argv, options_p->child_pid DEBUGV(, 0));
-	options_p->children = 0;
-	alarm(0);
+	int exitcode=0, ret=0, err=0;
+	int try_n=0;
+	do {
+		try_n++;
 
-	int ret;
-	if((ret=exitcode_process(options_p, exitcode))) {
-		printf_e("Error: sync_exec(): Bad exitcode %i\n", exitcode);
-		goto l_sync_exec_end;
+		alarm(options_p->synctimeout);
+		options_p->children = 1;
+		exitcode = exec_argv(argv, options_p->child_pid DEBUGV(, 0));
+		options_p->children = 0;
+		alarm(0);
+
+		if((err=exitcode_process(options_p, exitcode)))
+			printf_d("Debug: so_call_rsync(): Bad exitcode %i (errcode %i)\n", exitcode, err);
+	} while(err && ((!options_p->flags[RETRIES]) || (try_n < options_p->flags[RETRIES])));
+
+	if(err) {
+		printf_e("Error: so_call_rsync(): Bad exitcode %i (errcode %i)\n", exitcode, err);
+		ret = err;
+//		goto l_sync_exec_end;
 	}
 
 	if(callback != NULL) {
-		ret = callback(options_p, argv);
-		if(ret) {
+		int nret = callback(options_p, argv);
+		if(nret) {
 			printf_e("Error: Got error while callback(): %s (errno: %i).\n", strerror(ret), ret);
-			goto l_sync_exec_end;
+			if(!ret) ret=nret;
+//			goto l_sync_exec_end;
 		}
 	}
 
-l_sync_exec_end:
+//l_sync_exec_end:
 	free(argv);
 	return ret;
 }
 
 int __sync_exec_thread(threadinfo_t *threadinfo_p) {
 	char **argv			= threadinfo_p->argv;
+	options_t *options_p		= threadinfo_p->options_p;
 #ifdef _DEBUG
 	int _rand=rand();
 #endif
@@ -992,11 +1054,24 @@ int __sync_exec_thread(threadinfo_t *threadinfo_p) {
 	printf_ddd("Debug3: __sync_exec_thread(): thread_num == %i; threadinfo_p == %p; i_p->pthread %p; thread %p"DEBUGV("; rand == %i")"\n", 
 			threadinfo_p->thread_num, threadinfo_p, threadinfo_p->pthread, pthread_self() DEBUGV(, _rand));
 
-	int exec_exitcode = exec_argv(argv, &threadinfo_p->child_pid DEBUGV(, _rand));
+	int err=0, exec_exitcode=0, rc=0;
+	do {
+		threadinfo_p->try_n++;
+
+		exec_exitcode = exec_argv(argv, &threadinfo_p->child_pid DEBUGV(, _rand));
+
+		if((err=exitcode_process(threadinfo_p->options_p, exec_exitcode)))
+			printf_d("Debug: __sync_exec_thread(): Bad exitcode %i (errcode %i)\n", rc, err);
+
+	} while(err && ((!options_p->flags[RETRIES]) || (threadinfo_p->try_n < options_p->flags[RETRIES])));
+
+	if(err) {
+		printf_e("Error: __sync_exec_thread(): Bad exitcode %i (errcode %i)\n", exec_exitcode, err);
+		threadinfo_p->errcode = err;
+	}
 
 	g_hash_table_destroy(threadinfo_p->fpath2ei_ht);
 
-	int err;
 	if((err=thread_exit(threadinfo_p, exec_exitcode DEBUGV(, _rand)))) {
 		exitcode = err;	// This's global variable "exitcode"
 		pthread_kill(pthread_sighandler, SIGTERM);
@@ -1019,6 +1094,7 @@ static inline int sync_exec_thread(options_t *options_p, indexes_t *indexes_p, t
 	if(threadinfo_p == NULL)
 		return errno;
 
+	threadinfo_p->try_n       = 0;
 	threadinfo_p->callback    = callback;
 	threadinfo_p->argv        = argv;
 	threadinfo_p->options_p   = options_p;
@@ -2655,6 +2731,13 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 				pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 				ret = sync_initialsync(options_p->watchdir, options_p, indexes_p, INITSYNC_FULL);
 				if(ret) return ret;
+
+				if(options_p->flags[ONLYINITSYNC]) {
+					SYNC_INOTIFY_LOOP_IDLE;
+					state = STATE_EXIT;
+					return ret;
+				}
+
 				state = STATE_RUNNING;
 				continue;
 			case STATE_RUNNING:
@@ -3032,14 +3115,20 @@ int sync_run(options_t *options_p) {
 	if(options_p->listoutdir)
 		srand(time(NULL));
 
-	// Initializing FS monitor kernel subsystem in this userspace application
+	int notify_d=0;
 
-	int notify_d = sync_notify_init(options_p);
-	if(notify_d == -1) return errno;
+	if(!options_p->flags[ONLYINITSYNC]) {
 
-	// Marking file tree for FS monitor
-	ret = sync_mark_walk(notify_d, options_p, options_p->watchdir, &indexes);
-	if(ret) return ret;
+		// Initializing FS monitor kernel subsystem in this userspace application
+
+		notify_d = sync_notify_init(options_p);
+		if(notify_d == -1) return errno;
+
+		// Marking file tree for FS monitor
+		ret = sync_mark_walk(notify_d, options_p, options_p->watchdir, &indexes);
+		if(ret) return ret;
+
+	}
 
 	// "Infinite" loop of processling the events
 	ret = sync_notify_loop(notify_d, options_p, &indexes);

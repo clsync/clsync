@@ -170,6 +170,8 @@ struct threadinfo {
 
 	GHashTable		 *fpath2ei_ht;		// file path -> event information
 
+	int			  try_n;
+
 	// for so-synchandler
 	int			  n;
 	api_eventinfo_t		 *ei;

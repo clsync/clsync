@@ -210,6 +210,22 @@ Is not set by default.
 .PP
 .RE
 
+.B \-r, \-\-retries
+.I "number-of-tries"
+.RS 8
+Tries limit to sync with
+.IR sync-handler .
+
+.B clsync
+will die after
+.I number-of-tries
+tries.
+
+To try infinite set "0".
+
+Default value is "1".
+.RE
+
 .B \-p, \-\-pthread
 .RS 8
 Use
@@ -586,6 +602,14 @@ on initial sync.
 
 This may be useful for quick start or e.g. if it's required to sync 
 "/var/log/" tree but not sync every change from there.
+
+Is not set by default.
+.RE
+
+.PP
+.B \-\-only\-initialsync
+.RS 8
+Exit after initial syncing on clsync start.
 
 Is not set by default.
 .RE
