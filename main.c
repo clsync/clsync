@@ -857,6 +857,13 @@ int main(int argc, char *argv[]) {
 
 	main_status_update(&options, STATE_STARTING);
 
+#ifdef PARANOID
+	if((options.flags[RETRIES] != 1) && options.flags[PTHREAD]) {
+		printf_e("Error: \"--retries\" values should be equal to \"1\" for \"--pthread\" mode.\n");
+		ret = EINVAL;
+	}
+#endif
+
 	if(options.flags[PTHREAD] && options.flags[ONLYINITSYNC]) {
 		printf_e("Error: Conflicting options: \"--pthread\" and \"--only-initialsync\" cannot be used together.\n");
 		ret = EINVAL;
