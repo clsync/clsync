@@ -815,6 +815,7 @@ int main_status_update(options_t *options_p, state_t state) {
 #endif
 
 	printf_ddd("Debug3: main_status_update(): Setting status to %i: %s.\n", state, status_descr[state]);
+	state_old=state;
 
 	int ret = 0;
 
