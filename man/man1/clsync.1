@@ -621,6 +621,10 @@ Exit if there's no events. Works like
 .IR \-\-only\-initialsync ,
 but also syncs events collected while the initial syncing.
 
+Unlike
+.I \-\-only\-initialsync
+this option uses FS monitor subsystem to monitor for new events while the initial syncing. This may reduce performance. On the other hand this way may be used to be sure, that everything is synced at the moment before clsync will exit.
+
 Is not set by default.
 .RE
 
