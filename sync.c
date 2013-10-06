@@ -2414,6 +2414,7 @@ int sync_inotify_wait(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 	static struct timeval tv;
 	time_t tm = time(NULL);
 	long delay = ((unsigned long)~0 >> 1);
+
 	threadsinfo_t *threadsinfo_p = thread_getinfo();
 
 	pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
@@ -2467,12 +2468,17 @@ int sync_inotify_wait(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 	if((!delay) || (*state_p != STATE_RUNNING))
 		return 0;
 
-	printf_ddd("Debug3: sync_inotify_wait(): sleeping for %li second(s).\n", SLEEP_SECONDS);
-	sleep(SLEEP_SECONDS);
-	delay = ((long)delay)>SLEEP_SECONDS ? delay-SLEEP_SECONDS : 0;
+	if(options_p->flags[EXITONNOEVENTS]) { // zero delay if "--exit-on-no-events" is set
+		tv.tv_sec  = 0;
+		tv.tv_usec = 0;
+	} else {
+		printf_ddd("Debug3: sync_inotify_wait(): sleeping for %li second(s).\n", SLEEP_SECONDS);
+		sleep(SLEEP_SECONDS);
+		delay = ((long)delay)>SLEEP_SECONDS ? delay-SLEEP_SECONDS : 0;
 
-	tv.tv_sec  = delay;
-	tv.tv_usec = 0;
+		tv.tv_sec  = delay;
+		tv.tv_usec = 0;
+	}
 
 	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
@@ -2484,8 +2490,11 @@ int sync_inotify_wait(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 
 	if((ret == -1) && (errno == EINTR)) {
 		errno = 0;
-		return 0;
+		ret   = 0;
 	}
+
+	if((options_p->flags[EXITONNOEVENTS]) && (ret == 0)) // if not events and "--exit-on-no-events" is set
+		*state_p = STATE_EXIT;
 
 	return ret;
 }

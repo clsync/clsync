@@ -75,6 +75,7 @@ static const struct option long_options[] =
 	{"full-initialsync",	optional_argument,	NULL,	INITFULL},
 	{"only-initialsync",	optional_argument,	NULL,	ONLYINITSYNC},
 	{"skip-initialsync",	optional_argument,	NULL,	SKIPINITSYNC},
+	{"exit-on-no-events",	optional_argument,	NULL,	EXITONNOEVENTS},
 	{"verbose",		optional_argument,	NULL,	VERBOSE},
 	{"debug",		optional_argument,	NULL,	DEBUG},
 	{"quiet",		optional_argument,	NULL,	QUIET},
@@ -866,6 +867,19 @@ int main(int argc, char *argv[]) {
 
 	if(options.flags[PTHREAD] && options.flags[ONLYINITSYNC]) {
 		printf_e("Error: Conflicting options: \"--pthread\" and \"--only-initialsync\" cannot be used together.\n");
+		ret = EINVAL;
+	}
+
+	if(options.flags[PTHREAD] && options.flags[EXITONNOEVENTS]) {
+		printf_e("Error: Conflicting options: \"--pthread\" and \"--exit-on-no-events\" cannot be used together.\n");
+		ret = EINVAL;
+	}
+	if(options.flags[SKIPINITSYNC] && options.flags[EXITONNOEVENTS]) {
+		printf_e("Error: Conflicting options: \"--skip-initialsync\" and \"--exit-on-no-events\" cannot be used together.\n");
+		ret = EINVAL;
+	}
+	if(options.flags[ONLYINITSYNC] && options.flags[EXITONNOEVENTS]) {
+		printf_e("Error: Conflicting options: \"--only-initialsync\" and \"--exit-on-no-events\" cannot be used together.\n");
 		ret = EINVAL;
 	}
 
