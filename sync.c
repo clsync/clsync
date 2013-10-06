@@ -2787,8 +2787,9 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 			return errno;
 		}
 		main_status_update(options_p, state);
-//		SYNC_INOTIFY_LOOP_IDLE;
 
+		if(options_p->flags[EXITONNOEVENTS]) // clsync exits on no events, so sync_idle() is never called. We have to force the calling of it.
+			SYNC_INOTIFY_LOOP_IDLE;
 	}
 
 	SYNC_INOTIFY_LOOP_IDLE;
