@@ -179,6 +179,7 @@ static inline int parse_parameter(options_t *options_p, uint16_t param_id, char 
 			break;
 		case RETRIES:
 			options_p->retries		= (unsigned int)atol(arg);
+			break;
 #ifdef CLUSTER_SUPPORT
 		case CLUSTERIFACE:
 			options_p->cluster_iface	= arg;
