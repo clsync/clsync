@@ -1792,7 +1792,7 @@ int sync_idle_dosync_collectedevents_aggrqueue(queue_id_t queue_id, options_t *o
 
 	queueinfo_t *queueinfo = &options_p->_queues[queue_id];
 
-	if((queueinfo->stime + queueinfo->collectdelay > tm) && (queueinfo->collectdelay != COLLECTDELAY_INSTANT)) {
+	if((queueinfo->stime + queueinfo->collectdelay > tm) && (queueinfo->collectdelay != COLLECTDELAY_INSTANT) && (!options_p->flags[EXITONNOEVENTS])) {
 		printf_ddd("Debug3: sync_idle_dosync_collectedevents_procqueue(%i, ...): too early (%i + %i > %i).\n", queue_id, queueinfo->stime, queueinfo->collectdelay, tm);
 		return 0;
 	}
