@@ -127,7 +127,8 @@ enum state_enum {
 	STATE_REHASH,
 	STATE_TERM,
 	STATE_PTHREAD_GC,
-	STATE_INITSYNC
+	STATE_INITSYNC,
+	STATE_UNKNOWN
 };
 typedef enum state_enum state_t;
 
