@@ -1026,7 +1026,7 @@ static inline int sync_exec(options_t *options_p, indexes_t *indexes_p, thread_c
 	} while(err && ((!options_p->retries) || (try_n < options_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
 
 	if(err) {
-		printf_e("Error: so_call_rsync(): Bad exitcode %i (errcode %i)\n", exitcode, err);
+		printf_e("Error: sync_exec(): Bad exitcode %i (errcode %i)\n", exitcode, err);
 		ret = err;
 //		goto l_sync_exec_end;
 	}
