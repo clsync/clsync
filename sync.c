@@ -716,7 +716,7 @@ int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 		rc = options_p->handler_funct.sync(n, ei);
 
 		if((err=exitcode_process(threadinfo_p->options_p, rc)))
-			printf_d("Debug: so_call_sync_thread(): Bad exitcode %i (errcode %i)\n", rc, err);
+			printf_e("Warning: so_call_sync_thread(): Bad exitcode %i (errcode %i). Retrying.\n", rc, err);
 
 	} while(err && ((!options_p->retries) || (threadinfo_p->try_n < options_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
 
@@ -749,7 +749,7 @@ static inline int so_call_sync(options_t *options_p, indexes_t *indexes_p, int n
 			alarm(0);
 
 			if((err=exitcode_process(options_p, rc)))
-				printf_d("Debug: so_call_sync(): Bad exitcode %i (errcode %i)\n", rc, err);
+				printf_e("Warning: so_call_sync(): Bad exitcode %i (errcode %i). Retrying.\n", rc, err);
 		} while(err && ((!options_p->retries) || (try_n < options_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
 		if(err) {
 			printf_e("Error: so_call_sync(): Bad exitcode %i (errcode %i)\n", rc, err);
@@ -821,7 +821,7 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 
 		rc = options_p->handler_funct.rsync(argv[0], argv[1]);
 		if((err=exitcode_process(threadinfo_p->options_p, rc)))
-			printf_d("Debug: so_call_rsync_thread(): Bad exitcode %i (errcode %i)\n", rc, err);
+			printf_e("Warning: so_call_rsync_thread(): Bad exitcode %i (errcode %i). Retrying.\n", rc, err);
 
 	} while(err && ((!options_p->retries) || (threadinfo_p->try_n < options_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
 
@@ -863,7 +863,7 @@ static inline int so_call_rsync(options_t *options_p, indexes_t *indexes_p, cons
 			alarm(0);
 
 			if((err=exitcode_process(options_p, rc)))
-				printf_d("Debug: so_call_rsync(): Bad exitcode %i (errcode %i)\n", rc, err);
+				printf_e("Warning: so_call_rsync(): Bad exitcode %i (errcode %i). Retring.\n", rc, err);
 		} while(err && ((!options_p->retries) || (try_n < options_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
 		if(err) {
 			printf_e("Error: so_call_rsync(): Bad exitcode %i (errcode %i)\n", rc, err);
@@ -1022,7 +1022,7 @@ static inline int sync_exec(options_t *options_p, indexes_t *indexes_p, thread_c
 		alarm(0);
 
 		if((err=exitcode_process(options_p, exitcode)))
-			printf_d("Debug: sync_exec(): Bad exitcode %i (errcode %i)\n", exitcode, err);
+			printf_e("Warning: sync_exec(): Bad exitcode %i (errcode %i). Retrying.\n", exitcode, err);
 	} while(err && ((!options_p->retries) || (try_n < options_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
 
 	if(err) {
@@ -1062,7 +1062,7 @@ int __sync_exec_thread(threadinfo_t *threadinfo_p) {
 		exec_exitcode = exec_argv(argv, &threadinfo_p->child_pid DEBUGV(, _rand));
 
 		if((err=exitcode_process(threadinfo_p->options_p, exec_exitcode)))
-			printf_d("Debug: __sync_exec_thread(): Bad exitcode %i (errcode %i)\n", rc, err);
+			printf_e("Warning: __sync_exec_thread(): Bad exitcode %i (errcode %i). Retrying.\n", rc, err);
 
 	} while(err && ((!options_p->retries) || (threadinfo_p->try_n < options_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
 
