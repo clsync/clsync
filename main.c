@@ -59,7 +59,7 @@ static const struct option long_options[] =
 	{"cluster-hash-dl-max",	required_argument,	NULL,	CLUSTERHDLMAX},
 	{"cluster-scan-dl-max",	required_argument,	NULL,	CLUSTERSDLMAX},
 #endif
-	{"standby-file",	optional_argument,	NULL,	STANDBYFILE},
+	{"standby-file",	required_argument,	NULL,	STANDBYFILE},
 	{"timeout-sync",	required_argument,	NULL,	SYNCTIMEOUT},
 	{"delay-sync",		required_argument,	NULL,	SYNCDELAY},
 	{"delay-collect",	required_argument,	NULL,	DELAY},
