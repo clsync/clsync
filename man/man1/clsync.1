@@ -24,6 +24,20 @@ directories to sync may be placed in
 
 .SH OPTIONS
 
+This options can be passed as arguments or to be used in the configuration
+file.
+
+To disable numeric option set to zero:
+.RS
+	=0
+.RE
+
+To disable string option (for example path to file) set to empty string:
+.RS
+	=
+.RE
+
+
 .B \-W, \-\-watch\-dir
 .I watch\-dir
 .RS 8
@@ -404,6 +418,16 @@ Sets maximal directory level for ctime scanning (see
 .BR CLUSTERING ).
 
 Default value is "32".
+.RE
+
+.PP
+.B \-\-standby\-file
+.RS 8
+Sets file to path that should be checked before every sync. If file exists the
+sync will be suspended until the file is deleted. It may be useful if you need
+freeze destination directory while running some scripts.
+
+Is not set by default.
 .RE
 
 .PP

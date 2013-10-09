@@ -2353,8 +2353,24 @@ int apievinfo2rsynclist(indexes_t *indexes_p, FILE *listfile, int n, api_eventin
 }
 
 int sync_idle(int notify_d, options_t *options_p, indexes_t *indexes_p) {
+
+	// Collecting garbage
+
 	int ret=thread_gc(options_p);
 	if(ret) return ret;
+
+	// Checking if we can sync
+
+	if(options_p->flags[STANDBYFILE]) {
+		struct stat st;
+		if(!stat(options_p->standbyfile, &st)) {
+			printf_d("Debug3: sync_idle(): Found standby file. Holding over syncs. Sleeping "XTOSTR(SLEEP_SECONDS)" second.\n");
+			sleep(SLEEP_SECONDS);
+			return 0;
+		}
+	}
+
+	// Syncing
 
 	printf_ddd("Debug3: sync_idle(): calling sync_idle_dosync_collectedevents()\n");
 

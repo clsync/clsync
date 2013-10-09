@@ -59,6 +59,7 @@ static const struct option long_options[] =
 	{"cluster-hash-dl-max",	required_argument,	NULL,	CLUSTERHDLMAX},
 	{"cluster-scan-dl-max",	required_argument,	NULL,	CLUSTERSDLMAX},
 #endif
+	{"standby-file",	optional_argument,	NULL,	STANDBYFILE},
 	{"timeout-sync",	required_argument,	NULL,	SYNCTIMEOUT},
 	{"delay-sync",		required_argument,	NULL,	SYNCDELAY},
 	{"delay-collect",	required_argument,	NULL,	DELAY},
@@ -211,6 +212,15 @@ static inline int parse_parameter(options_t *options_p, uint16_t param_id, char 
 			break;
 		case LABEL:
 			options_p->label		= arg;
+			break;
+		case STANDBYFILE:
+			if(strlen(arg)) {
+				options_p->standbyfile		= arg;
+				options_p->flags[STANDBYFILE]	= 1;
+			} else {
+				options_p->standbyfile		= NULL;
+				options_p->flags[STANDBYFILE]	= 0;
+			}
 			break;
 		case SYNCDELAY: 
 			options_p->syncdelay		= (unsigned int)atol(arg);
@@ -872,6 +882,11 @@ int main(int argc, char *argv[]) {
 		ret = EINVAL;
 	}
 #endif
+
+	if(options.flags[STANDBYFILE] && (options.flags[MODE] == MODE_SIMPLE)) {
+		printf_e("Error: Sorry but option \"--standby-file\" cannot be used in mode \"simple\", yet.\n");
+		ret = EINVAL;
+	}
 
 	if(options.flags[PTHREAD] && options.flags[ONLYINITSYNC]) {
 		printf_e("Error: Conflicting options: \"--pthread\" and \"--only-initialsync\" cannot be used together.\n");

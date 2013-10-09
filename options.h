@@ -79,6 +79,7 @@ enum flags_enum {
 	SKIPINITSYNC		= 6|OPTION_LONGOPTONLY,
 	ONLYINITSYNC		= 7|OPTION_LONGOPTONLY,
 	EXITONNOEVENTS		= 8|OPTION_LONGOPTONLY,
+	STANDBYFILE		= 9|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -160,6 +161,7 @@ struct options {
 	char *label;
 	char *watchdir;
 	char *pidfile;
+	char *standbyfile;
 	char *destdir;
 	char *watchdirwslash;
 	char *destdirwslash;
