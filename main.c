@@ -1006,6 +1006,66 @@ int main(int argc, char *argv[]) {
 			ret = errno;
 		}
 
+		struct stat64 stat64={0};
+		if(lstat64(options.watchdir, &stat64)) {
+			printf_e("Error: main(): Cannot lstat64() on \"%s\": %s (errno: %i)\n", options.watchdir, strerror(errno), errno);
+			if(!ret)
+				ret = errno;
+		} else {
+			if(options.flags[EXCLUDEMOUNTPOINTS])
+				options.st_dev = stat64.st_dev;
+			if((stat64.st_mode & S_IFMT) == S_IFLNK) {
+				// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
+				// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
+				// it disables filters, because exclude-list will be empty.
+#ifdef VERYPARANOID
+				printf_e("Error: Watch dir cannot be symlink, but \"%s\" is a symlink.\n", options.watchdir);
+				ret = EINVAL;
+#else
+				char *watchdir_resolved_part = alloca(PATH_MAX+1);
+				ssize_t r = readlink(options.watchdir, watchdir_resolved_part, PATH_MAX+1);
+	
+				if(r>=PATH_MAX) {	// TODO: check if it's possible
+					printf_e("Error: Too long file path resolved from symbolic link \"%s\"\n", options.watchdir);
+					ret = EINVAL;
+				} else
+				if(r<0) {
+					printf_e("Error: Cannot resolve symbolic link \"%s\": readlink() error: %s (errno: %i)\n", options.watchdir, strerror(errno), errno);
+					ret = EINVAL;
+				} else {
+					char *watchdir_resolved;
+#ifdef VERYPARANOID
+					if(options.watchdirsize)
+						if(options.watchdir != NULL)
+							free(options.watchdir);
+#endif
+
+					size_t watchdir_resolved_part_len = strlen(watchdir_resolved_part);
+					options.watchdirsize = watchdir_resolved_part_len+1;	// Not true for case of relative symlink
+					if(*watchdir_resolved_part == '/') {
+						// Absolute symlink
+						watchdir_resolved = malloc(options.watchdirsize);
+						memcpy(watchdir_resolved, watchdir_resolved_part, options.watchdirsize);
+					} else {
+						// Relative symlink :(
+						char *rslash = strrchr(options.watchdir, '/');
+
+						char *watchdir_resolved_rel  = alloca(PATH_MAX+1);
+						size_t watchdir_resolved_rel_len = rslash-options.watchdir + 1;
+						memcpy(watchdir_resolved_rel, options.watchdir, watchdir_resolved_rel_len);
+						memcpy(&watchdir_resolved_rel[watchdir_resolved_rel_len], watchdir_resolved_part, watchdir_resolved_part_len+1);
+
+						watchdir_resolved = realpath(watchdir_resolved_rel, NULL);
+					}
+
+					
+					printf_d("Debug: Symlink resolved: watchdir \"%s\" -> \"%s\"\n", options.watchdir, watchdir_resolved);
+					options.watchdir = watchdir_resolved;
+				}
+#endif
+			}
+		}
+
 		if(!ret) {
 			options.watchdir     = rwatchdir;
 			options.watchdirlen  = strlen(options.watchdir);
@@ -1174,28 +1234,6 @@ int main(int argc, char *argv[]) {
 		printf_e("Error: \"%s\" is not executable: %s (errno: %i).\n", options.handlerfpath, strerror(errno), errno);
 		if(!ret)
 			ret = errno;
-	}
-
-	{
-		struct stat64 stat64={0};
-		if(lstat64(options.watchdir, &stat64)) {
-			printf_e("Error: main(): Cannot lstat64() on \"%s\": %s (errno: %i)\n", options.watchdir, strerror(errno), errno);
-			if(!ret)
-				ret = errno;
-		} else {
-			if(options.flags[EXCLUDEMOUNTPOINTS])
-				options.st_dev = stat64.st_dev;
-#ifdef VERYPARANOID
-			if((stat64.st_mode & S_IFMT) == S_IFLNK) {
-				// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
-				// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
-				// it disables filters, because exclude-list will be empty.
-
-				printf_e("Error: Watch dir cannot be symlink, but \"%s\" is a symlink.\n", options.watchdir);
-				ret = EINVAL;
-			}
-#endif
-		}
 	}
 
 	nret=main_rehash(&options);
