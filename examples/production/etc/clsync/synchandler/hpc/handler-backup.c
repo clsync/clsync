@@ -120,20 +120,7 @@ int clsyncapi_rsync(const char *incl_file, const char *excl_file)
     }
 
     // Return
-    static const char *exit_fmt = "handler: Execution completed with exitcode %i.\n";
     exitcode = WEXITSTATUS(status);
-    // force resync on errors, except 23 and 24 which are (sometimes) acceptable
-    if (exitcode != 0 && exitcode != 23 && exitcode != 24) {
-        printf_e(exit_fmt, exitcode);
-        if (kill(0, 12))
-            printf_e("handler: can't send SIGUSR2 to master\n");
-        else
-            exitcode = 0;
-    } else {
-        printf_d(exit_fmt, exitcode);
-    }
-
-
 cleanup:
     free(argv[back_idx]);
     return exitcode;

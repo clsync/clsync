@@ -8,7 +8,6 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <signal.h>
 
 #include <clsync/clsync.h>
 #include <clsync/configuration.h>
@@ -85,18 +84,7 @@ int clsyncapi_sync(int n, api_eventinfo_t *ei)
     }
 
     // Return
-    static const char *exit_fmt = "handler: Execution completed with exitcode %i.\n";
     exitcode = WEXITSTATUS(status);
-    // force resync on errors
-    if (exitcode) {
-        printf_e(exit_fmt, exitcode);
-        if (kill(0, 12))
-            printf_e("handler: can't send SIGUSR2 to master\n");
-    }
-    else {
-        printf_d(exit_fmt, exitcode);
-    }
-
 cleanup:
     free(argv);
     return exitcode; // do not die on errors
