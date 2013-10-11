@@ -863,7 +863,7 @@ static inline int so_call_rsync(options_t *options_p, indexes_t *indexes_p, cons
 			alarm(0);
 
 			if((err=exitcode_process(options_p, rc)))
-				printf_e("Warning: so_call_rsync(): Bad exitcode %i (errcode %i). Retring.\n", rc, err);
+				printf_e("Warning: so_call_rsync(): Bad exitcode %i (errcode %i). Retrying.\n", rc, err);
 		} while(err && ((!options_p->retries) || (try_n < options_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
 		if(err) {
 			printf_e("Error: so_call_rsync(): Bad exitcode %i (errcode %i)\n", rc, err);
