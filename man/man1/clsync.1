@@ -662,6 +662,22 @@ Is not set by default.
 .RE
 
 .PP
+.B \-\-exit\-hook
+.I path\-of\-exit\-hook\-program
+.RS 8
+Sets path of program to be executed on clsync exit.
+
+If this parameter is set, clsync will exec on exit:
+.RS
+.I path\-of\-exit\-hook\-program label 
+.RE
+
+The execution will be skipped if syncing process wasn't started.
+
+Is not set by default.
+.RE
+
+.PP
 .B \-v, \-\-verbose
 .RS 8
 This option is supposed to increase verbosity. But at the moment there's no

@@ -3223,6 +3223,11 @@ int sync_run(options_t *options_p) {
 	// One second for another threads
 	sleep(1);
 #endif
+
+	if(options_p->flags[EXITHOOK]) {
+		char *argv[] = { options_p->exithookfile, options_p->label, NULL};
+		exec_argv(argv, NULL DEBUGV(, 0));
+	}
 	return ret;
 }
 

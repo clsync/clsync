@@ -77,6 +77,7 @@ static const struct option long_options[] =
 	{"only-initialsync",	optional_argument,	NULL,	ONLYINITSYNC},
 	{"skip-initialsync",	optional_argument,	NULL,	SKIPINITSYNC},
 	{"exit-on-no-events",	optional_argument,	NULL,	EXITONNOEVENTS},
+	{"exit-hook",		required_argument,	NULL,	EXITHOOK},
 	{"verbose",		optional_argument,	NULL,	VERBOSE},
 	{"debug",		optional_argument,	NULL,	DEBUG},
 	{"quiet",		optional_argument,	NULL,	QUIET},
@@ -247,6 +248,15 @@ static inline int parse_parameter(options_t *options_p, uint16_t param_id, char 
 			break;
 		case SYNCTIMEOUT:
 			options_p->synctimeout   = (unsigned int)atol(arg);
+			break;
+		case EXITHOOK:
+			if(strlen(arg)) {
+				options_p->exithookfile		= arg;
+				options_p->flags[EXITHOOK]	= 1;
+			} else {
+				options_p->exithookfile		= NULL;
+				options_p->flags[EXITHOOK]	= 0;
+			}
 			break;
 		case IGNOREEXITCODE: {
 			char *ptr = arg, *start = arg;
@@ -1229,6 +1239,22 @@ int main(int argc, char *argv[]) {
 		printf_e("Warning: fanotify is not fully supported, yet!\n");
 	}
 #endif
+
+	if(options.flags[EXITHOOK]) {
+#ifdef VERYPARANOID
+		if(options.exithookfile == NULL) {
+			printf_e("Error: main(): options.exithookfile == NULL\n");
+			ret = EINVAL;
+		} else 
+#endif
+		{
+			if(access(options.exithookfile, X_OK) == -1) {
+				printf_e("Error: \"%s\" is not executable: %s (errno: %i).\n", options.exithookfile, strerror(errno), errno);
+				if(!ret)
+					ret = errno;
+			}
+		}
+	}
 
 	if(access(options.handlerfpath, X_OK) == -1) {
 		printf_e("Error: \"%s\" is not executable: %s (errno: %i).\n", options.handlerfpath, strerror(errno), errno);
