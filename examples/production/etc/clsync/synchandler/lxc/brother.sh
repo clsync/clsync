@@ -11,6 +11,12 @@ TO="/mnt/mirror/${LABEL}"
 BROTHERMNT="/mnt/mirror"
 BROTHERNAME=$(brothername)
 
+CLUSTERNAME=$(clustername)
+
+FROM="/srv/lxc/${LABEL}"
+#TO="/mnt/mirror/${LABEL}"
+TO="rsync://${CLUSTERNAME}@${BROTHERNAME}/lxc/${LABEL}"
+
 
 function rsynclist() {
 	LISTFILE="$1"
@@ -26,7 +32,7 @@ function rsynclist() {
 			if [ ! -d "$TO" ]; then
 				mkdir -p "$TO"
 			fi
-			exec rsync -aH --timeout=3600 --inplace --delete-before --exclude-from="/etc/clsync/synchandler/lxc/rsync.exclude" "$excludefrom" --include-from="${LISTFILE}" --exclude='*' "$FROM"/ "$TO"/ 2>/tmp/clsync-rsync-"$LABEL"-brother.err
+			exec rsync --password-file="/etc/rsyncd.pass"  -aH --timeout=3600 --inplace --delete-before --exclude-from="/etc/clsync/synchandler/lxc/rsync.exclude" "$excludefrom" --include-from="${LISTFILE}" --exclude='*' "$FROM"/ "$TO"/ 2>/tmp/clsync-rsync-"$LABEL"-brother.err
 		else
 			sleep $[ 3600 + $RANDOM % 1800 ]
 			exit 128
