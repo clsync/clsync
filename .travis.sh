@@ -99,7 +99,7 @@ for a3 in "--with-capabilities" "--without-capabilities"; do
 for a4 in "--with-mhash" "--without-mhash"; do
     arg[4]="$a4"
 
-    build_test ${arg[@]}
+    #build_test ${arg[@]}
 
 done
 done
@@ -109,7 +109,7 @@ done
 
 # Test coverage
 export CFLAGS="$CFLAGS --coverage -O0"
-export PATH=".:$PATH"
+export PATH="$(pwd):$PATH"
 build_test --enable-cluster --enable-debug --enable-paranoid=2 --with-capabilities --without-mhash
 run_example rsyncdirect
 run_example rsyncshell
