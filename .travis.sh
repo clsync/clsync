@@ -113,7 +113,7 @@ export PATH="$(pwd):$PATH"
 build_test --enable-cluster --enable-debug --enable-paranoid=2 --with-capabilities --without-mhash
 run_example rsyncdirect
 run_example rsyncshell
-run_example rsyncso
+#run_example rsyncso
 #run_example so
 #run_example cluster
 
