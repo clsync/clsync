@@ -113,6 +113,8 @@ deb [arch=amd64] http://mirror.mephi.ru/debian-mephi/ unstable main
 How to use is described in "man" ;). What is not described, you can ask me
 personally (see "Support").
 
+Video demonstration you can find here: [http://ut.mephi.ru/oss/clsync](http://ut.mephi.ru/oss/clsync)
+
 
 6. Example of usage
 -------------------
