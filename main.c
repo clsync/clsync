@@ -887,7 +887,7 @@ int main(int argc, char *argv[]) {
 	main_status_update(&options, STATE_STARTING);
 
 #ifdef VERYPARANOID
-	if((options.flags[RETRIES] != 1) && options.flags[PTHREAD]) {
+	if((options.retries != 1) && options.flags[PTHREAD]) {
 		printf_e("Error: \"--retries\" values should be equal to \"1\" for \"--pthread\" mode.\n");
 		ret = EINVAL;
 	}

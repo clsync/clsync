@@ -52,4 +52,8 @@ Makefile.in
 /autoscan.log
 /configure.scan
 
+# coverage test files
+/*.gcda
+/*.gcno
+/*.gcov
 
