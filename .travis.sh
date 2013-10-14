@@ -99,7 +99,7 @@ for a3 in "--with-capabilities" "--without-capabilities"; do
 for a4 in "--with-mhash" "--without-mhash"; do
     arg[4]="$a4"
 
-    #build_test ${arg[@]}
+    build_test ${arg[@]}
 
 done
 done
