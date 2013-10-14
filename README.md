@@ -95,8 +95,7 @@ Debian/ubuntu-users can try to install it directly with apt-get:
     apt-get install clsync
 
 If it's required to install clsync from the source, first of all, you should
-install dependencies to compile clsync. As you can see from GNUmakefile
-clsync depends only on "glib-2.0", so on debian-like systems you should
+install dependencies to compile it. On debian-like systems you should
 execute something like:
 
     apt-get install libglib2.0-dev autoreconf gcc
