@@ -20,7 +20,7 @@ clsync_include_HEADERS = configuration.h clsync.h malloc.h indexes.h options.h o
 
 revision.h:
 	(echo -n '#define REVISION "'; [ -d .git ] && \
-	(echo -n '.'$$(( $$(git log 2>/dev/null | grep -c ^commit | tr -d "\n") - 308 )) ) \
+	(echo -n '.'$$(( $$(git log 2>/dev/null | grep -c ^commit | tr -d "\n") - 522 )) ) \
 	|| echo -n '-release'; echo '"') > $@
 
 doc:
