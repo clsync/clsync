@@ -90,21 +90,28 @@ the program, like "directory creation" or "file deletion". So I switched to
 4. Installing
 -------------
 
-First of all, you should install dependencies to compile clsync. As you can
-see from GNUmakefile clsync depends only on "glib-2.0", so on debian-like 
-systems you should execute something like
-"apt-get install libglib2.0-dev autoreconf gcc".
+Debian/ubuntu-users can try to install it directly with apt-get:
 
-Next step is generating Makefile. To do that usually it's enought to execute
-"autoreconf -i && ./configure".
+    apt-get install clsync
 
-Next step is compiling. To compile usually it's enough to execute "make".
+If it's required to install clsync from the source, first of all, you should
+install dependencies to compile clsync. As you can see from GNUmakefile
+clsync depends only on "glib-2.0", so on debian-like systems you should
+execute something like:
 
-Next step is installing. To install usually it's enough to execute
-"su -c 'make install'".
+    apt-get install libglib2.0-dev autoreconf gcc
 
-Also, debian-users can use my repository to install the clsync:
-deb [arch=amd64] http://mirror.mephi.ru/debian-mephi/ unstable main
+Next step is generating Makefile. To do that usually it's enought to execute:
+
+    autoreconf -i && ./configure
+
+Next step is compiling. To compile usually it's enough to execute:
+
+    make
+
+Next step is installing. To install usually it's enough to execute:
+
+    su -c 'make install'
 
 
 5. How to use
@@ -112,8 +119,6 @@ deb [arch=amd64] http://mirror.mephi.ru/debian-mephi/ unstable main
 
 How to use is described in "man" ;). What is not described, you can ask me
 personally (see "Support").
-
-Video demonstration you can find here: [http://ut.mephi.ru/oss/clsync](http://ut.mephi.ru/oss/clsync)
 
 
 6. Example of usage
@@ -123,6 +128,60 @@ Example of usage, that works on my PC is in directory "examples". Just run
 "clsync-start-rsyncdirect.sh" and try to create/modify/delete files/dirs in
 "example/testdir/from". All modifications should appear (with some delay) in
 directory "example/testdir/to" ;)
+
+For dummies:
+
+    pushd /tmp
+    git clone https://github.com/xaionaro/clsync
+    cd clsync
+    autoreconf -fi
+    ./configure
+    make
+    export PATH_OLD="$PATH"
+    export PATH="$(pwd):$PATH"
+    cd examples
+    ./clsync-start-rsyncdirect.sh
+    export PATH="$PATH_OLD"
+
+Now you can try to make changes in directory
+"/tmp/clsync/examples/testdir/from" (in another terminal).
+Wait about 7 seconds after the changes and check directory
+"/tmp/clsync/examples/testdir/to". To finish the experiment press ^C
+(control+c) in clsync's terminal.
+
+    cd ../..
+    rm -rf clsync
+    popd
+
+Note: There's no need to change PATH's value if clsync is installed
+system-wide, e.g. with
+
+    make install
+
+For dummies, again (with "make install"):
+
+    pushd /tmp
+    git clone https://github.com/xaionaro/clsync
+    cd clsync
+    autoreconf -fi
+    ./configure
+    make
+    sudo make install
+    cd examples
+    ./clsync-start-rsyncdirect.sh
+
+Directory "/tmp/clsync/examples/testdir/from" is now synced to
+"/tmp/clsync/examples/testdir/to" with 7 seconds delay. To terminate
+the clsync press ^C (control+c) in clsync's terminal.
+
+    cd ..
+    sudo make uninstall
+    cd ..
+    rm -rf clsync
+    popd
+
+For really dummies or/and lazy users, there's a video demonstration:
+[http://ut.mephi.ru/oss/clsync](http://ut.mephi.ru/oss/clsync)
 
 
 7. Clustering
@@ -161,7 +220,7 @@ determine which side has the latest changes :)
 
 May be problems with "configuring" or compilation. In this case just try
 next command:
-> echo '#define REVISION "-custom"' > revision.h; gcc -std=gnu99 -D\_FORTIFY\_SOURCE=2 -DPARANOID -pipe -Wall -ggdb3 --param ssp-buffer-size=4 -fstack-check -fstack-protector-all -Xlinker -zrelro -pthread $(pkg-config --cflags glib-2.0) $(pkg-config --libs glib-2.0) -ldl \*.c -o /tmp/clsync
+    echo '#define REVISION "-custom"' > revision.h; gcc -std=gnu99 -D\_FORTIFY\_SOURCE=2 -DPARANOID -pipe -Wall -ggdb3 --param ssp-buffer-size=4 -fstack-check -fstack-protector-all -Xlinker -zrelro -pthread $(pkg-config --cflags glib-2.0) $(pkg-config --libs glib-2.0) -ldl \*.c -o /tmp/clsync
 
 9. Support
 -----------
