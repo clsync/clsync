@@ -2,6 +2,12 @@
 # Copyright 1999-2013 Gentoo Foundation; Distributed under the GPL v2
 # $Header: $
 
+*clsync-0.2.1 (15 Oct 2013)
+
+  15 Oct 2013; Andrew Savchenko <bircoph@gmail.com> -clsync-0.1.ebuild,
+  -files/clsync-0.1.confd, -files/clsync-0.1.initd, +clsync-0.2.1.ebuild:
+  Version bump. Remove old.
+
   27 Sep 2013; Andrew Savchenko <bircoph@gmail.com> files/clsync.initd:
   Remove tread killer hack, because bug #44 was fixed.
 
