@@ -5,4 +5,4 @@ before_install:
 script:
  - ./.travis.sh
 after_success:
- - coveralls --exclude examples --exclude debian --exclude gentoo --exclude autom4te.cache --exclude man --exclude conf*.dir
+ - coveralls -x c --exclude examples --exclude debian --exclude gentoo --exclude autom4te.cache --exclude man --exclude conf*.dir --exclude cluster.c
