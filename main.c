@@ -812,19 +812,9 @@ int main_rehash(options_t *options_p) {
 int main_status_update(options_t *options_p, state_t state) {
 	static state_t state_old = STATE_UNKNOWN;
 
-	if(options_p->statusfile == NULL)
-		return 0;
-
 	if(state == state_old) {
 		printf_ddd("Debug3: main_status_update: State unchanged: %u == %u\n", state, state_old);
 		return 0;
-	}
-
-	FILE *f = fopen(options_p->statusfile, "w");
-	if(f == NULL) {
-		printf_e("Error: main_status_update(): Cannot open file \"%s\" for writing: %s (errno: %u).\n", 
-			options_p->statusfile, strerror(errno), errno);
-		return errno;
 	}
 
 #ifdef VERYPARANOID
@@ -833,6 +823,18 @@ int main_status_update(options_t *options_p, state_t state) {
 		return EINVAL;
 	}
 #endif
+
+	setenv("CLSYNC_STATUS", status_descr[state], 1);
+
+	if(options_p->statusfile == NULL)
+		return 0;
+
+	FILE *f = fopen(options_p->statusfile, "w");
+	if(f == NULL) {
+		printf_e("Error: main_status_update(): Cannot open file \"%s\" for writing: %s (errno: %u).\n", 
+			options_p->statusfile, strerror(errno), errno);
+		return errno;
+	}
 
 	printf_ddd("Debug3: main_status_update(): Setting status to %i: %s.\n", state, status_descr[state]);
 	state_old=state;

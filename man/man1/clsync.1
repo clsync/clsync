@@ -1076,6 +1076,19 @@ it's passed bitmask of events with the file or directory (see
 
 .RE
 
+.SH ENVIRONMENT VARIABLES
+
+Output variables - variables that are set by clsync before calling
+.IR sync-handler .
+
+.B "Output variables"
+.RS
+CLSYNC_STATUS - 
+.BR clsync 's
+status (see possible statuses in description of
+.IR \-\-status\-file )
+.RE
+
 .SH RULES
 Filter riles can be placed into
 .I rules\-file
