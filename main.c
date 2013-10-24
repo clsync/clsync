@@ -1213,7 +1213,7 @@ int main(int argc, char *argv[]) {
 			options.flags[MODE] == MODE_RSYNCSO
 		)
 	) {
-		printf_e("Error: main(): Option \"--have-recursive-sync\" with nodes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" are incompatable.\n");
+		printf_e("Error: main(): Option \"--have-recursive-sync\" with nodes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" are incompatible.\n");
 		ret = EINVAL;
 	}
 
@@ -1230,7 +1230,7 @@ int main(int argc, char *argv[]) {
 			options.flags[MODE] == MODE_RSYNCSO
 		)
 	) {
-		printf_e("Error: main(): Option \"--synclist-simplify\" with nodes \"rsyncdirect\" and \"rsyncshell\" are incompatable.\n");
+		printf_e("Error: main(): Option \"--synclist-simplify\" with nodes \"rsyncdirect\" and \"rsyncshell\" are incompatible.\n");
 		ret = EINVAL;
 	}
 
