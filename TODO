@@ -10,3 +10,4 @@
 5. Deduplicate code from functions, that calls sync_exec() and sync_exec_thread()
 6. Fix variables' names
 7. [CLUSTER] Replace node_id value with his ipv4 address (8bits -> 32bits)
+8. In daemon mode stdout/stderr should be redirected to system log.

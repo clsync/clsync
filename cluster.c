@@ -1,7 +1,7 @@
 /*
     clsync - file tree sync utility based on fanotify and inotify
     
-    Copyright (C) 2013  Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
+    Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
     
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -1083,7 +1083,6 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 	// Initializing global variables, pt. 2
 	nodeinfo_my = &nodeinfo[node_id_my];
 
-
 	// Running thread, that will process background communicating routines with another nodes.
 	// The process is based on function cluster_loop() [let's use shorthand "cluster_loop()-thread"]
 	ret = pthread_create(&pthread_cluster, NULL, (void *(*)(void *))cluster_loop, NULL);
@@ -1219,7 +1218,7 @@ int cluster_unlock_all() {
  */
 
 int cluster_loop() {
-	int ret;
+	int ret = 0;
 	sigset_t sigset_cluster;
 
 	// Ignoring SIGINT signal
@@ -1236,18 +1235,22 @@ int cluster_loop() {
 
 	// Starting the loop
 
+	printf_ddd("Debug3: cluster_loop() started.\n");
+
 	while(1) {
+		int _ret;
 		// Waiting for event
 		fd_set rfds;
 		FD_ZERO(&rfds);
 		FD_SET(sock_i, &rfds);
 		printf_ddd("Debug3: cluster_loop(): select()\n");
-		ret = select(sock_i+1, &rfds, NULL, NULL, NULL);
+		_ret = select(sock_i+1, &rfds, NULL, NULL, NULL);
 
 		// Exit if error
-		if((ret == -1) && (errno != EINTR)) {
+		if((_ret == -1) && (errno != EINTR)) {
+			ret = errno;
 			sync_term(ret);
-			return ret;
+			break;
 		}
 
 		// Breaking the loop, if there's SIGTERM signal for this thread
@@ -1260,11 +1263,12 @@ int cluster_loop() {
 		printf_ddd("Debug3: cluster_loop(): cluster_recv_proc()\n");
 		if((ret=cluster_recv_proc(0))) {
 			sync_term(ret);
-			return ret;
+			break;
 		}
 	}
 
-	return 0;
+	printf_ddd("Debug3: cluster_loop() finished with exitcode %i.\n", ret);
+	return ret;
 #ifdef DOXYGEN
 	sync_term(0);
 #endif

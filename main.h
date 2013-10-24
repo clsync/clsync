@@ -1,7 +1,7 @@
 /*
     clsync - file tree sync utility based on fanotify and inotify
 
-    Copyright (C) 2013  Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
+    Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -18,4 +18,5 @@
  */
 
 extern int main_rehash(options_t *options_p);
+extern int main_status_update(options_t *options_p, state_t state);
 

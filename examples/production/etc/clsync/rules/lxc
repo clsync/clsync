@@ -1,0 +1,4 @@
+-f/var/log/.*
+-f/bin\.000
+-d/galera_.
+-d/var/lib/php5

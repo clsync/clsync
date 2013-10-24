@@ -1,7 +1,7 @@
 /*
     clsync - file tree sync utility based on fanotify and inotify
 
-    Copyright (C) 2013  Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
+    Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
  */
 
 
-extern char *xmalloc(size_t size);
-extern char *xcalloc(size_t nmemb, size_t size);
-extern char *xrealloc(char *oldptr, size_t size);
+void *xmalloc(size_t size);
+void *xcalloc(size_t nmemb, size_t size);
+void *xrealloc(void *oldptr, size_t size);
 

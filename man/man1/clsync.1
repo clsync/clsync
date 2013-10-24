@@ -7,15 +7,7 @@
 .SH NAME
 clsync \- live sync tool, written in GNU C
 .SH SYNOPSIS
-.B clsync [ options ] 
-.I watch\-dir
-.I sync\-handler
-.B [
-.I rules\-file
-.B ]
-.B [
-.I dest-dir
-.B ]
+.B clsync [ ... ] 
 .SH DESCRIPTION
 .B clsync
 executes
@@ -30,13 +22,142 @@ Extended regex\-rules to filter what files and
 directories to sync may be placed in
 .I rules\-file
 
-
 .SH OPTIONS
+
+This options can be passed as arguments or to be used in the configuration
+file.
+
+To disable numeric option set to zero:
+.RS
+	=0
+.RE
+
+To disable string option (for example path to file) set to empty string:
+.RS
+	=
+.RE
+
+
+.B \-W, \-\-watch\-dir
+.I watch\-dir
+.RS 8
+Root directory to be monitored by
+.BR clsync .
+
+Required.
+.PP
+.RE
+
+.B \-S, \-\-sync\-handler
+.I sync\-handler
+.RS 8
+Path to
+.I sync\-handler
+to be used for syncing by
+.BR clsync .
+(see 
+.IR \-\-mode )
+
+Required.
+.PP
+.RE
+
+.B \-R, \-\-rules\-file
+.I rules\-file
+.RS 8
+Path to file with filter rules of objects to be monitored. (see 
+.BR RULES )
+
+Is not set by default.
+.PP
+.RE
+
+.B \-D, \-\-destination\-dir
+.I destination\-directory
+.RS 8
+Defines directory to sync to for modes "rsyncdirect", "rsyncso" and "so". (see
+.IR \-\-mode )
+
+Is not set by default.
+.PP
+.RE
+
+.B \-M, \-\-mode
+.I mode
+.RS 8
+Sets syncing mode. Possible values:
+.RS
+simple      \- calls
+.I sync\-handler
+for every event
+.br
+shell       \- calls
+.I sync\-handler
+for every sync
+.br
+rsyncdirect \- calls rsync by path
+.I sync\-handler
+directly (inflexible and unreliable, should be used only as a proof of
+concept)
+.br
+rsyncshell  \- calls
+.I sync\-handler
+that supposed to run rsync for every sync (recommended
+mode)
+.br
+rsyncso     \- loads shared object by path
+.I sync\-handler
+with
+.BR dlopen (3)
+and calls function
+.B clsyncapi_rsync
+function for every sync
+.br
+so          \- loads shared object by path
+.I sync\-handler
+with
+.BR dlopen (3)
+and calls function
+.B clsyncapi_sync
+function for every sync
+.RE
+
+See
+.B SYNC HANDLER MODES
+.PP
+
+Required.
+.RE
 
 .B \-b, \-\-background
 .RS 8
 Daemonize, forcing clsync to fork() on start.
 
+Is not set by default.
+.PP
+.RE
+
+.B \-H, \-\-config\-file
+.I config\-file\-path
+.RS 8
+Use configuration from file
+.IR config\-file\-path .
+(see 
+.BR "CONFIGURATION FILE" )
+
+Is not set by default.
+.PP
+.RE
+
+.B \-K, \-\-config\-block
+.I config\-block\-name
+.RS 8
+Use configuration block with name
+.IR config\-block\-name .
+(see 
+.BR "CONFIGURATION FILE" )
+
+Default value is "default".
 .PP
 .RE
 
@@ -46,6 +167,36 @@ Daemonize, forcing clsync to fork() on start.
 Writes pid to file by path
 .IR path\-to\-pidfile .
 
+Is not set by default.
+.PP
+.RE
+
+.B \-\-status\-file
+.I status\-file\-path
+.RS 8
+Write status description into file with path
+.IR status\-file\-path .
+
+Possible statuses:
+.RS 8
+starting    \- initializing subsystems and marking file tree with FS monitor
+subsystem
+.br
+initsync    \- processing initial syncing
+.br
+running     \- waiting for events or syncing
+.br
+rehashing   \- reloading configuration files
+.br
+pthread gc  \- running threads' garbage collector
+.br
+terminating \- received signal to die, preparing to die
+.br
+exiting     \- cleaning up [for 
+.BR valgrind (1)]
+.RE
+
+Is not set by default.
 .PP
 .RE
 
@@ -56,6 +207,8 @@ Drop user privileges to uid
 .I uid
 with
 .BR setuid (2)
+
+Is not set by default.
 .PP
 .RE
 
@@ -66,14 +219,37 @@ Drop group privileges to gid
 .I gid
 with
 .BR setgid (2)
+
+Is not set by default.
 .PP
+.RE
+
+.B \-r, \-\-retries
+.I "number-of-tries"
+.RS 8
+Tries limit to sync with
+.IR sync-handler .
+
+.B clsync
+will die after
+.I number-of-tries
+tries.
+
+To try infinite set "0".
+
+Delay between tries is equal to
+.I \-\-delay\-sync
+value.
+
+Default value is "1".
 .RE
 
 .B \-p, \-\-pthread
 .RS 8
 Use
 .BR pthreads (7)
-to parallelize syncing processes.
+to parallelize syncing processes. Every sync will be done asynchronous without
+blocking.
 
 If you're running
 .B clsync
@@ -86,7 +262,50 @@ with option
 you may catch a bug due to nonatomicity of rsync's file replace operation.
 (see
 .BR DIAGNOSTICS )
+
+Is not set by default.
+
+Don't use this option if not sure.
 .RE
+
+.B \-Y, \-\-syslog
+.RS 8
+Use syslog instead of stderr for logging.
+
+Is not set by default.
+.RE
+
+.B \-\-one\-file\-system
+.RS 8
+Don't follow to different devices' mount points. This option just adds option
+"FTS_XDEV" for
+.BR fts_open (3)
+function.
+
+.B Warning!
+If you're using this option (but no \-\-exclude\-mount\-points)
+.B clsync
+will write neither includes nor excludes of content of mount points.
+.br
+This may cause problems e.g. you're using rsync for sync-handler without
+similar option "--one-file-system".
+
+Is not set by default.
+.RE
+
+.B \-X, \-\-exclude\-mount\-points
+.RS 8
+Forces
+.I \-\-one\-file\-system
+but also add excludes to do not sync mount points.
+
+This requires to do
+.BR stat (2)
+syscalls on every dir and can reduce performance.
+
+Is not set by default.
+.RE
+
 
 .PP
 .B \-c, \-\-cluster\-iface
@@ -109,6 +328,8 @@ To find out the IP-address on interface "eth0", you can use for example next
 command:
 
 ip a s eth0 | awk '{if($1=="inet") {gsub("/.*", "", $2); print $2}}'
+
+Is not set by default.
 .RE
 
 .PP
@@ -164,7 +385,7 @@ Default value is "1000". [1 second]
 
 Sets the name of current node in the cluster. It will be used in action
 scripts of another nodes (see 
-.BR "SYNC HANDLER" ).
+.BR "SYNC HANDLER MODES" ).
 
 Default value is $(uname \-n).
 .RE
@@ -201,6 +422,17 @@ Sets maximal directory level for ctime scanning (see
 .BR CLUSTERING ).
 
 Default value is "32".
+.RE
+
+.PP
+.B \-\-standby\-file
+.I standby\-file\-path
+.RS 8
+Sets file to path that should be checked before every sync. If file exists the
+sync will be suspended until the file is deleted. It may be useful if you need
+freeze destination directory while running some scripts.
+
+Is not set by default.
 .RE
 
 .PP
@@ -260,7 +492,7 @@ Default value is "134217728" ["128 MiB"].
 .RE
 
 .PP
-.B \-d, \-\-dir\-lists
+.B \-L, \-\-lists\-dir
 .I tmpdir\-path
 .RS 8
 Sets directory path to output temporary events\-lists files.
@@ -277,37 +509,49 @@ will execute
 .I sync\-handler
 for every file in the aggregated event list (action "sync").
 
+Cannot be used in mode "so".
+
 See
-.BR "SYNC HANDLER" .
+.BR "SYNC HANDLER MODES" .
 
 Is not set by default.
 .RE
 
 .PP
-.B \-R, \-\-rsync
+.B \-\-have\-recursive\-sync
 .RS 8
-Forces
-.B clsync
-to use "rsynclist" action instead of "initialsync" and "synclist" (see 
-.BR "SYNC HANDLER" ).
-This option can be used only with
-.I \-\-dir\-lists
-option.
-
-Recommended option.
-
-You can use "\-RR" to run "rsync" directly, bypassing intermediate script
-(see
-.B "SYNC HANDLER"
+Use action "recursivesync" instead of "synclist" for directories that were just marked (see
+.B "SYNC HANDLER MODES"
 case
-.BR e ).
-But you cannot use "\-\-cluster\-*" options in "\-RR" mode.
+.BR shell ).
 
 Is not set by default.
 .RE
 
 .PP
-.B \-L, \-\-rsync\-inclimit
+.B \-\-synclist\-simplify
+.RS 8
+Removes the first 3 parameters in list files of action "synclist" (see
+.B "SYNC HANDLER MODES"
+case
+.BR shell ).
+
+Is not set by default.
+.RE
+
+.PP
+.B \-A, \-\-auto\-add\-rules\-w
+.RS 8
+Forces clsync to create a "w\-rule" for every non-"w-rule" (see
+.BR RULES ).
+
+Not recommended to use in modes "rsyncdirect", "rsyncshell" and "rsyncso"
+
+Is not set by default.
+.RE
+
+.PP
+.B \-\-rsync\-inclimit
 .I rsync\-includes\-line\-limit
 .RS 8
 Sets soft limit for lines count in files by path
@@ -324,17 +568,20 @@ Default value is "20000".
 .RE
 
 .PP
-.B \-I, \-\-rsync\-prefer\-include
+.B \-\-rsync\-prefer\-include
 .RS 8
 Forces
 .B clsync
 to prefer a "lot of includes" method instead of a "excludes+includes" for
 rsync on recursive syncing.
 
-See
-.B case d
+See cases
+.BR rsyncshell ,
+.B rsyncdirect
+and
+.B rsyncso
 of
-.BR "SYNC HANDLER" .
+.BR "SYNC HANDLER MODES" .
 
 This option is not recommended.
 
@@ -354,8 +601,13 @@ of
 as an error. You can set multiple ignores by passing this option multiple
 times.
 
-Recommended values for rsync case are "23" and "24".
-["\-x 23 \-x 24"]
+Recommended values for rsync case is "24". You can set multiple values with
+listing a lot of "-x" options (e.g. "\-x 23 \-x 24") or via commas
+(e.g. "\-x 23,24"). To drop the list use zero exitcode (e.g. "\-x 0"). For
+example you can use "\-x 0,23" to drop the list and set "23"-th exitcode to
+be ignored.
+
+Is not set by default (or equally is set to "0").
 .RE
 
 .PP
@@ -384,24 +636,76 @@ Is not set by default.
 .RE
 
 .PP
+.B \-\-only\-initialsync
+.RS 8
+Exit after initial syncing on clsync start.
+
+Is not set by default.
+.RE
+
+.PP
+.B \-\-exit\-on\-no\-events
+.RS 8
+Exit if there's no events. Works like
+.IR \-\-only\-initialsync ,
+but also syncs events collected while the initial syncing.
+
+Unlike
+.I \-\-only\-initialsync
+this option uses FS monitor subsystem to monitor for new events while the initial syncing. This may reduce performance. On the other hand this way may be used to be sure, that everything is synced at the moment before clsync will exit.
+
+Is not set by default.
+.RE
+
+.PP
+.B \-\-skip\-initialsync
+.RS 8
+Skip initial syncing on clsync start.
+
+Is not set by default.
+.RE
+
+.PP
+.B \-\-exit\-hook
+.I path\-of\-exit\-hook\-program
+.RS 8
+Sets path of program to be executed on clsync exit.
+
+If this parameter is set, clsync will exec on exit:
+.RS
+.I path\-of\-exit\-hook\-program label 
+.RE
+
+The execution will be skipped if syncing process wasn't started.
+
+Is not set by default.
+.RE
+
+.PP
 .B \-v, \-\-verbose
 .RS 8
 This option is supposed to increase verbosity. But at the moment there's no
 "verbose output" in the code, so the option does nothing. :)
+
+Is not set by default.
 .RE
 
 .PP
-.B \-D, \-\-debug
+.B \-d, \-\-debug
 .RS 8
 Increases debugging output. This may be supplied multiple times for more
-debugging information, up to a maximum of three "D" flags (more will do 
-nothing), for example: \-DDD
+debugging information, up to a maximum of three "d" flags (more will do 
+nothing), for example "\-d \-d \-d" or "\-d3" (equivalent cases)
+
+Is not set by default.
 .RE
 
 .PP
 .B \-q, \-\-quiet
 .RS 8
 Suppresses error messages.
+
+Is not set by default.
 .RE
 
 .PP
@@ -411,6 +715,8 @@ Suppresses error messages.
 
 Switches monitor subsystem to "fanotify" [it's described for
 future\-compatibility].
+
+Is not set by default.
 .RE
 
 .PP
@@ -438,15 +744,19 @@ Default value is "nolabel".
 .B \-h, \-\-help
 .RS 8
 Outputs options list and exits with exitcode "0".
+
+Is not set by default.
 .RE
 
 .PP
 .B \-V, \-\-version
 .RS 8
 Outputs clsync version and exits with exitcode "0".
+
+Is not set by default.
 .RE
 
-.SH SYNC HANDLER
+.SH SYNC HANDLER MODES
 .B clsync
 executes
 .I sync\-handler
@@ -457,14 +767,14 @@ is only a convenient way to run a syncing script.
 .B clsync
 can run
 .I sync\-handler
-in five ways. Which way will be used depends on specified options (see
-.I \-\-dir\-lists
-and
-.IR \-\-rsync ).
+in six ways. Which way will be used depends on specified mode (see
+.IR \-\-mode )
 
 case
-.B a
+.B simple
 .RS
+Executes for every syncing file/dir:
+.br
 .I sync\-handler
 sync
 .I label evmask path [nodes]
@@ -478,58 +788,79 @@ With
 it's passed bitmask of events with the file or directory (see 
 "/usr/include/linux/inotify.h").
 
-This case will be used, if there is no
-.I \-\-dir\-lists
-options set.
+Not recommended. Not well tested.
 .RE
 
 case
-.B b
+.B shell
 .RS
+Executes for every sync (if 
+.B recursivesync
+is not used instead):
+.br
 .I sync\-handler
-initialsync
+synclist
+.I label listpath [nodes]
+
+Executes for initial syncs if option
+.I \-\-have\-recursive\-sync
+is set:
+.br
+.I sync\-handler
+recursivesync
 .I label dirpath [nodes]
 
 In this case,
+.I sync\-handler
+is supposed to non\-recursively sync files and directories from list in a file
+by path
+.I listpath
+(see below). With
+.I evmask
+it's passed bitmask of events with the file or directory (see 
+"/usr/include/linux/inotify.h").
+
+Also
 .I sync\-handler
 is supposed to recursively sync data from directory by path
 .I dirpath
 with manual excluding extra files.
 
-This case will be used for initial sync, if option
-.I \-\-dir\-lists
-is set, but option
-.I \-\-rsync
-is not set.
+Not recommended. Not well tested.
 .RE
 
 case
-.B c
+.B rsyncdirect
 .RS
+Executes for every sync:
+.br
 .I sync\-handler
-synclist
-.I label listpath [nodes]
+\-\-inplace \-aH \-\-delete\-before [\-\-exclude\-from
+.I rsync\-exclude\-listpath
+]
+\-\-include\-from
+.I rsync\-listpath
+\-\-exclude '*'
+.I watch-dir/ dest-dir/
 
 In this case,
 .I sync\-handler
-is supposed to non\-recursively sync files and directories from list in a file by
-path
-.IR listpath (see below).
-With
-.I evmask
-it's passed bitmask of events with the file or directory (see 
-"/usr/include/linux/inotify.h").
+is supposed to be a path to
+.B rsync
+binary.
 
-This case will be used not initial syncs, if option
-.I \-\-dir\-lists
-is set, but option
-.I \-\-rsync
-is not set.
+Error code "24" from
+.I sync\-handler
+will be ignored in this case.
+
+This case is supposed to be used only as a proof of concept.
 .RE
 
 case
-.B d
+.B rsyncshell
 .RS
+Executes for every sync:
+.br
 .I sync\-handler
 rsynclist
 .I label rsync\-listpath [nodes] [rsync\-exclude\-listpath]
@@ -558,51 +889,164 @@ if option
 .I \-\-rsync\-prefer\-include
 is disabled.
 
-This case will be used, if option
-.I \-\-rsync
-is set once.
-
 Recommended case.
 .RE
 
 case
-.B e
+.B rsyncso
 .RS
-.I sync\-handler
-\-\-inplace \-aH \-\-delete\-before [\-\-exclude\-from
-.I rsync\-exclude\-listpath
-]
-\-\-include\-from
-.I rsync\-listpath
-\-\-exclude '*'
-.I watch-dir/ dest-dir/
+In this case there's no direct exec*() calling. In this case
+.B clsync
+loads
+.I sync-handler
+as a shared library with
+.BR dlopen (3)
+and calls function "int clsyncapi_rsync(const char *inclist, const char *exclist)" from it
+for every sync.
+.br
+.B inclist
+is a path to file with rules for "\-\-include\-from" option of rsync. This argument is always not NULL.
+.br
+.B exclist
+is a path to file with rules for "\-\-exclude\-from" option of rsync. This argument is NULL if
+.B \-\-rsync\-prefer\-include
+is set.
+.br
+.I "Excludes takes precedence over includes."
 
-In this case,
-.I sync\-handler
-is supposed to be a path to
-.B rsync
-binary.
+Also may be defined functions "int clsyncapi_init(options_t *, indexes_t *)"
+and "int clsyncapi_deinit()" to initialize and deinitialize the syncing
+process by this shared object.
 
-Error code "24" from
-.I sync\-handler
-will be ignored in this case.
+To fork the process should be used function
+"pid_t clsyncapi_fork(options_t *)" instead of "pid_t fork()" to make clsync
+be able to kill the child.
 
-This case will be used, if option
-.I \-\-rsync
-is set twice. This case is supposed to be used only as a proof of concept.
+See example file "clsync-synchandler-rsyncso.c".
+
+Recommended case. IMHO, this way is the best.
 .RE
 
-As can be noticed, in the first four cases clsync's
+case
+.B so
+.RS
+In this case there's no direct exec*() calling. In this case
+.B clsync
+loads
+.I sync-handler
+as a shared library with
+.BR dlopen (3)
+and calls function "int clsyncapi_sync(int n, api_eventinfo_t *ei)" from it
+for every sync.
+.B n
+is number of elements of
+.BR ei .
+.B ei
+is an array of structures with information about what and how to sync (see
+below).
+
+api_eventinfo_t is a structure:
+.RS
+struct api_eventinfo {
+.br
+        uint32_t         evmask;		// event bitmask for file/dir
+by path
+.BR path .
+.br
+        uint32_t         flags;		// flags of "how to sync" the file/dir
+.br
+        size_t           path_len;		// strlen(path)
+.br
+        const char      *path;		// the
+.B path
+to file/dir need to be synced
+.br
+        eventobjtype_t   objtype_old;	// type of object by path
+.B path
+before the event.
+.br
+        eventobjtype_t   objtype_new;	// type of object by path
+.B path
+after the event.
+.br
+};
+.br
+typedef struct api_eventinfo api_eventinfo_t;
+.RE
+
+The event bitmask (evmask) values can be learned from
+"/usr/include/linux/inotify.h".
+
+There may be next flags' values (flags):
+.RS
+enum eventinfo_flags {
+.br
+        EVIF_NONE        = 0x00000000,	// No modifier
+.br
+        EVIF_RECURSIVELY = 0x00000001	// sync the file/dir recursively
+.br
+};
+.RE
+.br
+Flag "EVIF_RECURSIVELY" may be used if option
+.I \-\-have\-recursive\-sync
+is set.
+
+Is that a file or directory by path
+.B path
+can be determined with
+.B objtype_old
+and
+.BR objtype_new .
+.br
+.B objtype_old
+reports about which type was the object by the path before the event.
+.br
+.B objtype_new
+reports about which type became the object by the path after the event.
+
+.B objtype_old
+and
+.BR objtype_new
+have type
+.BR eventobjtype_t .
+
+.RS
+enum eventobjtype {
+.br
+        EOT_UNKNOWN     = 0,	// Unknown
+.br
+        EOT_DOESNTEXIST = 1,	// Doesn't exist (not created yet or already deleted)
+.br
+        EOT_FILE        = 2,	// File
+.br
+        EOT_DIR         = 3,	// Directory
+.br
+}
+typedef enum eventobjtype eventobjtype_t;
+.RE
+
+Also may be defined functions "int clsyncapi_init(options_t *, indexes_t *)"
+and "int clsyncapi_deinit()" to initialize and deinitialize the syncing
+process by this shared object.
+
+To fork the process should be used function
+"pid_t clsyncapi_fork(options_t *)" instead of "pid_t fork()" to make clsync
+be able to kill the child.
+
+See example file "clsync-synchandler-so.c".
+
+Recommended case.
+.RE
+
+About the
 .I label
-(see 
-.I \-\-label
-) and
-.I nodes
-are passed (or can be passed).
+see
+.IR \-\-label .
+.br
 .I nodes
 is comma-separated list of cluster nodes names where to sync to (see
-.I \-\-cluster-node-name
-)
+.IR \-\-cluster-node-name )
 
 The listfile by path
 .I listpath
@@ -610,6 +1054,17 @@ contains lines separated by NL (without CR) of next format:
 .RS
 sync
 .I label evmask path
+.RS
+if option
+.I \-\-synclist\-simplify
+is not set
+.RE
+.I path
+.RS
+if option
+.I \-\-synclist\-simplify
+is set
+.RE
 
 Every lines is supposed to be proceed by external syncer to sync file or
 directory by path
@@ -627,7 +1082,7 @@ Filter riles can be placed into
 with one rule per line.
 
 Rule format:
-.I [+\-][fd*]regexp
+.I [+\-][fdw*]regexp
 
 .I +
 \- means include;
@@ -637,10 +1092,81 @@ Rule format:
 \- means file;
 .I d
 \- means directory;
+.I w
+\- means walking to directory;
 .I *
 \- means all.
 
-For example: \-*/[Tt]est
+For example: \-*^/[Tt]est
+
+It's not recommended to use
+.I w
+rules in modes "rsyncdirect", "rsyncshell" and "rsyncso".
+.BR rsync (1)
+allows to set syncing and walking only together in "\-\-include" rules
+("\-\-files\-from" is not appropriate due to problem with syncing files
+deletions). So there may be problems with clsync's
+.I w
+rules in this cases.
+
+More examples:
+
+Syncing pwdb files and sshd_config (non-rsync case):
+.RS
+	+f^/passwd$
+.br
+	+f^/group$
+.br
+	+f^/shadow$
+.br
+	+f^/ssh/sshd_config$
+.br
+	+w^$
+.br
+	+w^/ssh$
+.br
+	-*
+.RE
+
+Syncing pwdb files and sshd_config (non-rsync case with option
+.IR \-\-auto\-add\-rules\-w ):
+.RS
+	+f^/passwd$
+.br
+	+f^/group$
+.br
+	+f^/shadow$
+.br
+	+f^/ssh/sshd_config$
+.br
+	-*
+.RE
+
+Syncing pwdb files and sshd_config (rsync case):
+.RS
+	+f^/passwd$
+.br
+	+f^/group$
+.br
+	+f^/shadow$
+.br
+	+f^/ssh/sshd_config$
+.br
+	+d^$
+.br
+	+d^/ssh$
+.br
+	-*
+.RE
+
+Syncing /srv/lxc tree (rsync case):
+.RS
+	-d/sess(ion)?s?$
+.br
+	-f/tmp/
+.br
+	+*
+.RE
 
 .SH SIGNALS
 1  \- to reread filter rules
@@ -677,7 +1203,8 @@ directly (e.g with «\-\-exclude "sess_*"»).
 
 The following diagnostics may be issued on stderr:
 
-Error: Cannot inotify_add_watch() on [...]
+Error: Cannot inotify_add_watch() on [...]: No space left on device (errno:
+28)
 .RS
 Not enough inotify watching descriptors is allowed. It can be fixed
 by increasing value of "sysctl fs.inotify.max_user_watches"
@@ -720,6 +1247,75 @@ your
 
 .RE
 
+To get support see
+.BR SUPPORT .
+
+.SH CONFIGURATION FILE
+
+.B clsync
+supports configuration file.
+
+By default
+.B clsync
+tries to read next files (in specified order):
+.RS
+~/.clsync.conf
+.br
+/etc/clsync/clsync.conf
+.RE
+
+This may be overrided with option
+.IR \-\-config\-file .
+
+.B clsync
+reads only one configuration file. In other words, if option
+.I \-\-config\-file
+is not set and file
+.B ~/.clsync.conf
+is accessable and parsable,
+.B clsync
+will not try to open
+.BR /etc/clsync/clsync.conf .
+Command line options have precedence over config file options.
+
+Configuration file is parsed with glib's g_key_file_* API. That means,
+that config should consits from groups (blocks) of key-value lines as in the
+example:
+.RS
+[default]
+.br
+background=1
+.br
+mode=rsyncshell
+.br
+debug=0
+.br
+syslog=1
+.br
+pid-file=/var/run/clsync.pid
+.br
+
+.br
+[test]
+.br
+mode=rsyncdirect
+.br
+debug=3
+.RE
+
+Also glib's
+.B gkf
+API doesn't support multiple assignments. If you need to list some values
+(e.g. exitcodes) just list them with commas in single assignment
+(e.g. "ignore\-exitcode=23,24").
+
+In this example there's 2 blocks are set - "default" and "test".
+
+By default
+.B clsync
+uses block with name "default". Block name can be set by option
+.IR \-\-config\-block .
+
 .SH CLUSTERING
 
 Not implemented yet.
@@ -728,14 +1324,19 @@ Not implemented yet.
 Not described yet.
 
 .SH EXAMPLES
-Working example you can try out in "example/" or 
-"/usr/share/doc/clsync/example/" directory. Copy this directory somewhere
-(e.g. into "/tmp"). And try to run "clsync-start.sh" in there. Any
-files/directories modifications in "example/testdir/from" will be synced to
-"example/testdir/to" with few seconds delay.
+Working examples you can try out in "/usr/share/doc/clsync/examples/"
+directory. Copy this directory somewhere (e.g. into "/tmp"). And try to run
+"clsync-start-rsync.sh" in there. Any files/directories modifications in
+"testdir/from" will be synced to "testdir/to" with few seconds delay.
 .RE
 .SH AUTHOR
-Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
+Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
+.SH SUPPORT
+You can get support on official IRC-channel in Freenode "#clsync" or on
+github's issue tracking system of repository
+"https://github.com/xaionaro/clsync".
+
+Don't be afraid to ask about clsync configuration, ;). 
 .SH "SEE ALSO"
 .BR rsync (1),
 .BR pthreads (7),

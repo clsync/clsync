@@ -1,5 +1,8 @@
 language: c
 before_install:
- - sudo apt-get install libglib2.0-dev libmhash-dev
+ - sudo apt-get install libcap-dev libglib2.0-dev libmhash-dev
+ - sudo pip install cpp-coveralls --use-mirrors
 script:
  - ./.travis.sh
+after_success:
+ - coveralls --exclude examples --exclude debian --exclude gentoo --exclude autom4te.cache --exclude man --exclude conf*.dir

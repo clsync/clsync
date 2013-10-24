@@ -1,7 +1,7 @@
 /*
     clsync - file tree sync utility based on fanotify and inotify
 
-    Copyright (C) 2013  Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
+    Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -21,7 +21,10 @@
 #define _XOPEN_SOURCE 700
 #define _LARGEFILE64_SOURCE
 
-#define AUTHOR "Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C"
+#define PROGRAM "clsync"
+#define VERSION_MAJ	0
+#define VERSION_MIN	1
+#define AUTHOR "Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -38,7 +41,6 @@
 #include <sys/mman.h>
 #include <errno.h>
 #include <ctype.h>
-#include <regex.h>
 #include <signal.h>
 #include <wait.h>
 #include <fts.h>
@@ -48,7 +50,6 @@
 #include <sys/inotify.h>
 #include <sys/time.h>
 #include <dirent.h>
-#include <glib.h>
 #include <sys/utsname.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -66,6 +67,10 @@
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
+
+#include "clsync.h"
+#include "options.h"
+#include "indexes.h"
 
 #ifndef MIN
 #define MIN(a,b) ((a)>(b)?(b):(a))
@@ -96,127 +101,14 @@
 
 #define COLLECTDELAY_INSTANT ((unsigned int)~0)
 
-enum flags_enum {
-	HELP		= 'h',
-	BACKGROUND	= 'b',
-	UID		= 'u',
-	GID		= 'g',
-	CAP_PRESERVE_FILEACCESS = 'C',
-	PTHREAD		= 'p',
-	PIDFILE		= 'z',
-#ifdef CLUSTER_SUPPORT
-	CLUSTERIFACE	= 'c',
-	CLUSTERMCASTIPADDR = 'm',
-	CLUSTERMCASTIPPORT = 'P',
-	CLUSTERTIMEOUT	= 'W',
-	CLUSTERNODENAME = 'n',
-	CLUSTERHDLMIN	= 'o',
-	CLUSTERHDLMAX	= 'O',
-	CLUSTERSDLMAX	= 's',
-#endif
-	DELAY		= 't',
-	BFILEDELAY	= 'T',
-	SYNCDELAY	= 'w',
-	BFILETHRESHOLD	= 'B',
-	DEBUG		= 'D',
-	QUIET		= 'q',
-	VERBOSE		= 'v',
-	OUTLISTSDIR	= 'd',
-	RSYNC		= 'R',
-	RSYNCINCLIMIT	= 'L',
-	RSYNC_PREFERINCLUDE= 'I',
-	IGNOREEXITCODE	= 'x',
-	DONTUNLINK	= 'U',
-	INITFULL	= 'F',
-	SYNCTIMEOUT	= 'k',
-#ifdef FANOTIFY_SUPPORT
-	FANOTIFY	= 'f',
-#endif
-	INOTIFY		= 'i',
-	LABEL		= 'l',
-	SHOW_VERSION	= 'V',
-};
-typedef enum flags_enum flags_t;
 
-enum queue_enum {
-	QUEUE_NORMAL,
-	QUEUE_BIGFILE,
-	QUEUE_INSTANT,
-	QUEUE_MAX,
-	QUEUE_AUTO
+enum paramsource_enum {
+	PS_UNKNOWN	 = 0,
+	PS_ARGUMENT,
+	PS_CONFIG
 };
-typedef enum queue_enum queue_id_t;
+typedef enum paramsource_enum paramsource_t;
 
-enum ruleaction_enum {
-	RULE_END = 0,	// Terminator. To be able to end rules' chain
-	RULE_ACCEPT,
-	RULE_REJECT
-};
-typedef enum ruleaction_enum ruleaction_t;
-
-// signals (man 7 signal)
-enum sigusr_enum {
-	SIGUSR_PTHREAD_GC	= 10,
-	SIGUSR_INITSYNC  	= 12,
-	SIGUSR_BLOPINT		= 16
-};
-
-struct rule {
-	regex_t		expr;
-	mode_t		objtype;
-	ruleaction_t	action;
-};
-typedef struct rule rule_t;
-
-struct queueinfo {
-	unsigned int 	collectdelay;
-	time_t		stime;
-};
-typedef struct queueinfo queueinfo_t;
-
-struct options {
-	uid_t uid;
-	gid_t gid;
-	rule_t rules[MAXRULES];
-	int flags[1<<8];
-	char *label;
-	char *watchdir;
-	char *pidfile;
-	char *destdir;
-	char *watchdirwslash;
-	char *destdirwslash;
-#ifdef CLUSTER_SUPPORT
-	char *cluster_iface;
-	char *cluster_mcastipaddr;
-	char *cluster_nodename;
-	uint32_t cluster_nodename_len;
-	uint16_t cluster_mcastipport;
-	uint16_t cluster_hash_dl_min;
-	uint16_t cluster_hash_dl_max;
-	uint16_t cluster_scan_dl_max;
-	unsigned int cluster_timeout;
-#endif
-	size_t watchdirlen;
-	size_t destdirlen;
-	size_t watchdirsize;
-	size_t destdirsize;
-	size_t watchdirwslashsize;
-	size_t destdirwslashsize;
-	short int watchdir_dirlevel;
-	char *handlerfpath;
-	char *rulfpath;
-	char *listoutdir;
-	int notifyengine;
-	size_t bfilethreshold;
-	unsigned int syncdelay;
-	queueinfo_t _queues[QUEUE_MAX];	// TODO: remove this from here
-	unsigned int rsyncinclimit;
-	time_t synctime;
-	unsigned int synctimeout;
-	sigset_t *sigset;
-	char isignoredexitcode[(1<<8)];
-};
-typedef struct options options_t;
 
 enum notifyengine_enum {
 	NE_UNDEFINED = 0,
@@ -230,36 +122,38 @@ typedef enum notifyengine_enum notifyenfine_t;
 #define STATE_STARTING(state_p) (state_p == NULL)
 enum state_enum {
 	STATE_EXIT 	= 0,
+	STATE_STARTING,
 	STATE_RUNNING,
 	STATE_REHASH,
 	STATE_TERM,
 	STATE_PTHREAD_GC,
-	STATE_INITSYNC
+	STATE_INITSYNC,
+	STATE_UNKNOWN
 };
 typedef enum state_enum state_t;
 
-enum eventinfo_flags {
-	EVIF_RECURSIVELY	= 0x00000001
+/*
+struct excludeinfo {
+	unsigned int	seqid_min;
+	unsigned int	seqid_max;
+	eventobjtype_t	objtype_old;
+	eventobjtype_t	objtype_new;
+	uint32_t	flags;
 };
-
+typedef struct eventinfo eventinfo_t;
+*/
 struct eventinfo {
 	uint32_t	evmask;
+	unsigned int	seqid_min;
+	unsigned int	seqid_max;
+	eventobjtype_t	objtype_old;
+	eventobjtype_t	objtype_new;
 	int		wd;
 	size_t		fsize;
 	uint32_t	flags;
 };
 typedef struct eventinfo eventinfo_t;
 
-struct indexes {
-	GHashTable *wd2fpath_ht;			// watching descriptor -> file path
-	GHashTable *fpath2wd_ht;			// file path -> watching descriptor
-	GHashTable *fpath2ei_ht;			// file path -> event information
-	GHashTable *exc_fpath_ht;			// excluded file path
-	GHashTable *exc_fpath_coll_ht[QUEUE_MAX];	// excluded file path aggregation hashtable for every queue
-	GHashTable *fpath2ei_coll_ht[QUEUE_MAX];	// "file path -> event information" aggregation hashtable for every queue
-	GHashTable *out_lines_aggr_ht;			// output lines aggregation hashtable
-};
-typedef struct indexes indexes_t;
 
 typedef int (*thread_callbackfunct_t)(options_t *options_p, char **argv);
 struct threadinfo {
@@ -274,6 +168,14 @@ struct threadinfo {
 	time_t			  starttime;
 	time_t			  expiretime;
 	int			  child_pid;
+
+	GHashTable		 *fpath2ei_ht;		// file path -> event information
+
+	int			  try_n;
+
+	// for so-synchandler
+	int			  n;
+	api_eventinfo_t		 *ei;
 };
 typedef struct threadinfo threadinfo_t;
 
@@ -304,6 +206,8 @@ struct dosync_arg {
 	indexes_t *indexes_p;
 	void *data;
 	int linescount;
+	api_eventinfo_t *api_ei;
+	int api_ei_count;
 	char buf[BUFSIZ+1];
 };
 
@@ -344,7 +248,7 @@ enum initsync {
 typedef enum initsync initsync_t;
 
 struct sighandler_arg {
-//	options_t *options_p;
+	options_t *options_p;
 //	indexes_t *indexes_p;
 	pthread_t  pthread_parent;
 	int	  *exitcode_p;

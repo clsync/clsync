@@ -1,7 +1,7 @@
 /*
     clsync - file tree sync utility based on fanotify and inotify
 
-    Copyright (C) 2013  Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
+    Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -24,20 +24,31 @@
 #include "cluster.h"
 #include "fileutils.h"
 
-#define VERSION_MAJ	0
-#define VERSION_MIN	1
 #include "revision.h"
 
-static struct option long_options[] =
+static const struct option long_options[] =
 {
-	{"background",		no_argument,		NULL,	BACKGROUND},
+	{"watch-dir",		required_argument,	NULL,	WATCHDIR},
+	{"sync-handler",	required_argument,	NULL,	SYNCHANDLER},
+	{"rules-file",		required_argument,	NULL,	RULESFILE},
+	{"destination-dir",	required_argument,	NULL,	DESTDIR},
+	{"mode",		required_argument,	NULL,	MODE},
+	{"status-file",		required_argument,	NULL,	STATUSFILE},
+
+	{"background",		optional_argument,	NULL,	BACKGROUND},
+	{"config-file",		required_argument,	NULL,	CONFIGFILE},
+	{"config-block",	required_argument,	NULL,	CONFIGBLOCK},
 	{"pid-file",		required_argument,	NULL,	PIDFILE},
 	{"uid",			required_argument,	NULL,	UID},
 	{"gid",			required_argument,	NULL,	GID},
 #ifdef HAVE_CAPABILITIES
-	{"preserve-file-access",no_argument,		NULL,	CAP_PRESERVE_FILEACCESS},
+	{"preserve-file-access",optional_argument,	NULL,	CAP_PRESERVE_FILEACCESS},
 #endif
-	{"pthread",		no_argument,		NULL,	PTHREAD},
+	{"pthread",		optional_argument,	NULL,	PTHREAD},
+	{"retries",		optional_argument,	NULL,	RETRIES},
+	{"syslog",		optional_argument,	NULL,	SYSLOG},
+	{"one-file-system",	optional_argument,	NULL,	ONEFILESYSTEM},
+	{"exclude-mount-points",optional_argument,	NULL,	EXCLUDEMOUNTPOINTS},
 #ifdef CLUSTER_SUPPORT
 	{"cluster-iface",	required_argument,	NULL,	CLUSTERIFACE},		// Not implemented, yet
 	{"cluster-ip",		required_argument,	NULL,	CLUSTERMCASTIPADDR},	// Not implemented, yet
@@ -48,153 +59,314 @@ static struct option long_options[] =
 	{"cluster-hash-dl-max",	required_argument,	NULL,	CLUSTERHDLMAX},
 	{"cluster-scan-dl-max",	required_argument,	NULL,	CLUSTERSDLMAX},
 #endif
+	{"standby-file",	required_argument,	NULL,	STANDBYFILE},
 	{"timeout-sync",	required_argument,	NULL,	SYNCTIMEOUT},
 	{"delay-sync",		required_argument,	NULL,	SYNCDELAY},
 	{"delay-collect",	required_argument,	NULL,	DELAY},
 	{"delay-collect-bigfile",required_argument,	NULL,	BFILEDELAY},
 	{"threshold-bigfile",	required_argument,	NULL,	BFILETHRESHOLD},
-	{"dir-lists",		required_argument,	NULL,	OUTLISTSDIR},
-	{"rsync",		no_argument,		NULL,	RSYNC},
+	{"lists-dir",		required_argument,	NULL,	OUTLISTSDIR},
+	{"have-recursive-sync",	optional_argument,	NULL,	HAVERECURSIVESYNC},
+	{"synclist-simplify",	optional_argument,	NULL,	SYNCLISTSIMPLIFY},
+	{"auto-add-rules-w",	optional_argument,	NULL,	AUTORULESW},
 	{"rsync-inclimit",	required_argument,	NULL,	RSYNCINCLIMIT},
-	{"rsync-prefer-include",no_argument,		NULL,	RSYNC_PREFERINCLUDE},
+	{"rsync-prefer-include",optional_argument,	NULL,	RSYNCPREFERINCLUDE},
 	{"ignore-exitcode",	required_argument,	NULL,	IGNOREEXITCODE},
-	{"dont-unlink-lists",	no_argument,		NULL,	DONTUNLINK},
-	{"full-initialsync",	no_argument,		NULL,	INITFULL},
-	{"verbose",		no_argument,		NULL,	VERBOSE},
-	{"debug",		no_argument,		NULL,	DEBUG},
-	{"quiet",		no_argument,		NULL,	QUIET},
+	{"dont-unlink-lists",	optional_argument,	NULL,	DONTUNLINK},
+	{"full-initialsync",	optional_argument,	NULL,	INITFULL},
+	{"only-initialsync",	optional_argument,	NULL,	ONLYINITSYNC},
+	{"skip-initialsync",	optional_argument,	NULL,	SKIPINITSYNC},
+	{"exit-on-no-events",	optional_argument,	NULL,	EXITONNOEVENTS},
+	{"exit-hook",		required_argument,	NULL,	EXITHOOK},
+	{"verbose",		optional_argument,	NULL,	VERBOSE},
+	{"debug",		optional_argument,	NULL,	DEBUG},
+	{"quiet",		optional_argument,	NULL,	QUIET},
 #ifdef FANOTIFY_SUPPORT
-	{"fanotify",		no_argument,		NULL,	FANOTIFY},
-	{"inotify",		no_argument,		NULL,	INOTIFY},
+	{"fanotify",		optional_argument,	NULL,	FANOTIFY},
+	{"inotify",		optional_argument,	NULL,	INOTIFY},
 #endif
 	{"label",		required_argument,	NULL,	LABEL},
-	{"help",		no_argument,		NULL,	HELP},
-	{"version",		no_argument,		NULL,	SHOW_VERSION},
+	{"help",		optional_argument,	NULL,	HELP},
+	{"version",		optional_argument,	NULL,	SHOW_VERSION},
+
 	{NULL,			0,			NULL,	0}
 };
 
+static char *const modes[] = {
+	[MODE_UNSET]		= "",
+	[MODE_SIMPLE]		= "simple",
+	[MODE_SHELL]		= "shell",
+	[MODE_RSYNCSHELL]	= "rsyncshell",
+	[MODE_RSYNCDIRECT]	= "rsyncdirect",
+	[MODE_RSYNCSO]		= "rsyncso",
+	[MODE_SO]		= "so",
+	NULL
+};
+
+static char *const status_descr[] = {
+	[STATE_EXIT]		= "exiting",
+	[STATE_STARTING]	= "starting",
+	[STATE_RUNNING]		= "running",
+	[STATE_REHASH]		= "rehashing",
+	[STATE_TERM]		= "terminating",
+	[STATE_PTHREAD_GC]	= "pthread gc",
+	[STATE_INITSYNC]	= "initsync",
+	NULL
+};
+
 int syntax() {
-	printf("syntax: clsync [flags] <watch dir> <action script> [file with rules regexps] [destination directory]\npossible options:\n");
+	printf("possible options:\n");
 	int i=0;
 	while(long_options[i].name != NULL) {
-		printf("\t--%-24s-%c%s\n", long_options[i].name, long_options[i].val, (long_options[i].has_arg == required_argument ? " argument" : ""));
+		if(!(long_options[i].val & OPTION_CONFIGONLY))
+			printf("\t--%-24s%c%c%s\n", long_options[i].name, 
+				long_options[i].val & OPTION_LONGOPTONLY ? ' ' : '-', 
+				long_options[i].val & OPTION_LONGOPTONLY ? ' ' : long_options[i].val, 
+				(long_options[i].has_arg == required_argument ? " argument" : ""));
 		i++;
 	}
 	exit(EINVAL);
 }
 
 int version() {
-	printf("clsync v%i.%i"REVISION"\n\t"AUTHOR"\n", VERSION_MAJ, VERSION_MIN);
+	printf(PROGRAM" v%i.%i"REVISION"\n\t"AUTHOR"\n", VERSION_MAJ, VERSION_MIN);
 	exit(0);
 }
 
-int parse_arguments(int argc, char *argv[], struct options *options_p) {
+int clsyncapi_getapiversion() {
+	return CLSYNC_API_VERSION;
+}
+
+static inline int parse_parameter(options_t *options_p, uint16_t param_id, char *arg, paramsource_t paramsource) {
+#ifdef _DEBUG
+	fprintf(stderr, "Force-Debug: parse_parameter(): %i: %i = \"%s\"\n", paramsource, param_id, arg);
+#endif
+	switch(paramsource) {
+		case PS_ARGUMENT:
+			if(param_id & OPTION_CONFIGONLY) {
+				syntax();
+				return 0;
+			}
+			options_p->flags_set[param_id] = 1;
+			break;
+		case PS_CONFIG:
+			if(options_p->flags_set[param_id])
+				return 0;
+			break;
+		default:
+			printf_e("Warning: Unknown parameter #%i source (value \"%s\").\n", param_id, arg!=NULL ? arg : "");
+			break;
+	}
+	switch(param_id) {
+		case '?':
+		case HELP:
+			syntax();
+			break;
+		case CONFIGFILE:
+			options_p->config_path  = arg;
+			break;
+		case CONFIGBLOCK:
+			options_p->config_block = arg;
+			break;
+		case GID:
+			options_p->gid = (unsigned int)atol(arg);
+			options_p->flags[param_id]++;
+			break;
+		case UID:
+			options_p->uid = (unsigned int)atol(arg);
+			options_p->flags[param_id]++;
+			break;
+		case PIDFILE:
+			options_p->pidfile		= arg;
+			break;
+		case RETRIES:
+			options_p->retries		= (unsigned int)atol(arg);
+			break;
+#ifdef CLUSTER_SUPPORT
+		case CLUSTERIFACE:
+			options_p->cluster_iface	= arg;
+			break;
+		case CLUSTERMCASTIPADDR:
+			options_p->cluster_mcastipaddr	= arg;
+			break;
+		case CLUSTERMCASTIPPORT:
+			options_p->cluster_mcastipport	= (uint16_t)atoi(arg);
+			break;
+		case CLUSTERTIMEOUT:
+			options_p->cluster_timeout	= (unsigned int)atol(arg);
+			break;
+		case CLUSTERNODENAME:
+			options_p->cluster_nodename	= arg;
+			break;
+		case CLUSTERHDLMIN:
+			options_p->cluster_hash_dl_min	= (uint16_t)atoi(arg);
+			break;
+		case CLUSTERHDLMAX:
+			options_p->cluster_hash_dl_max	= (uint16_t)atoi(arg);
+			break;
+		case CLUSTERSDLMAX:
+			options_p->cluster_scan_dl_max	= (uint16_t)atoi(arg);
+			break;
+#endif
+		case OUTLISTSDIR:
+			options_p->listoutdir		= arg;
+			break;
+		case LABEL:
+			options_p->label		= arg;
+			break;
+		case STANDBYFILE:
+			if(strlen(arg)) {
+				options_p->standbyfile		= arg;
+				options_p->flags[STANDBYFILE]	= 1;
+			} else {
+				options_p->standbyfile		= NULL;
+				options_p->flags[STANDBYFILE]	= 0;
+			}
+			break;
+		case SYNCDELAY: 
+			options_p->syncdelay		= (unsigned int)atol(arg);
+			break;
+		case DELAY:
+			options_p->_queues[QUEUE_NORMAL].collectdelay = (unsigned int)atol(arg);
+			break;
+		case BFILEDELAY:
+			options_p->_queues[QUEUE_BIGFILE].collectdelay = (unsigned int)atol(arg);
+			break;
+		case BFILETHRESHOLD:
+			options_p->bfilethreshold = (unsigned long)atol(arg);
+			break;
+#ifdef FANOTIFY_SUPPORT
+		case FANOTIFY:
+			options_p->notifyengine = NE_FANOTIFY;
+			break;
+#endif
+		case INOTIFY:
+			options_p->notifyengine = NE_INOTIFY;
+			break;
+		case RSYNCINCLIMIT:
+			options_p->rsyncinclimit = (unsigned int)atol(arg);
+			break;
+		case SYNCTIMEOUT:
+			options_p->synctimeout   = (unsigned int)atol(arg);
+			break;
+		case EXITHOOK:
+			if(strlen(arg)) {
+				options_p->exithookfile		= arg;
+				options_p->flags[EXITHOOK]	= 1;
+			} else {
+				options_p->exithookfile		= NULL;
+				options_p->flags[EXITHOOK]	= 0;
+			}
+			break;
+		case IGNOREEXITCODE: {
+			char *ptr = arg, *start = arg;
+			unsigned char exitcode;
+			do {
+				switch(*ptr) {
+					case 0:
+					case ',':
+//						*ptr=0;
+						exitcode = (unsigned char)atoi(start);
+						if(exitcode == 0) {
+							// flushing the setting
+							int i = 0;
+							while(i < 256)
+								options_p->isignoredexitcode[i++] = 0;
+#ifdef _DEBUG
+							fprintf(stderr, "Force-Debug: parse_parameter(): Reset ignored exitcodes.\n");
+#endif
+						} else {
+							options_p->isignoredexitcode[exitcode] = 1;
+#ifdef _DEBUG
+							fprintf(stderr, "Force-Debug: parse_parameter(): Adding ignored exitcode %u.\n", exitcode);
+#endif
+						}
+						start = ptr+1;
+						break;
+				}
+			} while(*(ptr++));
+			break;
+		}
+		case SHOW_VERSION:
+			version();
+			break;
+		case WATCHDIR:
+			options_p->watchdir	= arg;
+			break;
+		case SYNCHANDLER:
+			options_p->handlerfpath	= arg;
+			break;
+		case RULESFILE:
+			options_p->rulfpath	= arg;
+			break;
+		case DESTDIR:
+			options_p->destdir	= arg;
+			break;
+		case STATUSFILE:
+			options_p->statusfile	= arg;
+			break;
+		case MODE: {
+			char *value;
+
+			options_p->flags[MODE]  = getsubopt(&arg, modes, &value);
+			if(options_p->flags[MODE] == -1) {
+				fprintf(stderr, "Error: Wrong mode name entered: \"%s\"\n", arg);
+				return EINVAL;
+			}
+			break;
+		}
+		default:
+			if(arg == NULL)
+				options_p->flags[param_id]++;
+			else
+				options_p->flags[param_id] = atoi(arg);
+#ifdef _DEBUG
+			fprintf(stderr, "Force-Debug: flag %i is set to %i\n", param_id&0xff, options_p->flags[param_id]);
+#endif
+			break;
+	}
+	return 0;
+}
+
+int arguments_parse(int argc, char *argv[], struct options *options_p) {
 	int c;
 	int option_index = 0;
 
 	// Generating "optstring" (man 3 getopt_long) with using information from struct array "long_options"
-	char *optstring     = alloca((('z'-'a'+1)*2 + '9'-'0'+1)*2 + 1);
+	char *optstring     = alloca((('z'-'a'+1)*3 + '9'-'0'+1)*3 + 1);
 	char *optstring_ptr = optstring;
 
-	struct option *lo_ptr = long_options;
+	const struct option *lo_ptr = long_options;
 	while(lo_ptr->name != NULL) {
-		*(optstring_ptr++) = lo_ptr->val;
-		if(lo_ptr->has_arg == required_argument)
-			*(optstring_ptr++) = ':';
+		if(!(lo_ptr->val & (OPTION_CONFIGONLY|OPTION_LONGOPTONLY))) {
+			*(optstring_ptr++) = lo_ptr->val & 0xff;
+
+			if(lo_ptr->has_arg == required_argument)
+				*(optstring_ptr++) = ':';
+
+			if(lo_ptr->has_arg == optional_argument) {
+				*(optstring_ptr++) = ':';
+				*(optstring_ptr++) = ':';
+			}
+		}
 		lo_ptr++;
 	}
 	*optstring_ptr = 0;
+#ifdef _DEBUG
+	fprintf(stderr, "Force-Debug: %s\n", optstring);
+#endif
 
 	// Parsing arguments
 	while(1) {
 		c = getopt_long(argc, argv, optstring, long_options, &option_index);
 	
 		if (c == -1) break;
-		switch (c) {
-			case '?':
-			case HELP:
-				syntax();
-				break;
-			case GID:
-				options_p->gid = (unsigned int)atol(optarg);
-				options_p->flags[c]++;
-				break;
-			case UID:
-				options_p->uid = (unsigned int)atol(optarg);
-				options_p->flags[c]++;
-				break;
-			case PIDFILE:
-				options_p->pidfile             = optarg;
-				break;
-#ifdef CLUSTER_SUPPORT
-			case CLUSTERIFACE:
-				options_p->cluster_iface       = optarg;
-				break;
-			case CLUSTERMCASTIPADDR:
-				options_p->cluster_mcastipaddr = optarg;
-				break;
-			case CLUSTERMCASTIPPORT:
-				options_p->cluster_mcastipport = (uint16_t)atoi(optarg);
-				break;
-			case CLUSTERTIMEOUT:
-				options_p->cluster_timeout     = (unsigned int)atol(optarg);
-				break;
-			case CLUSTERNODENAME:
-				options_p->cluster_nodename    = optarg;
-				break;
-			case CLUSTERHDLMIN:
-				options_p->cluster_hash_dl_min = (uint16_t)atoi(optarg);
-				break;
-			case CLUSTERHDLMAX:
-				options_p->cluster_hash_dl_max = (uint16_t)atoi(optarg);
-				break;
-			case CLUSTERSDLMAX:
-				options_p->cluster_scan_dl_max = (uint16_t)atoi(optarg);
-				break;
-#endif
-			case OUTLISTSDIR:
-				options_p->listoutdir   = optarg;
-				break;
-			case LABEL:
-				options_p->label        = optarg;
-				break;
-			case SYNCDELAY: 
-				options_p->syncdelay  = (unsigned int)atol(optarg);
-				break;
-			case DELAY:
-				options_p->_queues[QUEUE_NORMAL].collectdelay = (unsigned int)atol(optarg);
-				break;
-			case BFILEDELAY:
-				options_p->_queues[QUEUE_BIGFILE].collectdelay = (unsigned int)atol(optarg);
-				break;
-			case BFILETHRESHOLD:
-				options_p->bfilethreshold = (unsigned long)atol(optarg);
-				break;
-#ifdef FANOTIFY_SUPPORT
-			case FANOTIFY:
-				options_p->notifyengine = NE_FANOTIFY;
-				break;
-#endif
-			case INOTIFY:
-				options_p->notifyengine = NE_INOTIFY;
-				break;
-			case RSYNCINCLIMIT:
-				options_p->rsyncinclimit = (unsigned int)atol(optarg);
-				break;
-			case SYNCTIMEOUT:
-				options_p->synctimeout = (unsigned int)atol(optarg);
-				break;
-			case IGNOREEXITCODE:
-				options_p->isignoredexitcode[(unsigned char)atoi(optarg)] = 1;
-				break;
-			case SHOW_VERSION:
-				version();
-				break;
-			default:
-				options_p->flags[c]++;
-				break;
-		}
+		int ret = parse_parameter(options_p, c, optarg, PS_ARGUMENT);
+		if(ret) return ret;
 	}
+	if(optind+1 < argc)
+		syntax();
+/*
 	if(optind+1 >= argc)
 		syntax();
 
@@ -212,40 +384,201 @@ int parse_arguments(int argc, char *argv[], struct options *options_p) {
 	}
 
 	options_p->watchdir    = argv[optind];
-	options_p->watchdirlen = strlen(options_p->watchdir);
+	options_p->watchdirlen = strlen(options_p->watchdir);*/
+/*
+	if(optind+0 < argc) {
+		options_p->watchdir     = argv[optind];
+		options_p->watchdirlen  = strlen(options_p->watchdir);
+	} else {
+		options_p->watchdir     = NULL;
+		options_p->watchdirlen  = 0;
+	}
+
+	if(optind+1 < argc) {
+		options_p->handlerfpath = argv[optind+1];
+	} else {
+		options_p->handlerfpath = NULL;
+	}
+
+	if(optind+2 < argc) {
+		options_p->rulfpath = argv[optind+2];
+		if(!strcmp(options_p->rulfpath, ""))
+			options_p->rulfpath = NULL;
+	} else {
+		options_p->rulfpath = NULL;
+	}
+
+	if(optind+3 < argc) {
+		options_p->destdir    = argv[optind+3];
+		options_p->destdirlen = strlen(options_p->destdir);
+	} else {
+		options_p->destdir    = NULL;
+		options_p->destdirlen = 0;
+	}
+*/
+
 	return 0;
 }
 
-int parse_rules_fromfile(const char *rulfpath, rule_t *rules) {
+char *configs_parse_str[1<<10] = {0};
+
+void gkf_parse(options_t *options_p, GKeyFile *gkf) {
+	const struct option *lo_ptr = long_options;
+	while(lo_ptr->name != NULL) {
+		gchar *value = g_key_file_get_value(gkf, options_p->config_block, lo_ptr->name, NULL);
+		if(value != NULL) {
+			unsigned char val_char = lo_ptr->val&0xff;
+
+			if(configs_parse_str[val_char])
+				free(configs_parse_str[val_char]);
+
+			configs_parse_str[val_char] = value;
+			int ret = parse_parameter(options_p, lo_ptr->val, value, PS_CONFIG);
+			if(ret) exit(ret);
+		}
+		lo_ptr++;
+	}
+
+	return;
+}
+
+int configs_parse(options_t *options_p) {
+	GKeyFile *gkf;
+
+	gkf = g_key_file_new();
+
+	if(options_p->config_path) {
+		printf_d("Debug: configs_parse(): Trying config-file \"%s\"\n", options_p->config_path);
+		if(!g_key_file_load_from_file(gkf, options_p->config_path, G_KEY_FILE_NONE, NULL)) {
+			printf_e("Error: configs_parse(): Cannot open/parse file \"%s\"\n", options_p->config_path);
+			g_key_file_free(gkf);
+			return -1;
+		} else
+			gkf_parse(options_p, gkf);
+
+	} else {
+		char *config_paths[] = CONFIG_PATHS;
+		char **config_path_p = config_paths, *config_path_real = xmalloc(PATH_MAX);
+		size_t config_path_real_size=PATH_MAX;
+
+		char *homedir = getenv("HOME");
+		size_t homedir_len = strlen(homedir);
+
+		while(*config_path_p != NULL) {
+			size_t config_path_len = strlen(*config_path_p);
+
+			if(config_path_len+homedir_len+3 > config_path_real_size) {
+				config_path_real_size = config_path_len+homedir_len+3;
+				config_path_real      = xmalloc(config_path_real_size);
+			}
+
+			if(*config_path_p[0] != '/') {
+				memcpy(config_path_real, homedir, homedir_len);
+				config_path_real[homedir_len] = '/';
+				memcpy(&config_path_real[homedir_len+1], *config_path_p, config_path_len+1);
+			} else 
+				memcpy(config_path_real, *config_path_p, config_path_len+1);
+
+			printf_d("Debug: configs_parse(): Trying config-file \"%s\"\n", config_path_real);
+			if(!g_key_file_load_from_file(gkf, config_path_real, G_KEY_FILE_NONE, NULL)) {
+				printf_d("Debug: configs_parse(): Cannot open/parse file \"%s\"\n", config_path_real);
+				config_path_p++;
+				continue;
+			}
+
+			gkf_parse(options_p, gkf);
+
+			break;
+		}
+		free(config_path_real);
+	}
+
+	g_key_file_free(gkf);
+
+	return 0;
+}
+
+int configs_cleanup() {
+	int i=0;
+
+	while(i < (1<<10)) {
+		if(configs_parse_str[i] != NULL) {
+			free(configs_parse_str[i]);
+			configs_parse_str[i] = NULL;
+		}
+		i++;
+	}
+
+	return 0;
+}
+
+int rule_complete(rule_t *rule_p, const char *expr) {
+	printf_ddd("Debug3: rule_complete(): <%s>.\n", expr);
+#ifdef VERYPARANOID
+	if(rule_p->mask == RA_NONE) {
+		printf_e("Error: rule_complete(): Received a rule with rule_p->mask == 0x00. Exit.\n");
+		return EINVAL;
+	}
+#endif
+
 	char buf[BUFSIZ];
+	int ret = 0;
+	if(rule_p->num >= MAXRULES) {
+		printf_e("Error: Too many rules (%i >= %i).\n", rule_p->num, MAXRULES);
+		return ENOMEM;
+	}
+	if((ret = regcomp(&rule_p->expr, expr, REG_EXTENDED | REG_NOSUB))) {
+		regerror(ret, &rule_p->expr, buf, BUFSIZ);
+		printf_e("Error: Invalid regexp pattern <%s>: %s (regex-errno: %i).\n", expr, buf, ret);
+		return ret;
+	}
+
+	return ret;
+}
+
+int parse_rules_fromfile(options_t *options_p) {
+	int ret = 0;
+	char *rulfpath = options_p->rulfpath;
+	rule_t *rules  = options_p->rules;
+
 	char *line_buf=NULL;
 	FILE *f = fopen(rulfpath, "r");
 	
 	if(f == NULL) {
-#ifdef PARANOID
-		rules->action = RULE_END;
-#endif
+		rules->mask   = RA_NONE;		// Terminator. End of rules' chain.
+		rules->perm   = DEFAULT_RULES_PERM;
 		printf_e("Error: Cannot open \"%s\" for reading: %s (errno: %i).\n", rulfpath, strerror(errno), errno);
 		return errno;
 	}
+
+	GHashTable *autowrules_ht = g_hash_table_new_full(g_str_hash,	g_str_equal,	free,    0);
 
 	int i=0;
 	size_t linelen, size=0;
 	while((linelen = getline(&line_buf, &size, f)) != -1) {
 		if(linelen>1) {
+			uint8_t sign = 0;
 			char *line = line_buf;
 			rule_t *rule;
 
 			rule = &rules[i];
+#ifdef VERYPARANOID
+			memset(rule, 0, sizeof(*rule));
+#endif
+			rule->num = i++;
 			line[--linelen] = 0; 
+
+
+			// Parsing the first character of the line
 			switch(*line) {
 				case '+':
-					rule->action = RULE_ACCEPT;
+					sign = RS_PERMIT;
 					break;
 				case '-':
-					rule->action = RULE_REJECT;
+					sign = RS_REJECT;
 					break;
 				case '#':	// Comment?
+					i--;	// Canceling new rule
 					continue;
 				default:
 					printf_e("Error: Wrong rule action <%c>.\n", *line);
@@ -255,7 +588,23 @@ int parse_rules_fromfile(const char *rulfpath, rule_t *rules) {
 			line++;
 			linelen--;
 
+			// Parsing the second character of the line
 			*line |= 0x20;	// lower-casing
+			// Default rule->mask and rule->perm
+
+			// rule->mask - sets bitmask of operations that are affected by the rule
+			// rule->perm - sets bitmask of permit/reject for every operation. Effect have only bits specified by the rule->mask.
+
+			rule->mask = RA_ALL;
+			switch(sign) {
+				case RS_REJECT:
+					rule->perm = RA_NONE;
+					break;
+				case RS_PERMIT:
+					rule->perm = RA_ALL;
+					break;
+			}
+
 			switch(*line) {
 				case '*':
 					rule->objtype = 0;	// "0" - means "of any type"
@@ -267,14 +616,8 @@ int parse_rules_fromfile(const char *rulfpath, rule_t *rules) {
 				case 'l':
 					rule->objtype = S_IFLNK;
 					break;
-				case 'f':
-					rule->objtype = S_IFREG;
-					break;
 				case 'b':
 					rule->objtype = S_IFBLK;
-					break;
-				case 'd':
-					rule->objtype = S_IFDIR;
 					break;
 				case 'c':
 					rule->objtype = S_IFCHR;
@@ -282,42 +625,143 @@ int parse_rules_fromfile(const char *rulfpath, rule_t *rules) {
 				case 'p':
 					rule->objtype = S_IFIFO;
 					break;
-#else
+#endif
 				case 'f':
 					rule->objtype = S_IFREG;
 					break;
 				case 'd':
 					rule->objtype = S_IFDIR;
 					break;
-#endif
+				case 'w':	// accept or reject walking to directory
+					if(
+						(options_p->flags[MODE] == MODE_RSYNCDIRECT) ||
+						(options_p->flags[MODE] == MODE_RSYNCSHELL)  ||
+						(options_p->flags[MODE] == MODE_RSYNCSO)
+					) {
+						printf_e("parse_rules_fromfile(): Warning: Used \"w\" rule in \"--rsync\" case."
+							" This may cause unexpected problems.\n");
+					}
+					rule->objtype = S_IFDIR;
+					rule->mask    = RA_WALK;
+					break;
+				default:
+					printf_e("parse_rules_fromfile(): Warning: Cannot parse the rule <%s>\n", &line[-1]);
+					i--;	// Canceling new rule
+					continue;
 			}
+
 
 			line++;
 			linelen--;
 
-			printf_d("Debug2: Rule #%i <%c> <%c> pattern <%s> (length: %i).\n", i+1, line[-2], line[-1], line, linelen);
-			int ret;
-			if(i >= MAXRULES) {
-				printf_e("Error: Too many rules (%i >= %i).\n", i, MAXRULES);
-				rule->action = RULE_END;
-				return ENOMEM;
+			// Parsing the rest part of the line
+
+			printf_d("Debug: parse_rules_fromfile(): Rule #%i <%c> <%c> pattern <%s> (length: %i).\n", rule->num, line[-2], line[-1], line, linelen);
+			if((ret=rule_complete(rule, line)))
+				goto l_parse_rules_fromfile_end;
+
+			// Post-processing:
+
+			line--;
+			linelen++;
+
+			if(*line != 'w') {
+				// processing --auto-add-rules-w
+				if(options_p->flags[AUTORULESW] && (sign == RS_PERMIT)) {
+					// Preparing to add appropriate w-rules
+					char skip = 0;
+					char *expr = alloca(linelen+2);
+					memcpy(expr, line, linelen+1);
+					size_t exprlen = linelen;
+
+					// Making expr to be starting with '^'
+					if(line[1] == '^') {
+						expr++;
+						exprlen--;
+					} else
+						*expr = '^';
+
+					char *end;
+
+					if(*line == 'd' || *line == '*') {
+						// "d" rule already doing what we need, so we can skip the last level
+
+						end = &expr[exprlen];
+						if(end[-1] != '$')
+							*(end++) = '$';
+						*end = 0;
+
+//						printf_ddd("Debug3: parse_rules_fromfile(): Don't adding w-rule for \"%s\" due to [*d]-rule for \"%s\"\n",
+//							expr, &line[1]);
+						g_hash_table_insert(autowrules_ht, strdup(expr), GINT_TO_POINTER(1));
+
+					}
+
+					if(!skip) {
+
+						do {
+							// Decreasing directory level and make the '$' ending
+							end = strrchr(expr, '/');
+							if(end != NULL) {
+								if(end[-1] != '$')
+									*(end++) = '$';
+								*end = 0;
+								exprlen = (size_t)(end - expr);
+							} else {
+								expr[1] = '$';
+								expr[2] = 0;
+								exprlen = 2;
+							}
+
+							// Checking if it not already set
+							if(!g_hash_table_lookup(autowrules_ht, expr)) {
+
+								// Switching to next rule:
+
+								rule = &rules[i];
+								rule->num = i++;
+
+								// Adding the rule
+
+								rule->objtype = S_IFDIR;
+								rule->mask    = RA_WALK;
+								rule->perm    = RA_WALK;
+
+								printf_d("Debug: parse_rules_fromfile(): Rule #%i <+> <w> pattern <%s> (length: %i) [auto].\n", 
+									rule->num, expr, exprlen);
+								if((ret=rule_complete(rule, expr)))
+									goto l_parse_rules_fromfile_end;
+								g_hash_table_insert(autowrules_ht, strdup(expr), GINT_TO_POINTER(1));
+
+							}
+						} while(end != NULL);
+					}
+				}
 			}
-			if((ret = regcomp(&rule->expr, line, REG_EXTENDED | REG_NOSUB))) {
-				regerror(ret, &rule->expr, buf, BUFSIZ);
-				printf_e("Error: Invalid regexp pattern <%s>: %s (regex-errno: %i).\n", line, buf, ret);
-				rule->action = RULE_END;
-				return ret;
-			}
-			i++;
 		}
 	}
+
+l_parse_rules_fromfile_end:
 	if(size)
 		free(line_buf);
 
 	fclose(f);
 
-	rules[i].action = RULE_END;	// Terminator. End of rules' chain.
-	return 0;
+	printf_ddd("Debug3: parse_rules_fromfile(): Adding tail-rule #%u (effective #%u).\n", -1, i);
+
+	rules[i].mask   = RA_NONE;		// Terminator. End of rules' chain.
+	rules[i].perm   = DEFAULT_RULES_PERM;
+
+	g_hash_table_destroy(autowrules_ht);
+#ifdef _DEBUG
+	printf_ddd("Debug3: parse_rules_fromfile(): Total (p == %p):\n", rules);
+	i=0;
+	do {
+		printf_ddd("\t%i\t%i\t%p/%p\n", i, rules[i].objtype, (void *)(long)rules[i].perm, (void *)(long)rules[i].mask);
+		i++;
+	} while(rules[i].mask != RA_NONE);
+#endif
+	return ret;
 }
 
 int becomedaemon() {
@@ -339,7 +783,7 @@ int becomedaemon() {
 
 int main_cleanup(options_t *options_p) {
 	int i=0;
-	while((i < MAXRULES) && (options_p->rules[i].action != RULE_END))
+	while((i < MAXRULES) && (options_p->rules[i].mask != RA_NONE))
 		regfree(&options_p->rules[i++].expr);
 
 	printf_ddd("Debug3: main_cleanup(): %i %i %i %i\n", options_p->watchdirsize, options_p->watchdirwslashsize, options_p->destdirsize, options_p->destdirwslashsize);
@@ -353,10 +797,59 @@ int main_rehash(options_t *options_p) {
 
 	main_cleanup(options_p);
 
-	if(options_p->rulfpath != NULL)
-		ret = parse_rules_fromfile(options_p->rulfpath, options_p->rules);
-	else
-		options_p->rules[0].action = RULE_END;
+	if(options_p->rulfpath != NULL) {
+		ret = parse_rules_fromfile(options_p);
+		if(ret)
+			printf_e("Error: main_rehash(): Got error from parse_rules_fromfile(): %s (errno: %i).\n", strerror(ret), ret);
+	} else {
+		options_p->rules[0].perm = DEFAULT_RULES_PERM;
+		options_p->rules[0].mask = RA_NONE;		// Terminator. End of rules.
+	}
+
+	return ret;
+}
+
+int main_status_update(options_t *options_p, state_t state) {
+	static state_t state_old = STATE_UNKNOWN;
+
+	if(options_p->statusfile == NULL)
+		return 0;
+
+	if(state == state_old) {
+		printf_ddd("Debug3: main_status_update: State unchanged: %u == %u\n", state, state_old);
+		return 0;
+	}
+
+	FILE *f = fopen(options_p->statusfile, "w");
+	if(f == NULL) {
+		printf_e("Error: main_status_update(): Cannot open file \"%s\" for writing: %s (errno: %u).\n", 
+			options_p->statusfile, strerror(errno), errno);
+		return errno;
+	}
+
+#ifdef VERYPARANOID
+	if(status_descr[state] == NULL) {
+		printf_e("Error: main_status_update(): status_descr[%u] == NULL.\n", state);
+		return EINVAL;
+	}
+#endif
+
+	printf_ddd("Debug3: main_status_update(): Setting status to %i: %s.\n", state, status_descr[state]);
+	state_old=state;
+
+	int ret = 0;
+
+	if(fprintf(f, "%s\n", status_descr[state]) <= 0) {	// TODO: check output length
+		printf_e("Error: main_status_update(): Cannot write to file \"%s\": %s (errno: %u).\n",
+			options_p->statusfile, strerror(errno), errno);
+		ret = errno;
+	}
+
+	if(fclose(f)) {
+		printf_e("Error: main_status_update(): Cannot close file \"%s\": %s (errno: %u).\n", 
+			options_p->statusfile, strerror(errno), errno);
+		ret = errno;
+	}
 
 	return ret;
 }
@@ -375,24 +868,101 @@ int main(int argc, char *argv[]) {
 	options._queues[QUEUE_INSTANT].collectdelay= COLLECTDELAY_INSTANT;
 	options.bfilethreshold			   = DEFAULT_BFILETHRESHOLD;
 	options.label				   = DEFAULT_LABEL;
-	options.rsyncinclimit			   = DEFAULT_RSYNC_INCLUDELINESLIMIT;
+	options.rsyncinclimit			   = DEFAULT_RSYNCINCLUDELINESLIMIT;
 	options.synctimeout			   = DEFAULT_SYNCTIMEOUT;
 #ifdef CLUSTER_SUPPORT
 	options.cluster_hash_dl_min		   = DEFAULT_CLUSTERHDLMIN;
 	options.cluster_hash_dl_max		   = DEFAULT_CLUSTERHDLMAX;
 	options.cluster_scan_dl_max		   = DEFAULT_CLUSTERSDLMAX;
 #endif
+	options.config_block			   = DEFAULT_CONFIG_BLOCK;
+	options.retries				   = DEFAULT_RETRIES;
 
-	parse_arguments(argc, argv, &options);
+	arguments_parse(argc, argv, &options);
 	out_init(options.flags);
-	if((options.flags[RSYNC]>1) && (options.destdir == NULL)) {
-		printf_e("Error: Option \"-RR\" cannot be used without specifying \"destination directory\".\n");
+	nret = configs_parse(&options);
+	if(nret) ret = nret;
+	out_init(options.flags);
+
+	main_status_update(&options, STATE_STARTING);
+
+#ifdef VERYPARANOID
+	if((options.retries != 1) && options.flags[PTHREAD]) {
+		printf_e("Error: \"--retries\" values should be equal to \"1\" for \"--pthread\" mode.\n");
+		ret = EINVAL;
+	}
+#endif
+
+	if(options.flags[STANDBYFILE] && (options.flags[MODE] == MODE_SIMPLE)) {
+		printf_e("Error: Sorry but option \"--standby-file\" cannot be used in mode \"simple\", yet.\n");
+		ret = EINVAL;
+	}
+
+	if(options.flags[PTHREAD] && options.flags[ONLYINITSYNC]) {
+		printf_e("Error: Conflicting options: \"--pthread\" and \"--only-initialsync\" cannot be used together.\n");
+		ret = EINVAL;
+	}
+
+	if(options.flags[PTHREAD] && options.flags[EXITONNOEVENTS]) {
+		printf_e("Error: Conflicting options: \"--pthread\" and \"--exit-on-no-events\" cannot be used together.\n");
+		ret = EINVAL;
+	}
+	if(options.flags[SKIPINITSYNC] && options.flags[EXITONNOEVENTS]) {
+		printf_e("Error: Conflicting options: \"--skip-initialsync\" and \"--exit-on-no-events\" cannot be used together.\n");
+		ret = EINVAL;
+	}
+	if(options.flags[ONLYINITSYNC] && options.flags[EXITONNOEVENTS]) {
+		printf_e("Error: Conflicting options: \"--only-initialsync\" and \"--exit-on-no-events\" cannot be used together.\n");
+		ret = EINVAL;
+	}
+
+	if(options.flags[SKIPINITSYNC] && options.flags[ONLYINITSYNC]) {
+		printf_e("Error: Conflicting options: \"--skip-initialsync\" and \"--only-initialsync\" cannot be used together.\n");
+		ret = EINVAL;
+	}
+
+	if(options.flags[INITFULL] && options.flags[SKIPINITSYNC]) {
+		printf_e("Error: Conflicting options: \"--full-initialsync\" and \"--skip-initialsync\" cannot be used together.\n");
+		ret = EINVAL;
+	}
+
+	if(options.flags[EXCLUDEMOUNTPOINTS])
+		options.flags[ONEFILESYSTEM]=1;
+
+	if(options.flags[MODE] == MODE_UNSET) {
+		printf_e("Error: \"--mode\" is not set.\n");
+		ret = EINVAL;
+	}
+
+	if(options.watchdir == NULL) {
+		printf_e("Error: \"--watchdir\" is not set.\n");
+		ret = EINVAL;
+	}
+
+	if(options.handlerfpath == NULL) {
+		printf_e("Error: \"--sync-handler\" path is not set.\n");
+		ret = EINVAL;
+	}
+/*
+	if(options.flags[SYNCHANDLERSO] && options.flags[RSYNC]) {
+		printf_e("Error: Option \"--rsync\" cannot be used in conjunction with \"--synchandler-so-module\".\n");
+		ret = EINVAL;
+	}
+*/
+//	if(options.flags[SYNCHANDLERSO] && (options.listoutdir != NULL))
+//		printf_e("Warning: Option \"--dir-lists\" has no effect conjunction with \"--synchandler-so-module\".\n");
+
+//	if(options.flags[SYNCHANDLERSO] && (options.destdir != NULL))
+//		printf_e("Warning: Destination directory argument has no effect conjunction with \"--synchandler-so-module\".\n");
+
+	if((options.flags[MODE] == MODE_RSYNCDIRECT) && (options.destdir == NULL)) {
+		printf_e("Error: Mode \"rsyncdirect\" cannot be used without specifying \"destination directory\".\n");
 		ret = EINVAL;
 	}
 
 #ifdef CLUSTER_SUPPORT
-	if((options.flags[RSYNC]>1) && (options.cluster_iface != NULL)) {
-		printf_e("Error: Option \"-RR\" cannot be used in conjunction with \"--cluster-iface\".\n");
+	if((options.flags[MODE] == MODE_RSYNCDIRECT ) && (options.cluster_iface != NULL)) {
+		printf_e("Error: Mode \"rsyncdirect\" cannot be used in conjunction with \"--cluster-iface\".\n");
 		ret = EINVAL;
 	}
 
@@ -446,26 +1016,94 @@ int main(int argc, char *argv[]) {
 			ret = errno;
 		}
 
+		struct stat64 stat64={0};
+		if(lstat64(options.watchdir, &stat64)) {
+			printf_e("Error: main(): Cannot lstat64() on \"%s\": %s (errno: %i)\n", options.watchdir, strerror(errno), errno);
+			if(!ret)
+				ret = errno;
+		} else {
+			if(options.flags[EXCLUDEMOUNTPOINTS])
+				options.st_dev = stat64.st_dev;
+			if((stat64.st_mode & S_IFMT) == S_IFLNK) {
+				// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
+				// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
+				// it disables filters, because exclude-list will be empty.
+#ifdef VERYPARANOID
+				printf_e("Error: Watch dir cannot be symlink, but \"%s\" is a symlink.\n", options.watchdir);
+				ret = EINVAL;
+#else
+				char *watchdir_resolved_part = alloca(PATH_MAX+1);
+				ssize_t r = readlink(options.watchdir, watchdir_resolved_part, PATH_MAX+1);
+	
+				if(r>=PATH_MAX) {	// TODO: check if it's possible
+					printf_e("Error: Too long file path resolved from symbolic link \"%s\"\n", options.watchdir);
+					ret = EINVAL;
+				} else
+				if(r<0) {
+					printf_e("Error: Cannot resolve symbolic link \"%s\": readlink() error: %s (errno: %i)\n", options.watchdir, strerror(errno), errno);
+					ret = EINVAL;
+				} else {
+					char *watchdir_resolved;
+#ifdef VERYPARANOID
+					if(options.watchdirsize)
+						if(options.watchdir != NULL)
+							free(options.watchdir);
+#endif
+
+					size_t watchdir_resolved_part_len = strlen(watchdir_resolved_part);
+					options.watchdirsize = watchdir_resolved_part_len+1;	// Not true for case of relative symlink
+					if(*watchdir_resolved_part == '/') {
+						// Absolute symlink
+						watchdir_resolved = malloc(options.watchdirsize);
+						memcpy(watchdir_resolved, watchdir_resolved_part, options.watchdirsize);
+					} else {
+						// Relative symlink :(
+						char *rslash = strrchr(options.watchdir, '/');
+
+						char *watchdir_resolved_rel  = alloca(PATH_MAX+1);
+						size_t watchdir_resolved_rel_len = rslash-options.watchdir + 1;
+						memcpy(watchdir_resolved_rel, options.watchdir, watchdir_resolved_rel_len);
+						memcpy(&watchdir_resolved_rel[watchdir_resolved_rel_len], watchdir_resolved_part, watchdir_resolved_part_len+1);
+
+						watchdir_resolved = realpath(watchdir_resolved_rel, NULL);
+					}
+
+					
+					printf_d("Debug: Symlink resolved: watchdir \"%s\" -> \"%s\"\n", options.watchdir, watchdir_resolved);
+					options.watchdir = watchdir_resolved;
+				}
+#endif
+			}
+		}
+
 		if(!ret) {
 			options.watchdir     = rwatchdir;
 			options.watchdirlen  = strlen(options.watchdir);
 			options.watchdirsize = options.watchdirlen;
 
+#ifdef VERYPARANOID
 			if(options.watchdirlen == 1) {
-				printf_e("Error: watchdir is supposed to be not \"/\".\n");
+				printf_e("Very-Paranoid: --watch-dir is supposed to be not \"/\".\n");
 				ret = EINVAL;
 			}
+#endif
 		}
 
 		if(!ret) {
-			size_t size = options.watchdirlen + 2;
-			char *newwatchdir = xmalloc(size);
-			memcpy( newwatchdir, options.watchdir, options.watchdirlen);
-			options.watchdirwslash     = newwatchdir;
-			options.watchdirwslashsize = size;
-			memcpy(&options.watchdirwslash[options.watchdirlen], "/", 2);
+			if(options.watchdirlen == 1) {
+				options.watchdirwslash     = options.watchdir;
+				options.watchdirwslashsize = 0;
+				options.watchdir_dirlevel  = 0;
+			} else {
+				size_t size = options.watchdirlen + 2;
+				char *newwatchdir = xmalloc(size);
+				memcpy( newwatchdir, options.watchdir, options.watchdirlen);
+				options.watchdirwslash     = newwatchdir;
+				options.watchdirwslashsize = size;
+				memcpy(&options.watchdirwslash[options.watchdirlen], "/", 2);
 
-			options.watchdir_dirlevel  = fileutils_calcdirlevel(options.watchdirwslash);
+				options.watchdir_dirlevel  = fileutils_calcdirlevel(options.watchdirwslash);
+			}
 		}
 	}
 
@@ -499,12 +1137,36 @@ int main(int argc, char *argv[]) {
 
 	printf_d("Debug: %s [%s] (%p) -> %s [%s]\n", options.watchdir, options.watchdirwslash, options.watchdirwslash, options.destdir?options.destdir:"", options.destdirwslash?options.destdirwslash:"");
 
-	if(options.flags[RSYNC] && (options.listoutdir == NULL)) {
-		printf_e("Error: Option \"--rsync\" cannot be used without \"--outlistsdir\".\n");
+	if(
+		(
+			(options.flags[MODE]==MODE_RSYNCDIRECT) || 
+			(options.flags[MODE]==MODE_RSYNCSHELL)  ||
+			(options.flags[MODE]==MODE_RSYNCSO)
+		) && (options.listoutdir == NULL)
+	) {
+		printf_e("Error: Modes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" cannot be used without \"--lists-dir\".\n");
 		ret = EINVAL;
 	}
-	if(options.flags[RSYNC_PREFERINCLUDE] && (!options.flags[RSYNC]))
-		printf_e("Warning: Option \"--rsyncpreferinclude\" is useless without \"--rsync\".\n");
+
+	if(
+		options.flags[RSYNCPREFERINCLUDE] && 
+		!(
+			options.flags[MODE] == MODE_RSYNCDIRECT ||
+			options.flags[MODE] == MODE_RSYNCSHELL  ||
+			options.flags[MODE] == MODE_RSYNCSO
+		)
+	)
+		printf_e("Warning: Option \"--rsyncpreferinclude\" is useless if mode is not \"rsyncdirect\", \"rsyncshell\" or \"rsyncso\".\n");
+
+	if(
+		(
+			options.flags[MODE] == MODE_RSYNCDIRECT ||
+			options.flags[MODE] == MODE_RSYNCSHELL  ||
+			options.flags[MODE] == MODE_RSYNCSO
+		)
+		&& options.flags[AUTORULESW]
+	)
+		printf_e("Warning: Option \"--auto-add-rules-w\" in modes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" may cause unexpected problems.\n");
 
 	if(options.flags[DEBUG])
 		debug_print_flags();
@@ -517,7 +1179,7 @@ int main(int argc, char *argv[]) {
 				printf_e("Warning: Directory \"%s\" doesn't exist. Creating it.\n", options.listoutdir);
 				errno = 0;
 				if(mkdir(options.listoutdir, S_IRWXU)) {
-					printf_e("Error: main(): Cannot create directory \"%s\": %s (%i)", options.listoutdir, strerror(errno), errno);
+					printf_e("Error: main(): Cannot create directory \"%s\": %s (errno: %i).\n", options.listoutdir, strerror(errno), errno);
 					ret = errno;
 				}
 			} else {
@@ -536,35 +1198,69 @@ int main(int argc, char *argv[]) {
 			}
 	}
 
+/*
+	if(options.flags[HAVERECURSIVESYNC] && (options.listoutdir == NULL)) {
+		printf_e("Error: main(): Option \"--dir-lists\" should be set to use option \"--have-recursive-sync\".\n");
+		ret = EINVAL;
+	}
+*/
+
+	if(
+		options.flags[HAVERECURSIVESYNC] &&
+		(
+			options.flags[MODE] == MODE_RSYNCDIRECT ||
+			options.flags[MODE] == MODE_RSYNCSHELL  ||
+			options.flags[MODE] == MODE_RSYNCSO
+		)
+	) {
+		printf_e("Error: main(): Option \"--have-recursive-sync\" with nodes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" are incompatable.\n");
+		ret = EINVAL;
+	}
+
+	if(options.flags[SYNCLISTSIMPLIFY] && (options.listoutdir == NULL)) {
+		printf_e("Error: main(): Option \"--dir-lists\" should be set to use option \"--synclist-simplify\".\n");
+		ret = EINVAL;
+	}
+
+	if(
+		options.flags[SYNCLISTSIMPLIFY] && 
+		(
+			options.flags[MODE] == MODE_RSYNCDIRECT ||
+			options.flags[MODE] == MODE_RSYNCSHELL  ||
+			options.flags[MODE] == MODE_RSYNCSO
+		)
+	) {
+		printf_e("Error: main(): Option \"--synclist-simplify\" with nodes \"rsyncdirect\" and \"rsyncshell\" are incompatable.\n");
+		ret = EINVAL;
+	}
+
 #ifdef FANOTIFY_SUPPORT
 	if(options.notifyengine != NE_INOTIFY) {
 		printf_e("Warning: fanotify is not fully supported, yet!\n");
 	}
 #endif
 
-	if(access(options.handlerfpath, X_OK) == -1) {
-		printf_e("Error: \"%s\" is not executable: %s (errno: %i).\n", options.handlerfpath, strerror(errno), errno);
-		ret = errno;
-	}
-
+	if(options.flags[EXITHOOK]) {
 #ifdef VERYPARANOID
-	{
-		struct stat64 stat64={0};
-		if(lstat64(options.watchdir, &stat64)) {
-			printf_e("Error: main(): Cannot lstat64() on \"%s\": %s (errno: %i)\n", options.watchdir, strerror(errno), errno);
-			ret = errno;
-		} else {
-			if((stat64.st_mode & S_IFMT) == S_IFLNK) {
-				// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
-				// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
-				// it disables filters, because exclude-list will be empty.
-
-				printf_e("Error: Watch dir cannot be symlink, but \"%s\" is a symlink.\n", options.watchdir);
-				ret = EINVAL;
+		if(options.exithookfile == NULL) {
+			printf_e("Error: main(): options.exithookfile == NULL\n");
+			ret = EINVAL;
+		} else 
+#endif
+		{
+			if(access(options.exithookfile, X_OK) == -1) {
+				printf_e("Error: \"%s\" is not executable: %s (errno: %i).\n", options.exithookfile, strerror(errno), errno);
+				if(!ret)
+					ret = errno;
 			}
 		}
 	}
-#endif
+
+	if(access(options.handlerfpath, X_OK) == -1) {
+		printf_e("Error: \"%s\" is not executable: %s (errno: %i).\n", options.handlerfpath, strerror(errno), errno);
+		if(!ret)
+			ret = errno;
+	}
 
 	nret=main_rehash(&options);
 	if(nret)
@@ -656,13 +1352,25 @@ preserve_fileaccess_end:
 		}
 	}
 
-	if(ret == 0)
+	printf_ddd("Debug3: main(): Current errno is %i.\n", ret);
+
+
+	if(ret == 0) {
 		ret = sync_run(&options);
+	}
 
 	if(options.pidfile != NULL) {
 		if(unlink(options.pidfile)) {
 			printf_e("Error: main(): Cannot unlink pidfile \"%s\": %s (errno: %i)\n",
 				options.pidfile, strerror(errno), errno);
+			ret = errno;
+		}
+	}
+
+	if(options.statusfile != NULL) {
+		if(unlink(options.statusfile)) {
+			printf_e("Error: main(): Cannot unlink status file \"%s\": %s (errno: %i)\n",
+				options.statusfile, strerror(errno), errno);
 			ret = errno;
 		}
 	}
@@ -681,9 +1389,11 @@ preserve_fileaccess_end:
 	if(options.destdirwslashsize)
 		free(options.destdirwslash);
 
+	configs_cleanup();
 	out_flush();
-	printf_d("Debug: finished, exitcode: %i.\n", ret);
+	printf_d("Debug: finished, exitcode: %i: %s.\n", ret, strerror(ret));
 	out_flush();
+	out_deinit();
 	return ret;
 }
 

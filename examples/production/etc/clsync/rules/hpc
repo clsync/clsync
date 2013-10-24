@@ -1,0 +1,5 @@
++f^passwd
++f^group
++f^hosts$
++f^machines$
+-*.*

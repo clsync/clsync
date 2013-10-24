@@ -6,7 +6,7 @@ EAPI=5
 
 if [[ ${PV} == "9999" ]] ; then
 	_GIT=git-2
-	EGIT_REPO_URI="https://github.com/xaionaro/clsync.git"
+	EGIT_REPO_URI="https://github.com/xaionaro/${PN}.git"
 	SRC_URI=""
 	KEYWORDS=""
 else
@@ -18,17 +18,21 @@ inherit autotools $_GIT
 
 DESCRIPTION="Live sync tool based on inotify, written in GNU C"
 HOMEPAGE="http://ut.mephi.ru/oss"
-LICENSE="GPL-3"
+LICENSE="GPL-3+"
 SLOT="0"
-IUSE="-cluster debug doc +examples extra-hardened hardened +mhash"
+IUSE="-caps -cluster debug doc +examples extra-hardened hardened mhash"
 REQUIRED_USE="
-	extra-hardened? ( hardened )"
+	extra-hardened? ( hardened )
+	mhash? ( cluster )"
 
-RDEPEND="dev-libs/glib:2"
+RDEPEND="
+	caps? ( sys-libs/libcap )
+	mhash? ( app-crypt/mhash )
+	dev-libs/glib:2
+"
 DEPEND="${RDEPEND}
 	virtual/pkgconfig
 	doc? ( app-doc/doxygen )
-	mhash? ( app-crypt/mhash )
 "
 
 src_prepare() {
@@ -45,6 +49,7 @@ src_configure() {
 		--enable-paranoid=${harden_level} \
 		$(use_enable cluster) \
 		$(use_enable debug) \
+		$(use_with caps capabilities) \
 		$(use_with mhash)
 }
 
@@ -56,7 +61,26 @@ src_compile() {
 src_install() {
 	emake DESTDIR="${D}" install
 	use doc && dohtml -r doc/html/*
+
 	# remove unwanted docs
 	rm "${ED}/usr/share/doc/${PF}"/{LICENSE,TODO} || die
 	use examples || rm -r "${ED}/usr/share/doc/${PF}/examples" || die
+
+	newinitd "${FILESDIR}/${PN}.initd" "${PN}"
+	newconfd "${FILESDIR}/${PN}.confd" "${PN}"
+
+	# filter rules and sync scripts are supposed to be here
+	keepdir "${EPREFIX}/etc/${PN}"
+	insinto "/etc/${PN}"
+	doins "${FILESDIR}/${PN}.conf"
+}
+
+pkg_postinst() {
+	einfo "${PN} is just a convenient way to run synchronization tools on live data,"
+	einfo "it doesn't copy data itself, so you need to install software to do actual"
+	einfo "data transfer. Usually net-misc/rsync is a good choise, but ${PN} is"
+	einfo "is flexible enough to use any user tool, see manual page for details."
+	einfo
+	einfo "${PN} init script can now be multiplexed, to use symlink init script to"
+	einfo "othername and use conf.d/othername to configure it."
 }

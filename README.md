@@ -1,4 +1,5 @@
 [![Build Status](https://travis-ci.org/xaionaro/clsync.png?branch=master)](https://travis-ci.org/xaionaro/clsync)
+[![Coverage Status](https://coveralls.io/repos/xaionaro/clsync/badge.png)](https://coveralls.io/r/xaionaro/clsync)
 
 clsync
 ======
@@ -11,11 +12,10 @@ Contents
 4.  Installing
 5.  How to use
 6.  Example of usage
-7.  Recommended configuration
-8.  Clustering
-9.  Known issues
-10. Support
-11. Developing
+7.  Clustering
+8.  Known building issues
+9.  Support
+10. Developing
 
 
 1. Name
@@ -68,10 +68,13 @@ event. :(
 - Sometimes, it's too complex in configuration for our situation.
 - It can't set another event-collecting delay for big files. We don't
 want to sync big files (`>1GiB`) so often as ordinary files.
+- Shared object (.so file) cannot be used as rsync-wrapper.
 
 Sorry, if I'm wrong. Let me know if it is, please :). "lsyncd" - is really
 good and useful utility, just it's not appropriate for us.
 
+UPD.: Also clsync was used to replace incron/csync2/etc in HPC-clusters for
+syncing /etc/{passwd,shadow,group,shells} files.
 
 3. inotify vs fanotify:
 -----------------------
@@ -87,20 +90,27 @@ the program, like "directory creation" or "file deletion". So I switched to
 4. Installing
 -------------
 
-First of all, you should install dependencies to compile clsync. As you can
-see from GNUmakefile clsync depends only on "glib-2.0", so on debian-like
-systems you should execute something like "apt-get install libglib2.0-dev".
+Debian/ubuntu-users can try to install it directly with apt-get:
 
-Next step is generating Makefile. To do that usually it's enought to execute
-"autoreconf -i && ./configure".
+    apt-get install clsync
 
-Next step is compiling. To compile usually it's enough to execute "make".
+If it's required to install clsync from the source, first of all, you should
+install dependencies to compile it. On debian-like systems you should
+execute something like:
 
-Next step in installing. To install usually it's enough to execute
-"su -c 'make install'".
+    apt-get install libglib2.0-dev autoreconf gcc
 
-Also, debian-users can use my repository to install the clsync:
-deb [arch=amd64] http://mirror.mephi.ru/debian-mephi/ unstable main
+Next step is generating Makefile. To do that usually it's enought to execute:
+
+    autoreconf -i && ./configure
+
+Next step is compiling. To compile usually it's enough to execute:
+
+    make
+
+Next step is installing. To install usually it's enough to execute:
+
+    su -c 'make install'
 
 
 5. How to use
@@ -113,37 +123,67 @@ personally (see "Support").
 6. Example of usage
 -------------------
 
-Example of usage, that works on my PC is in directory "example". Just run
-"clsync-start.sh" and try to create/modify/delete files/dirs in
+Example of usage, that works on my PC is in directory "examples". Just run
+"clsync-start-rsyncdirect.sh" and try to create/modify/delete files/dirs in
 "example/testdir/from". All modifications should appear (with some delay) in
 directory "example/testdir/to" ;)
 
+For dummies:
 
-7. Recommended configuration
-----------------------------
+    pushd /tmp
+    git clone https://github.com/xaionaro/clsync
+    cd clsync
+    autoreconf -fi
+    ./configure
+    make
+    export PATH_OLD="$PATH"
+    export PATH="$(pwd):$PATH"
+    cd examples
+    ./clsync-start-rsyncdirect.sh
+    export PATH="$PATH_OLD"
 
-First of all, recommended and not recommended options are notices in the
-manpage.
+Now you can try to make changes in directory
+"/tmp/clsync/examples/testdir/from" (in another terminal).
+Wait about 7 seconds after the changes and check directory
+"/tmp/clsync/examples/testdir/to". To finish the experiment press ^C
+(control+c) in clsync's terminal.
 
-However let's describe 4 situations:
+    cd ../..
+    rm -rf clsync
+    popd
 
-- The simpliest usage (syncing from "/tmp/fromdir" to "/tmp/todir" with delay about 30 seconds):
-> clsync -RR -d /dev/shm/clsync /tmp/fromdir $(which rsync) /dev/zero /tmp/todir
+Note: There's no need to change PATH's value if clsync is installed
+system-wide, e.g. with
 
-- You're backing-up over very slow channel:
-> clsync -l backup -R -d /dev/shm/clsync -t 600 -T 3600 -B $[1024 * 1024 * 16] /home/user /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules
+    make install
 
-This will minimize network traffic. And pthread-ing is removed due to rarely
-updating.
+For dummies, again (with "make install"):
 
-- You're syncing ordinary web-server over 1Gbs channel:
-> clsync -l mirror -p -R -d /dev/shm/clsync /var/www /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules
+    pushd /tmp
+    git clone https://github.com/xaionaro/clsync
+    cd clsync
+    autoreconf -fi
+    ./configure
+    make
+    sudo make install
+    cd examples
+    ./clsync-start-rsyncdirect.sh
 
-- You're syncing only few files from huge file tree (with a great lot of
-excludes):
-> clsync -l mirror -p -R -d /dev/shm/clsync -I /home/user /home/clsync/bin/clsync-actionscript.sh /home/clsync/clsync-rules
+Directory "/tmp/clsync/examples/testdir/from" is now synced to
+"/tmp/clsync/examples/testdir/to" with 7 seconds delay. To terminate
+the clsync press ^C (control+c) in clsync's terminal.
 
-8. Clustering
+    cd ..
+    sudo make uninstall
+    cd ..
+    rm -rf clsync
+    popd
+
+For really dummies or/and lazy users, there's a video demonstration:
+[http://ut.mephi.ru/oss/clsync](http://ut.mephi.ru/oss/clsync)
+
+
+7. Clustering
 -------------
 
 I've started to implement support of bi-directional syncing with using
@@ -174,22 +214,22 @@ split-brain, that can be solved two ways:
 Example of the script is just a script that calls "find" on both sides to
 determine which side has the latest changes :)
 
-9. Known building issues
+8. Known building issues
 ------------------------
 
 May be problems with "configuring" or compilation. In this case just try
 next command:
-> gcc -std=gnu99 -D\_FORTIFY\_SOURCE=2 -DPARANOID -pthread -DHAVE\_MHASH  -pipe -Wall -ggdb3 --param ssp-buffer-size=4 -fstack-check -fstack-protector-all -Xlinker -zrelro -pthread $(pkg-config --cflags glib-2.0) $(pkg-config --libs glib-2.0) -lmhash \*.c -o /tmp/clsync
+    echo '#define REVISION "-custom"' > revision.h; gcc -std=gnu99 -D\_FORTIFY\_SOURCE=2 -DPARANOID -pipe -Wall -ggdb3 --param ssp-buffer-size=4 -fstack-check -fstack-protector-all -Xlinker -zrelro -pthread $(pkg-config --cflags glib-2.0) $(pkg-config --libs glib-2.0) -ldl \*.c -o /tmp/clsync
 
-10. Support
+9. Support
 -----------
 
 To get support, you can contact with me this ways:
 - Official IRC channel of "clsync": irc.freenode.net#clsync
 - Where else can you find me: IRC:SSL+UTF-8 irc.campus.mephi.ru:6695#mephi,xaionaro,xai
-- And e-mail: <xai@mephi.ru>, <dyokunev@ut.mephi.ru>, <xaionaro@gmail.com>; PGP pubkey: 0x8E30679C
+- And e-mail: <dyokunev@ut.mephi.ru>, <xaionaro@gmail.com>; PGP pubkey: 0x8E30679C
 
-11. Developing
+10. Developing
 --------------
 
 I started to write "DEVELOPING" and "PROTOCOL" files.
@@ -199,5 +239,5 @@ I'll be glad to receive code contribution :)
 
 
 
-                                               -- Dmitry Yu Okunev <xai@mephi.ru> 0x8E30679C
+                                               -- Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 
