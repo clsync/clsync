@@ -288,7 +288,7 @@ If you're using this option (but no \-\-exclude\-mount\-points)
 will write neither includes nor excludes of content of mount points.
 .br
 This may cause problems e.g. you're using rsync for sync-handler without
-similar option "--one-file-system".
+similar option "\-\-one\-file\-system".
 
 Is not set by default.
 .RE
@@ -602,7 +602,7 @@ as an error. You can set multiple ignores by passing this option multiple
 times.
 
 Recommended values for rsync case is "24". You can set multiple values with
-listing a lot of "-x" options (e.g. "\-x 23 \-x 24") or via commas
+listing a lot of "\-x" options (e.g. "\-x 23 \-x 24") or via commas
 (e.g. "\-x 23,24"). To drop the list use zero exitcode (e.g. "\-x 0"). For
 example you can use "\-x 0,23" to drop the list and set "23"-th exitcode to
 be ignored.
@@ -1116,7 +1116,7 @@ It's not recommended to use
 .I w
 rules in modes "rsyncdirect", "rsyncshell" and "rsyncso".
 .BR rsync (1)
-allows to set syncing and walking only together in "\-\-include" rules
+allows one to set syncing and walking only together in "\-\-include" rules
 ("\-\-files\-from" is not appropriate due to problem with syncing files
 deletions). So there may be problems with clsync's
 .I w
@@ -1138,7 +1138,7 @@ Syncing pwdb files and sshd_config (non-rsync case):
 .br
 	+w^/ssh$
 .br
-	-*
+	\-*
 .RE
 
 Syncing pwdb files and sshd_config (non-rsync case with option
@@ -1174,9 +1174,9 @@ Syncing pwdb files and sshd_config (rsync case):
 
 Syncing /srv/lxc tree (rsync case):
 .RS
-	-d/sess(ion)?s?$
+	\-d/sess(ion)?s?$
 .br
-	-f/tmp/
+	\-f/tmp/
 .br
 	+*
 .RE
@@ -1285,7 +1285,7 @@ reads only one configuration file. In other words, if option
 .I \-\-config\-file
 is not set and file
 .B ~/.clsync.conf
-is accessable and parsable,
+is accessible and parsable,
 .B clsync
 will not try to open
 .BR /etc/clsync/clsync.conf .
