@@ -12,10 +12,11 @@ Contents
 4.  Installing
 5.  How to use
 6.  Example of usage
-7.  Clustering
-8.  Known building issues
-9.  Support
-10. Developing
+7.  Other uses
+8.  Clustering
+9.  Known building issues
+10. Support
+11. Developing
 
 
 1. Name
@@ -183,7 +184,19 @@ For really dummies or/and lazy users, there's a video demonstration:
 [http://ut.mephi.ru/oss/clsync](http://ut.mephi.ru/oss/clsync)
 
 
-7. Clustering
+7. Other uses
+-------------
+
+Also, clsync may be used to do nearly atomic directory recursive copy.
+
+For example, command
+
+    ionice -c 3 clsync --exit-on-no-events -x 23 -x 24 -M rsyncdirect -S $(which rsync) -W /path/from -D /path/to -d1
+
+may be used to copy "/path/from" into "/path/to" with sync up of changes made (in "/path/from") while the copying. It will copy new changes over and over until there will be no changes, and then clsync will exit.
+
+
+8. Clustering
 -------------
 
 I've started to implement support of bi-directional syncing with using
@@ -214,14 +227,14 @@ split-brain, that can be solved two ways:
 Example of the script is just a script that calls "find" on both sides to
 determine which side has the latest changes :)
 
-8. Known building issues
+9. Known building issues
 ------------------------
 
 May be problems with "configuring" or compilation. In this case just try
 next command:
     echo '#define REVISION "-custom"' > revision.h; gcc -std=gnu99 -D\_FORTIFY\_SOURCE=2 -DPARANOID -pipe -Wall -ggdb3 --param ssp-buffer-size=4 -fstack-check -fstack-protector-all -Xlinker -zrelro -pthread $(pkg-config --cflags glib-2.0) $(pkg-config --libs glib-2.0) -ldl \*.c -o /tmp/clsync
 
-9. Support
+10. Support
 -----------
 
 To get support, you can contact with me this ways:
@@ -229,7 +242,7 @@ To get support, you can contact with me this ways:
 - Where else can you find me: IRC:SSL+UTF-8 irc.campus.mephi.ru:6695#mephi,xaionaro,xai
 - And e-mail: <dyokunev@ut.mephi.ru>, <xaionaro@gmail.com>; PGP pubkey: 0x8E30679C
 
-10. Developing
+11. Developing
 --------------
 
 I started to write "DEVELOPING" and "PROTOCOL" files.
