@@ -191,7 +191,7 @@ Also, clsync may be used to do nearly atomic directory recursive copy.
 
 For example, command
 
-    ionice -c 3 clsync --exit-on-no-events -x 23 -x 24 -M rsyncdirect -S $(which rsync) -W /path/from -D /path/to -d1
+    ionice -c 3 clsync -L /dev/shm/clsync --exit-on-no-events -x 23 -x 24 -M rsyncdirect -S $(which rsync) -W /path/from -D /path/to -d1
 
 may be used to copy "/path/from" into "/path/to" with sync up of changes made (in "/path/from") while the copying. It will copy new changes over and over until there will be no changes, and then clsync will exit.
 
