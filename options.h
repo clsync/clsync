@@ -26,6 +26,7 @@ enum flags_enum {
 	SYNCHANDLER	= 'S',
 	RULESFILE	= 'R',
 	DESTDIR		= 'D',
+	SOCKETPATH	= 's',
 
 	HELP		= 'h',
 	CONFIGFILE	= 'H',
@@ -47,7 +48,7 @@ enum flags_enum {
 	CLUSTERNODENAME = 'n',
 	CLUSTERHDLMIN	= 'o',
 	CLUSTERHDLMAX	= 'O',
-	CLUSTERSDLMAX	= 's',
+	CLUSTERSDLMAX	= 11|OPTION_LONGOPTONLY,
 #endif
 	DELAY		= 't',
 	BFILEDELAY	= 'T',
@@ -168,6 +169,8 @@ struct options {
 	char *watchdirwslash;
 	char *destdirwslash;
 	char *statusfile;
+	char *socketpath;
+	int socket;
 #ifdef CLUSTER_SUPPORT
 	char *cluster_iface;
 	char *cluster_mcastipaddr;

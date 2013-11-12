@@ -17,12 +17,14 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+
 #include "common.h"
 #include "output.h"
 #include "sync.h"
 #include "malloc.h"
 #include "cluster.h"
 #include "fileutils.h"
+#include "socket.h"
 
 #include "revision.h"
 
@@ -33,6 +35,7 @@ static const struct option long_options[] =
 	{"rules-file",		required_argument,	NULL,	RULESFILE},
 	{"destination-dir",	required_argument,	NULL,	DESTDIR},
 	{"mode",		required_argument,	NULL,	MODE},
+	{"socket",		required_argument,	NULL,	SOCKETPATH},
 	{"status-file",		required_argument,	NULL,	STATUSFILE},
 
 	{"background",		optional_argument,	NULL,	BACKGROUND},
@@ -301,6 +304,9 @@ static inline int parse_parameter(options_t *options_p, uint16_t param_id, char 
 			break;
 		case DESTDIR:
 			options_p->destdir	= arg;
+			break;
+		case SOCKETPATH:
+			options_p->socketpath	= arg;
 			break;
 		case STATUSFILE:
 			options_p->statusfile	= arg;
@@ -1356,6 +1362,9 @@ preserve_fileaccess_end:
 
 	printf_ddd("Debug3: main(): Current errno is %i.\n", ret);
 
+	if(ret == 0)
+		if(options.socketpath != NULL)
+			ret = socket_run(&options);
 
 	if(ret == 0) {
 		ret = sync_run(&options);
