@@ -19,5 +19,6 @@
 
 
 extern int socket_run(options_t *options_p);
+extern int socket_cleanup(options_t *options_p);
 
 

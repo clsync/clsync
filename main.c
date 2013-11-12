@@ -1367,7 +1367,13 @@ preserve_fileaccess_end:
 			ret = socket_run(&options);
 
 	if(ret == 0) {
+
+		// == RUNNING ==
 		ret = sync_run(&options);
+		// == RUNNING ==
+
+		if(options.socketpath != NULL)
+			socket_cleanup(&options);
 	}
 
 	if(options.pidfile != NULL) {
