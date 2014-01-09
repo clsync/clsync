@@ -19,12 +19,15 @@
 
 
 #include "common.h"
+
+#include <pwd.h>	// For getpwnam()
+#include <grp.h>	// For getgrnam()
+
 #include "output.h"
 #include "sync.h"
 #include "malloc.h"
 #include "cluster.h"
 #include "fileutils.h"
-#include "socket.h"
 
 #include "revision.h"
 
@@ -36,6 +39,9 @@ static const struct option long_options[] =
 	{"destination-dir",	required_argument,	NULL,	DESTDIR},
 	{"mode",		required_argument,	NULL,	MODE},
 	{"socket",		required_argument,	NULL,	SOCKETPATH},
+	{"socket-auth",		required_argument,	NULL,	SOCKETAUTH},
+	{"socket-mod",		required_argument,	NULL,	SOCKETMOD},
+	{"socket-own",		required_argument,	NULL,	SOCKETOWN},
 	{"status-file",		required_argument,	NULL,	STATUSFILE},
 
 	{"background",		optional_argument,	NULL,	BACKGROUND},
@@ -95,6 +101,13 @@ static const struct option long_options[] =
 	{NULL,			0,			NULL,	0}
 };
 
+static char *const socketauth[] = {
+	[SOCKAUTH_UNSET]	= "",
+	[SOCKAUTH_NULL]		= "null",
+//	[SOCKAUTH_PAM]		= "pam",
+	NULL
+};
+
 static char *const modes[] = {
 	[MODE_UNSET]		= "",
 	[MODE_SIMPLE]		= "simple",
@@ -140,7 +153,7 @@ int clsyncapi_getapiversion() {
 	return CLSYNC_API_VERSION;
 }
 
-static inline int parse_parameter(options_t *options_p, uint16_t param_id, char *arg, paramsource_t paramsource) {
+int parse_parameter(options_t *options_p, uint16_t param_id, char *arg, paramsource_t paramsource) {
 #ifdef _DEBUG
 	fprintf(stderr, "Force-Debug: parse_parameter(): %i: %i = \"%s\"\n", paramsource, param_id, arg);
 #endif
@@ -308,6 +321,76 @@ static inline int parse_parameter(options_t *options_p, uint16_t param_id, char 
 		case SOCKETPATH:
 			options_p->socketpath	= arg;
 			break;
+		case SOCKETAUTH: {
+			char *value;
+
+			options_p->flags[SOCKETAUTH] = getsubopt(&arg, modes, &value);
+			if(options_p->flags[SOCKETAUTH] == -1) {
+				printf_e("Error: Wrong socket auth mech entered: \"%s\"\n", arg);
+				return EINVAL;
+			}
+		}
+		case SOCKETMOD:
+			if(!sscanf(arg, "%o", &options_p->socketmod)) {
+				printf_e("Error: Non octal value passed to --socket-mod: \"%s\"\n", arg);
+				return EINVAL;
+			}
+			options_p->flags[param_id]++;
+			break;
+		case SOCKETOWN: {
+			char *colon = strchr(arg, ':');
+			uid_t uid;
+			gid_t gid;
+
+			if(colon == NULL) {
+				struct passwd *pwent = getpwnam(arg);
+
+				if(pwent == NULL) {
+					printf_e("Error: Cannot find username \"%s\" (case #0): %s (errno: %i)\n", 
+						arg, strerror(errno), errno);
+					return EINVAL;
+				}
+
+				uid = pwent->pw_uid;
+				gid = pwent->pw_gid;
+
+			} else {
+
+				char user[USER_LEN+2], group[GROUP_LEN+2];
+
+				memcpy(user, arg, MIN(USER_LEN, colon-arg));
+				user[colon-arg] = 0;
+
+				strncpy(group, &colon[1], GROUP_LEN);
+
+				errno=0;
+				struct passwd *pwent = getpwnam(user);
+				if(pwent == NULL) {
+					printf_e("Error: Cannot find username \"%s\" (case #1): %s (errno: %i)\n", 
+						user, strerror(errno), errno);
+					return EINVAL;
+				}
+
+				errno=0;
+				struct group  *grent = getgrnam(group);
+				if(grent == NULL) {
+					printf_e("Error: Cannot find group \"%s\": %s (errno: %i)\n", 
+						group, strerror(errno), errno);
+					return EINVAL;
+				}
+	
+				uid = pwent->pw_uid;
+				gid = grent->gr_gid;
+			}
+
+			options_p->socketuid = uid;
+			options_p->socketgid = gid;
+			options_p->flags[param_id]++;
+
+			printf_dd("Debug2: socket: uid == %u; gid == %u\n", uid, gid);
+
+			break;
+		}
 		case STATUSFILE:
 			options_p->statusfile	= arg;
 			break;
@@ -886,13 +969,38 @@ int main(int argc, char *argv[]) {
 	options.config_block			   = DEFAULT_CONFIG_BLOCK;
 	options.retries				   = DEFAULT_RETRIES;
 
-	arguments_parse(argc, argv, &options);
+	nret = arguments_parse(argc, argv, &options);
+	if(nret) ret = nret;
 	out_init(options.flags);
 	nret = configs_parse(&options);
 	if(nret) ret = nret;
 	out_init(options.flags);
 
 	main_status_update(&options, STATE_STARTING);
+
+	if(options.socketpath != NULL) {
+#ifndef ENABLE_SOCKET
+		printf_e("Error: clsync is compiled without control socket support, option \"--socket\" cannot be used.\n");
+		ret = EINVAL;
+#endif
+		if(options.flags[SOCKETAUTH] == SOCKAUTH_UNSET)
+			options.flags[SOCKETAUTH] = SOCKAUTH_NULL;
+	}
+
+	if((options.flags[SOCKETOWN]) && (options.socketpath == NULL)) {
+		printf_e("Error: \"--socket-own\" is useless without \"--socket\"");
+		ret = EINVAL;
+	}
+
+	if((options.flags[SOCKETMOD]) && (options.socketpath == NULL)) {
+		printf_e("Error: \"--socket-mod\" is useless without \"--socket\"");
+		ret = EINVAL;
+	}
+
+	if((options.flags[SOCKETAUTH]) && (options.socketpath == NULL)) {
+		printf_e("Error: \"--socket-auth\" is useless without \"--socket\"");
+		ret = EINVAL;
+	}
 
 #ifdef VERYPARANOID
 	if((options.retries != 1) && options.flags[PTHREAD]) {
@@ -1362,19 +1470,11 @@ preserve_fileaccess_end:
 
 	printf_ddd("Debug3: main(): Current errno is %i.\n", ret);
 
+
+	// == RUNNING ==
 	if(ret == 0)
-		if(options.socketpath != NULL)
-			ret = socket_run(&options);
-
-	if(ret == 0) {
-
-		// == RUNNING ==
 		ret = sync_run(&options);
-		// == RUNNING ==
-
-		if(options.socketpath != NULL)
-			socket_cleanup(&options);
-	}
+	// == RUNNING ==
 
 	if(options.pidfile != NULL) {
 		if(unlink(options.pidfile)) {

@@ -13,6 +13,16 @@
 // clsync should be used, if there's more than 5-10 nodes. So the limit in 255 is quite enough. :)
 #define MAXNODES			((1<<8)-1)
 
+// max user/group lengths
+#define USER_LEN			(1<<8)
+#define GROUP_LEN			USER_LEN
+
+// control socket listen backlog (man 2 listen)
+#define SOCKET_BACKLOG			2
+
+// control socket clients limit
+#define SOCKET_CLIENTS_MAX		8
+
 // children count limit
 #define MAXCHILDREN			(1<<8)
 

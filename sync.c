@@ -26,6 +26,7 @@
 #include "cluster.h"
 #include "sync.h"
 #include "glibex.h"
+#include "socket.h"
 
 #include <dlfcn.h>
 
@@ -1870,7 +1871,7 @@ int sync_idle_dosync_collectedevents_uniqfname(options_t *options_p, char *fpath
 		lstat64(fpath, &stat64);
 		if(counter++ > COUNTER_LIMIT) {
 			printf_e("Error: Cannot file unused filename for list-file. The last try was \"%s\".\n", fpath);
-			return ELOOP;
+			return ENOENT;
 		}
 	} while(errno != ENOENT);	// TODO: find another way to check if the object exists
 	errno=0;
@@ -2850,6 +2851,8 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 	}
 
 	SYNC_INOTIFY_LOOP_IDLE;
+
+	printf_d("Debug: sync_inotify_loop(): end\n");
 	return exitcode;
 
 #ifdef DOXYGEN
@@ -3044,7 +3047,6 @@ int sync_run(options_t *options_p) {
 	int ret, i;
 	sighandler_arg_t sighandler_arg = {0};
 
-
 	// Creating signal handler thread
 	sigset_t sigset_sighandler;
 	sigemptyset(&sigset_sighandler);
@@ -3185,6 +3187,12 @@ int sync_run(options_t *options_p) {
 
 	int notify_d=0;
 
+#ifdef ENABLE_SOCKET
+	// Creating control socket
+	if(options_p->socketpath != NULL)
+		ret = socket_run(options_p);
+#endif
+
 	if(!options_p->flags[ONLYINITSYNC]) {
 
 		// Initializing FS monitor kernel subsystem in this userspace application
@@ -3201,7 +3209,15 @@ int sync_run(options_t *options_p) {
 	// "Infinite" loop of processling the events
 	ret = sync_notify_loop(notify_d, options_p, &indexes);
 	if(ret) return ret;
+	printf_d("Debug2: sync_run(): sync_notify_loop() ended\n");
 
+#ifdef ENABLE_SOCKET
+	// Removing control socket
+	if(options_p->socketpath != NULL)
+		socket_cleanup(options_p);
+#endif
+
+	printf_d("Debug2: sync_run(): killing sighandler\n");
 	// TODO: Do cleanup of watching points
 	pthread_kill(pthread_sighandler, SIGTERM);
 	pthread_join(pthread_sighandler, NULL);
@@ -3210,7 +3226,7 @@ int sync_run(options_t *options_p) {
 
 	thread_cleanup(options_p);
 
-	// Closing sockets and files
+	// Closing rest sockets and files
 
 	printf_ddd("sync_run(): Closing notify_d\n");
 	close(notify_d);

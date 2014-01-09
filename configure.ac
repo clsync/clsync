@@ -26,6 +26,14 @@ AS_IF([test "x$enable_cluster" = "xyes"], [CPPFLAGS+=" -DCLUSTER_SUPPORT"
 	])
 ])
 
+dnl --enable-socket
+AC_ARG_ENABLE(socket,
+AS_HELP_STRING(--enable-socket,
+[enable control socket support, default: no]))
+
+AS_IF([test "x$enable_socket" = "xyes"],
+[CPPFLAGS+=" -DENABLE_SOCKET"])
+
 dnl --enable-debug
 AC_ARG_ENABLE(debug,
 AS_HELP_STRING(--enable-debug,

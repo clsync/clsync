@@ -82,8 +82,19 @@ enum flags_enum {
 	EXITONNOEVENTS		=  8|OPTION_LONGOPTONLY,
 	STANDBYFILE		=  9|OPTION_LONGOPTONLY,
 	EXITHOOK		= 10|OPTION_LONGOPTONLY,
+
+	SOCKETAUTH		= 12|OPTION_LONGOPTONLY,
+	SOCKETMOD		= 13|OPTION_LONGOPTONLY,
+	SOCKETOWN		= 14|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
+
+enum sockauth_id {
+	SOCKAUTH_UNSET	= 0,
+	SOCKAUTH_NULL,
+	SOCKAUTH_PAM,
+};
+typedef enum sockauth_id sockauth_id_t;
 
 enum mode_id {
 	MODE_UNSET	= 0,
@@ -171,6 +182,9 @@ struct options {
 	char *statusfile;
 	char *socketpath;
 	int socket;
+	mode_t socketmod;
+	uid_t  socketuid;
+	gid_t  socketgid;
 #ifdef CLUSTER_SUPPORT
 	char *cluster_iface;
 	char *cluster_mcastipaddr;
