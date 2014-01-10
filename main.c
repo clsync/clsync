@@ -28,8 +28,9 @@
 #include "malloc.h"
 #include "cluster.h"
 #include "fileutils.h"
+#include "socket.h"
 
-#include "revision.h"
+//#include "revision.h"
 
 static const struct option long_options[] =
 {

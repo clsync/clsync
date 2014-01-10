@@ -26,7 +26,7 @@
 #include "cluster.h"
 #include "sync.h"
 #include "glibex.h"
-#include "socket.h"
+#include "control.h"
 
 #include <dlfcn.h>
 
@@ -3190,7 +3190,7 @@ int sync_run(options_t *options_p) {
 #ifdef ENABLE_SOCKET
 	// Creating control socket
 	if(options_p->socketpath != NULL)
-		ret = socket_run(options_p);
+		ret = control_run(options_p);
 #endif
 
 	if(!options_p->flags[ONLYINITSYNC]) {
@@ -3214,7 +3214,7 @@ int sync_run(options_t *options_p) {
 #ifdef ENABLE_SOCKET
 	// Removing control socket
 	if(options_p->socketpath != NULL)
-		socket_cleanup(options_p);
+		control_cleanup(options_p);
 #endif
 
 	printf_d("Debug2: sync_run(): killing sighandler\n");

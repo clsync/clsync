@@ -2,10 +2,13 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.59])
-AC_INIT([clsync],[0.2],[Dmitry Yu Okunev <dyokunev@ut.mephi.ru>],,[https://github.com/xaionaro/clsync])
+AC_INIT([clsync],[0.3],[Dmitry Yu Okunev <dyokunev@ut.mephi.ru>],,[https://github.com/xaionaro/clsync])
 AC_CONFIG_SRCDIR([sync.c])
-AM_INIT_AUTOMAKE([1.11 foreign -Wall])
+AM_INIT_AUTOMAKE([1.11 foreign -Wall -Wno-portability])
 AC_CONFIG_HEADERS([config.h])
+AM_PROG_CC_C_O
+
+LT_INIT
 
 dnl --enable-cluster
 AC_ARG_ENABLE(cluster,
@@ -33,6 +36,8 @@ AS_HELP_STRING(--enable-socket,
 
 AS_IF([test "x$enable_socket" = "xyes"],
 [CPPFLAGS+=" -DENABLE_SOCKET"])
+
+AM_CONDITIONAL([SOCKET], [test "x$enable_socket" = "xyes"])
 
 dnl --enable-debug
 AC_ARG_ENABLE(debug,

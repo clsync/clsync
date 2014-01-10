@@ -1,6 +1,13 @@
 bin_PROGRAMS = clsync
+clsync_SOURCES = sync.c cluster.c main.c output.c fileutils.c malloc.c glibex.c
+clsync_CFLAGS = $(AM_CFLAGS)
 
-clsync_SOURCES = sync.c cluster.c main.c socket.c output.c fileutils.c malloc.c glibex.c
+if SOCKET
+lib_LTLIBRARIES = libclsync.la
+libclsync_la_SOURCES = malloc.c libclsync.c socket.c
+libclsync_la_LDFLAGS = -version-info 3:0:0
+clsync_SOURCES += socket.c control.c
+endif
 
 main.o: revision.h
 
@@ -14,14 +21,27 @@ example_DATA = \
  $(wildcard $(srcdir)/examples/*.c) \
  $(wildcard $(srcdir)/examples/*.sh)
 
+REVISION=$(shell [ -d .git ] &&\
+	(echo -n \
+		'\".'$$(($$(git log 2>/dev/null \
+			| grep -c ^commit \
+			| tr -d "\n" \
+			)-523 \
+		))'\"' \
+	) || echo -n '"-release"' )
+
+AM_CFLAGS := -DREVISION=$(REVISION)
 
 clsync_includedir = $(includedir)/clsync
-clsync_include_HEADERS = configuration.h clsync.h malloc.h indexes.h options.h output.h socket.h
 
-revision.h:
-	(echo -n '#define REVISION "'; [ -d .git ] && \
-	(echo -n '.'$$(( $$(git log 2>/dev/null | grep -c ^commit | tr -d "\n") - 523 )) ) \
-	|| echo -n '-release'; echo '"') > $@
+clsync_include_HEADERS = \
+	configuration.h \
+	clsync.h \
+	malloc.h \
+	indexes.h \
+	options.h \
+	output.h \
+	socket.h
 
 doc:
 	doxygen .doxygen
@@ -37,3 +57,4 @@ CLEANFILES = revision.h
 CLEANFILES += examples/rules
 clean-local:
 	-rm -rf examples/testdir examples/*.o examples/*.so examples/*.xz doc
+

@@ -17,18 +17,19 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define SOCKET_DEFAULT_PROT 0
-#define SOCKET_DEFAULT_SUBPROT SUBPROT0_TEXT
+#define SOCKET_DEFAULT_PROT	0
+#define SOCKET_DEFAULT_SUBPROT	SUBPROT0_TEXT
 
 // buffer size
 #define SOCKET_BUFSIZ			(1<<12)
 
-struct client {
+struct clsyncconn {
 	int sock;
+	int num;
 	uint16_t prot;
 	uint16_t subprot;
 };
-typedef struct client client_t;
+typedef struct clsyncconn clsyncconn_t;
 
 enum subprot0 {
 	SUBPROT0_TEXT,
@@ -41,14 +42,14 @@ struct sockcmd_negotiation {
 	uint16_t subprot;
 };
 
-enum client_state {
+enum clsyncconn_state {
 	CLSTATE_NONE	= 0,
 	CLSTATE_AUTH,
 	CLSTATE_MAIN,
 	CLSTATE_DYING,
 	CLSTATE_DIED,
 };
-typedef enum client_state client_state_t;
+typedef enum clsyncconn_state clsyncconn_state_t;
 
 enum sockcmd_id {
 	SOCKCMD_NEGOTIATION	=  00,
@@ -66,30 +67,6 @@ enum sockcmd_id {
 };
 typedef enum sockcmd_id sockcmd_id_t;
 
-static char *const textmessage_args[] = {
-	[SOCKCMD_NEGOTIATION] 	= "%u",
-	[SOCKCMD_ACK]		= "%03u %lu",
-	[SOCKCMD_EINVAL]	= "%03u %lu",
-	[SOCKCMD_VERSION]	= "%u %u",
-	[SOCKCMD_INFO]		= "%s\003/ %s\003/ %x %x",
-	[SOCKCMD_UNKNOWNCMD]	= "%03u %lu",
-	[SOCKCMD_INVALIDCMDID]	= "%lu",
-};
-
-static char *const textmessage_descr[] = {
-	[SOCKCMD_NEGOTIATION] 	= "Protocol version is %u.",
-	[SOCKCMD_ACK]		= "Acknowledged command: id == %03u; num == %lu.",
-	[SOCKCMD_EINVAL]	= "Rejected command: id == %03u; num == %lu. Invalid arguments: %s.",
-	[SOCKCMD_LOGIN]		= "Enter your login and password, please.",
-	[SOCKCMD_UNEXPECTEDEND]	= "Need to go, sorry. :)",
-	[SOCKCMD_DIE]		= "Okay :(",
-	[SOCKCMD_BYE]		= "Bye.",
-	[SOCKCMD_VERSION]	= "clsync v%u.%u.",
-	[SOCKCMD_INFO]		= "config_block == \"%s\"; label == \"%s\"; flags == %x; flags_set == %x.",
-	[SOCKCMD_UNKNOWNCMD]	= "Unknown command.",
-	[SOCKCMD_INVALIDCMDID]	= "Invalid command id. Required: 0 <= cmd_id < 1000.",
-};
-
 struct sockcmd {
 	uint64_t	cmd_num;
 	uint16_t	cmd_id;
@@ -98,7 +75,45 @@ struct sockcmd {
 };
 typedef struct sockcmd sockcmd_t;
 
-extern int socket_run(options_t *options_p);
-extern int socket_cleanup(options_t *options_p);
+enum sockprocflags {
+	SOCKPROCFLAG_NONE	= 0,
+	SOCKPROCFLAG_OVERRIDECOMMON,
+};
+typedef enum sockprocflags sockprocflags_t;
 
+enum sockauth_id {
+	SOCKAUTH_UNSET	= 0,
+	SOCKAUTH_NULL,
+	SOCKAUTH_PAM,
+};
+typedef enum sockauth_id sockauth_id_t;
+
+struct socket_procconnproc_arg;
+typedef int (*clsyncconn_procfunct_t)(struct socket_procconnproc_arg *, sockcmd_t *);
+struct socket_procconnproc_arg {
+	clsyncconn_procfunct_t	 procfunct;
+	clsyncconn_t		*clsyncconn_p;
+	void			*arg;
+	clsyncconn_state_t	 state;
+	sockauth_id_t		 authtype;
+	int			*running;		// Pointer to interger with non-zero value to continue running
+	sockprocflags_t		 flags;
+};
+typedef struct socket_procconnproc_arg socket_procconnproc_arg_t;
+
+extern int socket_send(clsyncconn_t *clsyncconn, sockcmd_id_t cmd_id, ...);
+extern int socket_recv(clsyncconn_t *clsyncconn, sockcmd_t *sockcmd);
+extern int socket_check_bysock(int sock);
+extern int socket_close(clsyncconn_t *clsyncconn);
+extern clsyncconn_t *socket_accept(int sock);
+extern int socket_init();
+extern int socket_deinit();
+extern int socket_procclsyncconn(socket_procconnproc_arg_t *arg);
+
+extern int clsyncconns_num;
+extern int clsyncconns_count;
+extern int clsyncconns_last;
+
+extern const char *const textmessage_args[];
+extern const char *const textmessage_descr[];
 

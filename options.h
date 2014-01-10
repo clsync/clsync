@@ -89,13 +89,6 @@ enum flags_enum {
 };
 typedef enum flags_enum flags_t;
 
-enum sockauth_id {
-	SOCKAUTH_UNSET	= 0,
-	SOCKAUTH_NULL,
-	SOCKAUTH_PAM,
-};
-typedef enum sockauth_id sockauth_id_t;
-
 enum mode_id {
 	MODE_UNSET	= 0,
 	MODE_SIMPLE,

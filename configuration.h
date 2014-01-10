@@ -20,8 +20,11 @@
 // control socket listen backlog (man 2 listen)
 #define SOCKET_BACKLOG			2
 
-// control socket clients limit
-#define SOCKET_CLIENTS_MAX		8
+// control socket connections limit in clsync
+#define SOCKET_MAX_CLSYNC		8
+
+// control socket connections limit in libclsync
+#define SOCKET_MAX_LIBCLSYNC		(1<<16)
 
 // children count limit
 #define MAXCHILDREN			(1<<8)
