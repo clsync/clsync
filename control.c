@@ -33,17 +33,19 @@ int control_procclsyncconn(socket_procconnproc_arg_t *arg, sockcmd_t *sockcmd_p)
 	options_t 	*options_p    = (options_t *)arg->arg;
 
 	switch(sockcmd_p->cmd_id) {
-		case SOCKCMD_INFO: {
-			socket_send(clsyncconn_p, SOCKCMD_INFO, options_p->config_block, options_p->label, options_p->flags, options_p->flags_set);
+		case SOCKCMD_REQUEST_INFO: {
+			socket_send(clsyncconn_p, SOCKCMD_REPLY_INFO, options_p->config_block, options_p->label, options_p->flags, options_p->flags_set);
 			break;
 		}
-		case SOCKCMD_DIE: {
+		case SOCKCMD_REQUEST_DIE: {
 			sync_term(SIGTERM);
 			break;
 		}
+		default:
+			return EINVAL;
 	}
 
-	return EINVAL;
+	return 0;
 }
 
 static inline void closecontrol(options_t *options_p) {

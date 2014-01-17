@@ -37,11 +37,6 @@ enum subprot0 {
 };
 typedef enum subprot0 subprot0_t;
 
-struct sockcmd_negotiation {
-	uint16_t prot;
-	uint16_t subprot;
-};
-
 enum clsyncconn_state {
 	CLSTATE_NONE	= 0,
 	CLSTATE_AUTH,
@@ -52,26 +47,69 @@ enum clsyncconn_state {
 typedef enum clsyncconn_state clsyncconn_state_t;
 
 enum sockcmd_id {
-	SOCKCMD_NEGOTIATION	=  00,
-	SOCKCMD_ACK		=  50,
-	SOCKCMD_UNKNOWNCMD	=  60,
-	SOCKCMD_INVALIDCMDID	=  61,
-	SOCKCMD_EINVAL		=  62,
-	SOCKCMD_LOGIN		= 100,
-	SOCKCMD_VERSION		= 201,
-	SOCKCMD_INFO		= 202,
-	SOCKCMD_DIE		= 210,
-	SOCKCMD_UNEXPECTEDEND	= 300,
-	SOCKCMD_QUIT		= 301,
-	SOCKCMD_BYE		= 350,
+	SOCKCMD_REQUEST_NEGOTIATION	= 000,
+	SOCKCMD_REPLY_NEGOTIATION	= 001,
+	SOCKCMD_REPLY_ACK		= 150,
+	SOCKCMD_REPLY_UNKNOWNCMD	= 160,
+	SOCKCMD_REPLY_INVALIDCMDID	= 161,
+	SOCKCMD_REPLY_EINVAL		= 162,
+	SOCKCMD_REQUEST_LOGIN		= 200,
+	SOCKCMD_REQUEST_VERSION		= 201,
+	SOCKCMD_REQUEST_INFO		= 202,
+	SOCKCMD_REQUEST_DIE		= 210,
+	SOCKCMD_REQUEST_QUIT		= 250,
+	SOCKCMD_REPLY_LOGIN		= 300,
+	SOCKCMD_REPLY_VERSION		= 301,
+	SOCKCMD_REPLY_INFO		= 302,
+	SOCKCMD_REPLY_DIE		= 310,
+	SOCKCMD_REPLY_UNEXPECTEDEND	= 300,
+	SOCKCMD_REPLY_QUIT		= 301,
+	SOCKCMD_REPLY_BYE		= 350,
+	SOCKCMD_MAXID
 };
 typedef enum sockcmd_id sockcmd_id_t;
 
+struct sockcmd_dat_negotiation {
+	uint16_t prot;
+	uint16_t subprot;
+};
+typedef struct sockcmd_dat_negotiation sockcmd_dat_negotiation_t;
+
+struct sockcmd_dat_ack {
+	uint64_t	 cmd_num;
+	uint16_t	 cmd_id;
+};
+typedef struct sockcmd_dat_ack sockcmd_dat_ack_t;
+#define sockcmd_dat_einval       sockcmd_dat_ack
+#define sockcmd_dat_einval_t     sockcmd_dat_ack_t
+#define sockcmd_dat_unknowncmd   sockcmd_dat_ack
+#define sockcmd_dat_unknowncmd_t sockcmd_dat_ack_t
+
+struct sockcmd_dat_invalidcmd {
+	uint64_t	 cmd_num;
+};
+typedef struct sockcmd_dat_invalidcmd sockcmd_dat_invalidcmd_t;
+
+struct sockcmd_dat_version {
+	int		major;
+	int		minor;
+	char		revision[1<<8];
+};
+typedef struct sockcmd_dat_version sockcmd_dat_version_t;
+
+struct sockcmd_dat_info {
+	char		config_block[1<<8];
+	char		label[1<<8];
+	char		flags[OPTION_FLAGS];
+	char		flags_set[OPTION_FLAGS];
+};
+typedef struct sockcmd_dat_info sockcmd_dat_info_t;
+
 struct sockcmd {
-	uint64_t	cmd_num;
-	uint16_t	cmd_id;
-	size_t		data_len;
-	char		data[1];
+	uint64_t	 cmd_num;
+	uint16_t	 cmd_id;
+	size_t		 data_len;
+	char		*data;
 };
 typedef struct sockcmd sockcmd_t;
 

@@ -19,8 +19,9 @@
 
 #include <regex.h>
 
-#define OPTION_LONGOPTONLY (1<<9)
-#define OPTION_CONFIGONLY  (1<<8)
+#define OPTION_FLAGS		(1<<10)
+#define OPTION_LONGOPTONLY	(1<<9)
+#define OPTION_CONFIGONLY	(1<<8)
 enum flags_enum {
 	WATCHDIR	= 'W',
 	SYNCHANDLER	= 'S',
@@ -160,8 +161,8 @@ struct options {
 	int   children;			// Used only for non-pthread mode
 	rule_t rules[MAXRULES];
 	dev_t st_dev;
-	int flags[1<<10];
-	int flags_set[1<<10];
+	int flags[OPTION_FLAGS];
+	int flags_set[OPTION_FLAGS];
 	char *config_path;
 	char *config_block;
 	char *label;

@@ -1,12 +1,20 @@
 # dynamical headers:
 /revision.h
 
-# objects:
+# complied:
 *.o
-
-# linked:
+*.lo
+*.la
 /clsync
 /clsync-debug
+/.libs
+
+#debian:
+/debian/clsync/
+/debian/*clsync*.log
+/debian/files
+/debian/*.ex
+/debian/*.debhelper
 
 # other:
 test.c
@@ -20,25 +28,25 @@ log*
 from/
 to/
 .clsync-list.*
-/debian/clsync/
-/debian/clsync.debhelper.log
-/debian/clsync.substvars
-/debian/files
-/debian/*.ex
-/debian/*.debhelper
 /examples/rules
 /examples/testdir/
 /examples/*.so
 /doc/
 *.swp
+tmp
 
 # autotools build debris
+/compile
+/libtool
+/ltmain.sh
 /.deps/
 /aclocal.m4
 /autom4te.cache/
 /config.h*
 /config.log
 /config.status
+/config.guess
+/config.sub
 /configure
 /depcomp
 /install-sh

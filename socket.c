@@ -42,28 +42,30 @@ char clsyncconn_busy[SOCKET_MAX+1] = {0};
 static char *recv_stps[SOCKET_MAX];
 static char *recv_ptrs[SOCKET_MAX];
 
-const char *const textmessage_args[1000] = {
-	[SOCKCMD_NEGOTIATION] 	= "%u",
-	[SOCKCMD_ACK]		= "%03u %lu",
-	[SOCKCMD_EINVAL]	= "%03u %lu",
-	[SOCKCMD_VERSION]	= "%u %u %s",
-	[SOCKCMD_INFO]		= "%s\003/ %s\003/ %x %x",
-	[SOCKCMD_UNKNOWNCMD]	= "%03u %lu",
-	[SOCKCMD_INVALIDCMDID]	= "%lu",
+const char *const textmessage_args[SOCKCMD_MAXID] = {
+	[SOCKCMD_REQUEST_NEGOTIATION] 	= "%u",
+	[SOCKCMD_REPLY_NEGOTIATION] 	= "%u",
+	[SOCKCMD_REPLY_ACK]		= "%03u %lu",
+	[SOCKCMD_REPLY_EINVAL]		= "%03u %lu",
+	[SOCKCMD_REPLY_VERSION]		= "%u %u %s",
+	[SOCKCMD_REPLY_INFO]		= "%s\003/ %s\003/ %x %x",
+	[SOCKCMD_REPLY_UNKNOWNCMD]	= "%03u %lu",
+	[SOCKCMD_REPLY_INVALIDCMDID]	= "%lu",
 };
 
-const char *const textmessage_descr[1000] = {
-	[SOCKCMD_NEGOTIATION] 	= "Protocol version is %u.",
-	[SOCKCMD_ACK]		= "Acknowledged command: id == %03u; num == %lu.",
-	[SOCKCMD_EINVAL]	= "Rejected command: id == %03u; num == %lu. Invalid arguments: %s.",
-	[SOCKCMD_LOGIN]		= "Enter your login and password, please.",
-	[SOCKCMD_UNEXPECTEDEND]	= "Need to go, sorry. :)",
-	[SOCKCMD_DIE]		= "Okay :(",
-	[SOCKCMD_BYE]		= "Bye.",
-	[SOCKCMD_VERSION]	= "clsync v%u.%u%s",
-	[SOCKCMD_INFO]		= "config_block == \"%s\"; label == \"%s\"; flags == %x; flags_set == %x.",
-	[SOCKCMD_UNKNOWNCMD]	= "Unknown command.",
-	[SOCKCMD_INVALIDCMDID]	= "Invalid command id. Required: 0 <= cmd_id < 1000.",
+const char *const textmessage_descr[SOCKCMD_MAXID] = {
+	[SOCKCMD_REQUEST_NEGOTIATION]	= "Protocol version is %u.",
+	[SOCKCMD_REPLY_NEGOTIATION]	= "Protocol version is %u.",
+	[SOCKCMD_REPLY_ACK]		= "Acknowledged command: id == %03u; num == %lu.",
+	[SOCKCMD_REPLY_EINVAL]		= "Rejected command: id == %03u; num == %lu. Invalid arguments: %s.",
+	[SOCKCMD_REPLY_LOGIN]		= "Enter your login and password, please.",
+	[SOCKCMD_REPLY_UNEXPECTEDEND]	= "Need to go, sorry. :)",
+	[SOCKCMD_REPLY_DIE]		= "Okay :(",
+	[SOCKCMD_REPLY_BYE]		= "Bye.",
+	[SOCKCMD_REPLY_VERSION]		= "clsync v%u.%u%s",
+	[SOCKCMD_REPLY_INFO]		= "config_block == \"%s\"; label == \"%s\"; flags == %x; flags_set == %x.",
+	[SOCKCMD_REPLY_UNKNOWNCMD]	= "Unknown command.",
+	[SOCKCMD_REPLY_INVALIDCMDID]	= "Invalid command id. Required: 0 <= cmd_id < 1000.",
 };
 
 int socket_check_bysock(int sock) {
@@ -225,6 +227,69 @@ static inline int socket_overflow_fix(char *buf, char **data_start_p, char **dat
 	return ptr_diff;
 }
 
+#define PARSE_TEXT_DATA_SSCANF(dat_t, ...) {\
+	sockcmd_p->data = xmalloc(sizeof(dat_t));\
+	dat_t *d = (dat_t *)sockcmd_p->data;\
+	if(sscanf(args, textmessage_args[sockcmd_p->cmd_id], __VA_ARGS__) < min_args)\
+		return EINVAL;\
+}
+
+static inline int parse_text_data(sockcmd_t *sockcmd_p, char *args, size_t args_len) {
+	if(!args_len)
+		return 0;
+
+	int min_args = 0;
+	const char *ptr = (const char *)textmessage_args[sockcmd_p->cmd_id];
+
+	if(ptr != NULL) {
+		while(*ptr) {
+			if(*ptr == '%') {
+				if(ptr[1] == '%')
+					ptr++;
+				else
+					min_args++;
+			}
+			ptr++;
+		}
+	}
+
+	switch(sockcmd_p->cmd_id) {
+		case SOCKCMD_REQUEST_NEGOTIATION:
+		case SOCKCMD_REPLY_NEGOTIATION:
+			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_negotiation_t, &d->prot, &d->subprot);
+			break;
+		case SOCKCMD_REPLY_ACK:
+			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_ack_t, &d->cmd_id, &d->cmd_num);
+			break;
+		case SOCKCMD_REPLY_EINVAL:
+			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_einval_t, &d->cmd_id, &d->cmd_num);
+			break;
+		case SOCKCMD_REPLY_VERSION:
+			if(args_len > sizeof(1<<8))
+				args[args_len=1<<8] = 0;
+			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_version_t, &d->major, &d->minor, &d->revision);
+			break;
+		case SOCKCMD_REPLY_INFO:
+			if(args_len > sizeof(1<<8))
+				args[args_len=1<<8] = 0;
+			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_info_t, &d->config_block, &d->label, &d->flags, &d->flags_set);
+			break;
+		case SOCKCMD_REPLY_UNKNOWNCMD:
+			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_unknowncmd_t, &d->cmd_id, &d->cmd_num);
+			break;
+		case SOCKCMD_REPLY_INVALIDCMDID:
+			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_invalidcmd_t, &d->cmd_num);
+			break;
+		default:
+			sockcmd_p->data = xmalloc(args_len+1);
+			memcpy(sockcmd_p->data, args, args_len);
+			sockcmd_p->data[args_len] = 0;
+			break;
+	}
+
+	return 0;
+}
+
 int socket_recv(clsyncconn_t *clsyncconn, sockcmd_t *sockcmd_p) {
 	static char bufs[SOCKET_MAX][SOCKET_BUFSIZ];
 	char *buf, *ptr, *start, *end;
@@ -265,7 +330,11 @@ int socket_recv(clsyncconn_t *clsyncconn, sockcmd_t *sockcmd_p) {
 			case 0: {
 				// Checking if binary
 				uint16_t cmd_id_binary = *(uint16_t *)buf;
-				clsyncconn->subprot = (cmd_id_binary == SOCKCMD_NEGOTIATION) ? SUBPROT0_BINARY : SUBPROT0_TEXT;
+				clsyncconn->subprot = (
+								cmd_id_binary == SOCKCMD_REQUEST_NEGOTIATION ||
+								cmd_id_binary == SOCKCMD_REPLY_NEGOTIATION
+							) 
+							? SUBPROT0_BINARY : SUBPROT0_TEXT;
 
 				// Processing
 				switch(clsyncconn->subprot) {
@@ -273,6 +342,10 @@ int socket_recv(clsyncconn_t *clsyncconn, sockcmd_t *sockcmd_p) {
 						if((end=strchr(ptr, '\n'))!=NULL) {
 							if(sscanf(start, "%03u", (unsigned int *)&sockcmd_p->cmd_id) != 1)
 								return EBADRQC;
+
+							char *str_args = &start[3+1];
+							parse_text_data(sockcmd_p, str_args, end-str_args);
+
 
 							// TODO Process message here
 
@@ -323,13 +396,12 @@ l_socket_recv_end:
 
 static inline int socket_sendinvalid(clsyncconn_t *clsyncconn_p, sockcmd_t *sockcmd_p) {
 	if(sockcmd_p->cmd_id >= 1000)
-		return socket_send(clsyncconn_p, SOCKCMD_INVALIDCMDID, sockcmd_p->cmd_num);
+		return socket_send(clsyncconn_p, SOCKCMD_REPLY_INVALIDCMDID, sockcmd_p->cmd_num);
 	else
-		return socket_send(clsyncconn_p, SOCKCMD_UNKNOWNCMD,   sockcmd_p->cmd_id, sockcmd_p->cmd_num);
+		return socket_send(clsyncconn_p, SOCKCMD_REPLY_UNKNOWNCMD,   sockcmd_p->cmd_id, sockcmd_p->cmd_num);
 }
 
 int socket_procclsyncconn(socket_procconnproc_arg_t *arg) {
-#define SL(a) a,sizeof(a)-1
 //	clsyncconn_t clsyncconn = {0};
 	char		_sockcmd_buf[SOCKET_BUFSIZ]={0};
 
@@ -350,7 +422,7 @@ int socket_procclsyncconn(socket_procconnproc_arg_t *arg) {
 	printf_ddd("Debug3: socket_procclsyncconn(): Started new thread for new connection.\n");
 
 	arg->state = (arg->authtype == SOCKAUTH_NULL) ? CLSTATE_MAIN : CLSTATE_AUTH;
-	socket_send(clsyncconn_p, SOCKCMD_NEGOTIATION);
+	socket_send(clsyncconn_p, SOCKCMD_REQUEST_NEGOTIATION, clsyncconn_p->prot, clsyncconn_p->subprot);
 
 	while(*arg->running && (arg->state==CLSTATE_AUTH || arg->state==CLSTATE_MAIN)) {
 		printf_ddd("Debug3: socket_procclsyncconn(): Iteration.\n");
@@ -368,40 +440,49 @@ int socket_procclsyncconn(socket_procconnproc_arg_t *arg) {
 
 		// Processing the message
 		switch(sockcmd_p->cmd_id) {
-			case SOCKCMD_NEGOTIATION: {
-				struct sockcmd_negotiation *data = (struct sockcmd_negotiation *)sockcmd_p->data;
+			case SOCKCMD_REPLY_NEGOTIATION:
+			case SOCKCMD_REQUEST_NEGOTIATION: {
+				sockcmd_dat_negotiation_t *data = (sockcmd_dat_negotiation_t *)sockcmd_p->data;
 				switch(data->prot) {
 					case 0:
 						switch(data->subprot) {
 							case SUBPROT0_TEXT:
 							case SUBPROT0_BINARY:
 								clsyncconn_p->subprot = data->subprot;
-								socket_send(clsyncconn_p, SOCKCMD_ACK,    sockcmd_p->cmd_id, sockcmd_p->cmd_num);
+								if(sockcmd_p->cmd_id == SOCKCMD_REQUEST_NEGOTIATION)
+									socket_send(clsyncconn_p, SOCKCMD_REPLY_NEGOTIATION, data->prot, data->subprot);
+								else {
+									socket_send(clsyncconn_p, SOCKCMD_REPLY_ACK,    sockcmd_p->cmd_id, sockcmd_p->cmd_num);
+									printf_d("Debug2: socket_procclsyncconn(): Negotiated proto: %u %u\n", data->prot, data->subprot);
+								}
 								break;
 							default:
-								socket_send(clsyncconn_p, SOCKCMD_EINVAL, sockcmd_p->cmd_id, sockcmd_p->cmd_num, "Incorrect subprotocol id");
+								socket_send(clsyncconn_p, SOCKCMD_REPLY_EINVAL, sockcmd_p->cmd_id, sockcmd_p->cmd_num, "Incorrect subprotocol id");
 						}
 						break;
 					default:
-						socket_send(clsyncconn_p, SOCKCMD_EINVAL, sockcmd_p->cmd_id, sockcmd_p->cmd_num, "Incorrect protocol id");
+						socket_send(clsyncconn_p, SOCKCMD_REPLY_EINVAL, sockcmd_p->cmd_id, sockcmd_p->cmd_num, "Incorrect protocol id");
 				}
 				break;
 			}
-			case SOCKCMD_VERSION: {
-				socket_send(clsyncconn_p, SOCKCMD_VERSION, VERSION_MAJ, VERSION_MIN, REVISION);
+			case SOCKCMD_REQUEST_VERSION: {
+				socket_send(clsyncconn_p, SOCKCMD_REPLY_VERSION, VERSION_MAJ, VERSION_MIN, REVISION);
 				break;
 			}
-			case SOCKCMD_QUIT: {
-				socket_send(clsyncconn_p, SOCKCMD_BYE);
+			case SOCKCMD_REQUEST_QUIT: {
+				socket_send(clsyncconn_p, SOCKCMD_REPLY_BYE);
 				arg->state = CLSTATE_DYING;
 				break;
 			}
 			default:
 l_socket_procclsyncconn_sw_default:
-				if(!procfunct(arg, sockcmd_p))
+				if(procfunct(arg, sockcmd_p))
 					socket_sendinvalid(clsyncconn_p, sockcmd_p);
 				break;
 		}
+
+		if(sockcmd_p->data != NULL)
+			free(sockcmd_p->data);
 
 		// Check if the socket is still alive
 		if(socket_check(clsyncconn_p)) {
@@ -413,7 +494,7 @@ l_socket_procclsyncconn_sw_default:
 		switch(arg->state) {
 			case CLSTATE_AUTH:
 				if(!(auth_flags&AUTHFLAG_ENTERED_LOGIN))
-					socket_send(clsyncconn_p, SOCKCMD_LOGIN);
+					socket_send(clsyncconn_p, SOCKCMD_REQUEST_LOGIN);
 				break;
 			default:
 				break;
@@ -427,7 +508,6 @@ l_socket_procclsyncconn_sw_default:
 	arg->state = CLSTATE_DIED;
 
 	return 0;
-#undef SL
 }
 
 int socket_init() {
