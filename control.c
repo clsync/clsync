@@ -28,7 +28,7 @@
 
 static pthread_t pthread_control;
 
-int control_procclsyncconn(socket_procconnproc_arg_t *arg, sockcmd_t *sockcmd_p) {
+int control_procclsyncconn(socket_connthreaddata_t *arg, sockcmd_t *sockcmd_p) {
 	clsyncconn_t	*clsyncconn_p =              arg->clsyncconn_p;
 	options_t 	*options_p    = (options_t *)arg->arg;
 
@@ -56,8 +56,6 @@ static inline void closecontrol(options_t *options_p) {
 }
 
 int control_loop(options_t *options_p) {
-	pthread_t	clsyncconns_threads[SOCKET_MAX_CLSYNC+1];
-	struct socket_procconnproc_arg clsyncconns_args[SOCKET_MAX_CLSYNC+1] = {{0}};
 
 	// Starting
 
@@ -103,22 +101,6 @@ int control_loop(options_t *options_p) {
 			continue;
 		}
 
-		// Cleaning up after died connections
-
-		int i=clsyncconns_last+1;
-		while(i) {
-			i--;
-			switch(clsyncconns_args[i].state) {
-				case CLSTATE_DIED:
-					printf_ddd("Debug3: control_loop(): Forgeting clsyncconn #%u\n", i);
-					pthread_join(clsyncconns_threads[i], NULL);
-					clsyncconns_args[i].state = CLSTATE_NONE;
-					break;
-				default:
-					break;
-			}
-		}
-
 		// Processing the events: accepting new clsyncconn
 
 		clsyncconn_t *clsyncconn_p = socket_accept(s);
@@ -133,38 +115,24 @@ int control_loop(options_t *options_p) {
 			continue;
 		}
 
-		struct socket_procconnproc_arg *connproc_arg = &clsyncconns_args[clsyncconns_num];
+		printf_dd("Debug2: control_loop(): Starting new thread for new connection.\n");
+		socket_connthreaddata_t *threaddata_p = socket_thread_attach(clsyncconn_p);
 
-#ifdef PARANOID
-		// Processing the events: checking if previous check were been made right
-
-		if(connproc_arg->state != CLSTATE_NONE) {
-			// This's not supposed to be
-			printf_e("Internal-Error: control_loop(): connproc_arg->state != CLSTATE_NONE\n");
+		if (threaddata_p == NULL) {
+			printf_e("Error: control_loop(): Cannot create a thread for connection: %s (errno: %i)\n", strerror(errno), errno);
 			closecontrol(options_p);
 			continue;
 		}
-#endif
 
-		// Processing the events: creating a thread for new connection
+		threaddata_p->procfunct		=  control_procclsyncconn;
+		threaddata_p->clsyncconn_p	=  clsyncconn_p;
+		threaddata_p->arg		=  options_p;
+		threaddata_p->running		= &options_p->socket;
+		threaddata_p->authtype		=  options_p->flags[SOCKETAUTH];
+		threaddata_p->flags		=  0;
 
-		printf_ddd("Debug3: control_loop(): clsyncconns_count == %u;\tclsyncconns_last == %u;\tclsyncconn_num == %u\n", 
-			clsyncconns_count, clsyncconns_last, clsyncconns_num);
-
-		clsyncconns_last = MAX(clsyncconns_last, clsyncconns_num);
-
-		clsyncconns_count++;
-
-		connproc_arg->procfunct		=  control_procclsyncconn;
-		connproc_arg->clsyncconn_p	=  clsyncconn_p;
-		connproc_arg->arg		=  options_p;
-		connproc_arg->running		= &options_p->socket;
-		connproc_arg->authtype		=  options_p->flags[SOCKETAUTH];
-		connproc_arg->flags		=  0;
-
-		printf_dd("Debug2: control_loop(): Starting new thread for new connection.\n");
-		if(pthread_create(&clsyncconns_threads[clsyncconns_num], NULL, (void *(*)(void *))socket_procclsyncconn, connproc_arg)) {
-			printf_e("Error: control_loop(): Cannot create a thread for connection: %s (errno: %i)\n", strerror(errno), errno);
+		if (socket_thread_start(threaddata_p)) {
+			printf_e("Error: control_loop(): Cannot start a thread for connection: %s (errno: %i)\n", strerror(errno), errno);
 			closecontrol(options_p);
 			continue;
 		}

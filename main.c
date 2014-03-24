@@ -1471,7 +1471,6 @@ preserve_fileaccess_end:
 
 	printf_ddd("Debug3: main(): Current errno is %i.\n", ret);
 
-
 	// == RUNNING ==
 	if(ret == 0)
 		ret = sync_run(&options);

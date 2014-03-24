@@ -26,18 +26,45 @@
 #include "socket.h"
 
 #if PIC
-#	define SOCKET_MAX SOCKET_MAX_LIBCLSYNC
+#	define SOCKET_PROVIDER_LIBCLSYNC
 #else
+#	define SOCKET_PROVIDER_CLSYNC
+#endif
+
+#ifdef SOCKET_PROVIDER_LIBCLSYNC
+#	define SOCKET_MAX SOCKET_MAX_LIBCLSYNC
+#endif
+#ifdef SOCKET_PROVIDER_CLSYNC
 #	define SOCKET_MAX SOCKET_MAX_CLSYNC
 #endif
 
-pthread_mutex_t socket_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t socket_thread_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-int clsyncconns_last	= -1;
-int clsyncconns_count	=  0;
-int clsyncconns_num	=  0;
+int clsyncconnthreads_last	= -1;
+int clsyncconnthreads_count	=  0;
+int clsyncconnthreads_num	=  0;
 
-char clsyncconn_busy[SOCKET_MAX+1] = {0};
+char clsyncconnthread_busy[SOCKET_MAX+1] = {0};
+
+socket_connthreaddata_t connthreaddata[SOCKET_MAX+1] = {{0}};
+
+int socket_gc() {
+	int i=clsyncconnthreads_last+1;
+	while(i) {
+		i--;
+		switch(connthreaddata[i].state) {
+			case CLSTATE_DIED:
+				printf_ddd("Debug3: socket_gc(): Forgeting clsyncconn #%u\n", i);
+				pthread_join(connthreaddata[i].thread, NULL);
+				connthreaddata[i].state = CLSTATE_NONE;
+				break;
+			default:
+				break;
+		}
+	}
+
+	return 0;
+}
 
 static char *recv_stps[SOCKET_MAX];
 static char *recv_ptrs[SOCKET_MAX];
@@ -89,60 +116,62 @@ static inline int socket_check(clsyncconn_t *clsyncconn_p) {
 }
 
 clsyncconn_t *socket_new(int clsyncconn_sock) {
-	pthread_mutex_lock(&socket_mutex);
-
-	if(clsyncconns_num >= SOCKET_MAX) {
-		printf_e("Warning: socket_new(): Too many connection to control socket. Closing the new one.\n");
-		close(clsyncconn_sock);
-		errno = EUSERS;
-		pthread_mutex_unlock(&socket_mutex);
-		return NULL;
-	}
-
 	clsyncconn_t *clsyncconn_p = xmalloc(sizeof(*clsyncconn_p));
 	
-	printf_dd("Debug2: socket_new(): sock == %i; num == %i.\n", clsyncconn_sock, clsyncconns_num);
+	printf_dd("Debug2: socket_new(): sock == %i; num == %i.\n", clsyncconn_sock, clsyncconnthreads_num);
 
 	clsyncconn_p->sock    = clsyncconn_sock;
 	
 	clsyncconn_p->prot    = SOCKET_DEFAULT_PROT;
 	clsyncconn_p->subprot = SOCKET_DEFAULT_SUBPROT;
 
-	clsyncconn_busy[clsyncconns_num]=1;
-	// TODO: SECURITY: Possible DoS-attack on huge "SOCKET_MAX" value. Fix it.
-	while(clsyncconn_busy[++clsyncconns_num]);
-
-	pthread_mutex_unlock(&socket_mutex);
 	return clsyncconn_p;
 }
 
-int socket_delete(clsyncconn_t *clsyncconn_p) {
-	pthread_mutex_lock(&socket_mutex);
-
+int socket_cleanup(clsyncconn_t *clsyncconn_p) {
 	int clsyncconn_sock = clsyncconn_p->sock;
 
-	printf_dd("Debug2: socket_delete(): sock == %i; num == %i.\n", clsyncconn_sock, clsyncconn_p->num);
+	printf_dd("Debug2: socket_cleanup(): sock == %i; num == %i.\n", clsyncconn_sock, clsyncconn_p->num);
 
 	recv_ptrs[clsyncconn_sock] = NULL;
 	recv_stps[clsyncconn_sock] = NULL;
 
 	close(clsyncconn_sock);
 
-	clsyncconns_count--;
-
-	if(clsyncconns_last == clsyncconn_p->num)
-		clsyncconns_last = clsyncconn_p->num-1;
-
-	clsyncconns_num = MIN(clsyncconn_p->num, clsyncconn_sock);
-
-	clsyncconn_busy[clsyncconn_p->num]=0;
-
 	free(clsyncconn_p);
-	pthread_mutex_unlock(&socket_mutex);
+	return 0;
+}
+
+int socket_thread_delete(socket_connthreaddata_t *threaddata_p) {
+	int thread_id;
+
+	pthread_mutex_lock(&socket_thread_mutex);
+
+	thread_id = threaddata_p->id;
+
+	socket_cleanup(threaddata_p->clsyncconn_p);
+
+	clsyncconnthreads_count--;
+
+	if(clsyncconnthreads_last == thread_id)
+		clsyncconnthreads_last = thread_id-1;
+
+	clsyncconnthread_busy[thread_id]=0;
+
+	threaddata_p->state = CLSTATE_DIED;
+
+	if (threaddata_p->freefunct_arg != NULL)
+		threaddata_p->freefunct_arg(threaddata_p->arg);
+
+	pthread_mutex_unlock(&socket_thread_mutex);
 	return 0;
 }
 
 clsyncconn_t *socket_accept(int sock) {
+	// Cleaning up after died connections (getting free space for new connection)
+	socket_gc();
+
+	// Getting new connection
 	int clsyncconn_sock = accept(sock, NULL, NULL);
 	if(clsyncconn_sock == -1) {
 		printf_e("Error: socket_accept(%i): Cannot accept(): %s (errno: %i)\n", sock, strerror(errno), errno);
@@ -152,14 +181,17 @@ clsyncconn_t *socket_accept(int sock) {
 	return socket_new(clsyncconn_sock);
 }
 
+#ifdef SOCKET_PROVIDER_LIBCLSYNC
+clsyncconn_t *socket_connect_unix(const char *const socket_path) {
+	return NULL;
+}
+#endif
+
 int socket_send(clsyncconn_t *clsyncconn, sockcmd_id_t cmd_id, ...) {
 	va_list ap;
 	int ret;
 
 	va_start(ap, cmd_id);
-/*	static char bufs[SOCKET_MAX][SOCKET_BUFSIZ], prebufs0[SOCKET_MAX][SOCKET_BUFSIZ], prebufs1[SOCKET_MAX][SOCKET_BUFSIZ];
-	char *prebuf0 = prebufs0[clsyncconn_sock], *prebuf1 = prebufs1[clsyncconn_sock], *sendbuf = bufs[clsyncconn_sock];
-*/
 	char prebuf0[SOCKET_BUFSIZ], prebuf1[SOCKET_BUFSIZ], sendbuf[SOCKET_BUFSIZ];
 
 	ret = 0;
@@ -394,15 +426,14 @@ l_socket_recv_end:
 	return 0;
 }
 
-static inline int socket_sendinvalid(clsyncconn_t *clsyncconn_p, sockcmd_t *sockcmd_p) {
+int socket_sendinvalid(clsyncconn_t *clsyncconn_p, sockcmd_t *sockcmd_p) {
 	if(sockcmd_p->cmd_id >= 1000)
 		return socket_send(clsyncconn_p, SOCKCMD_REPLY_INVALIDCMDID, sockcmd_p->cmd_num);
 	else
 		return socket_send(clsyncconn_p, SOCKCMD_REPLY_UNKNOWNCMD,   sockcmd_p->cmd_id, sockcmd_p->cmd_num);
 }
 
-int socket_procclsyncconn(socket_procconnproc_arg_t *arg) {
-//	clsyncconn_t clsyncconn = {0};
+int socket_procclsyncconn(socket_connthreaddata_t *arg) {
 	char		_sockcmd_buf[SOCKET_BUFSIZ]={0};
 
 	sockcmd_t		*sockcmd_p    = (sockcmd_t *)_sockcmd_buf;
@@ -481,8 +512,10 @@ l_socket_procclsyncconn_sw_default:
 				break;
 		}
 
-		if(sockcmd_p->data != NULL)
+		if(sockcmd_p->data != NULL) {
 			free(sockcmd_p->data);
+			sockcmd_p->data = NULL;
+		}
 
 		// Check if the socket is still alive
 		if(socket_check(clsyncconn_p)) {
@@ -503,9 +536,68 @@ l_socket_procclsyncconn_sw_default:
 
 	printf_ddd("Debug3: socket_procclsyncconn(): Ending a connection thread.\n");
 
-	socket_delete(clsyncconn_p);
+	socket_thread_delete(arg);
 
-	arg->state = CLSTATE_DIED;
+	return 0;
+}
+
+socket_connthreaddata_t *socket_thread_new() {
+	pthread_mutex_lock(&socket_thread_mutex);
+	socket_connthreaddata_t *threaddata_p = &connthreaddata[clsyncconnthreads_num];
+
+	if(clsyncconnthreads_num >= SOCKET_MAX) {
+		printf_e("Warning: socket_thread_new(): Too many connection threads.\n");
+		errno = EUSERS;
+		pthread_mutex_unlock(&socket_thread_mutex);
+		return NULL;
+	}
+
+	threaddata_p->id = clsyncconnthreads_num;
+
+	clsyncconnthread_busy[clsyncconnthreads_num]=1;
+	// TODO: SECURITY: Possible DoS-attack on huge "SOCKET_MAX" value. Fix it.
+	while(clsyncconnthread_busy[++clsyncconnthreads_num]);
+
+#ifdef PARANOID
+	// Processing the events: checking if previous check were been made right
+
+	if(threaddata_p->state != CLSTATE_NONE) {
+		// This's not supposed to be
+		printf_e("Internal-Error: socket_newconnarg(): connproc_arg->state != CLSTATE_NONE\n");
+		pthread_mutex_unlock(&socket_thread_mutex);
+		return NULL;
+	}
+#endif
+
+	// Processing the events: creating a thread for new connection
+
+	printf_ddd("Debug3: socket_newconnarg(): clsyncconnthreads_count == %u;\tclsyncconnthreads_last == %u;\tclsyncconn_num == %u\n", 
+		clsyncconnthreads_count, clsyncconnthreads_last, clsyncconnthreads_num);
+
+	clsyncconnthreads_last = MAX(clsyncconnthreads_last, clsyncconnthreads_num);
+
+	clsyncconnthreads_count++;
+	pthread_mutex_unlock(&socket_thread_mutex);
+	return threaddata_p;
+}
+
+socket_connthreaddata_t *socket_thread_attach(clsyncconn_t *clsyncconn_p) {
+
+	socket_connthreaddata_t *threaddata_p = socket_thread_new();
+
+	if (threaddata_p == NULL)
+		return NULL;
+
+	threaddata_p->clsyncconn_p	= clsyncconn_p;
+
+	return threaddata_p;
+}
+
+int socket_thread_start(socket_connthreaddata_t *threaddata_p) {
+	if(pthread_create(&threaddata_p->thread, NULL, (void *(*)(void *))socket_procclsyncconn, threaddata_p)) {
+		printf_e("Error: socket_thread_start(): Cannot create a thread for connection: %s (errno: %i)\n", strerror(errno), errno);
+		return errno;
+	}
 
 	return 0;
 }

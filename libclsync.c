@@ -23,201 +23,95 @@
 
 #include "socket.h"
 #include "malloc.h"
-#if 0
+#include "output.h"
+
+printf_funct _printf_ddd=NULL;
+printf_funct _printf_dd=NULL;
+printf_funct _printf_d=NULL;
+printf_funct _printf_v=NULL;
+printf_funct printf_e=printf_stderr;
+write_funct _write_ddd=NULL;
+write_funct _write_dd=NULL;
+write_funct _write_d=NULL;
+write_funct _write_v=NULL;
+write_funct write_e=NULL;
+
 struct clsync {
-	int	s;
+	clsyncconn_t 		*conn_p;
+	clsyncconn_procfunct_t	 procfunct;
 };
 typedef struct clsync clsync_t;
 
-static inline int socketcheck(int sock) {
-	int error_code, ret;
-	socklen_t error_code_len = sizeof(error_code);
 
-	if((ret=getsockopt(sock, SOL_SOCKET, SO_ERROR, &error_code, &error_code_len))) {
-		return errno;
-	}
-	if(error_code) {
-		errno = error_code;
-		return error_code;
-	}
+int libclsync_procclsyncconn(socket_connthreaddata_t *arg, sockcmd_t *sockcmd_p) {
+	clsync_t		*clsync_p     = arg->arg;
+	clsyncconn_t		*clsyncconn_p = clsync_p->conn_p;
+	clsyncconn_procfunct_t   procfunct    = clsync_p->procfunct;
 
-	return 0;
-}
-
-int clsyncsock_send(clsync_t *clsync, sockcmd_id_t cmd_id, ...) {
-	va_list ap;
-	int ret;
-
-	va_start(ap, cmd_id);
-	char prebuf0[SOCKET_BUFSIZ], prebuf1[SOCKET_BUFSIZ], sendbuf[SOCKET_BUFSIZ];
-
-	ret = 0;
-
-	switch(clsync->prot) {
-		case 0:
-			switch(clsync->subprot) {
-				case SUBPROT0_TEXT: {
-					va_list ap_copy;
-
-					if(textmessage_args[cmd_id]) {
-						va_copy(ap_copy, ap);
-						vsprintf(prebuf0, textmessage_args[cmd_id], ap_copy);
-					} else
-						*prebuf0 = 0;
-
-					va_copy(ap_copy, ap);
-					vsprintf(prebuf1, textmessage_descr[cmd_id], ap);
-
-					size_t sendlen = sprintf(sendbuf, "%03u %s :%s\n", cmd_id, prebuf0, prebuf1);
-
-					send(clsync->sock, sendbuf, sendlen, 0);
-					break;
-				}
-/*				case SUBPROT0_BINARY:
-					break;*/
-				default:
-					printf_e("Error: socket_send(): Unknown subprotocol with id %u.\n", clsync->subprot);
-					ret = EINVAL;
-					goto l_socket_send_end;
-			}
-			break;
-		default:
-			printf_e("Error: socket_send(): Unknown protocol with id %u.\n", clsync->prot);
-			ret = EINVAL;
-			goto l_socket_send_end;
-	}
-
-l_socket_send_end:
-	va_end(ap);
-	return ret;
-}
-
-static inline int socket_overflow_fix(char *buf, char **data_start_p, char **data_end_p) {
-	printf_ddd("Debug3: socket_overflow_fix(): buf==%p; data_start==%p; data_end==%p\n", buf, *data_start_p, *data_end_p);
-	if(buf == *data_start_p)
+#ifdef PARANOID
+	if (procfunct == NULL) {
+		printf_e("Error: libclsync_procclsyncconn(): procfunct == NULL\n");
 		return 0;
+	}
+#endif
 
-	size_t ptr_diff = *data_start_p - buf;
-
-	if(*data_start_p != *data_end_p) {
-		*data_start_p = buf;
-		*data_end_p   = buf;
-		return ptr_diff;
+	switch(sockcmd_p->cmd_id) {
+		default:
+			if(procfunct(arg, sockcmd_p))
+				socket_sendinvalid(clsyncconn_p, sockcmd_p);
+			break;
 	}
 
-	size_t data_length = *data_end_p - *data_start_p;
-
-	memmove(buf, *data_start_p, data_length);
-	*data_start_p =  buf;
-	*data_end_p   = &buf[data_length];
-
-	return ptr_diff;
-}
-
-static char *recv_stps[SOCKET_MAX_LIBCLSYNC];
-static char *recv_ptrs[SOCKET_MAX_LIBCLSYNC];
-int clsyncsock_recv(clsync_t *clsync, sockcmd_t *sockcmd) {
-	static char bufs[SOCKET_MAX_LIBCLSYNC][SOCKET_BUFSIZ];
-	char *buf, *ptr, *start, *end;
-	int clsync_sock;
-	size_t filled_length, rest_length, recv_length, filled_length_new;
-
-	clsync_sock = clsync->sock;
-
-	buf = bufs[clsync_sock];
-
-	start =  recv_stps[clsync_sock];
-	start = (start==NULL ? buf : start);
-
-	ptr   =  recv_ptrs[clsync_sock];
-	ptr   = (ptr==NULL   ? buf : ptr);
-
-	printf_ddd("Debug3: socket_recv(): buf==%p; start==%p; ptr==%p\n", buf, start, ptr);
-
-	while(1) {
-		filled_length = ptr-buf;
-		rest_length = SOCKET_BUFSIZ-filled_length-16;
-
-		if(rest_length <= 0) {
-			if(!socket_overflow_fix(buf, &start, &ptr)) {
-				printf_d("Debug: socket_recv(): Got too big message. Ignoring.\n");
-				ptr = buf;
-			}
-			continue;
-		}
-
-		recv_length = recv(clsync_sock, ptr, rest_length, 0);
-		filled_length_new = filled_length + recv_length;
-
-		if(recv_length <= 0)
-			return errno;
-
-		switch(clsync->prot) {
-			case 0: {
-				// Checking if binary
-				uint16_t cmd_id_binary = *(uint16_t *)buf;
-				clsync->subprot = (cmd_id_binary == SOCKCMD_NEGOTIATION) ? SUBPROT0_BINARY : SUBPROT0_TEXT;
-
-				// Processing
-				switch(clsync->subprot) {
-					case SUBPROT0_TEXT:
-						if((end=strchr(ptr, '\n'))!=NULL) {
-							if(sscanf(start, "%03u", (unsigned int *)&sockcmd->cmd_id) != 1)
-								return EBADRQC;
-
-							// TODO Process message here
-
-							goto l_socket_recv_end;
-						}
-						break;
-					default:
-						return ENOPROTOOPT;
-				}
-				break;
-			}
-			default:
-				return ENOPROTOOPT;
-		}
-
-		
-	}
-
-l_socket_recv_end:
-	
-	//       ----------------------------------
-	//       buf    ptr    end    filled
-	// cut:  ---------------
-	//                    start    ptr
-	//                     new     new
-
-	start = &end[1];
-	ptr   = &buf[filled_length_new];
-
-	// No data buffered. Reset "start" and "ptr".
-
-	if(start == ptr) {
-		start = buf;
-		ptr   = buf;
-	}
-
-	// Remembering the values
-
-	recv_stps[clsync_sock] = start;
-	recv_ptrs[clsync_sock] = ptr;
-
-	printf_ddd("Debug3: socket_recv(): buf==%p; ptr==%p; end==%p, filled=%p, buf_end==%p\n", buf, ptr, end, &buf[filled_length_new], &buf[SOCKET_BUFSIZ]);
-
-	sockcmd->cmd_num++;
 	return 0;
 }
 
-clsync_t *clsyncsock_connect_unix(const char const *socket_path) {
+static inline int _clsync_connect_setthreaddata(socket_connthreaddata_t *threaddata_p, clsync_t *clsync_p) {
+	threaddata_p->procfunct		=  libclsync_procclsyncconn;
+	threaddata_p->clsyncconn_p	=  clsync_p->conn_p;
+	threaddata_p->arg		=  clsync_p;
+	threaddata_p->running		=  NULL;
+	threaddata_p->authtype		=  SOCKAUTH_NULL;
+	threaddata_p->flags		=  0;
 
-	clsync_t clsync = xmalloc
-
-	return 
+	return 0;
 }
 
-#endif
+clsync_t *clsync_connect_unix(const char *const socket_path, clsyncconn_procfunct_t procfunct) {
+	clsync_t *clsync_p = xmalloc(sizeof(*clsync_p));
+	memset(clsync_p, 0, sizeof(*clsync_p));
+
+	if (procfunct == NULL) {
+		errno = EINVAL;
+		return NULL;
+	}
+
+	clsync_p->conn_p = socket_connect_unix(socket_path);
+	if(clsync_p->conn_p == NULL) {
+		free(clsync_p);
+		if(errno == EUSERS) {
+			printf_e("Error: clsync_connect_unix(): Too many connections.\n");
+			return NULL;
+		}
+
+		// Got unknown error. Closing control socket just in case.
+		printf_e("Error: clsync_connect_unix(): Cannot socket_accept(): %s (errno: %i)\n", strerror(errno), errno);
+		return NULL;
+	}
+
+	socket_connthreaddata_t *threaddata_p = socket_thread_attach(clsync_p->conn_p);
+	if (threaddata_p == NULL) {
+		socket_cleanup(clsync_p->conn_p);
+		free(clsync_p);
+		return NULL;
+	}
+
+	_clsync_connect_setthreaddata(threaddata_p, clsync_p);
+
+	clsync_p->procfunct		=  procfunct;
+	socket_thread_start(threaddata_p);
+
+	return clsync_p;
+}
+
 
 
