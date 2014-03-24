@@ -72,6 +72,7 @@ static inline int _clsync_connect_setthreaddata(socket_connthreaddata_t *threadd
 	threaddata_p->running		=  NULL;
 	threaddata_p->authtype		=  SOCKAUTH_NULL;
 	threaddata_p->flags		=  0;
+	threaddata_p->freefunct_arg	=  free;
 
 	return 0;
 }
