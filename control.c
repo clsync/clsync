@@ -150,52 +150,22 @@ int control_loop(options_t *options_p) {
 
 int control_run(options_t *options_p) {
 	if(options_p->socketpath != NULL) {
-		int ret = 0;
+		int ret =  0;
+		int s   = -1;
 
 		// initializing clsync-socket subsystem
-		if((ret = socket_init()))
+		if ((ret = socket_init()))
 			printf_e("Error: Cannot init clsync-sockets subsystem.\n");
 
-		// creating a simple unix socket
-		int s = -1;
-		if(!ret)
-			s = socket(AF_UNIX, SOCK_STREAM, 0);
 
-		// checking the path
-		if(!ret) {
-			// already exists? - unlink
-			if(!access(options_p->socketpath, F_OK))
-				if(unlink(options_p->socketpath)) {
-					printf_e("Error: Cannot unlink() \"%s\": %s (errno: %i).\n", 
-						options_p->socketpath, strerror(errno), errno);
-					ret = errno;
-				}
-		}
-
-		// binding
-		if(!ret) {
-			struct sockaddr_un addr;
-			memset(&addr, 0, sizeof(addr));
-			addr.sun_family = AF_UNIX;
-			strncpy(addr.sun_path, options_p->socketpath, sizeof(addr.sun_path)-1);
-			if(bind(s, (struct sockaddr *)&addr, sizeof(addr))) {
-				printf_e("Error: Cannot bind() on address \"%s\": %s (errno: %i).\n",
-					options_p->socketpath, strerror(errno), errno);
+		if (!ret) {
+			s = socket_listen_unix(options_p->socketpath);
+			if (s == -1)
 				ret = errno;
-			}
-		}
-
-		// starting to listening
-		if(!ret) {
-			if(listen(s, SOCKET_BACKLOG)) {
-				printf_e("Error: Cannot listen() on address \"%s\": %s (errno: %i).\n",
-					options_p->socketpath, strerror(errno), errno);
-				ret = errno;
-			}
 		}
 
 		// fixing privileges
-		if(!ret) {
+		if (!ret) {
 			if(options_p->flags[SOCKETMOD])
 				if(chmod(options_p->socketpath, options_p->socketmod)) {
 					printf_e("Error, Cannot chmod(\"%s\", %o): %s (errno: %i)\n", 
@@ -211,7 +181,7 @@ int control_run(options_t *options_p) {
 		}
 
 		// finish
-		if(ret) {
+		if (ret) {
 			close(s);
 			return ret;
 		}

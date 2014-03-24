@@ -181,6 +181,50 @@ clsyncconn_t *socket_accept(int sock) {
 	return socket_new(clsyncconn_sock);
 }
 
+int socket_listen_unix(const char *const socket_path) {
+	int ret = 0;
+
+	// creating a simple unix socket
+	int s = -1;
+	if(!ret)
+		s = socket(AF_UNIX, SOCK_STREAM, 0);
+
+	// checking the path
+	if(!ret) {
+		// already exists? - unlink
+		if(!access(socket_path, F_OK))
+			if(unlink(socket_path)) {
+				printf_e("Error: Cannot unlink() \"%s\": %s (errno: %i).\n", 
+					socket_path, strerror(errno), errno);
+				ret = errno;
+			}
+	}
+
+	// binding
+	if(!ret) {
+		struct sockaddr_un addr;
+		memset(&addr, 0, sizeof(addr));
+		addr.sun_family = AF_UNIX;
+		strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path)-1);
+		if(bind(s, (struct sockaddr *)&addr, sizeof(addr))) {
+			printf_e("Error: Cannot bind() on address \"%s\": %s (errno: %i).\n",
+				socket_path, strerror(errno), errno);
+			ret = errno;
+		}
+	}
+
+	// starting to listening
+	if(!ret) {
+		if(listen(s, SOCKET_BACKLOG)) {
+			printf_e("Error: Cannot listen() on address \"%s\": %s (errno: %i).\n",
+				socket_path, strerror(errno), errno);
+			ret = errno;
+		}
+	}
+
+	return s; 
+}
+
 #ifdef SOCKET_PROVIDER_LIBCLSYNC
 clsyncconn_t *socket_connect_unix(const char *const socket_path) {
 	return NULL;

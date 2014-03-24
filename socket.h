@@ -160,6 +160,7 @@ extern int socket_init();
 extern int socket_deinit();
 extern int socket_procclsyncconn(socket_connthreaddata_t *arg);
 extern clsyncconn_t *socket_connect_unix(const char *const socket_path);
+extern int socket_listen_unix(const char *const socket_path);
 
 extern socket_connthreaddata_t *socket_thread_attach(clsyncconn_t *clsyncconn_p);
 extern int socket_thread_start(socket_connthreaddata_t *threaddata_p);
