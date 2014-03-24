@@ -135,7 +135,7 @@ typedef enum sockauth_id sockauth_id_t;
 
 struct socket_connthreaddata;
 typedef int (*clsyncconn_procfunct_t)(struct socket_connthreaddata *, sockcmd_t *);
-typedef int (*freefunct_t)(void *);
+typedef void (*freefunct_t)(void *);
 struct socket_connthreaddata {
 	int			 id;
 	clsyncconn_procfunct_t	 procfunct;
