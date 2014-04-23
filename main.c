@@ -69,6 +69,7 @@ static const struct option long_options[] =
 	{"cluster-hash-dl-max",	required_argument,	NULL,	CLUSTERHDLMAX},
 	{"cluster-scan-dl-max",	required_argument,	NULL,	CLUSTERSDLMAX},
 #endif
+	{"max-iterations",	required_argument,	NULL,	MAXITERATIONS},
 	{"standby-file",	required_argument,	NULL,	STANDBYFILE},
 	{"timeout-sync",	required_argument,	NULL,	SYNCTIMEOUT},
 	{"delay-sync",		required_argument,	NULL,	SYNCDELAY},
@@ -1022,6 +1023,10 @@ int main(int argc, char *argv[]) {
 
 	if(options.flags[PTHREAD] && options.flags[EXITONNOEVENTS]) {
 		printf_e("Error: Conflicting options: \"--pthread\" and \"--exit-on-no-events\" cannot be used together.\n");
+		ret = EINVAL;
+	}
+	if(options.flags[PTHREAD] && options.flags[MAXITERATIONS]) {
+		printf_e("Error: Conflicting options: \"--pthread\" and \"--max-iterations\" cannot be used together.\n");
 		ret = EINVAL;
 	}
 	if(options.flags[SKIPINITSYNC] && options.flags[EXITONNOEVENTS]) {

@@ -87,6 +87,8 @@ enum flags_enum {
 	SOCKETAUTH		= 12|OPTION_LONGOPTONLY,
 	SOCKETMOD		= 13|OPTION_LONGOPTONLY,
 	SOCKETOWN		= 14|OPTION_LONGOPTONLY,
+
+	MAXITERATIONS		= 15|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -159,6 +161,7 @@ struct options {
 	gid_t gid;
 	pid_t child_pid[MAXCHILDREN];	// Used only for non-pthread mode
 	int   children;			// Used only for non-pthread mode
+	uint32_t iteration_num;
 	rule_t rules[MAXRULES];
 	dev_t st_dev;
 	int flags[OPTION_FLAGS];

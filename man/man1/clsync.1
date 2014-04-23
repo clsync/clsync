@@ -436,6 +436,28 @@ Is not set by default.
 .RE
 
 .PP
+.B \-\-max\-iterations
+.I iterations\-count
+.RS 8
+Sets synchronization iterations limit. One iteration means one sync-handler
+execution.
+
+.I iterations\-count
+.RS 8
+set to 0 means no limit (infinite loop).
+
+set to 1 means that only initial sync will be done
+
+set to n means that only initial sync and (n-1) sync-ups after that will be done
+.RE
+
+Hint: This option may be useful in conjunction with \-\-exit\-on\-no\-events
+to prevent infinite sync-up processes.
+
+Default value is "0".
+.RE
+
+.PP
 .B \-k, \-\-timeout\-sync
 .I sync-timeout
 .RS 8
@@ -1087,6 +1109,11 @@ CLSYNC_STATUS -
 .BR clsync 's
 status (see possible statuses in description of
 .IR \-\-status\-file )
+.RE
+
+.RS
+CLSYNC_ITERATION - count of done synchronizaton iterations after initial sync
+see \-\-max\-iterations option
 .RE
 
 .SH RULES
