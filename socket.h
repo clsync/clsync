@@ -20,11 +20,27 @@
 #ifndef __CLSYNC_SOCKET_H
 #define __CLSYNC_SOCKET_H
 
+#include <stdint.h>
+#include <pthread.h>
+
 #define SOCKET_DEFAULT_PROT	0
 #define SOCKET_DEFAULT_SUBPROT	SUBPROT0_TEXT
 
 // buffer size
 #define SOCKET_BUFSIZ			(1<<12)
+
+#if PIC
+#	define SOCKET_PROVIDER_LIBCLSYNC
+#else
+#	define SOCKET_PROVIDER_CLSYNC
+#endif
+
+#ifdef SOCKET_PROVIDER_LIBCLSYNC
+#	define SOCKET_MAX SOCKET_MAX_LIBCLSYNC
+#endif
+#ifdef SOCKET_PROVIDER_CLSYNC
+#	define SOCKET_MAX SOCKET_MAX_CLSYNC
+#endif
 
 struct clsyncsock {
 	int sock;
@@ -106,6 +122,7 @@ struct sockcmd_dat_version {
 };
 typedef struct sockcmd_dat_version sockcmd_dat_version_t;
 
+#ifdef __CLSYNC_OPTIONS_H
 struct sockcmd_dat_info {
 	char		config_block[1<<8];
 	char		label[1<<8];
@@ -113,6 +130,7 @@ struct sockcmd_dat_info {
 	char		flags_set[OPTION_FLAGS];
 };
 typedef struct sockcmd_dat_info sockcmd_dat_info_t;
+#endif
 
 struct sockcmd {
 	uint64_t	 cmd_num;

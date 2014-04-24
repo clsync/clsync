@@ -25,19 +25,6 @@
 #include "malloc.h"
 #include "socket.h"
 
-#if PIC
-#	define SOCKET_PROVIDER_LIBCLSYNC
-#else
-#	define SOCKET_PROVIDER_CLSYNC
-#endif
-
-#ifdef SOCKET_PROVIDER_LIBCLSYNC
-#	define SOCKET_MAX SOCKET_MAX_LIBCLSYNC
-#endif
-#ifdef SOCKET_PROVIDER_CLSYNC
-#	define SOCKET_MAX SOCKET_MAX_CLSYNC
-#endif
-
 pthread_mutex_t socket_thread_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 int clsyncsockthreads_last	= -1;

@@ -17,6 +17,10 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+
+#ifndef __CLSYNC_OPTIONS_H
+#define __CLSYNC_OPTIONS_H
+
 #include <regex.h>
 
 #define OPTION_FLAGS		(1<<10)
@@ -217,4 +221,6 @@ struct options {
 	char isignoredexitcode[(1<<8)];
 };
 typedef struct options options_t;
+
+#endif
 

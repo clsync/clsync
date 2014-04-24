@@ -17,6 +17,11 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef __CLSYNC_CONTROL_H
+#define __CLSYNC_CONTROL_H
+
 extern int control_run(options_t *options_p);
 extern int control_cleanup(options_t *options_p);
+
+#endif
 

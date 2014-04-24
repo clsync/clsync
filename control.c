@@ -23,8 +23,8 @@
 
 #include "output.h"
 #include "sync.h"
-#include "socket.h"
 #include "control.h"
+#include "socket.h"
 
 static pthread_t pthread_control;
 
