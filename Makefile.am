@@ -41,7 +41,8 @@ clsync_include_HEADERS = \
 	indexes.h \
 	options.h \
 	output.h \
-	socket.h
+	socket.h \
+	libclsync.h
 
 doc:
 	doxygen .doxygen

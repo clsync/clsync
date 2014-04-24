@@ -40,23 +40,23 @@
 
 pthread_mutex_t socket_thread_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-int clsyncconnthreads_last	= -1;
-int clsyncconnthreads_count	=  0;
-int clsyncconnthreads_num	=  0;
+int clsyncsockthreads_last	= -1;
+int clsyncsockthreads_count	=  0;
+int clsyncsockthreads_num	=  0;
 
-char clsyncconnthread_busy[SOCKET_MAX+1] = {0};
+char clsyncsockthread_busy[SOCKET_MAX+1] = {0};
 
-socket_connthreaddata_t connthreaddata[SOCKET_MAX+1] = {{0}};
+socket_sockthreaddata_t sockthreaddata[SOCKET_MAX+1] = {{0}};
 
 int socket_gc() {
-	int i=clsyncconnthreads_last+1;
+	int i=clsyncsockthreads_last+1;
 	while(i) {
 		i--;
-		switch(connthreaddata[i].state) {
+		switch(sockthreaddata[i].state) {
 			case CLSTATE_DIED:
-				printf_ddd("Debug3: socket_gc(): Forgeting clsyncconn #%u\n", i);
-				pthread_join(connthreaddata[i].thread, NULL);
-				connthreaddata[i].state = CLSTATE_NONE;
+				printf_ddd("Debug3: socket_gc(): Forgeting clsyncsock #%u\n", i);
+				pthread_join(sockthreaddata[i].thread, NULL);
+				sockthreaddata[i].state = CLSTATE_NONE;
 				break;
 			default:
 				break;
@@ -111,52 +111,52 @@ int socket_check_bysock(int sock) {
 	return 0;
 }
 
-static inline int socket_check(clsyncconn_t *clsyncconn_p) {
-	return socket_check_bysock(clsyncconn_p->sock);
+static inline int socket_check(clsyncsock_t *clsyncsock_p) {
+	return socket_check_bysock(clsyncsock_p->sock);
 }
 
-clsyncconn_t *socket_new(int clsyncconn_sock) {
-	clsyncconn_t *clsyncconn_p = xmalloc(sizeof(*clsyncconn_p));
+clsyncsock_t *socket_new(int clsyncsock_sock) {
+	clsyncsock_t *clsyncsock_p = xmalloc(sizeof(*clsyncsock_p));
 	
-	printf_dd("Debug2: socket_new(): sock == %i; num == %i.\n", clsyncconn_sock, clsyncconnthreads_num);
+	printf_dd("Debug2: socket_new(): sock == %i.\n", clsyncsock_sock);
 
-	clsyncconn_p->sock    = clsyncconn_sock;
+	clsyncsock_p->sock    = clsyncsock_sock;
 	
-	clsyncconn_p->prot    = SOCKET_DEFAULT_PROT;
-	clsyncconn_p->subprot = SOCKET_DEFAULT_SUBPROT;
+	clsyncsock_p->prot    = SOCKET_DEFAULT_PROT;
+	clsyncsock_p->subprot = SOCKET_DEFAULT_SUBPROT;
 
-	return clsyncconn_p;
+	return clsyncsock_p;
 }
 
-int socket_cleanup(clsyncconn_t *clsyncconn_p) {
-	int clsyncconn_sock = clsyncconn_p->sock;
+int socket_cleanup(clsyncsock_t *clsyncsock_p) {
+	int clsyncsock_sock = clsyncsock_p->sock;
 
-	printf_dd("Debug2: socket_cleanup(): sock == %i; num == %i.\n", clsyncconn_sock, clsyncconn_p->num);
+	printf_dd("Debug2: socket_cleanup(): sock == %i.\n", clsyncsock_sock);
 
-	recv_ptrs[clsyncconn_sock] = NULL;
-	recv_stps[clsyncconn_sock] = NULL;
+	recv_ptrs[clsyncsock_sock] = NULL;
+	recv_stps[clsyncsock_sock] = NULL;
 
-	close(clsyncconn_sock);
+	close(clsyncsock_sock);
 
-	free(clsyncconn_p);
+	free(clsyncsock_p);
 	return 0;
 }
 
-int socket_thread_delete(socket_connthreaddata_t *threaddata_p) {
+int socket_thread_delete(socket_sockthreaddata_t *threaddata_p) {
 	int thread_id;
 
 	pthread_mutex_lock(&socket_thread_mutex);
 
 	thread_id = threaddata_p->id;
 
-	socket_cleanup(threaddata_p->clsyncconn_p);
+	socket_cleanup(threaddata_p->clsyncsock_p);
 
-	clsyncconnthreads_count--;
+	clsyncsockthreads_count--;
 
-	if(clsyncconnthreads_last == thread_id)
-		clsyncconnthreads_last = thread_id-1;
+	if(clsyncsockthreads_last == thread_id)
+		clsyncsockthreads_last = thread_id-1;
 
-	clsyncconnthread_busy[thread_id]=0;
+	clsyncsockthread_busy[thread_id]=0;
 
 	threaddata_p->state = CLSTATE_DIED;
 
@@ -167,21 +167,21 @@ int socket_thread_delete(socket_connthreaddata_t *threaddata_p) {
 	return 0;
 }
 
-clsyncconn_t *socket_accept(int sock) {
+clsyncsock_t *socket_accept(int sock) {
 	// Cleaning up after died connections (getting free space for new connection)
 	socket_gc();
 
 	// Getting new connection
-	int clsyncconn_sock = accept(sock, NULL, NULL);
-	if(clsyncconn_sock == -1) {
+	int clsyncsock_sock = accept(sock, NULL, NULL);
+	if(clsyncsock_sock == -1) {
 		printf_e("Error: socket_accept(%i): Cannot accept(): %s (errno: %i)\n", sock, strerror(errno), errno);
 		return NULL;
 	}
 
-	return socket_new(clsyncconn_sock);
+	return socket_new(clsyncsock_sock);
 }
 
-int socket_listen_unix(const char *const socket_path) {
+clsyncsock_t *socket_listen_unix(const char *const socket_path) {
 	int ret = 0;
 
 	// creating a simple unix socket
@@ -222,16 +222,16 @@ int socket_listen_unix(const char *const socket_path) {
 		}
 	}
 
-	return s; 
+	return socket_new(s);
 }
 
 #ifdef SOCKET_PROVIDER_LIBCLSYNC
-clsyncconn_t *socket_connect_unix(const char *const socket_path) {
+clsyncsock_t *socket_connect_unix(const char *const socket_path) {
 	return NULL;
 }
 #endif
 
-int socket_send(clsyncconn_t *clsyncconn, sockcmd_id_t cmd_id, ...) {
+int socket_send(clsyncsock_t *clsyncsock, sockcmd_id_t cmd_id, ...) {
 	va_list ap;
 	int ret;
 
@@ -240,9 +240,9 @@ int socket_send(clsyncconn_t *clsyncconn, sockcmd_id_t cmd_id, ...) {
 
 	ret = 0;
 
-	switch(clsyncconn->prot) {
+	switch(clsyncsock->prot) {
 		case 0:
-			switch(clsyncconn->subprot) {
+			switch(clsyncsock->subprot) {
 				case SUBPROT0_TEXT: {
 					va_list ap_copy;
 
@@ -259,19 +259,19 @@ int socket_send(clsyncconn_t *clsyncconn, sockcmd_id_t cmd_id, ...) {
 
 					size_t sendlen = sprintf(sendbuf, "%03u %s :%s\n", cmd_id, prebuf0, prebuf1);
 
-					send(clsyncconn->sock, sendbuf, sendlen, 0);
+					send(clsyncsock->sock, sendbuf, sendlen, 0);
 					break;
 				}
 /*				case SUBPROT0_BINARY:
 					break;*/
 				default:
-					printf_e("Error: socket_send(): Unknown subprotocol with id %u.\n", clsyncconn->subprot);
+					printf_e("Error: socket_send(): Unknown subprotocol with id %u.\n", clsyncsock->subprot);
 					ret = EINVAL;
 					goto l_socket_send_end;
 			}
 			break;
 		default:
-			printf_e("Error: socket_send(): Unknown protocol with id %u.\n", clsyncconn->prot);
+			printf_e("Error: socket_send(): Unknown protocol with id %u.\n", clsyncsock->prot);
 			ret = EINVAL;
 			goto l_socket_send_end;
 	}
@@ -366,20 +366,20 @@ static inline int parse_text_data(sockcmd_t *sockcmd_p, char *args, size_t args_
 	return 0;
 }
 
-int socket_recv(clsyncconn_t *clsyncconn, sockcmd_t *sockcmd_p) {
+int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p) {
 	static char bufs[SOCKET_MAX][SOCKET_BUFSIZ];
 	char *buf, *ptr, *start, *end;
-	int clsyncconn_sock;
+	int clsyncsock_sock;
 	size_t filled_length, rest_length, recv_length, filled_length_new;
 
-	clsyncconn_sock = clsyncconn->sock;
+	clsyncsock_sock = clsyncsock->sock;
 
-	buf = bufs[clsyncconn_sock];
+	buf = bufs[clsyncsock_sock];
 
-	start =  recv_stps[clsyncconn_sock];
+	start =  recv_stps[clsyncsock_sock];
 	start = (start==NULL ? buf : start);
 
-	ptr   =  recv_ptrs[clsyncconn_sock];
+	ptr   =  recv_ptrs[clsyncsock_sock];
 	ptr   = (ptr==NULL   ? buf : ptr);
 
 	printf_ddd("Debug3: socket_recv(): buf==%p; start==%p; ptr==%p\n", buf, start, ptr);
@@ -396,24 +396,24 @@ int socket_recv(clsyncconn_t *clsyncconn, sockcmd_t *sockcmd_p) {
 			continue;
 		}
 
-		recv_length = recv(clsyncconn_sock, ptr, rest_length, 0);
+		recv_length = recv(clsyncsock_sock, ptr, rest_length, 0);
 		filled_length_new = filled_length + recv_length;
 
 		if(recv_length <= 0)
 			return errno;
 
-		switch(clsyncconn->prot) {
+		switch(clsyncsock->prot) {
 			case 0: {
 				// Checking if binary
 				uint16_t cmd_id_binary = *(uint16_t *)buf;
-				clsyncconn->subprot = (
+				clsyncsock->subprot = (
 								cmd_id_binary == SOCKCMD_REQUEST_NEGOTIATION ||
 								cmd_id_binary == SOCKCMD_REPLY_NEGOTIATION
 							) 
 							? SUBPROT0_BINARY : SUBPROT0_TEXT;
 
 				// Processing
-				switch(clsyncconn->subprot) {
+				switch(clsyncsock->subprot) {
 					case SUBPROT0_TEXT:
 						if((end=strchr(ptr, '\n'))!=NULL) {
 							if(sscanf(start, "%03u", (unsigned int *)&sockcmd_p->cmd_id) != 1)
@@ -460,8 +460,8 @@ l_socket_recv_end:
 
 	// Remembering the values
 
-	recv_stps[clsyncconn_sock] = start;
-	recv_ptrs[clsyncconn_sock] = ptr;
+	recv_stps[clsyncsock_sock] = start;
+	recv_ptrs[clsyncsock_sock] = ptr;
 
 	printf_ddd("Debug3: socket_recv(): sockcmd_p->cmd_id == %i; buf==%p; ptr==%p; end==%p, filled=%p, buf_end==%p\n",
 		sockcmd_p->cmd_id, buf, ptr, end, &buf[filled_length_new], &buf[SOCKET_BUFSIZ]);
@@ -470,20 +470,20 @@ l_socket_recv_end:
 	return 0;
 }
 
-int socket_sendinvalid(clsyncconn_t *clsyncconn_p, sockcmd_t *sockcmd_p) {
+int socket_sendinvalid(clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p) {
 	if(sockcmd_p->cmd_id >= 1000)
-		return socket_send(clsyncconn_p, SOCKCMD_REPLY_INVALIDCMDID, sockcmd_p->cmd_num);
+		return socket_send(clsyncsock_p, SOCKCMD_REPLY_INVALIDCMDID, sockcmd_p->cmd_num);
 	else
-		return socket_send(clsyncconn_p, SOCKCMD_REPLY_UNKNOWNCMD,   sockcmd_p->cmd_id, sockcmd_p->cmd_num);
+		return socket_send(clsyncsock_p, SOCKCMD_REPLY_UNKNOWNCMD,   sockcmd_p->cmd_id, sockcmd_p->cmd_num);
 }
 
-int socket_procclsyncconn(socket_connthreaddata_t *arg) {
+int socket_procclsyncsock(socket_sockthreaddata_t *arg) {
 	char		_sockcmd_buf[SOCKET_BUFSIZ]={0};
 
 	sockcmd_t		*sockcmd_p    = (sockcmd_t *)_sockcmd_buf;
 
-	clsyncconn_t		*clsyncconn_p = arg->clsyncconn_p;
-	clsyncconn_procfunct_t   procfunct    = arg->procfunct;
+	clsyncsock_t		*clsyncsock_p = arg->clsyncsock_p;
+	clsyncsock_procfunct_t   procfunct    = arg->procfunct;
 	sockprocflags_t		 flags        = arg->flags;
 
 	sockcmd_p->cmd_num = -1;
@@ -494,24 +494,24 @@ int socket_procclsyncconn(socket_connthreaddata_t *arg) {
 	typedef enum auth_flags auth_flags_t;
 	auth_flags_t	 auth_flags = 0;
 
-	printf_ddd("Debug3: socket_procclsyncconn(): Started new thread for new connection.\n");
+	printf_ddd("Debug3: socket_procclsyncsock(): Started new thread for new connection.\n");
 
 	arg->state = (arg->authtype == SOCKAUTH_NULL) ? CLSTATE_MAIN : CLSTATE_AUTH;
-	socket_send(clsyncconn_p, SOCKCMD_REQUEST_NEGOTIATION, clsyncconn_p->prot, clsyncconn_p->subprot);
+	socket_send(clsyncsock_p, SOCKCMD_REQUEST_NEGOTIATION, clsyncsock_p->prot, clsyncsock_p->subprot);
 
 	while(*arg->running && (arg->state==CLSTATE_AUTH || arg->state==CLSTATE_MAIN)) {
-		printf_ddd("Debug3: socket_procclsyncconn(): Iteration.\n");
+		printf_ddd("Debug3: socket_procclsyncsock(): Iteration.\n");
 
 		// Receiving message
 		int ret;
-		if((ret = socket_recv(clsyncconn_p, sockcmd_p))) {
-			printf_e("Error: socket_procclsyncconn(): Got error while receiving a message from clsyncconn #%u: %s (errno: %u)\n", 
-				arg->clsyncconn_p->num, strerror(ret), ret);
+		if((ret = socket_recv(clsyncsock_p, sockcmd_p))) {
+			printf_e("Error: socket_procclsyncsock(): Got error while receiving a message from clsyncsock with sock %u: %s (errno: %u)\n", 
+				arg->clsyncsock_p->sock, strerror(ret), ret);
 			break;
 		}
 
-		if(flags&SOCKPROCFLAG_OVERRIDECOMMON)
-			goto l_socket_procclsyncconn_sw_default;
+		if(flags&SOCKPROCFLAG_OVERRIDE_COMMON)
+			goto l_socket_procclsyncsock_sw_default;
 
 		// Processing the message
 		switch(sockcmd_p->cmd_id) {
@@ -523,36 +523,36 @@ int socket_procclsyncconn(socket_connthreaddata_t *arg) {
 						switch(data->subprot) {
 							case SUBPROT0_TEXT:
 							case SUBPROT0_BINARY:
-								clsyncconn_p->subprot = data->subprot;
+								clsyncsock_p->subprot = data->subprot;
 								if(sockcmd_p->cmd_id == SOCKCMD_REQUEST_NEGOTIATION)
-									socket_send(clsyncconn_p, SOCKCMD_REPLY_NEGOTIATION, data->prot, data->subprot);
+									socket_send(clsyncsock_p, SOCKCMD_REPLY_NEGOTIATION, data->prot, data->subprot);
 								else {
-									socket_send(clsyncconn_p, SOCKCMD_REPLY_ACK,    sockcmd_p->cmd_id, sockcmd_p->cmd_num);
-									printf_d("Debug2: socket_procclsyncconn(): Negotiated proto: %u %u\n", data->prot, data->subprot);
+									socket_send(clsyncsock_p, SOCKCMD_REPLY_ACK,    sockcmd_p->cmd_id, sockcmd_p->cmd_num);
+									printf_d("Debug2: socket_procclsyncsock(): Negotiated proto: %u %u\n", data->prot, data->subprot);
 								}
 								break;
 							default:
-								socket_send(clsyncconn_p, SOCKCMD_REPLY_EINVAL, sockcmd_p->cmd_id, sockcmd_p->cmd_num, "Incorrect subprotocol id");
+								socket_send(clsyncsock_p, SOCKCMD_REPLY_EINVAL, sockcmd_p->cmd_id, sockcmd_p->cmd_num, "Incorrect subprotocol id");
 						}
 						break;
 					default:
-						socket_send(clsyncconn_p, SOCKCMD_REPLY_EINVAL, sockcmd_p->cmd_id, sockcmd_p->cmd_num, "Incorrect protocol id");
+						socket_send(clsyncsock_p, SOCKCMD_REPLY_EINVAL, sockcmd_p->cmd_id, sockcmd_p->cmd_num, "Incorrect protocol id");
 				}
 				break;
 			}
 			case SOCKCMD_REQUEST_VERSION: {
-				socket_send(clsyncconn_p, SOCKCMD_REPLY_VERSION, VERSION_MAJ, VERSION_MIN, REVISION);
+				socket_send(clsyncsock_p, SOCKCMD_REPLY_VERSION, VERSION_MAJ, VERSION_MIN, REVISION);
 				break;
 			}
 			case SOCKCMD_REQUEST_QUIT: {
-				socket_send(clsyncconn_p, SOCKCMD_REPLY_BYE);
+				socket_send(clsyncsock_p, SOCKCMD_REPLY_BYE);
 				arg->state = CLSTATE_DYING;
 				break;
 			}
 			default:
-l_socket_procclsyncconn_sw_default:
+l_socket_procclsyncsock_sw_default:
 				if(procfunct(arg, sockcmd_p))
-					socket_sendinvalid(clsyncconn_p, sockcmd_p);
+					socket_sendinvalid(clsyncsock_p, sockcmd_p);
 				break;
 		}
 
@@ -562,8 +562,8 @@ l_socket_procclsyncconn_sw_default:
 		}
 
 		// Check if the socket is still alive
-		if(socket_check(clsyncconn_p)) {
-			printf_d("Debug: clsyncconn socket error: %s\n", strerror(errno));
+		if(socket_check(clsyncsock_p)) {
+			printf_d("Debug: clsyncsock socket error: %s\n", strerror(errno));
 			break;
 		}
 
@@ -571,36 +571,36 @@ l_socket_procclsyncconn_sw_default:
 		switch(arg->state) {
 			case CLSTATE_AUTH:
 				if(!(auth_flags&AUTHFLAG_ENTERED_LOGIN))
-					socket_send(clsyncconn_p, SOCKCMD_REQUEST_LOGIN);
+					socket_send(clsyncsock_p, SOCKCMD_REQUEST_LOGIN);
 				break;
 			default:
 				break;
 		}
 	}
 
-	printf_ddd("Debug3: socket_procclsyncconn(): Ending a connection thread.\n");
+	printf_ddd("Debug3: socket_procclsyncsock(): Ending a connection thread.\n");
 
 	socket_thread_delete(arg);
 
 	return 0;
 }
 
-socket_connthreaddata_t *socket_thread_new() {
+socket_sockthreaddata_t *socket_thread_new() {
 	pthread_mutex_lock(&socket_thread_mutex);
-	socket_connthreaddata_t *threaddata_p = &connthreaddata[clsyncconnthreads_num];
+	socket_sockthreaddata_t *threaddata_p = &sockthreaddata[clsyncsockthreads_num];
 
-	if(clsyncconnthreads_num >= SOCKET_MAX) {
+	if(clsyncsockthreads_num >= SOCKET_MAX) {
 		printf_e("Warning: socket_thread_new(): Too many connection threads.\n");
 		errno = EUSERS;
 		pthread_mutex_unlock(&socket_thread_mutex);
 		return NULL;
 	}
 
-	threaddata_p->id = clsyncconnthreads_num;
+	threaddata_p->id = clsyncsockthreads_num;
 
-	clsyncconnthread_busy[clsyncconnthreads_num]=1;
+	clsyncsockthread_busy[clsyncsockthreads_num]=1;
 	// TODO: SECURITY: Possible DoS-attack on huge "SOCKET_MAX" value. Fix it.
-	while(clsyncconnthread_busy[++clsyncconnthreads_num]);
+	while(clsyncsockthread_busy[++clsyncsockthreads_num]);
 
 #ifdef PARANOID
 	// Processing the events: checking if previous check were been made right
@@ -615,30 +615,30 @@ socket_connthreaddata_t *socket_thread_new() {
 
 	// Processing the events: creating a thread for new connection
 
-	printf_ddd("Debug3: socket_newconnarg(): clsyncconnthreads_count == %u;\tclsyncconnthreads_last == %u;\tclsyncconn_num == %u\n", 
-		clsyncconnthreads_count, clsyncconnthreads_last, clsyncconnthreads_num);
+	printf_ddd("Debug3: socket_newconnarg(): clsyncsockthreads_count == %u;\tclsyncsockthreads_last == %u;\tclsyncsockthreads_num == %u\n", 
+		clsyncsockthreads_count, clsyncsockthreads_last, clsyncsockthreads_num);
 
-	clsyncconnthreads_last = MAX(clsyncconnthreads_last, clsyncconnthreads_num);
+	clsyncsockthreads_last = MAX(clsyncsockthreads_last, clsyncsockthreads_num);
 
-	clsyncconnthreads_count++;
+	clsyncsockthreads_count++;
 	pthread_mutex_unlock(&socket_thread_mutex);
 	return threaddata_p;
 }
 
-socket_connthreaddata_t *socket_thread_attach(clsyncconn_t *clsyncconn_p) {
+socket_sockthreaddata_t *socket_thread_attach(clsyncsock_t *clsyncsock_p) {
 
-	socket_connthreaddata_t *threaddata_p = socket_thread_new();
+	socket_sockthreaddata_t *threaddata_p = socket_thread_new();
 
 	if (threaddata_p == NULL)
 		return NULL;
 
-	threaddata_p->clsyncconn_p	= clsyncconn_p;
+	threaddata_p->clsyncsock_p	= clsyncsock_p;
 
 	return threaddata_p;
 }
 
-int socket_thread_start(socket_connthreaddata_t *threaddata_p) {
-	if(pthread_create(&threaddata_p->thread, NULL, (void *(*)(void *))socket_procclsyncconn, threaddata_p)) {
+int socket_thread_start(socket_sockthreaddata_t *threaddata_p) {
+	if(pthread_create(&threaddata_p->thread, NULL, (void *(*)(void *))socket_procclsyncsock, threaddata_p)) {
 		printf_e("Error: socket_thread_start(): Cannot create a thread for connection: %s (errno: %i)\n", strerror(errno), errno);
 		return errno;
 	}

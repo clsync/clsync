@@ -17,22 +17,24 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef __CLSYNC_SOCKET_H
+#define __CLSYNC_SOCKET_H
+
 #define SOCKET_DEFAULT_PROT	0
 #define SOCKET_DEFAULT_SUBPROT	SUBPROT0_TEXT
 
 // buffer size
 #define SOCKET_BUFSIZ			(1<<12)
 
-struct clsyncconn {
+struct clsyncsock {
 	int sock;
-	int num;
 	uint16_t prot;
 	uint16_t subprot;
 };
-typedef struct clsyncconn clsyncconn_t;
+typedef struct clsyncsock clsyncsock_t;
 
 struct clsyncthread {
-	clsyncconn_t *clsyncconn_p;
+	clsyncsock_t *clsyncsock_p;
 	void *arg;
 	void *funct_arg_free;
 };
@@ -44,14 +46,14 @@ enum subprot0 {
 };
 typedef enum subprot0 subprot0_t;
 
-enum clsyncconn_state {
+enum clsyncsock_state {
 	CLSTATE_NONE	= 0,
 	CLSTATE_AUTH,
 	CLSTATE_MAIN,
 	CLSTATE_DYING,
 	CLSTATE_DIED,
 };
-typedef enum clsyncconn_state clsyncconn_state_t;
+typedef enum clsyncsock_state clsyncsock_state_t;
 
 enum sockcmd_id {
 	SOCKCMD_REQUEST_NEGOTIATION	= 000,
@@ -121,8 +123,10 @@ struct sockcmd {
 typedef struct sockcmd sockcmd_t;
 
 enum sockprocflags {
-	SOCKPROCFLAG_NONE	= 0,
-	SOCKPROCFLAG_OVERRIDECOMMON,
+	SOCKPROCFLAG_NONE		= 0x00,
+	SOCKPROCFLAG_OVERRIDE_COMMON	= 0x01,
+	SOCKPROCFLAG_OVERRIDE_API	= 0x02,
+	SOCKPROCFLAG_OVERRIDE_ALL	= 0x0f,
 };
 typedef enum sockprocflags sockprocflags_t;
 
@@ -133,42 +137,44 @@ enum sockauth_id {
 };
 typedef enum sockauth_id sockauth_id_t;
 
-struct socket_connthreaddata;
-typedef int (*clsyncconn_procfunct_t)(struct socket_connthreaddata *, sockcmd_t *);
+struct socket_sockthreaddata;
+typedef int (*clsyncsock_procfunct_t)(struct socket_sockthreaddata *, sockcmd_t *);
 typedef void (*freefunct_t)(void *);
-struct socket_connthreaddata {
+struct socket_sockthreaddata {
 	int			 id;
-	clsyncconn_procfunct_t	 procfunct;
+	clsyncsock_procfunct_t	 procfunct;
 	freefunct_t		 freefunct_arg;
-	clsyncconn_t		*clsyncconn_p;
+	clsyncsock_t		*clsyncsock_p;
 	void			*arg;
-	clsyncconn_state_t	 state;
+	clsyncsock_state_t	 state;
 	sockauth_id_t		 authtype;
 	int			*running;		// Pointer to interger with non-zero value to continue running
 	sockprocflags_t		 flags;
 	pthread_t		 thread;
 };
-typedef struct socket_connthreaddata socket_connthreaddata_t;
+typedef struct socket_sockthreaddata socket_sockthreaddata_t;
 
-extern int socket_send(clsyncconn_t *clsyncconn, sockcmd_id_t cmd_id, ...);
-extern int socket_sendinvalid(clsyncconn_t *clsyncconn_p, sockcmd_t *sockcmd_p);
-extern int socket_recv(clsyncconn_t *clsyncconn, sockcmd_t *sockcmd);
+extern int socket_send(clsyncsock_t *clsyncsock, sockcmd_id_t cmd_id, ...);
+extern int socket_sendinvalid(clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p);
+extern int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd);
 extern int socket_check_bysock(int sock);
-extern clsyncconn_t *socket_accept(int sock);
-extern int socket_cleanup(clsyncconn_t *clsyncconn_p);
+extern clsyncsock_t *socket_accept(int sock);
+extern int socket_cleanup(clsyncsock_t *clsyncsock_p);
 extern int socket_init();
 extern int socket_deinit();
-extern int socket_procclsyncconn(socket_connthreaddata_t *arg);
-extern clsyncconn_t *socket_connect_unix(const char *const socket_path);
-extern int socket_listen_unix(const char *const socket_path);
+extern int socket_procclsyncsock(socket_sockthreaddata_t *arg);
+extern clsyncsock_t *socket_connect_unix(const char *const socket_path);
+extern clsyncsock_t *socket_listen_unix (const char *const socket_path);
 
-extern socket_connthreaddata_t *socket_thread_attach(clsyncconn_t *clsyncconn_p);
-extern int socket_thread_start(socket_connthreaddata_t *threaddata_p);
+extern socket_sockthreaddata_t *socket_thread_attach(clsyncsock_t *clsyncsock_p);
+extern int socket_thread_start(socket_sockthreaddata_t *threaddata_p);
 
-extern int clsyncconns_num;
-extern int clsyncconns_count;
-extern int clsyncconns_last;
+extern int clsyncsocks_num;
+extern int clsyncsocks_count;
+extern int clsyncsocks_last;
 
 extern const char *const textmessage_args[];
 extern const char *const textmessage_descr[];
+
+#endif
 

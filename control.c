@@ -28,13 +28,13 @@
 
 static pthread_t pthread_control;
 
-int control_procclsyncconn(socket_connthreaddata_t *arg, sockcmd_t *sockcmd_p) {
-	clsyncconn_t	*clsyncconn_p =              arg->clsyncconn_p;
+int control_procclsyncsock(socket_sockthreaddata_t *arg, sockcmd_t *sockcmd_p) {
+	clsyncsock_t	*clsyncsock_p =              arg->clsyncsock_p;
 	options_t 	*options_p    = (options_t *)arg->arg;
 
 	switch(sockcmd_p->cmd_id) {
 		case SOCKCMD_REQUEST_INFO: {
-			socket_send(clsyncconn_p, SOCKCMD_REPLY_INFO, options_p->config_block, options_p->label, options_p->flags, options_p->flags_set);
+			socket_send(clsyncsock_p, SOCKCMD_REPLY_INFO, options_p->config_block, options_p->label, options_p->flags, options_p->flags_set);
 			break;
 		}
 		case SOCKCMD_REQUEST_DIE: {
@@ -101,10 +101,10 @@ int control_loop(options_t *options_p) {
 			continue;
 		}
 
-		// Processing the events: accepting new clsyncconn
+		// Processing the events: accepting new clsyncsock
 
-		clsyncconn_t *clsyncconn_p = socket_accept(s);
-		if(clsyncconn_p == NULL) {
+		clsyncsock_t *clsyncsock_p = socket_accept(s);
+		if(clsyncsock_p == NULL) {
 
 			if(errno == EUSERS)	// Too many connections. Just ignoring the new one.
 				continue;
@@ -116,7 +116,7 @@ int control_loop(options_t *options_p) {
 		}
 
 		printf_dd("Debug2: control_loop(): Starting new thread for new connection.\n");
-		socket_connthreaddata_t *threaddata_p = socket_thread_attach(clsyncconn_p);
+		socket_sockthreaddata_t *threaddata_p = socket_thread_attach(clsyncsock_p);
 
 		if (threaddata_p == NULL) {
 			printf_e("Error: control_loop(): Cannot create a thread for connection: %s (errno: %i)\n", strerror(errno), errno);
@@ -124,8 +124,8 @@ int control_loop(options_t *options_p) {
 			continue;
 		}
 
-		threaddata_p->procfunct		=  control_procclsyncconn;
-		threaddata_p->clsyncconn_p	=  clsyncconn_p;
+		threaddata_p->procfunct		=  control_procclsyncsock;
+		threaddata_p->clsyncsock_p	=  clsyncsock_p;
 		threaddata_p->arg		=  options_p;
 		threaddata_p->running		= &options_p->socket;
 		threaddata_p->authtype		=  options_p->flags[SOCKETAUTH];
@@ -159,9 +159,13 @@ int control_run(options_t *options_p) {
 
 
 		if (!ret) {
-			s = socket_listen_unix(options_p->socketpath);
-			if (s == -1)
+			clsyncsock_t *clsyncsock = socket_listen_unix(options_p->socketpath);
+			if (clsyncsock == NULL) {
 				ret = errno;
+			} else {
+				s = clsyncsock->sock;
+				socket_cleanup(clsyncsock);
+			}
 		}
 
 		// fixing privileges

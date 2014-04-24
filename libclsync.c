@@ -22,6 +22,7 @@
 #include <sys/un.h>	// for "struct sockaddr_un"
 
 #include "socket.h"
+#include "libclsync.h"
 #include "malloc.h"
 #include "output.h"
 
@@ -36,82 +37,95 @@ write_funct _write_d=NULL;
 write_funct _write_v=NULL;
 write_funct write_e=NULL;
 
-struct clsync {
-	clsyncconn_t 		*conn_p;
-	clsyncconn_procfunct_t	 procfunct;
-};
-typedef struct clsync clsync_t;
 
-
-int libclsync_procclsyncconn(socket_connthreaddata_t *arg, sockcmd_t *sockcmd_p) {
-	clsync_t		*clsync_p     = arg->arg;
-	clsyncconn_t		*clsyncconn_p = clsync_p->conn_p;
-	clsyncconn_procfunct_t   procfunct    = clsync_p->procfunct;
+int libproc_procclsyncsock(socket_sockthreaddata_t *arg, sockcmd_t *sockcmd_p) {
+	clsyncproc_t		*proc_p     = arg->arg;
+	clsyncsock_t		*clsyncsock_p = proc_p->sock_p;
+	clsyncsock_procfunct_t   procfunct    = proc_p->procfunct;
 
 #ifdef PARANOID
 	if (procfunct == NULL) {
-		printf_e("Error: libclsync_procclsyncconn(): procfunct == NULL\n");
+		printf_e("Error: libproc_procclsyncsock(): procfunct == NULL\n");
 		return 0;
 	}
 #endif
 
+	if(arg->flags&SOCKPROCFLAG_OVERRIDE_API)
+		goto l_libproc_procclsyncsock_sw_default;
+
 	switch(sockcmd_p->cmd_id) {
 		default:
+l_libproc_procclsyncsock_sw_default:
 			if(procfunct(arg, sockcmd_p))
-				socket_sendinvalid(clsyncconn_p, sockcmd_p);
+				socket_sendinvalid(clsyncsock_p, sockcmd_p);
 			break;
 	}
 
 	return 0;
 }
 
-static inline int _clsync_connect_setthreaddata(socket_connthreaddata_t *threaddata_p, clsync_t *clsync_p) {
-	threaddata_p->procfunct		=  libclsync_procclsyncconn;
-	threaddata_p->clsyncconn_p	=  clsync_p->conn_p;
-	threaddata_p->arg		=  clsync_p;
+static inline int _clsync_connect_setthreaddata(socket_sockthreaddata_t *threaddata_p, clsyncproc_t *proc_p, sockprocflags_t flags) {
+	threaddata_p->procfunct		=  libproc_procclsyncsock;
+	threaddata_p->clsyncsock_p	=  proc_p->sock_p;
+	threaddata_p->arg		=  proc_p;
 	threaddata_p->running		=  NULL;
 	threaddata_p->authtype		=  SOCKAUTH_NULL;
-	threaddata_p->flags		=  0;
+	threaddata_p->flags		=  flags;
 	threaddata_p->freefunct_arg	=  free;
 
 	return 0;
 }
 
-clsync_t *clsync_connect_unix(const char *const socket_path, clsyncconn_procfunct_t procfunct) {
-	clsync_t *clsync_p = xmalloc(sizeof(*clsync_p));
-	memset(clsync_p, 0, sizeof(*clsync_p));
-
+static inline clsyncproc_t *_clsync_x_unix(
+	const char *const socket_path, 
+	clsyncsock_procfunct_t procfunct, 
+	sockprocflags_t flags, 
+	const char *const action, 
+	clsyncsock_t *(*socket_x_unix)(const char *const)
+) {
 	if (procfunct == NULL) {
 		errno = EINVAL;
 		return NULL;
 	}
 
-	clsync_p->conn_p = socket_connect_unix(socket_path);
-	if(clsync_p->conn_p == NULL) {
-		free(clsync_p);
+	clsyncproc_t *proc_p = xmalloc(sizeof(*proc_p));
+	memset(proc_p, 0, sizeof(*proc_p));
+
+	proc_p->sock_p = socket_x_unix(socket_path);
+	if(proc_p->sock_p == NULL) {
+		free(proc_p);
 		if(errno == EUSERS) {
-			printf_e("Error: clsync_connect_unix(): Too many connections.\n");
+			printf_e("Error: clsync_%s_unix(): Too many connections.\n", action);
 			return NULL;
 		}
 
-		// Got unknown error. Closing control socket just in case.
-		printf_e("Error: clsync_connect_unix(): Cannot socket_accept(): %s (errno: %i)\n", strerror(errno), errno);
+		printf_e("Error: clsync_%s_unix(): Cannot socket_%s_unix(): %s (errno: %i)\n",
+			action, action, strerror(errno), errno);
 		return NULL;
 	}
 
-	socket_connthreaddata_t *threaddata_p = socket_thread_attach(clsync_p->conn_p);
+	socket_sockthreaddata_t *threaddata_p = socket_thread_attach(proc_p->sock_p);
 	if (threaddata_p == NULL) {
-		socket_cleanup(clsync_p->conn_p);
-		free(clsync_p);
+		socket_cleanup(proc_p->sock_p);
+		free(proc_p);
 		return NULL;
 	}
 
-	_clsync_connect_setthreaddata(threaddata_p, clsync_p);
+	_clsync_connect_setthreaddata(threaddata_p, proc_p, flags);
 
-	clsync_p->procfunct		=  procfunct;
+	proc_p->procfunct = procfunct;
 	socket_thread_start(threaddata_p);
 
-	return clsync_p;
+	return proc_p;
+}
+
+clsyncproc_t *clsync_listen_unix(const char *const socket_path, clsyncsock_procfunct_t procfunct, sockprocflags_t flags) {
+	return _clsync_x_unix(socket_path, procfunct, flags, "listen",  socket_listen_unix);
+}
+
+
+clsyncproc_t *clsync_connect_unix(const char *const socket_path, clsyncsock_procfunct_t procfunct, sockprocflags_t flags) {
+	return _clsync_x_unix(socket_path, procfunct, flags, "connect", socket_connect_unix);
 }
 
 
