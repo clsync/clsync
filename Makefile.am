@@ -48,6 +48,10 @@ doc:
 	doxygen .doxygen
 
 install-data-local:
+if SOCKET
+	mkdir -p $(DESTDIR)/$(libdir)/pkgconfig
+	cp pkgconfig/*.pc $(DESTDIR)/$(libdir)/pkgconfig/
+endif
 	mkdir -p $(DESTDIR)/$(exampledir)
 	cp -R examples/production $(DESTDIR)/$(exampledir)/
 

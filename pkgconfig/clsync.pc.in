@@ -1,0 +1,10 @@
+prefix=@prefix@
+exec_prefix=@exec_prefix@
+libdir=@libdir@
+includedir=@includedir@
+
+Name: clsync
+Description: Live sync utility
+Version: @VERSION@
+Cflags: -I${includedir}/clsync/
+Libs: -L${libdir} -lclsync

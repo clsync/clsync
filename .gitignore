@@ -54,6 +54,7 @@ tmp
 /stamp-h1
 Makefile
 Makefile.in
+pkgconfig/clsync.pc
 
 /debian/autoreconf.after
 /debian/autoreconf.before
