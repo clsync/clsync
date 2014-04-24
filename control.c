@@ -137,7 +137,7 @@ int control_loop(options_t *options_p) {
 			continue;
 		}
 #ifdef DEBUG
-		// Too prevent to often connections
+		// To prevent too often connections
 		sleep(1);
 #endif
 	}
