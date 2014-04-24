@@ -28,6 +28,7 @@
 #include "glibex.h"
 #include "control.h"
 
+#include <stdio.h>
 #include <dlfcn.h>
 
 
@@ -2271,7 +2272,12 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 	return;
 }
 
-
+static inline void setenv_iteration(uint32_t iteration_num)
+{
+	char iterations[sizeof("4294967296")];	// 4294967296 == 2**32
+	sprintf(iterations, "%i", iteration_num);
+	setenv("CLSYNC_ITERATION", iterations, 1);
+}
 
 int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p) {
 	printf_ddd("Debug3: sync_idle_dosync_collectedevents()\n");
@@ -2321,7 +2327,6 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 		return 0;
 	}
 
-
 	if(options_p->flags[MODE] == MODE_SO) {
 		//dosync_arg.evcount = g_hash_table_size(indexes_p->fpath2ei_ht);
 		printf_ddd("Debug3: sync_idle_dosync_collectedevents(): There's %i events. Processing.\n", dosync_arg.evcount);
@@ -2368,6 +2373,15 @@ int sync_idle_dosync_collectedevents(options_t *options_p, indexes_t *indexes_p)
 		}
 
 		g_hash_table_remove_all(indexes_p->fpath2ei_ht);
+	}
+
+	if(!options_p->flags[PTHREAD]) {
+		if(options_p->iteration_num < ~0) // ~0 is the max value for unsigned variables
+			options_p->iteration_num++;
+		setenv_iteration(options_p->iteration_num); 
+
+		printf_ddd("Debug3: sync_idle_dosync_collectedevents(): next iteration: %u/%u\n", 
+			options_p->iteration_num, options_p->flags[MAXITERATIONS]);
 	}
 
 	return 0;
@@ -2782,7 +2796,8 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 
 		threadsinfo_t *threadsinfo_p = thread_getinfo();
 		pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
-		printf_ddd("Debug3: sync_inotify_loop(): current state is %i\n", state);
+		printf_ddd("Debug3: sync_inotify_loop(): current state is %i (iteration: %u/%u)\n",
+			state, options_p->iteration_num, options_p->flags[MAXITERATIONS]);
 		events = 0;
 		switch(state) {
 			case STATE_PTHREAD_GC:
@@ -2794,6 +2809,11 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 				state = STATE_RUNNING;
 				SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
 			case STATE_INITSYNC:
+				if(!options_p->flags[PTHREAD]) {
+					options_p->iteration_num = 0;
+					setenv_iteration(options_p->iteration_num);
+				}
+
 				main_status_update(options_p, state);
 				pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
 				pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
@@ -2809,7 +2829,14 @@ int sync_inotify_loop(int inotify_d, options_t *options_p, indexes_t *indexes_p)
 				state = STATE_RUNNING;
 				continue;
 			case STATE_RUNNING:
-				events = sync_inotify_wait(inotify_d, options_p, indexes_p); 
+				if(!options_p->flags[PTHREAD])
+					if (options_p->flags[MAXITERATIONS] &&
+					    options_p->flags[MAXITERATIONS] <= options_p->iteration_num)
+							state = STATE_EXIT;
+
+				if(state == STATE_RUNNING)
+					events = sync_inotify_wait(inotify_d, options_p, indexes_p);
+
 				if(state != STATE_RUNNING)
 					SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
 				break;
