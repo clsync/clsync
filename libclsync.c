@@ -26,16 +26,24 @@
 #include "malloc.h"
 #include "output.h"
 
+int printf_null(const char *const fmt, ...) {
+	return 0;
+}
+
+int write_null(const char *const buf, size_t size) {
+	return 0;
+}
+
 printf_funct _printf_ddd=NULL;
 printf_funct _printf_dd=NULL;
 printf_funct _printf_d=NULL;
 printf_funct _printf_v=NULL;
-printf_funct printf_e=NULL;
+printf_funct printf_e=printf_null;
 write_funct _write_ddd=NULL;
 write_funct _write_dd=NULL;
 write_funct _write_d=NULL;
 write_funct _write_v=NULL;
-write_funct write_e=NULL;
+write_funct write_e=write_null;
 
 
 int libproc_procclsyncsock(socket_sockthreaddata_t *arg, sockcmd_t *sockcmd_p) {
@@ -50,16 +58,12 @@ int libproc_procclsyncsock(socket_sockthreaddata_t *arg, sockcmd_t *sockcmd_p) {
 	}
 #endif
 
-	if(arg->flags&SOCKPROCFLAG_OVERRIDE_API)
-		goto l_libproc_procclsyncsock_sw_default;
-
-	switch(sockcmd_p->cmd_id) {
-		default:
-l_libproc_procclsyncsock_sw_default:
-			if(procfunct(arg, sockcmd_p))
+	if(procfunct(arg, sockcmd_p))
+		switch(sockcmd_p->cmd_id) {
+			default:
 				socket_sendinvalid(clsyncsock_p, sockcmd_p);
-			break;
-	}
+				break;
+		}
 
 	return 0;
 }

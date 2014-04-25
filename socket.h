@@ -142,9 +142,6 @@ typedef struct sockcmd sockcmd_t;
 
 enum sockprocflags {
 	SOCKPROCFLAG_NONE		= 0x00,
-	SOCKPROCFLAG_OVERRIDE_COMMON	= 0x01,
-	SOCKPROCFLAG_OVERRIDE_API	= 0x02,
-	SOCKPROCFLAG_OVERRIDE_ALL	= 0x0f,
 };
 typedef enum sockprocflags sockprocflags_t;
 
