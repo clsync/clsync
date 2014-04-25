@@ -326,7 +326,7 @@ int parse_parameter(options_t *options_p, uint16_t param_id, char *arg, paramsou
 		case SOCKETAUTH: {
 			char *value;
 
-			options_p->flags[SOCKETAUTH] = getsubopt(&arg, modes, &value);
+			options_p->flags[SOCKETAUTH] = getsubopt(&arg, socketauth, &value);
 			if(options_p->flags[SOCKETAUTH] == -1) {
 				printf_e("Error: Wrong socket auth mech entered: \"%s\"\n", arg);
 				return EINVAL;
