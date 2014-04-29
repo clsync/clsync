@@ -27,7 +27,7 @@
 #define CLUSTER_LOOP_EXPECTCMD(clustercmd_p, clustercmd_id, ret) {\
 		/* Exit if error */ \
 		if(ret == -1) { \
-			printf_e("Error: CLUSTER_LOOP_EXPECTCMD(): Got error while cluster_recv(): %s (%i).\n", strerror(errno), errno); \
+			error("CLUSTER_LOOP_EXPECTCMD()"); \
 			return errno; \
 		}\
 \
@@ -244,7 +244,7 @@ typedef int (*cluster_recvproc_funct_t)(clustercmd_t *clustercmd_p);
 
 // Externs
 
-extern int cluster_init(options_t *options_p, indexes_t *indexes_p);
+extern int cluster_init(glob_t *glob_p, indexes_t *indexes_p);
 extern int cluster_deinit();
 
 extern int cluster_lock(const char *fpath);

@@ -33,6 +33,7 @@
 #ifdef CLUSTER_SUPPORT
 
 #include "common.h"
+#include "error.h"
 #include "cluster.h"
 #include "sync.h"
 #include "malloc.h"
@@ -582,10 +583,10 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 		return 0;
 	}
 	if(selret == 0) {
-		printf_ddd("Debug: cluster_recv(): no new messages.");
+		debug(3, "no new messages.");
 		return 0;
 	}
-	printf_ddd("Debug: cluster_recv(): got new message(s).");
+	debug(3, "got new message(s).");
 
 	// Reading new message's header
 	clustercmdadler32_t adler32;

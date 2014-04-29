@@ -996,7 +996,7 @@ char *sync_path_abs2rel(glob_t *glob_p, const char *path_abs, size_t path_abs_le
 		glob_p->watchdirwslash, watchdirlen+1);
 	if(path_rel[path_rel_len - 1] == '/')
 		path_rel[--path_rel_len] = 0x00;
-	printf_ddd("\"%s\" (len: %i)", path_rel, path_rel_len);
+	debug(3, "\"%s\" (len: %i)", path_rel, path_rel_len);
 #endif
 
 	if(path_rel_len_p != NULL)
