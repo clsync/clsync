@@ -18,7 +18,7 @@
  */
 
 #include "common.h"
-#include "output.h"
+#include "error.h"
 #include "malloc.h"
 
 
@@ -26,7 +26,7 @@ char *fd2fpath_malloc(int fd) {
 	struct stat64 lstat;
 
 	if(fd <= 0) {
-		printf_e("Error: Invalid file descriptor supplied: fd2fpath_malloc(%i).\n", fd);
+		error("Invalid file descriptor supplied: fd2fpath_malloc(%i).", fd);
 		errno = EINVAL;
 		return NULL;
 	}
@@ -36,7 +36,7 @@ char *fd2fpath_malloc(int fd) {
 	sprintf(fpath, "/proc/self/fd/%i", fd);
 
 	if(lstat64(fpath, &lstat)) {
-		printf_e("Error: Cannot lstat(\"%s\", lstat): %s (errno: %i).\n", fpath, strerror(errno), errno);
+		error("Cannot lstat(\"%s\", lstat).", fpath);
 		return NULL;
 	}
 
@@ -45,12 +45,12 @@ char *fd2fpath_malloc(int fd) {
 	if(fpathlen > (1<<8))
 		fpath = xrealloc(fpath, fpathlen+2);
 
-	printf_ddd("Debug2: Getting file path from symlink \"%s\". Path length is: %i.\n", fpath, fpathlen);
+	debug(3, "Getting file path from symlink \"%s\". Path length is: %i.", fpath, fpathlen);
 	if((fpathlen = readlink(fpath, fpath, fpathlen+1)) < 0) {
-		printf_e("Error: Cannot readlink(\"%s\", fpath, bufsize).\n", fpath);
+		error("Cannot readlink(\"%s\", fpath, bufsize).", fpath);
 		return NULL;
 	}
-	printf_ddd("Debug2: The path is: \"%s\"\n", fpath);
+	debug(3, "The path is: \"%s\"", fpath);
 
 	fpath[fpathlen] = 0;
 	return fpath;
@@ -73,15 +73,15 @@ int fileutils_copy(const char *path_from, const char *path_to) {
 
 	from = fopen(path_from, "r");
 	if(from == NULL) {
-		printf_e("Error: fileutils_copy(\"%s\", \"%s\"): Cannot open file \"%s\" for reading: %s (errno: %i)\n", 
-			path_from, path_to, path_from, strerror(errno), errno);
+		error("fileutils_copy(\"%s\", \"%s\"): Cannot open file \"%s\" for reading", 
+			path_from, path_to, path_from);
 		return errno;
 	}
 
 	to   = fopen(path_to,   "w");
 	if(to == NULL) {
-		printf_e("Error: fileutils_copy(\"%s\", \"%s\"): Cannot open file \"%s\" for writing: %s (errno: %i)\n", 
-			path_from, path_to, path_to, strerror(errno), errno);
+		error("fileutils_copy(\"%s\", \"%s\"): Cannot open file \"%s\" for writing", 
+			path_from, path_to, path_to);
 		return errno;
 	}
 
@@ -91,20 +91,20 @@ int fileutils_copy(const char *path_from, const char *path_to) {
 
 		r =  fread(buf, 1, BUFSIZ, from);
 		if((err=ferror(from))) {
-			printf_e("Error: fileutils_copy(\"%s\", \"%s\"): Cannot read from file \"%s\": %s (errno: %i)\n",
-				path_from, path_to, path_from, strerror(errno), errno);
+			error("fileutils_copy(\"%s\", \"%s\"): Cannot read from file \"%s\"",
+				path_from, path_to, path_from);
 			return errno;	// CHECK: Is the "errno" should be used in fread() case?
 		}
 
 		w = fwrite(buf, 1, r,      to);
 		if((err=ferror(to))) {
-			printf_e("Error: fileutils_copy(\"%s\", \"%s\"): Cannot write to file \"%s\": %s (errno: %i)\n",
-				path_from, path_to, path_to, strerror(errno), errno);
+			error("fileutils_copy(\"%s\", \"%s\"): Cannot write to file \"%s\"",
+				path_from, path_to, path_to);
 			return errno;	// CHECK: is the "errno" should be used in fwrite() case?
 		}
 		if(r != w) {
-			printf_e("Error: fileutils_copy(\"%s\", \"%s\"): Got error while writing to file \"%s\" (%u != %u): %s (errno: %i)\n",
-				path_from, path_to, path_to, r, w, strerror(errno), errno);
+			error("fileutils_copy(\"%s\", \"%s\"): Got error while writing to file \"%s\" (%u != %u)",
+				path_from, path_to, path_to, r, w);
 			return errno;	// CHECK: is the "errno" should be used in case "r != w"?
 		}
 	}
@@ -128,19 +128,19 @@ short int fileutils_calcdirlevel(const char *path) {
 	const char *ptr = path;
 
 	if(path == NULL) {
-		printf_e("Error: fileutils_calcdirlevel(): path is NULL.\n");
+		error("path is NULL.");
 		errno=EINVAL;
 		return -1;
 	}
 
 	if(*path == 0) {
-		printf_e("Error: fileutils_calcdirlevel(): path has zero length.\n");
+		error("path has zero length.");
 		errno=EINVAL;
 		return -2;
 	}
 
 	if(*path != '/') {
-		printf_e("Error: fileutils_calcdirlevel(): path \"%s\" is not canonized.\n", path);
+		error("path \"%s\" is not canonized.", path);
 		errno=EINVAL;
 		return -3;
 	}

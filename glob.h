@@ -18,8 +18,8 @@
  */
 
 
-#ifndef __CLSYNC_OPTIONS_H
-#define __CLSYNC_OPTIONS_H
+#ifndef __CLSYNC_GLOB_H
+#define __CLSYNC_GLOB_H
 
 #include <regex.h>
 
@@ -42,7 +42,7 @@ enum flags_enum {
 	CAP_PRESERVE_FILEACCESS = 'C',
 	PTHREAD		= 'p',
 	RETRIES		= 'r',
-	SYSLOG		= 'Y',
+	OUTPUT_METHOD	= 'Y',
 	EXCLUDEMOUNTPOINTS= 'X',
 	PIDFILE		= 'z',
 #ifdef CLUSTER_SUPPORT
@@ -155,12 +155,13 @@ typedef struct queueinfo queueinfo_t;
 struct api_functs {
 	api_funct_init   init;
 	api_funct_sync   sync;
-	api_funct_rsync   rsync;
+	api_funct_rsync  rsync;
 	api_funct_deinit deinit;
 };
 typedef struct api_functs api_functs_t;
 
-struct options {
+struct glob {
+#ifndef LIBCLSYNC
 	uid_t uid;
 	gid_t gid;
 	pid_t child_pid[MAXCHILDREN];	// Used only for non-pthread mode
@@ -168,8 +169,10 @@ struct options {
 	uint32_t iteration_num;
 	rule_t rules[MAXRULES];
 	dev_t st_dev;
+#endif
 	int flags[OPTION_FLAGS];
 	int flags_set[OPTION_FLAGS];
+#ifndef LIBCLSYNC
 	char *config_path;
 	char *config_block;
 	char *label;
@@ -219,8 +222,9 @@ struct options {
 	unsigned int synctimeout;
 	sigset_t *sigset;
 	char isignoredexitcode[(1<<8)];
+#endif
 };
-typedef struct options options_t;
+typedef struct glob glob_t;
 
 #endif
 

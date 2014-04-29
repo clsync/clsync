@@ -122,7 +122,7 @@ struct sockcmd_dat_version {
 };
 typedef struct sockcmd_dat_version sockcmd_dat_version_t;
 
-#ifdef __CLSYNC_OPTIONS_H
+#ifdef __CLSYNC_GLOB_H
 struct sockcmd_dat_info {
 	char		config_block[1<<8];
 	char		label[1<<8];

@@ -7,5 +7,5 @@ cat > rules <<EOF
 +*.*
 EOF
 
-clsync -K example-simple -M rsyncdirect -L ./testdir/listdir -w2 -p -t5 -W ./testdir/from -S `which rsync` -R rules -D ./testdir/to $@
+clsync -K example-simple -M rsyncdirect -L ./testdir/listdir -w2 -p -d4 -t5 -W ./testdir/from -S `which rsync` -R rules -D ./testdir/to $@
 

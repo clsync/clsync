@@ -21,7 +21,7 @@
 
 #include <sys/un.h>	// for "struct sockaddr_un"
 
-#include "output.h"
+#include "error.h"
 #include "malloc.h"
 #include "socket.h"
 
@@ -41,7 +41,7 @@ int socket_gc() {
 		i--;
 		switch(sockthreaddata[i].state) {
 			case CLSTATE_DIED:
-				printf_ddd("Debug3: socket_gc(): Forgeting clsyncsock #%u\n", i);
+				debug(3, "Forgeting clsyncsock #%u\n", i);
 				pthread_join(sockthreaddata[i].thread, NULL);
 				sockthreaddata[i].state = CLSTATE_NONE;
 				break;
@@ -105,7 +105,7 @@ static inline int socket_check(clsyncsock_t *clsyncsock_p) {
 clsyncsock_t *socket_new(int clsyncsock_sock) {
 	clsyncsock_t *clsyncsock_p = xmalloc(sizeof(*clsyncsock_p));
 	
-	printf_dd("Debug2: socket_new(): sock == %i.\n", clsyncsock_sock);
+	debug(2, "sock == %i.\n", clsyncsock_sock);
 
 	clsyncsock_p->sock    = clsyncsock_sock;
 	
@@ -118,7 +118,7 @@ clsyncsock_t *socket_new(int clsyncsock_sock) {
 int socket_cleanup(clsyncsock_t *clsyncsock_p) {
 	int clsyncsock_sock = clsyncsock_p->sock;
 
-	printf_dd("Debug2: socket_cleanup(): sock == %i.\n", clsyncsock_sock);
+	debug(2, "sock == %i.\n", clsyncsock_sock);
 
 	recv_ptrs[clsyncsock_sock] = NULL;
 	recv_stps[clsyncsock_sock] = NULL;
@@ -161,7 +161,7 @@ clsyncsock_t *socket_accept(int sock) {
 	// Getting new connection
 	int clsyncsock_sock = accept(sock, NULL, NULL);
 	if(clsyncsock_sock == -1) {
-		printf_e("Error: socket_accept(%i): Cannot accept(): %s (errno: %i)\n", sock, strerror(errno), errno);
+		error("socket_accept(%i): Cannot accept()\n", sock);
 		return NULL;
 	}
 
@@ -177,8 +177,8 @@ clsyncsock_t *socket_listen_unix(const char *const socket_path) {
 	// already exists? - unlink
 	if(!access(socket_path, F_OK))
 		if(unlink(socket_path)) {
-			printf_e("Error: Cannot unlink() \"%s\": %s (errno: %i).\n", 
-				socket_path, strerror(errno), errno);
+			error("Cannot unlink() \"%s\".\n", 
+				socket_path);
 			close(s);
 			return NULL;
 		}
@@ -190,8 +190,8 @@ clsyncsock_t *socket_listen_unix(const char *const socket_path) {
 		addr.sun_family = AF_UNIX;
 		strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path)-1);
 		if(bind(s, (struct sockaddr *)&addr, sizeof(addr))) {
-			printf_e("Error: Cannot bind() on address \"%s\": %s (errno: %i).\n",
-				socket_path, strerror(errno), errno);
+			error("Cannot bind() on address \"%s\".\n",
+				socket_path);
 			close(s);
 			return NULL;
 		}
@@ -199,8 +199,8 @@ clsyncsock_t *socket_listen_unix(const char *const socket_path) {
 
 	// starting to listening
 	if(listen(s, SOCKET_BACKLOG)) {
-		printf_e("Error: Cannot listen() on address \"%s\": %s (errno: %i).\n",
-			socket_path, strerror(errno), errno);
+		error("Cannot listen() on address \"%s\".\n",
+			socket_path);
 		close(s);
 		return NULL;
 	}
@@ -219,8 +219,8 @@ clsyncsock_t *socket_connect_unix(const char *const socket_path) {
 
 	// checking the path
 	if(access(socket_path, F_OK)) {
-		printf_e("Error: Cannot access() to \"%s\": %s (errno: %i).\n", 
-			socket_path, strerror(errno), errno);
+		error("Cannot access() to \"%s\".\n", 
+			socket_path);
 		close(s);
 		return NULL;
 	}
@@ -232,8 +232,8 @@ clsyncsock_t *socket_connect_unix(const char *const socket_path) {
 		addr.sun_family = AF_UNIX;
 		strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path)-1);
 		if(connect(s, (struct sockaddr *)&addr, sizeof(addr))) {
-			printf_e("Error: Cannot connect() to address \"%s\": %s (errno: %i).\n",
-				socket_path, strerror(errno), errno);
+			error("Cannot connect() to address \"%s\".\n",
+				socket_path);
 			close(s);
 			return NULL;
 		}
@@ -258,7 +258,7 @@ int socket_send(clsyncsock_t *clsyncsock, sockcmd_id_t cmd_id, ...) {
 				case SUBPROT0_TEXT: {
 					va_list ap_copy;
 
-					printf_ddd("Debug3: %p %p %p\n", prebuf0, textmessage_args[cmd_id], ap_copy);
+					debug(3, "%p %p %p\n", prebuf0, textmessage_args[cmd_id], ap_copy);
 
 					if(textmessage_args[cmd_id]) {
 						va_copy(ap_copy, ap);
@@ -277,13 +277,13 @@ int socket_send(clsyncsock_t *clsyncsock, sockcmd_id_t cmd_id, ...) {
 /*				case SUBPROT0_BINARY:
 					break;*/
 				default:
-					printf_e("Error: socket_send(): Unknown subprotocol with id %u.\n", clsyncsock->subprot);
+					error("Unknown subprotocol with id %u.\n", clsyncsock->subprot);
 					ret = EINVAL;
 					goto l_socket_send_end;
 			}
 			break;
 		default:
-			printf_e("Error: socket_send(): Unknown protocol with id %u.\n", clsyncsock->prot);
+			error("Unknown protocol with id %u.\n", clsyncsock->prot);
 			ret = EINVAL;
 			goto l_socket_send_end;
 	}
@@ -294,7 +294,7 @@ l_socket_send_end:
 }
 
 static inline int socket_overflow_fix(char *buf, char **data_start_p, char **data_end_p) {
-	printf_ddd("Debug3: socket_overflow_fix(): buf==%p; data_start==%p; data_end==%p\n", buf, *data_start_p, *data_end_p);
+	debug(3, "buf==%p; data_start==%p; data_end==%p\n", buf, *data_start_p, *data_end_p);
 	if(buf == *data_start_p)
 		return 0;
 
@@ -394,7 +394,7 @@ int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p) {
 	ptr   =  recv_ptrs[clsyncsock_sock];
 	ptr   = (ptr==NULL   ? buf : ptr);
 
-	printf_ddd("Debug3: socket_recv(): buf==%p; start==%p; ptr==%p\n", buf, start, ptr);
+	debug(3, "buf==%p; start==%p; ptr==%p\n", buf, start, ptr);
 
 	while(1) {
 		filled_length = ptr-buf;
@@ -402,7 +402,7 @@ int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p) {
 
 		if(rest_length <= 0) {
 			if(!socket_overflow_fix(buf, &start, &ptr)) {
-				printf_d("Debug: socket_recv(): Got too big message. Ignoring.\n");
+				debug(1, "Got too big message. Ignoring.\n");
 				ptr = buf;
 			}
 			continue;
@@ -475,7 +475,7 @@ l_socket_recv_end:
 	recv_stps[clsyncsock_sock] = start;
 	recv_ptrs[clsyncsock_sock] = ptr;
 
-	printf_ddd("Debug3: socket_recv(): sockcmd_p->cmd_id == %i; buf==%p; ptr==%p; end==%p, filled=%p, buf_end==%p\n",
+	debug(3, "sockcmd_p->cmd_id == %i; buf==%p; ptr==%p; end==%p, filled=%p, buf_end==%p\n",
 		sockcmd_p->cmd_id, buf, ptr, end, &buf[filled_length_new], &buf[SOCKET_BUFSIZ]);
 
 	sockcmd_p->cmd_num++;
@@ -506,19 +506,19 @@ int socket_procclsyncsock(socket_sockthreaddata_t *arg) {
 	typedef enum auth_flags auth_flags_t;
 	auth_flags_t	 auth_flags = 0;
 
-	printf_ddd("Debug3: socket_procclsyncsock(): Started new thread for new connection.\n");
+	debug(3, "Started new thread for new connection.\n");
 
 	arg->state = (arg->authtype == SOCKAUTH_NULL) ? CLSTATE_MAIN : CLSTATE_AUTH;
 	socket_send(clsyncsock_p, SOCKCMD_REQUEST_NEGOTIATION, clsyncsock_p->prot, clsyncsock_p->subprot);
 
 	while((arg->running && *arg->running) && (arg->state==CLSTATE_AUTH || arg->state==CLSTATE_MAIN)) {
-		printf_ddd("Debug3: socket_procclsyncsock(): Iteration.\n");
+		debug(3, "Iteration.\n");
 
 		// Receiving message
 		int ret;
 		if((ret = socket_recv(clsyncsock_p, sockcmd_p))) {
-			printf_e("Error: socket_procclsyncsock(): Got error while receiving a message from clsyncsock with sock %u: %s (errno: %u)\n", 
-				arg->clsyncsock_p->sock, strerror(ret), ret);
+			error("Got error while receiving a message from clsyncsock with sock %u: %s (errno: %u)\n", 
+				arg->clsyncsock_p->sock);
 			break;
 		}
 
@@ -538,7 +538,7 @@ int socket_procclsyncsock(socket_sockthreaddata_t *arg) {
 										socket_send(clsyncsock_p, SOCKCMD_REPLY_NEGOTIATION, data->prot, data->subprot);
 									else {
 										socket_send(clsyncsock_p, SOCKCMD_REPLY_ACK,    sockcmd_p->cmd_id, sockcmd_p->cmd_num);
-										printf_d("Debug2: socket_procclsyncsock(): Negotiated proto: %u %u\n", data->prot, data->subprot);
+										debug(1, "Negotiated proto: %u %u\n", data->prot, data->subprot);
 									}
 									break;
 								default:
@@ -571,7 +571,7 @@ int socket_procclsyncsock(socket_sockthreaddata_t *arg) {
 
 		// Check if the socket is still alive
 		if(socket_check(clsyncsock_p)) {
-			printf_d("Debug: clsyncsock socket error: %s\n", strerror(errno));
+			debug(1, "clsyncsock socket error: %s\n", strerror(errno));
 			break;
 		}
 
@@ -586,7 +586,7 @@ int socket_procclsyncsock(socket_sockthreaddata_t *arg) {
 		}
 	}
 
-	printf_ddd("Debug3: socket_procclsyncsock(): Ending a connection thread.\n");
+	debug(3, "Ending a connection thread.\n");
 
 	socket_thread_delete(arg);
 
@@ -598,7 +598,7 @@ socket_sockthreaddata_t *socket_thread_new() {
 	socket_sockthreaddata_t *threaddata_p = &sockthreaddata[clsyncsockthreads_num];
 
 	if(clsyncsockthreads_num >= SOCKET_MAX) {
-		printf_e("Warning: socket_thread_new(): Too many connection threads.\n");
+		error("Warning: socket_thread_new(): Too many connection threads.\n");
 		errno = EUSERS;
 		pthread_mutex_unlock(&socket_thread_mutex);
 		return NULL;
@@ -615,7 +615,7 @@ socket_sockthreaddata_t *socket_thread_new() {
 
 	if(threaddata_p->state != CLSTATE_NONE) {
 		// This's not supposed to be
-		printf_e("Internal-Error: socket_newconnarg(): connproc_arg->state != CLSTATE_NONE\n");
+		error("Internal-Error: socket_newconnarg(): connproc_arg->state != CLSTATE_NONE\n");
 		pthread_mutex_unlock(&socket_thread_mutex);
 		errno = EILSEQ;
 		return NULL;
@@ -624,7 +624,7 @@ socket_sockthreaddata_t *socket_thread_new() {
 
 	// Processing the events: creating a thread for new connection
 
-	printf_ddd("Debug3: socket_newconnarg(): clsyncsockthreads_count == %u;\tclsyncsockthreads_last == %u;\tclsyncsockthreads_num == %u\n", 
+	debug(3, "clsyncsockthreads_count == %u;\tclsyncsockthreads_last == %u;\tclsyncsockthreads_num == %u\n", 
 		clsyncsockthreads_count, clsyncsockthreads_last, clsyncsockthreads_num);
 
 	clsyncsockthreads_last = MAX(clsyncsockthreads_last, clsyncsockthreads_num);
@@ -648,7 +648,7 @@ socket_sockthreaddata_t *socket_thread_attach(clsyncsock_t *clsyncsock_p) {
 
 int socket_thread_start(socket_sockthreaddata_t *threaddata_p) {
 	if(pthread_create(&threaddata_p->thread, NULL, (void *(*)(void *))socket_procclsyncsock, threaddata_p)) {
-		printf_e("Error: socket_thread_start(): Cannot create a thread for connection: %s (errno: %i)\n", strerror(errno), errno);
+		error("Cannot create a thread for connection\n");
 		return errno;
 	}
 

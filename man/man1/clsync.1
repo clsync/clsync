@@ -268,11 +268,21 @@ Is not set by default.
 Don't use this option if not sure.
 .RE
 
-.B \-Y, \-\-syslog
+.B \-Y, \-\-output
+.I log\-destination
 .RS 8
-Use syslog instead of stderr for logging.
+Sets destination for log writing (errors, warnings, infos and debugging).
 
-Is not set by default.
+Possible values:
+.RS
+.I stderr
+.br
+.I stdout
+.br
+.I syslog
+.RE
+
+Default value is "stderr".
 .RE
 
 .B \-\-one\-file\-system

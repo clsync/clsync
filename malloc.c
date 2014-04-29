@@ -19,7 +19,7 @@
 
 #include "common.h"
 #include "malloc.h"
-#include "output.h"
+#include "error.h"
 
 void *xmalloc(size_t size) {
 #ifdef PARANOID
@@ -28,10 +28,8 @@ void *xmalloc(size_t size) {
 
 	void *ret = malloc(size);
 
-	if(ret == NULL) {
-		printf_e("xmalloc(%i): Cannot allocate memory (#%i: %s).\n", size, errno, strerror(errno));
-		exit(errno);
-	}
+	if(ret == NULL)
+		critical("xmalloc(%i): Cannot allocate memory.", size);
 
 #ifdef PARANOID
 	memset(ret, 0, size);
@@ -47,10 +45,8 @@ void *xcalloc(size_t nmemb, size_t size) {
 
 	void *ret = calloc(nmemb, size);
 
-	if(ret == NULL) {
-		printf_e("xcalloc(%i): Cannot allocate memory (#%i: %s).\n", size, errno, strerror(errno));
-		exit(errno);
-	}
+	if(ret == NULL)
+		critical("xcalloc(%i): Cannot allocate memory.", size);
 
 //	memset(ret, 0, nmemb*size);	// Just in case
 	return ret;
@@ -63,10 +59,8 @@ void *xrealloc(void *oldptr, size_t size) {
 
 	void *ret = realloc(oldptr, size);
 
-	if(ret == NULL) {
-		printf_e("xrealloc(%p, %i): Cannot reallocate memory (#%i: %s).\n", oldptr, size, errno, strerror(errno));
-		exit(errno);
-	}
+	if(ret == NULL)
+		critical("xrealloc(%p, %i): Cannot reallocate memory.", oldptr, size);
 
 	return ret;
 }

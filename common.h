@@ -69,7 +69,7 @@
 #endif
 
 #include "clsync.h"
-#include "options.h"
+#include "glob.h"
 #include "indexes.h"
 
 #ifndef MIN
@@ -95,6 +95,23 @@
 #else
 #define PARANOIDV(...)
 #endif
+
+#ifdef _GNU_SOURCE
+#	ifndef likely
+#		define likely(x)    __builtin_expect(!!(x), 1)
+#	endif
+#	ifndef unlikely
+#		define unlikely(x)  __builtin_expect(!!(x), 0)
+#	endif
+#else
+#	ifndef likely
+#		define likely(x)   (x)
+#	endif
+#	ifndef unlikely
+#		define unlikely(x) (x)
+#	endif
+#endif
+
 
 #define TOSTR(a) # a
 #define XTOSTR(a) TOSTR(a)
@@ -155,7 +172,7 @@ struct eventinfo {
 typedef struct eventinfo eventinfo_t;
 
 
-typedef int (*thread_callbackfunct_t)(options_t *options_p, char **argv);
+typedef int (*thread_callbackfunct_t)(glob_t *glob_p, char **argv);
 struct threadinfo {
 	int			  thread_num;
 	thread_callbackfunct_t 	  callback;
@@ -164,7 +181,7 @@ struct threadinfo {
 	int			  exitcode;
 	int			  errcode;
 	state_t			  state;
-	options_t		 *options_p;
+	glob_t		 *glob_p;
 	time_t			  starttime;
 	time_t			  expiretime;
 	int			  child_pid;
@@ -202,7 +219,7 @@ struct dosync_arg {
 	char excf_path[PATH_MAX+1];
 	char outf_path[PATH_MAX+1];
 	FILE *outf;
-	options_t *options_p;
+	glob_t *glob_p;
 	indexes_t *indexes_p;
 	void *data;
 	int linescount;
@@ -248,7 +265,7 @@ enum initsync {
 typedef enum initsync initsync_t;
 
 struct sighandler_arg {
-	options_t *options_p;
+	glob_t    *glob_p;
 //	indexes_t *indexes_p;
 	pthread_t  pthread_parent;
 	int	  *exitcode_p;

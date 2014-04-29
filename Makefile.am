@@ -1,5 +1,5 @@
 bin_PROGRAMS = clsync
-clsync_SOURCES = sync.c cluster.c main.c output.c fileutils.c malloc.c glibex.c
+clsync_SOURCES = sync.c cluster.c main.c error.c fileutils.c malloc.c glibex.c
 clsync_CFLAGS = $(AM_CFLAGS)
 
 if SOCKET
@@ -39,8 +39,8 @@ clsync_include_HEADERS = \
 	clsync.h \
 	malloc.h \
 	indexes.h \
-	options.h \
-	output.h \
+	glob.h \
+	error.h \
 	socket.h \
 	libclsync.h
 

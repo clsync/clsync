@@ -35,7 +35,6 @@
 #include "common.h"
 #include "cluster.h"
 #include "sync.h"
-#include "output.h"
 #include "malloc.h"
 
 #ifdef HAVE_MHASH
@@ -53,7 +52,7 @@ struct sockaddr_in sa_i		= {0};
 int sock_o			= -1;
 struct sockaddr_in sa_o		= {0};
 
-options_t  *options_p		= NULL;
+glob_t  *glob_p		= NULL;
 indexes_t  *indexes_p		= NULL;
 pthread_t   pthread_cluster	= 0;
 
@@ -84,7 +83,7 @@ window_t window_o = {0};
 static inline int clustercmd_window_add(window_t *window_p, clustercmd_t *clustercmd_p, GHashTable *serial2queuedpacket_ht) {
 #ifdef PARANOID
 	if(clustercmd_p->h.src_node_id >= MAXNODES) {
-		printf_e("Error: clustercmd_window_add(): Invalid src_node_id: %i.\n", clustercmd_p->h.src_node_id);
+		error("Invalid src_node_id: %i.", clustercmd_p->h.src_node_id);
 		return EINVAL;
 	}
 #endif
@@ -117,7 +116,7 @@ static inline int clustercmd_window_add(window_t *window_p, clustercmd_t *cluste
 		occupied_right = MAX(occupied_right, window_p->occupied_sides[window_id].right);
 	}
 
-	printf_ddd("Debug3: clustercmd_window_add(): w.size == %u, b_left == %u; b_right == %u; w.buf_size == %u; r_space == %u\n",
+	debug(3, "w.size == %u, b_left == %u; b_right == %u; w.buf_size == %u; r_space == %u",
 		window_p->size, occupied_left, occupied_right, window_p->buf_size, required_space);
 
 	// Trying to find a space in the buffer to place message
@@ -140,7 +139,7 @@ static inline int clustercmd_window_add(window_t *window_p, clustercmd_t *cluste
 			window_p->buf	    = xrealloc(window_p->buf, window_p->buf_size);
 			buf_coordinate      = occupied_right;
 		}
-		printf_ddd("Debug3: clustercmd_window_add(): f_left == %u; f_right == %u; b_coord == %u; w.buf_size == %u",
+		debug(3, "f_left == %u; f_right == %u; b_coord == %u; w.buf_size == %u",
 			free_left, free_right, buf_coordinate, window_p->buf_size);
 	} else {
 		buf_coordinate = 0;
@@ -162,7 +161,7 @@ static inline int clustercmd_window_add(window_t *window_p, clustercmd_t *cluste
 	// placing information into buffer
 	clustercmdqueuedpacket_t *queuedpacket_p;
 
-	printf_ddd("Debug3: clustercmd_window_add(): b_coord == %u\n", buf_coordinate);
+	debug(3, "b_coord == %u", buf_coordinate);
 	queuedpacket_p = (clustercmdqueuedpacket_t *)&window_p->buf[buf_coordinate];
 
 	memset(&queuedpacket_p->h,	0,		sizeof(queuedpacket_p->h));
@@ -191,11 +190,11 @@ static inline int clustercmd_window_add(window_t *window_p, clustercmd_t *cluste
 static inline int clustercmd_window_del(window_t *window_p, clustercmdqueuedpacket_t *queuedpacket_p, GHashTable *serial2queuedpacket_ht) {
 #ifdef PARANOID
 	if(!window_p->size) {
-		printf_e("Error: clustercmd_window_del(): window not allocated.\n");
+		error("window not allocated.");
 		return EINVAL;
 	}
 	if(!window_p->packets_len) {
-		printf_e("Error: clustercmd_window_del(): there already no packets in the window.\n");
+		error("there already no packets in the window.");
 		return EINVAL;
 	}
 #endif
@@ -207,7 +206,7 @@ static inline int clustercmd_window_del(window_t *window_p, clustercmdqueuedpack
 
 	// 	Moving the last packet into place of deleting packet, to free the tail in "window_p->packets_id" and "window_p->occupied_sides"
 	if(window_id_del != window_id_last) {
-		printf_ddd("Debug3: clustercmd_window_del(): %i -> %i\n", window_id_last, window_id_del);
+		debug(3, "%i -> %i", window_id_last, window_id_del);
 
 		window_p->packets_id[window_id_del] = window_p->packets_id[window_id_last];
 
@@ -298,7 +297,7 @@ int clustercmd_adler32_calc(clustercmd_t *clustercmd_p, clustercmdadler32_t *clu
 
 #ifdef PARANOID
 		if(size & 0x3) {
-			printf_e("Error: clustercmd_adler32_calc(): clustercmd_p->h.data_len&0x3 != 0: %u\n",
+			error("clustercmd_adler32_calc(): clustercmd_p->h.data_len&0x3 != 0: %u",
 				clustercmd_p->h.data_len);
 			return EINVAL;
 		}
@@ -394,8 +393,8 @@ int cluster_send(clustercmd_t *clustercmd_p) {
 	clustercmd_p->h.src_node_id = node_id_my;
 	clustercmd_adler32_calc(clustercmd_p, &clustercmd_p->h.adler32, ADLER32_CALC_ALL);
 
-	printf_ddd("Debug3: cluster_send(): Sending: "
-		"{h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u, adler32.hdr: %p, adler32.dat: %p, data_len: %u}\n",
+	debug(3, "Sending: "
+		"{h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u, adler32.hdr: %p, adler32.dat: %p, data_len: %u}",
 		clustercmd_p->h.dst_node_id, clustercmd_p->h.src_node_id, clustercmd_p->h.cmd_id,
 		(void *)(long)clustercmd_p->h.adler32.hdr, (void *)(long)clustercmd_p->h.adler32.dat,
 		clustercmd_p->h.data_len);
@@ -407,7 +406,7 @@ int cluster_send(clustercmd_t *clustercmd_p) {
 	switch(nodeinfo_p->status) {
 		case NODESTATUS_DOESNTEXIST:
 		case NODESTATUS_OFFLINE:
-			printf_d("Debug: cluster_send(): There's no online node with id %u. Skipping sending.\n", clustercmd_p->h.dst_node_id);
+			debug(1, "There's no online node with id %u. Skipping sending.", clustercmd_p->h.dst_node_id);
 			return EADDRNOTAVAIL;
 		default:
 			break;
@@ -462,7 +461,7 @@ static inline int cluster_read(int sock, void *buf, size_t size, cluster_read_fl
 	int readret = recvfrom(sock, buf, size, MSG_WAITALL, (struct sockaddr *)&sa_in, (socklen_t * restrict)&sa_in_len);
 	if(flags & CLREAD_CONTINUE) {
 		if(memcmp(&last_addr, &sa_in.sin_addr, sizeof(last_addr))) {
-			printf_d("Debug: Get message from wrong source (%s != %s). Skipping it :(.\n", inet_ntoa(sa_in.sin_addr), inet_ntoa(last_addr));
+			debug(1, "Get message from wrong source (%s != %s). Skipping it :(.", inet_ntoa(sa_in.sin_addr), inet_ntoa(last_addr));
 			size = 0;
 			return 0;
 		}
@@ -471,22 +470,22 @@ static inline int cluster_read(int sock, void *buf, size_t size, cluster_read_fl
 
 #ifdef PARANOID
 	if(!readret) {
-		printf_e("Error: cluster_read(): recvfrom() returned 0. This shouldn't happend. Exit.");
+		error("recvfrom() returned 0. This shouldn't happend. Exit.");
 		return EINVAL;
 	}
 #endif
 	if(readret < 0) {
-		printf_e("Error: cluster_read(): recvfrom() returned %i. "
-			"Seems, that something wrong with network socket: %s (errno %i).\n", 
-			readret, strerror(errno), errno);
+		error("recvfrom() returned %i. "
+			"Seems, that something wrong with network socket.", 
+			readret);
 		return errno != -1 ? errno : -2;
 	}
 
-	printf_dd("Debug2: cluster_read(): Got message from %s (len: %i, expected: %i).\n", inet_ntoa(sa_in.sin_addr), readret, size);
+	debug(2, "Got message from %s (len: %i, expected: %i).", inet_ntoa(sa_in.sin_addr), readret, size);
 
 	if(readret < size) {
 		// Too short message
-		printf_e("Warning: cluster_read(): Got too short message from node. Ignoring it.\n");
+		error("Warning: cluster_read(): Got too short message from node. Ignoring it.");
 		return -1;
 	}
 
@@ -579,15 +578,14 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 
 	//	processing select()'s retuned value
 	if(selret <  0) {
-		printf_e("Error: cluster_recv(): got error while select(): %s (errno: %i).\n", 
-			strerror(errno), errno);
+		error("got error while select().");
 		return 0;
 	}
 	if(selret == 0) {
-		printf_ddd("Debug: cluster_recv(): no new messages.\n");
+		printf_ddd("Debug: cluster_recv(): no new messages.");
 		return 0;
 	}
-	printf_ddd("Debug: cluster_recv(): got new message(s).\n");
+	printf_ddd("Debug: cluster_recv(): got new message(s).");
 
 	// Reading new message's header
 	clustercmdadler32_t adler32;
@@ -597,8 +595,7 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 	if((ret=cluster_read(sock_i, (void *)clustercmd_p, sizeof(clustercmdhdr_t), CLREAD_NONE))) {
 		if(ret == -1) return 0; // Invalid message? Skipping.
 
-		printf_e("Error: cluster_recv(): Got error from cluster_read(): %s (errno %i).\n",
-			strerror(errno), errno);
+		error("Got error from cluster_read().");
 		errno = ret;
 		return -1;
 	}
@@ -606,12 +603,11 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 	// Checking adler32 of packet headers.
 	clustercmd_adler32_calc(clustercmd_p, &adler32, ADLER32_CALC_HEADER);
 	if(adler32.hdr != clustercmd_p->h.adler32.hdr) {
-		printf_d("Debug: cluster_recv(): hdr-adler32 mismatch: %p != %p.\n", 
+		debug(1, "hdr-adler32 mismatch: %p != %p.", 
 			(void*)(long)clustercmd_p->h.adler32.hdr, (void*)(long)adler32.hdr);
 
 		if((ret=clustercmd_reject(clustercmd_p, REJ_adler32MISMATCH)) != EADDRNOTAVAIL) {
-			printf_e("Error: cluster_recv(): Got error while clustercmd_reject(): %s (errno: %i).\n", 
-				strerror(ret), ret);
+			error("Got error while clustercmd_reject().");
 			errno = ret;
 			return -1;
 		}
@@ -625,17 +621,17 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 	if(src_node_id == NODEID_NOID) {
 		// 	Wrong command from registering node?
 		if(clustercmd_p->h.cmd_id != CLUSTERCMDID_GETMYID) {
-			printf_e("Warning: cluster_recv(): Got non getmyid packet from NOID node. Ignoring the packet.\n");
+			error("Warning: cluster_recv(): Got non getmyid packet from NOID node. Ignoring the packet.");
 			return 0;
 		}
 		if(clustercmd_p->h.serial != 0) {
-			printf_e("Warning: cluster_recv(): Got packet with non-zero serial from NOID node. Ignoring the packet.\n");
+			error("Warning: cluster_recv(): Got packet with non-zero serial from NOID node. Ignoring the packet.");
 			return 0;
 		}
 	} else
 	// 	Wrong src_node_id?
 	if(src_node_id >= MAXNODES) {
-		printf_e("Warning: cluster_recv(): Invalid h.src_node_id: %i >= "XTOSTR(MAXNODES)"\n",
+		error("Warning: cluster_recv(): Invalid h.src_node_id: %i >= "XTOSTR(MAXNODES)"",
 			src_node_id);
 		return 0;
 	}
@@ -646,14 +642,14 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 	} else
 	//	Wrong dst_node_id?
 	if(dst_node_id >= MAXNODES) {
-		printf_e("Warning: cluster_recv(): Invalid h.dst_node_id: %i >= "XTOSTR(MAXNODES)"\n", 
+		error("Warning: cluster_recv(): Invalid h.dst_node_id: %i >= "XTOSTR(MAXNODES)"", 
 			dst_node_id);
 		return 0;
 	}
 
 	// Seems, that headers are correct. Continuing.
-	printf_ddd("Debug3: cluster_recv(): Received: {h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u,"
-		" adler32: %u, data_len: %u}, timeout: %u -> %u\n",
+	debug(3, "Received: {h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u,"
+		" adler32: %u, data_len: %u}, timeout: %u -> %u",
 		dst_node_id, src_node_id, clustercmd_p->h.cmd_id, 
 		clustercmd_p->h.adler32, clustercmd_p->h.data_len, *timeout_p, timeout);
 
@@ -662,12 +658,12 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 #ifdef PARANOID
 	if((clustercmd_p->h.src_node_id == node_id_my) && (node_id_my != NODEID_NOID)) {
 #ifdef VERYPARANOID
-		printf_e("Error: cluster_recv(): clustercmd_p->h.src_node_id == node_id_my (%i != %i)."
-			" Exit.\n", clustercmd_p->h.src_node_id, node_id_my);
+		error("clustercmd_p->h.src_node_id == node_id_my (%i != %i)."
+			" Exit.", clustercmd_p->h.src_node_id, node_id_my);
 		return EINVAL;
 #else
-		printf_e("Warning: cluster_recv(): clustercmd_p->h.src_node_id == node_id_my (%i != %i)."
-			" Ignoring the command.\n", clustercmd_p->h.src_node_id, node_id_my);
+		error("Warning: cluster_recv(): clustercmd_p->h.src_node_id == node_id_my (%i != %i)."
+			" Ignoring the command.", clustercmd_p->h.src_node_id, node_id_my);
 		clustercmd_p = NULL;
 		return 0;
 #endif
@@ -678,7 +674,7 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 
 	// Not actual packet?
 	if(clustercmd_p->h.serial <= nodeinfo_p->last_serial) {
-		printf_d("Debug: cluster_recv(): Ignoring packet from %i due to serial: %i <= %i\n", 
+		debug(1, "Ignoring packet from %i due to serial: %i <= %i", 
 			src_node_id, clustercmd_p->h.serial, nodeinfo_p->last_serial);
 		return 0;
 	}
@@ -695,14 +691,14 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 
 	// Too big data?
 	if(clustercmd_p->h.data_len > CLUSTER_PACKET_MAXSIZE) {
-		printf_e("Warning: cluster_recv(): Got too big message from node %i. Ignoring it.\n",
+		error("Warning: cluster_recv(): Got too big message from node %i. Ignoring it.",
 			src_node_id);
 		return 0;
 	}
 
 	// Incorrect size of data?
 	if(clustercmd_p->h.data_len & 0x3) {
-		printf_e("Warning: cluster_recv(): Received packet of size not a multiple of 4. Ignoring it.\n");
+		error("Warning: cluster_recv(): Received packet of size not a multiple of 4. Ignoring it.");
 		return 0;
 	}
 
@@ -716,8 +712,7 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 	if((ret=cluster_read(sock_i, (void *)clustercmd_p->data.p, clustercmd_p->h.data_len, CLREAD_CONTINUE))) {
 		if(ret == -1) return 0;
 
-		printf_e("Error: cluster_recv(): Got error from cluster_read(): %s (errno %i).\n", 
-			strerror(errno), errno);
+		error("Got error from cluster_read().");
 		errno = ret;
 		return -1;
 	}
@@ -725,12 +720,11 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 	// Checking adler32 of packet data.
 	clustercmd_adler32_calc(clustercmd_p, &adler32, ADLER32_CALC_DATA);
 	if(adler32.dat != clustercmd_p->h.adler32.dat) {
-		printf_d("Debug: cluster_recv(): dat-adler32 mismatch: %p != %p.\n", 
+		debug(1, "dat-adler32 mismatch: %p != %p.", 
 			(void*)(long)clustercmd_p->h.adler32.dat, (void*)(long)adler32.dat);
 
 		if((ret=clustercmd_reject(clustercmd_p, REJ_adler32MISMATCH)) != EADDRNOTAVAIL) {
-			printf_e("Error: cluster_recv(): Got error while clustercmd_reject(): %s (errno: %i).\n", 
-				strerror(ret), ret);
+			error("Got error while clustercmd_reject().");
 			errno = ret;
 			return -1;
 		}
@@ -751,23 +745,22 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
  */
 
  int cluster_recv_proc(unsigned int _timeout) {
-	printf_ddd("Debug3: cluster_recv_proc(%i)\n", _timeout);
+	debug(3, "cluster_recv_proc(%i)", _timeout);
 	clustercmd_t *clustercmd_p;
 	int ret;
 	unsigned int timeout = _timeout;
 	while((ret=cluster_recv(&clustercmd_p, &timeout))) {
 		// Exit if error
 		if(ret == -1) {
-			printf_e("Error: cluster_recv_proc(): Got error while cluster_recv(): %s (%i).\n", 
-				strerror(errno), errno);
+			error("Got error while cluster_recv(): %s (%i).");
 			return errno;
 		}
 
 		// If we have appropriate callback function, then call it! :)
 		if(recvproc_funct[clustercmd_p->h.cmd_id])
 			if((ret=recvproc_funct[clustercmd_p->h.cmd_id](clustercmd_p))) {
-				printf_e("Error: cluster_recv_proc(): Got error from recvproc_funct[%i]: %s (%i)\n", 
-					clustercmd_p->h.cmd_id, strerror(ret), ret);
+				error("Got error from recvproc_funct[%i]: %s (%i)", 
+					clustercmd_p->h.cmd_id);
 				return ret;
 			}
 	}
@@ -841,7 +834,7 @@ int cluster_io_deinit() {
 	if(window_i.buf_size) {
 #ifdef PARANOID
 		if(window_i.buf == NULL) {
-			printf_e("Error: cluster_recv_proc_deinit(): window_i.buf_size != 0, but window_i.buf == NULL.\n");
+			error("window_i.buf_size != 0, but window_i.buf == NULL.");
 		} else
 #endif
 		free(window_i.buf);
@@ -850,7 +843,7 @@ int cluster_io_deinit() {
 	if(window_o.buf_size) {
 #ifdef PARANOID
 		if(window_o.buf == NULL) {
-			printf_e("Error: cluster_recv_proc_deinit(): window_o.buf_size != 0, but window_o.buf == NULL.\n");
+			error("window_o.buf_size != 0, but window_o.buf == NULL.");
 		} else
 #endif
 		free(window_o.buf);
@@ -881,11 +874,11 @@ static int cluster_recvproc_setid(clustercmd_t *clustercmd_p) {
 	// 	Is the node name length in message equals to our node name length? Skipping if not.
 	uint32_t recv_nodename_len;
 	recv_nodename_len = CLUSTER_RESTDATALEN(clustercmd_p, clustercmd_setiddata_t);
-	if(recv_nodename_len != options_p->cluster_nodename_len)
+	if(recv_nodename_len != glob_p->cluster_nodename_len)
 		return 0;
 
 	// 	Is the node name equals to ours? Skipping if not.
-	if(memcmp(data_setid_p->node_name, options_p->cluster_nodename, recv_nodename_len))
+	if(memcmp(data_setid_p->node_name, glob_p->cluster_nodename, recv_nodename_len))
 		return 0;
 
 	//	Remembering the node that answered us
@@ -903,7 +896,7 @@ extern int cluster_loop();
 /**
  * @brief 			Initializes cluster subsystem.
  * 
- * @param[in] 	_options_p 	Pointer to "options" variable, defined in main().
+ * @param[in] 	_glob_p 	Pointer to "glob" variable, defined in main().
  * @param[in] 	_indexes_p	Pointer to "indexes" variable, defined in sync_run().
  *
  * @retval	zero 		Successfully initialized.
@@ -911,19 +904,19 @@ extern int cluster_loop();
  * 
  */
 
-int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
+int cluster_init(glob_t *_glob_p, indexes_t *_indexes_p) {
 	int ret;
 
 	// Preventing double initializing
-	if(options_p != NULL) {
-		printf_e("Error: cluster_init(): cluster subsystem is already initialized.\n");
+	if(glob_p != NULL) {
+		error("cluster subsystem is already initialized.");
 		return EALREADY;
 	}
 
 	// Initializing global variables, pt. 1
-	options_p	= _options_p;
+	glob_p	= _glob_p;
 	indexes_p	= _indexes_p;
-	cluster_timeout	= options_p->cluster_timeout;
+	cluster_timeout	= glob_p->cluster_timeout;
 	node_status_change(NODEID_NOID, NODESTATUS_ONLINE);
 
 	// Initializing network routines
@@ -934,7 +927,7 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 
 	sock_i = socket(AF_INET, SOCK_DGRAM, 0);
 	if(sock_i < 0) {
-		printf_e("cluster_init(): Cannot create socket for input traffic: %s (errno: %i)\n", strerror(errno), errno);
+		error("Cannot create socket for input traffic");
 		return errno;
 	}
 
@@ -943,33 +936,31 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 
 	int reuse = 1;
 	if(setsockopt(sock_i, SOL_SOCKET, SO_REUSEADDR,(char *)&reuse, sizeof(reuse)) < 0) {
-		printf_e("Error: cluster_init(): Got error while setsockopt(): %s (errno: %i)\n", 
-			strerror(errno), errno);
+		error("Got error while setsockopt()");
 		return errno;
 	}
 
 	//		Binding
 
 	sa_i.sin_family		= AF_INET;
-	sa_i.sin_port 		= htons(options_p->cluster_mcastipport);
+	sa_i.sin_port 		= htons(glob_p->cluster_mcastipport);
 	sa_i.sin_addr.s_addr	= INADDR_ANY;
 
 	if(bind(sock_i, (struct sockaddr*)&sa_i, sizeof(sa_i))) {
-		printf_e("Error: cluster_init(): Got error while bind(): %s (errno: %i)\n", 
-			strerror(errno), errno);
+		error("Got error while bind()");
 		return errno;
 	}
 
 	//		Joining to multicast group
 
 	struct ip_mreq group;
-	group.imr_interface.s_addr = inet_addr(options_p->cluster_iface);
-	group.imr_multiaddr.s_addr = inet_addr(options_p->cluster_mcastipaddr);
+	group.imr_interface.s_addr = inet_addr(glob_p->cluster_iface);
+	group.imr_multiaddr.s_addr = inet_addr(glob_p->cluster_mcastipaddr);
 
 	if(setsockopt(sock_i, IPPROTO_IP, IP_ADD_MEMBERSHIP, 
 				(char *)&group, sizeof(group)) < 0) {
-		printf_e("Error: cluster_init(): Cannot setsockopt() to enter to membership %s -> %s\n",
-			options_p->cluster_iface, options_p->cluster_mcastipaddr);
+		error("Cannot setsockopt() to enter to membership %s -> %s",
+			glob_p->cluster_iface, glob_p->cluster_mcastipaddr);
 		return errno;
 	}
 
@@ -979,22 +970,22 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 
 	sock_o = socket(AF_INET, SOCK_DGRAM, 0);
 	if(sock_o < 0) {
-		printf_e("cluster_init(): Cannot create socket for output traffic: %s (errno: %i)\n", strerror(errno), errno);
+		error("Cannot create socket for output traffic");
 		return errno;
 	}
 	
 	//		Initializing the group sockaddr structure
 
 	sa_o.sin_family		= AF_INET;
-	sa_o.sin_port 		= htons(options_p->cluster_mcastipport);
-	sa_o.sin_addr.s_addr	= inet_addr(options_p->cluster_mcastipaddr);
+	sa_o.sin_port 		= htons(glob_p->cluster_mcastipport);
+	sa_o.sin_addr.s_addr	= inet_addr(glob_p->cluster_mcastipaddr);
 
 	//		Disable looping back output datagrams
 
 	{
 		char loopch = 0;
 		if(setsockopt(sock_o, IPPROTO_IP, IP_MULTICAST_LOOP, (char *)&loopch, sizeof(loopch))<0) {
-			printf_e("Error: Cannot disable loopback for output socket: %s (errno: %i).\n", strerror(errno), errno);
+			error("Cannot disable loopback for output socket.");
 			return errno;
 		}
 	}
@@ -1003,9 +994,9 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 
 	{
 		struct in_addr addr_o;
-		addr_o.s_addr = inet_addr(options_p->cluster_iface);
+		addr_o.s_addr = inet_addr(glob_p->cluster_iface);
 		if(setsockopt(sock_o, IPPROTO_IP, IP_MULTICAST_IF, &addr_o, sizeof(addr_o)) < 0) {
-			printf_e("Error: Cannot set local interface for outbound traffic: %s (errno: %i)\n", strerror(errno), errno);
+			error("Cannot set local interface for outbound traffic");
 			return errno;
 		}
 	}
@@ -1019,10 +1010,10 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 	//	Trying to preserve my node_id after restart. :)
 	//	Asking another nodes about my previous node_id
 	{
-		clustercmd_t *clustercmd_p = CLUSTER_ALLOCA(clustercmd_getmyid_t, options_p->cluster_nodename_len);
+		clustercmd_t *clustercmd_p = CLUSTER_ALLOCA(clustercmd_getmyid_t, glob_p->cluster_nodename_len);
 
-		clustercmd_p->h.data_len = options_p->cluster_nodename_len;
-		memcpy(clustercmd_p->data.getmyid.node_name, options_p->cluster_nodename, clustercmd_p->h.data_len+1);
+		clustercmd_p->h.data_len = glob_p->cluster_nodename_len;
+		memcpy(clustercmd_p->data.getmyid.node_name, glob_p->cluster_nodename, clustercmd_p->h.data_len+1);
 
 		clustercmd_p->h.cmd_id      = CLUSTERCMDID_GETMYID;
 		clustercmd_p->h.dst_node_id = NODEID_NOID; // broadcast
@@ -1036,7 +1027,7 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 	if((ret=cluster_recv_proc(cluster_timeout)))
 		return ret;
 
-	printf_ddd("Debug3: cluster_init(): After communicating with others, my node_id is %i.\n", node_id_my);
+	debug(3, "After communicating with others, my node_id is %i.", node_id_my);
 
 	//	Getting free node_id if nobody said us the certain value (see above).
 	if(node_id_my == NODEID_NOID) {
@@ -1048,12 +1039,12 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 			}
 			i++;
 		}
-		printf_ddd("Debug3: cluster_init(): I was have to set my node_id to %i.\n", node_id_my);
+		debug(3, "I was have to set my node_id to %i.", node_id_my);
 	}
 
 	//	If there's no free id-s, then exit :(
 	if(node_id_my == NODEID_NOID) {
-		printf_e("Error: Cannot find free node ID. Seems, that all %i ID-s are already occupied.\n");
+		error("Cannot find free node ID. Seems, that all %i ID-s are already occupied.");
 		return ENOMEM;
 	}
 
@@ -1062,12 +1053,12 @@ int cluster_init(options_t *_options_p, indexes_t *_indexes_p) {
 	// 	Sending registration information
 	node_status_change(node_id_my, NODESTATUS_SEEMSONLINE);
 	{
-		clustercmd_t *clustercmd_p = CLUSTER_ALLOCA(clustercmd_reg_t, options_p->cluster_nodename_len);
+		clustercmd_t *clustercmd_p = CLUSTER_ALLOCA(clustercmd_reg_t, glob_p->cluster_nodename_len);
 		clustercmd_reg_t *data_reg_p = &clustercmd_p->data.reg;
 
-		memcpy(data_reg_p->node_name, options_p->cluster_nodename, options_p->cluster_nodename_len+1);
+		memcpy(data_reg_p->node_name, glob_p->cluster_nodename, glob_p->cluster_nodename_len+1);
 
-		clustercmd_p->h.data_len    = options_p->cluster_nodename_len+1;
+		clustercmd_p->h.data_len    = glob_p->cluster_nodename_len+1;
 		clustercmd_p->h.cmd_id      = CLUSTERCMDID_REG;
 		clustercmd_p->h.dst_node_id = NODEID_NOID; // broadcast
 		if((ret=cluster_send(clustercmd_p)))
@@ -1133,7 +1124,7 @@ int cluster_deinit() {
 	while(node_count) {
 #ifdef VERYPARANOID
 		if(i++ > MAXNODES) {
-			printf_e("Error: cluster_deinit() looped. Forcing break.");
+			error("cluster_deinit() looped. Forcing break.");
 			break;
 		}
 #endif
@@ -1235,7 +1226,7 @@ int cluster_loop() {
 
 	// Starting the loop
 
-	printf_ddd("Debug3: cluster_loop() started.\n");
+	debug(3, "cluster_loop() started.");
 
 	while(1) {
 		int _ret;
@@ -1243,7 +1234,7 @@ int cluster_loop() {
 		fd_set rfds;
 		FD_ZERO(&rfds);
 		FD_SET(sock_i, &rfds);
-		printf_ddd("Debug3: cluster_loop(): select()\n");
+		debug(3, "select()");
 		_ret = select(sock_i+1, &rfds, NULL, NULL, NULL);
 
 		// Exit if error
@@ -1254,20 +1245,20 @@ int cluster_loop() {
 		}
 
 		// Breaking the loop, if there's SIGTERM signal for this thread
-		printf_ddd("Debug3: cluster_loop(): sigpending()\n");
+		debug(3, "sigpending()");
 		if(sigpending(&sigset_cluster))
 			if(sigismember(&sigset_cluster, SIGTERM))
 				break;
 
 		// Processing new messages
-		printf_ddd("Debug3: cluster_loop(): cluster_recv_proc()\n");
+		debug(3, "cluster_recv_proc()");
 		if((ret=cluster_recv_proc(0))) {
 			sync_term(ret);
 			break;
 		}
 	}
 
-	printf_ddd("Debug3: cluster_loop() finished with exitcode %i.\n", ret);
+	debug(3, "cluster_loop() finished with exitcode %i.", ret);
 	return ret;
 #ifdef DOXYGEN
 	sync_term(0);
@@ -1292,13 +1283,13 @@ int cluster_modtime_update(const char *path, short int dirlevel, mode_t st_mode)
 	int ret;
 
 	// Getting relative directory level (depth)
-	short int dirlevel_rel = dirlevel - options_p->watchdir_dirlevel;
+	short int dirlevel_rel = dirlevel - glob_p->watchdir_dirlevel;
 
 	if((st_mode & S_IFMT) == S_IFDIR)
 		dirlevel_rel++;
 
 	// Don't remembering information about directories with level beyond the limits
-	if((dirlevel_rel > options_p->cluster_scan_dl_max) || (dirlevel_rel < options_p->cluster_hash_dl_min))
+	if((dirlevel_rel > glob_p->cluster_scan_dl_max) || (dirlevel_rel < glob_p->cluster_hash_dl_min))
 		return 0;
 
 
@@ -1306,7 +1297,7 @@ int cluster_modtime_update(const char *path, short int dirlevel, mode_t st_mode)
 	struct stat64 stat64;
 	ret=lstat64(path, &stat64);
 	if(ret) {
-		printf_e("Error: cluster_modtime_update() cannot lstat64() on \"%s\": %s (errno: %i)\n", path, strerror(errno), errno);
+		error("Cannot lstat64()", path);
 		return errno;
 	}
 
@@ -1326,8 +1317,8 @@ int cluster_modtime_update(const char *path, short int dirlevel, mode_t st_mode)
 	char   *dirpath_rel_p = xmalloc(dirpath_len+1);
 	char   *dirpath_rel   = dirpath_rel_p;
 
-	const char *dirpath_rel_full     = &dirpath[options_p->watchdirlen];
-	size_t      dirpath_rel_full_len = dirpath_len - options_p->watchdirlen;
+	const char *dirpath_rel_full     = &dirpath[glob_p->watchdirlen];
+	size_t      dirpath_rel_full_len = dirpath_len - glob_p->watchdirlen;
 
 	// 	Getting coodinate of the end (directory path is already canonized, so we can simply count number of slashes to get directory level)
 	int     slashcount=0;
@@ -1335,7 +1326,7 @@ int cluster_modtime_update(const char *path, short int dirlevel, mode_t st_mode)
 	while(dirpath_rel_full[dirpath_rel_end] && (dirpath_rel_end < dirpath_rel_full_len)) {
 		if(dirpath_rel_full[dirpath_rel_end] == '/') {
 			slashcount++;
-			if(slashcount >= options_p->cluster_hash_dl_max)
+			if(slashcount >= glob_p->cluster_hash_dl_max)
 				break;
 		}
 		dirpath_rel_end++;

@@ -25,6 +25,7 @@ struct clsyncproc {
 };
 typedef struct clsyncproc clsyncproc_t;
 
+extern int libclsync_init(int quite, int verbosity, int debug);
 extern clsyncproc_t *clsync_listen_unix (const char *const socket_path, clsyncsock_procfunct_t procfunct, sockprocflags_t flags);
 extern clsyncproc_t *clsync_connect_unix(const char *const socket_path, clsyncsock_procfunct_t procfunct, sockprocflags_t flags);
 

@@ -17,6 +17,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#define LIBCLSYNC
 #include "common.h"
 
 #include <sys/un.h>	// for "struct sockaddr_un"
@@ -24,27 +25,7 @@
 #include "socket.h"
 #include "libclsync.h"
 #include "malloc.h"
-#include "output.h"
-
-int printf_null(const char *const fmt, ...) {
-	return 0;
-}
-
-int write_null(const char *const buf, size_t size) {
-	return 0;
-}
-
-printf_funct _printf_ddd=NULL;
-printf_funct _printf_dd=NULL;
-printf_funct _printf_d=NULL;
-printf_funct _printf_v=NULL;
-printf_funct printf_e=printf_null;
-write_funct _write_ddd=NULL;
-write_funct _write_dd=NULL;
-write_funct _write_d=NULL;
-write_funct _write_v=NULL;
-write_funct write_e=write_null;
-
+#include "error.h"
 
 int libproc_procclsyncsock(socket_sockthreaddata_t *arg, sockcmd_t *sockcmd_p) {
 	clsyncproc_t		*proc_p     = arg->arg;
@@ -53,7 +34,7 @@ int libproc_procclsyncsock(socket_sockthreaddata_t *arg, sockcmd_t *sockcmd_p) {
 
 #ifdef PARANOID
 	if (procfunct == NULL) {
-		printf_e("Error: libproc_procclsyncsock(): procfunct == NULL\n");
+		error("procfunct == NULL");
 		return 0;
 	}
 #endif
@@ -99,12 +80,12 @@ static inline clsyncproc_t *_clsync_x_unix(
 	if(proc_p->sock_p == NULL) {
 		free(proc_p);
 		if(errno == EUSERS) {
-			printf_e("Error: clsync_%s_unix(): Too many connections.\n", action);
+			error("clsync_%s_unix(): Too many connections.", action);
 			return NULL;
 		}
 
-		printf_e("Error: clsync_%s_unix(): Cannot socket_%s_unix(): %s (errno: %i)\n",
-			action, action, strerror(errno), errno);
+		error("clsync_%s_unix(): Cannot socket_%s_unix()",
+			action, action);
 		return NULL;
 	}
 

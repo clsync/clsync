@@ -23,7 +23,7 @@
 #include <pwd.h>	// For getpwnam()
 #include <grp.h>	// For getgrnam()
 
-#include "output.h"
+#include "error.h"
 #include "sync.h"
 #include "malloc.h"
 #include "cluster.h"
@@ -32,7 +32,7 @@
 
 //#include "revision.h"
 
-static const struct option long_options[] =
+static const struct option long_glob[] =
 {
 	{"watch-dir",		required_argument,	NULL,	WATCHDIR},
 	{"sync-handler",	required_argument,	NULL,	SYNCHANDLER},
@@ -56,7 +56,7 @@ static const struct option long_options[] =
 #endif
 	{"pthread",		optional_argument,	NULL,	PTHREAD},
 	{"retries",		optional_argument,	NULL,	RETRIES},
-	{"syslog",		optional_argument,	NULL,	SYSLOG},
+	{"output",		required_argument,	NULL,	OUTPUT_METHOD},
 	{"one-file-system",	optional_argument,	NULL,	ONEFILESYSTEM},
 	{"exclude-mount-points",optional_argument,	NULL,	EXCLUDEMOUNTPOINTS},
 #ifdef CLUSTER_SUPPORT
@@ -110,6 +110,13 @@ static char *const socketauth[] = {
 	NULL
 };
 
+static char *const output_methods[] = {
+	[OM_STDERR]		= "stderr",
+	[OM_STDOUT]		= "stdout",
+	[OM_SYSLOG]		= "syslog",
+	NULL
+};
+
 static char *const modes[] = {
 	[MODE_UNSET]		= "",
 	[MODE_SIMPLE]		= "simple",
@@ -133,21 +140,21 @@ static char *const status_descr[] = {
 };
 
 int syntax() {
-	printf("possible options:\n");
+	info_short("possible glob:");
 	int i=0;
-	while(long_options[i].name != NULL) {
-		if(!(long_options[i].val & OPTION_CONFIGONLY))
-			printf("\t--%-24s%c%c%s\n", long_options[i].name, 
-				long_options[i].val & OPTION_LONGOPTONLY ? ' ' : '-', 
-				long_options[i].val & OPTION_LONGOPTONLY ? ' ' : long_options[i].val, 
-				(long_options[i].has_arg == required_argument ? " argument" : ""));
+	while(long_glob[i].name != NULL) {
+		if(!(long_glob[i].val & OPTION_CONFIGONLY))
+			info_short("\t--%-24s%c%c%s", long_glob[i].name, 
+				long_glob[i].val & OPTION_LONGOPTONLY ? ' ' : '-', 
+				long_glob[i].val & OPTION_LONGOPTONLY ? ' ' : long_glob[i].val, 
+				(long_glob[i].has_arg == required_argument ? " argument" : ""));
 		i++;
 	}
 	exit(EINVAL);
 }
 
 int version() {
-	printf(PROGRAM" v%i.%i"REVISION"\n\t"AUTHOR"\n", VERSION_MAJ, VERSION_MIN);
+	info_short(PROGRAM" v%i.%i"REVISION"\n\t"AUTHOR"", VERSION_MAJ, VERSION_MIN);
 	exit(0);
 }
 
@@ -155,7 +162,7 @@ int clsyncapi_getapiversion() {
 	return CLSYNC_API_VERSION;
 }
 
-int parse_parameter(options_t *options_p, uint16_t param_id, char *arg, paramsource_t paramsource) {
+int parse_parameter(glob_t *glob_p, uint16_t param_id, char *arg, paramsource_t paramsource) {
 #ifdef _DEBUG
 	fprintf(stderr, "Force-Debug: parse_parameter(): %i: %i = \"%s\"\n", paramsource, param_id, arg);
 #endif
@@ -165,14 +172,14 @@ int parse_parameter(options_t *options_p, uint16_t param_id, char *arg, paramsou
 				syntax();
 				return 0;
 			}
-			options_p->flags_set[param_id] = 1;
+			glob_p->flags_set[param_id] = 1;
 			break;
 		case PS_CONFIG:
-			if(options_p->flags_set[param_id])
+			if(glob_p->flags_set[param_id])
 				return 0;
 			break;
 		default:
-			printf_e("Warning: Unknown parameter #%i source (value \"%s\").\n", param_id, arg!=NULL ? arg : "");
+			error("Warning: Unknown parameter #%i source (value \"%s\").", param_id, arg!=NULL ? arg : "");
 			break;
 	}
 	switch(param_id) {
@@ -181,99 +188,110 @@ int parse_parameter(options_t *options_p, uint16_t param_id, char *arg, paramsou
 			syntax();
 			break;
 		case CONFIGFILE:
-			options_p->config_path  = arg;
+			glob_p->config_path  = arg;
 			break;
 		case CONFIGBLOCK:
-			options_p->config_block = arg;
+			glob_p->config_block = arg;
 			break;
 		case GID:
-			options_p->gid = (unsigned int)atol(arg);
-			options_p->flags[param_id]++;
+			glob_p->gid = (unsigned int)atol(arg);
+			glob_p->flags[param_id]++;
 			break;
 		case UID:
-			options_p->uid = (unsigned int)atol(arg);
-			options_p->flags[param_id]++;
+			glob_p->uid = (unsigned int)atol(arg);
+			glob_p->flags[param_id]++;
 			break;
 		case PIDFILE:
-			options_p->pidfile		= arg;
+			glob_p->pidfile		= arg;
 			break;
 		case RETRIES:
-			options_p->retries		= (unsigned int)atol(arg);
+			glob_p->retries		= (unsigned int)atol(arg);
 			break;
+		case OUTPUT_METHOD: {
+			char *value, *arg_orig = arg;
+
+			outputmethod_t outputmethod = getsubopt(&arg, output_methods, &value);
+			if(outputmethod == -1) {
+				errno = EINVAL;
+				error("Invalid log writing destination entered: \"%s\"", arg_orig);
+				return EINVAL;
+			}
+			glob_p->flags[OUTPUT_METHOD] = outputmethod;
+		}
 #ifdef CLUSTER_SUPPORT
 		case CLUSTERIFACE:
-			options_p->cluster_iface	= arg;
+			glob_p->cluster_iface	= arg;
 			break;
 		case CLUSTERMCASTIPADDR:
-			options_p->cluster_mcastipaddr	= arg;
+			glob_p->cluster_mcastipaddr	= arg;
 			break;
 		case CLUSTERMCASTIPPORT:
-			options_p->cluster_mcastipport	= (uint16_t)atoi(arg);
+			glob_p->cluster_mcastipport	= (uint16_t)atoi(arg);
 			break;
 		case CLUSTERTIMEOUT:
-			options_p->cluster_timeout	= (unsigned int)atol(arg);
+			glob_p->cluster_timeout	= (unsigned int)atol(arg);
 			break;
 		case CLUSTERNODENAME:
-			options_p->cluster_nodename	= arg;
+			glob_p->cluster_nodename	= arg;
 			break;
 		case CLUSTERHDLMIN:
-			options_p->cluster_hash_dl_min	= (uint16_t)atoi(arg);
+			glob_p->cluster_hash_dl_min	= (uint16_t)atoi(arg);
 			break;
 		case CLUSTERHDLMAX:
-			options_p->cluster_hash_dl_max	= (uint16_t)atoi(arg);
+			glob_p->cluster_hash_dl_max	= (uint16_t)atoi(arg);
 			break;
 		case CLUSTERSDLMAX:
-			options_p->cluster_scan_dl_max	= (uint16_t)atoi(arg);
+			glob_p->cluster_scan_dl_max	= (uint16_t)atoi(arg);
 			break;
 #endif
 		case OUTLISTSDIR:
-			options_p->listoutdir		= arg;
+			glob_p->listoutdir		= arg;
 			break;
 		case LABEL:
-			options_p->label		= arg;
+			glob_p->label		= arg;
 			break;
 		case STANDBYFILE:
 			if(strlen(arg)) {
-				options_p->standbyfile		= arg;
-				options_p->flags[STANDBYFILE]	= 1;
+				glob_p->standbyfile		= arg;
+				glob_p->flags[STANDBYFILE]	= 1;
 			} else {
-				options_p->standbyfile		= NULL;
-				options_p->flags[STANDBYFILE]	= 0;
+				glob_p->standbyfile		= NULL;
+				glob_p->flags[STANDBYFILE]	= 0;
 			}
 			break;
 		case SYNCDELAY: 
-			options_p->syncdelay		= (unsigned int)atol(arg);
+			glob_p->syncdelay		= (unsigned int)atol(arg);
 			break;
 		case DELAY:
-			options_p->_queues[QUEUE_NORMAL].collectdelay = (unsigned int)atol(arg);
+			glob_p->_queues[QUEUE_NORMAL].collectdelay = (unsigned int)atol(arg);
 			break;
 		case BFILEDELAY:
-			options_p->_queues[QUEUE_BIGFILE].collectdelay = (unsigned int)atol(arg);
+			glob_p->_queues[QUEUE_BIGFILE].collectdelay = (unsigned int)atol(arg);
 			break;
 		case BFILETHRESHOLD:
-			options_p->bfilethreshold = (unsigned long)atol(arg);
+			glob_p->bfilethreshold = (unsigned long)atol(arg);
 			break;
 #ifdef FANOTIFY_SUPPORT
 		case FANOTIFY:
-			options_p->notifyengine = NE_FANOTIFY;
+			glob_p->notifyengine = NE_FANOTIFY;
 			break;
 #endif
 		case INOTIFY:
-			options_p->notifyengine = NE_INOTIFY;
+			glob_p->notifyengine = NE_INOTIFY;
 			break;
 		case RSYNCINCLIMIT:
-			options_p->rsyncinclimit = (unsigned int)atol(arg);
+			glob_p->rsyncinclimit = (unsigned int)atol(arg);
 			break;
 		case SYNCTIMEOUT:
-			options_p->synctimeout   = (unsigned int)atol(arg);
+			glob_p->synctimeout   = (unsigned int)atol(arg);
 			break;
 		case EXITHOOK:
 			if(strlen(arg)) {
-				options_p->exithookfile		= arg;
-				options_p->flags[EXITHOOK]	= 1;
+				glob_p->exithookfile		= arg;
+				glob_p->flags[EXITHOOK]	= 1;
 			} else {
-				options_p->exithookfile		= NULL;
-				options_p->flags[EXITHOOK]	= 0;
+				glob_p->exithookfile		= NULL;
+				glob_p->flags[EXITHOOK]	= 0;
 			}
 			break;
 		case IGNOREEXITCODE: {
@@ -289,12 +307,12 @@ int parse_parameter(options_t *options_p, uint16_t param_id, char *arg, paramsou
 							// flushing the setting
 							int i = 0;
 							while(i < 256)
-								options_p->isignoredexitcode[i++] = 0;
+								glob_p->isignoredexitcode[i++] = 0;
 #ifdef _DEBUG
 							fprintf(stderr, "Force-Debug: parse_parameter(): Reset ignored exitcodes.\n");
 #endif
 						} else {
-							options_p->isignoredexitcode[exitcode] = 1;
+							glob_p->isignoredexitcode[exitcode] = 1;
 #ifdef _DEBUG
 							fprintf(stderr, "Force-Debug: parse_parameter(): Adding ignored exitcode %u.\n", exitcode);
 #endif
@@ -309,35 +327,35 @@ int parse_parameter(options_t *options_p, uint16_t param_id, char *arg, paramsou
 			version();
 			break;
 		case WATCHDIR:
-			options_p->watchdir	= arg;
+			glob_p->watchdir	= arg;
 			break;
 		case SYNCHANDLER:
-			options_p->handlerfpath	= arg;
+			glob_p->handlerfpath	= arg;
 			break;
 		case RULESFILE:
-			options_p->rulfpath	= arg;
+			glob_p->rulfpath	= arg;
 			break;
 		case DESTDIR:
-			options_p->destdir	= arg;
+			glob_p->destdir	= arg;
 			break;
 		case SOCKETPATH:
-			options_p->socketpath	= arg;
+			glob_p->socketpath	= arg;
 			break;
 		case SOCKETAUTH: {
 			char *value;
 
-			options_p->flags[SOCKETAUTH] = getsubopt(&arg, socketauth, &value);
-			if(options_p->flags[SOCKETAUTH] == -1) {
-				printf_e("Error: Wrong socket auth mech entered: \"%s\"\n", arg);
+			glob_p->flags[SOCKETAUTH] = getsubopt(&arg, socketauth, &value);
+			if(glob_p->flags[SOCKETAUTH] == -1) {
+				error("Wrong socket auth mech entered: \"%s\"", arg);
 				return EINVAL;
 			}
 		}
 		case SOCKETMOD:
-			if(!sscanf(arg, "%o", &options_p->socketmod)) {
-				printf_e("Error: Non octal value passed to --socket-mod: \"%s\"\n", arg);
+			if(!sscanf(arg, "%o", &glob_p->socketmod)) {
+				error("Non octal value passed to --socket-mod: \"%s\"", arg);
 				return EINVAL;
 			}
-			options_p->flags[param_id]++;
+			glob_p->flags[param_id]++;
 			break;
 		case SOCKETOWN: {
 			char *colon = strchr(arg, ':');
@@ -348,8 +366,8 @@ int parse_parameter(options_t *options_p, uint16_t param_id, char *arg, paramsou
 				struct passwd *pwent = getpwnam(arg);
 
 				if(pwent == NULL) {
-					printf_e("Error: Cannot find username \"%s\" (case #0): %s (errno: %i)\n", 
-						arg, strerror(errno), errno);
+					error("Cannot find username \"%s\" (case #0)", 
+						arg);
 					return EINVAL;
 				}
 
@@ -368,16 +386,16 @@ int parse_parameter(options_t *options_p, uint16_t param_id, char *arg, paramsou
 				errno=0;
 				struct passwd *pwent = getpwnam(user);
 				if(pwent == NULL) {
-					printf_e("Error: Cannot find username \"%s\" (case #1): %s (errno: %i)\n", 
-						user, strerror(errno), errno);
+					error("Cannot find username \"%s\" (case #1)", 
+						user);
 					return EINVAL;
 				}
 
 				errno=0;
 				struct group  *grent = getgrnam(group);
 				if(grent == NULL) {
-					printf_e("Error: Cannot find group \"%s\": %s (errno: %i)\n", 
-						group, strerror(errno), errno);
+					error("Cannot find group \"%s\"", 
+						group);
 					return EINVAL;
 				}
 	
@@ -385,49 +403,49 @@ int parse_parameter(options_t *options_p, uint16_t param_id, char *arg, paramsou
 				gid = grent->gr_gid;
 			}
 
-			options_p->socketuid = uid;
-			options_p->socketgid = gid;
-			options_p->flags[param_id]++;
+			glob_p->socketuid = uid;
+			glob_p->socketgid = gid;
+			glob_p->flags[param_id]++;
 
-			printf_dd("Debug2: socket: uid == %u; gid == %u\n", uid, gid);
+			debug(2, "socket: uid == %u; gid == %u", uid, gid);
 
 			break;
 		}
 		case STATUSFILE:
-			options_p->statusfile	= arg;
+			glob_p->statusfile	= arg;
 			break;
 		case MODE: {
 			char *value;
 
-			options_p->flags[MODE]  = getsubopt(&arg, modes, &value);
-			if(options_p->flags[MODE] == -1) {
-				fprintf(stderr, "Error: Wrong mode name entered: \"%s\"\n", arg);
+			glob_p->flags[MODE]  = getsubopt(&arg, modes, &value);
+			if(glob_p->flags[MODE] == -1) {
+				error("Wrong mode name entered: \"%s\"", arg);
 				return EINVAL;
 			}
 			break;
 		}
 		default:
 			if(arg == NULL)
-				options_p->flags[param_id]++;
+				glob_p->flags[param_id]++;
 			else
-				options_p->flags[param_id] = atoi(arg);
+				glob_p->flags[param_id] = atoi(arg);
 #ifdef _DEBUG
-			fprintf(stderr, "Force-Debug: flag %i is set to %i\n", param_id&0xff, options_p->flags[param_id]);
+			fprintf(stderr, "Force-Debug: flag %i is set to %i\n", param_id&0xff, glob_p->flags[param_id]);
 #endif
 			break;
 	}
 	return 0;
 }
 
-int arguments_parse(int argc, char *argv[], struct options *options_p) {
+int arguments_parse(int argc, char *argv[], struct glob *glob_p) {
 	int c;
 	int option_index = 0;
 
-	// Generating "optstring" (man 3 getopt_long) with using information from struct array "long_options"
+	// Generating "optstring" (man 3 getopt_long) with using information from struct array "long_glob"
 	char *optstring     = alloca((('z'-'a'+1)*3 + '9'-'0'+1)*3 + 1);
 	char *optstring_ptr = optstring;
 
-	const struct option *lo_ptr = long_options;
+	const struct option *lo_ptr = long_glob;
 	while(lo_ptr->name != NULL) {
 		if(!(lo_ptr->val & (OPTION_CONFIGONLY|OPTION_LONGOPTONLY))) {
 			*(optstring_ptr++) = lo_ptr->val & 0xff;
@@ -449,10 +467,10 @@ int arguments_parse(int argc, char *argv[], struct options *options_p) {
 
 	// Parsing arguments
 	while(1) {
-		c = getopt_long(argc, argv, optstring, long_options, &option_index);
+		c = getopt_long(argc, argv, optstring, long_glob, &option_index);
 	
 		if (c == -1) break;
-		int ret = parse_parameter(options_p, c, optarg, PS_ARGUMENT);
+		int ret = parse_parameter(glob_p, c, optarg, PS_ARGUMENT);
 		if(ret) return ret;
 	}
 	if(optind+1 < argc)
@@ -461,50 +479,50 @@ int arguments_parse(int argc, char *argv[], struct options *options_p) {
 	if(optind+1 >= argc)
 		syntax();
 
-	options_p->handlerfpath = argv[optind+1];
+	glob_p->handlerfpath = argv[optind+1];
 
 	if(optind+2 < argc) {
-		options_p->rulfpath = argv[optind+2];
-		if(!strcmp(options_p->rulfpath, ""))
-			options_p->rulfpath = NULL;
+		glob_p->rulfpath = argv[optind+2];
+		if(!strcmp(glob_p->rulfpath, ""))
+			glob_p->rulfpath = NULL;
 	}
 
 	if(optind+3 < argc) {
-		options_p->destdir    = argv[optind+3];
-		options_p->destdirlen = strlen(options_p->destdir);
+		glob_p->destdir    = argv[optind+3];
+		glob_p->destdirlen = strlen(glob_p->destdir);
 	}
 
-	options_p->watchdir    = argv[optind];
-	options_p->watchdirlen = strlen(options_p->watchdir);*/
+	glob_p->watchdir    = argv[optind];
+	glob_p->watchdirlen = strlen(glob_p->watchdir);*/
 /*
 	if(optind+0 < argc) {
-		options_p->watchdir     = argv[optind];
-		options_p->watchdirlen  = strlen(options_p->watchdir);
+		glob_p->watchdir     = argv[optind];
+		glob_p->watchdirlen  = strlen(glob_p->watchdir);
 	} else {
-		options_p->watchdir     = NULL;
-		options_p->watchdirlen  = 0;
+		glob_p->watchdir     = NULL;
+		glob_p->watchdirlen  = 0;
 	}
 
 	if(optind+1 < argc) {
-		options_p->handlerfpath = argv[optind+1];
+		glob_p->handlerfpath = argv[optind+1];
 	} else {
-		options_p->handlerfpath = NULL;
+		glob_p->handlerfpath = NULL;
 	}
 
 	if(optind+2 < argc) {
-		options_p->rulfpath = argv[optind+2];
-		if(!strcmp(options_p->rulfpath, ""))
-			options_p->rulfpath = NULL;
+		glob_p->rulfpath = argv[optind+2];
+		if(!strcmp(glob_p->rulfpath, ""))
+			glob_p->rulfpath = NULL;
 	} else {
-		options_p->rulfpath = NULL;
+		glob_p->rulfpath = NULL;
 	}
 
 	if(optind+3 < argc) {
-		options_p->destdir    = argv[optind+3];
-		options_p->destdirlen = strlen(options_p->destdir);
+		glob_p->destdir    = argv[optind+3];
+		glob_p->destdirlen = strlen(glob_p->destdir);
 	} else {
-		options_p->destdir    = NULL;
-		options_p->destdirlen = 0;
+		glob_p->destdir    = NULL;
+		glob_p->destdirlen = 0;
 	}
 */
 
@@ -513,10 +531,10 @@ int arguments_parse(int argc, char *argv[], struct options *options_p) {
 
 char *configs_parse_str[1<<10] = {0};
 
-void gkf_parse(options_t *options_p, GKeyFile *gkf) {
-	const struct option *lo_ptr = long_options;
+void gkf_parse(glob_t *glob_p, GKeyFile *gkf) {
+	const struct option *lo_ptr = long_glob;
 	while(lo_ptr->name != NULL) {
-		gchar *value = g_key_file_get_value(gkf, options_p->config_block, lo_ptr->name, NULL);
+		gchar *value = g_key_file_get_value(gkf, glob_p->config_block, lo_ptr->name, NULL);
 		if(value != NULL) {
 			unsigned char val_char = lo_ptr->val&0xff;
 
@@ -524,7 +542,7 @@ void gkf_parse(options_t *options_p, GKeyFile *gkf) {
 				free(configs_parse_str[val_char]);
 
 			configs_parse_str[val_char] = value;
-			int ret = parse_parameter(options_p, lo_ptr->val, value, PS_CONFIG);
+			int ret = parse_parameter(glob_p, lo_ptr->val, value, PS_CONFIG);
 			if(ret) exit(ret);
 		}
 		lo_ptr++;
@@ -533,19 +551,19 @@ void gkf_parse(options_t *options_p, GKeyFile *gkf) {
 	return;
 }
 
-int configs_parse(options_t *options_p) {
+int configs_parse(glob_t *glob_p) {
 	GKeyFile *gkf;
 
 	gkf = g_key_file_new();
 
-	if(options_p->config_path) {
-		printf_d("Debug: configs_parse(): Trying config-file \"%s\"\n", options_p->config_path);
-		if(!g_key_file_load_from_file(gkf, options_p->config_path, G_KEY_FILE_NONE, NULL)) {
-			printf_e("Error: configs_parse(): Cannot open/parse file \"%s\"\n", options_p->config_path);
+	if(glob_p->config_path) {
+		debug(1, "Trying config-file \"%s\"", glob_p->config_path);
+		if(!g_key_file_load_from_file(gkf, glob_p->config_path, G_KEY_FILE_NONE, NULL)) {
+			error("Cannot open/parse file \"%s\"", glob_p->config_path);
 			g_key_file_free(gkf);
 			return -1;
 		} else
-			gkf_parse(options_p, gkf);
+			gkf_parse(glob_p, gkf);
 
 	} else {
 		char *config_paths[] = CONFIG_PATHS;
@@ -570,14 +588,14 @@ int configs_parse(options_t *options_p) {
 			} else 
 				memcpy(config_path_real, *config_path_p, config_path_len+1);
 
-			printf_d("Debug: configs_parse(): Trying config-file \"%s\"\n", config_path_real);
+			debug(1, "Trying config-file \"%s\"", config_path_real);
 			if(!g_key_file_load_from_file(gkf, config_path_real, G_KEY_FILE_NONE, NULL)) {
-				printf_d("Debug: configs_parse(): Cannot open/parse file \"%s\"\n", config_path_real);
+				debug(1, "Cannot open/parse file \"%s\"", config_path_real);
 				config_path_p++;
 				continue;
 			}
 
-			gkf_parse(options_p, gkf);
+			gkf_parse(glob_p, gkf);
 
 			break;
 		}
@@ -604,10 +622,10 @@ int configs_cleanup() {
 }
 
 int rule_complete(rule_t *rule_p, const char *expr) {
-	printf_ddd("Debug3: rule_complete(): <%s>.\n", expr);
+	debug(3, "<%s>.", expr);
 #ifdef VERYPARANOID
 	if(rule_p->mask == RA_NONE) {
-		printf_e("Error: rule_complete(): Received a rule with rule_p->mask == 0x00. Exit.\n");
+		error("Received a rule with rule_p->mask == 0x00. Exit.");
 		return EINVAL;
 	}
 #endif
@@ -615,22 +633,22 @@ int rule_complete(rule_t *rule_p, const char *expr) {
 	char buf[BUFSIZ];
 	int ret = 0;
 	if(rule_p->num >= MAXRULES) {
-		printf_e("Error: Too many rules (%i >= %i).\n", rule_p->num, MAXRULES);
+		error("Too many rules (%i >= %i).", rule_p->num, MAXRULES);
 		return ENOMEM;
 	}
 	if((ret = regcomp(&rule_p->expr, expr, REG_EXTENDED | REG_NOSUB))) {
 		regerror(ret, &rule_p->expr, buf, BUFSIZ);
-		printf_e("Error: Invalid regexp pattern <%s>: %s (regex-errno: %i).\n", expr, buf, ret);
+		error("Invalid regexp pattern <%s>: %s (regex-errno: %i).", expr, buf, ret);
 		return ret;
 	}
 
 	return ret;
 }
 
-int parse_rules_fromfile(options_t *options_p) {
+int parse_rules_fromfile(glob_t *glob_p) {
 	int ret = 0;
-	char *rulfpath = options_p->rulfpath;
-	rule_t *rules  = options_p->rules;
+	char *rulfpath = glob_p->rulfpath;
+	rule_t *rules  = glob_p->rules;
 
 	char *line_buf=NULL;
 	FILE *f = fopen(rulfpath, "r");
@@ -638,7 +656,7 @@ int parse_rules_fromfile(options_t *options_p) {
 	if(f == NULL) {
 		rules->mask   = RA_NONE;		// Terminator. End of rules' chain.
 		rules->perm   = DEFAULT_RULES_PERM;
-		printf_e("Error: Cannot open \"%s\" for reading: %s (errno: %i).\n", rulfpath, strerror(errno), errno);
+		error("Cannot open \"%s\" for reading.", rulfpath);
 		return errno;
 	}
 
@@ -672,7 +690,7 @@ int parse_rules_fromfile(options_t *options_p) {
 					i--;	// Canceling new rule
 					continue;
 				default:
-					printf_e("Error: Wrong rule action <%c>.\n", *line);
+					error("Wrong rule action <%c>.", *line);
 					return EINVAL;
 			}
 
@@ -725,18 +743,18 @@ int parse_rules_fromfile(options_t *options_p) {
 					break;
 				case 'w':	// accept or reject walking to directory
 					if(
-						(options_p->flags[MODE] == MODE_RSYNCDIRECT) ||
-						(options_p->flags[MODE] == MODE_RSYNCSHELL)  ||
-						(options_p->flags[MODE] == MODE_RSYNCSO)
+						(glob_p->flags[MODE] == MODE_RSYNCDIRECT) ||
+						(glob_p->flags[MODE] == MODE_RSYNCSHELL)  ||
+						(glob_p->flags[MODE] == MODE_RSYNCSO)
 					) {
-						printf_e("parse_rules_fromfile(): Warning: Used \"w\" rule in \"--rsync\" case."
-							" This may cause unexpected problems.\n");
+						error("Warning: Used \"w\" rule in \"--rsync\" case."
+							" This may cause unexpected problems.");
 					}
 					rule->objtype = S_IFDIR;
 					rule->mask    = RA_WALK;
 					break;
 				default:
-					printf_e("parse_rules_fromfile(): Warning: Cannot parse the rule <%s>\n", &line[-1]);
+					error("Warning: Cannot parse the rule <%s>", &line[-1]);
 					i--;	// Canceling new rule
 					continue;
 			}
@@ -747,7 +765,7 @@ int parse_rules_fromfile(options_t *options_p) {
 
 			// Parsing the rest part of the line
 
-			printf_d("Debug: parse_rules_fromfile(): Rule #%i <%c> <%c> pattern <%s> (length: %i).\n", rule->num, line[-2], line[-1], line, linelen);
+			debug(1, "Rule #%i <%c> <%c> pattern <%s> (length: %i).", rule->num, line[-2], line[-1], line, linelen);
 			if((ret=rule_complete(rule, line)))
 				goto l_parse_rules_fromfile_end;
 
@@ -758,7 +776,7 @@ int parse_rules_fromfile(options_t *options_p) {
 
 			if(*line != 'w') {
 				// processing --auto-add-rules-w
-				if(options_p->flags[AUTORULESW] && (sign == RS_PERMIT)) {
+				if(glob_p->flags[AUTORULESW] && (sign == RS_PERMIT)) {
 					// Preparing to add appropriate w-rules
 					char skip = 0;
 					char *expr = alloca(linelen+2);
@@ -782,7 +800,7 @@ int parse_rules_fromfile(options_t *options_p) {
 							*(end++) = '$';
 						*end = 0;
 
-//						printf_ddd("Debug3: parse_rules_fromfile(): Don't adding w-rule for \"%s\" due to [*d]-rule for \"%s\"\n",
+//						debug(3, "Don't adding w-rule for \"%s\" due to [*d]-rule for \"%s\"",
 //							expr, &line[1]);
 						g_hash_table_insert(autowrules_ht, strdup(expr), GINT_TO_POINTER(1));
 
@@ -818,7 +836,7 @@ int parse_rules_fromfile(options_t *options_p) {
 								rule->mask    = RA_WALK;
 								rule->perm    = RA_WALK;
 
-								printf_d("Debug: parse_rules_fromfile(): Rule #%i <+> <w> pattern <%s> (length: %i) [auto].\n", 
+								debug(1, "Rule #%i <+> <w> pattern <%s> (length: %i) [auto].", 
 									rule->num, expr, exprlen);
 								if((ret=rule_complete(rule, expr)))
 									goto l_parse_rules_fromfile_end;
@@ -838,17 +856,17 @@ l_parse_rules_fromfile_end:
 
 	fclose(f);
 
-	printf_ddd("Debug3: parse_rules_fromfile(): Adding tail-rule #%u (effective #%u).\n", -1, i);
+	debug(3, "Adding tail-rule #%u (effective #%u).", -1, i);
 
 	rules[i].mask   = RA_NONE;		// Terminator. End of rules' chain.
 	rules[i].perm   = DEFAULT_RULES_PERM;
 
 	g_hash_table_destroy(autowrules_ht);
 #ifdef _DEBUG
-	printf_ddd("Debug3: parse_rules_fromfile(): Total (p == %p):\n", rules);
+	debug(3, "Total (p == %p):", rules);
 	i=0;
 	do {
-		printf_ddd("\t%i\t%i\t%p/%p\n", i, rules[i].objtype, (void *)(long)rules[i].perm, (void *)(long)rules[i].mask);
+		debug(4, "\t%i\t%i\t%p/%p", i, rules[i].objtype, (void *)(long)rules[i].perm, (void *)(long)rules[i].mask);
 		i++;
 	} while(rules[i].mask != RA_NONE);
 #endif
@@ -860,87 +878,87 @@ int becomedaemon() {
 	signal(SIGPIPE, SIG_IGN);
 	switch((pid = fork())) {
 		case -1:
-			printf_e("Error: Cannot fork(): %s (errno: %i).\n", strerror(errno), errno);
+			error("Cannot fork().");
 			return(errno);
 		case 0:
 			setsid();
 			break;
 		default:
-			printf_d("Debug: fork()-ed, pid is %i.\n", pid);
+			debug(1, "fork()-ed, pid is %i.", pid);
 			exit(0);
 	}
 	return 0;
 }
 
-int main_cleanup(options_t *options_p) {
+int main_cleanup(glob_t *glob_p) {
 	int i=0;
-	while((i < MAXRULES) && (options_p->rules[i].mask != RA_NONE))
-		regfree(&options_p->rules[i++].expr);
+	while((i < MAXRULES) && (glob_p->rules[i].mask != RA_NONE))
+		regfree(&glob_p->rules[i++].expr);
 
-	printf_ddd("Debug3: main_cleanup(): %i %i %i %i\n", options_p->watchdirsize, options_p->watchdirwslashsize, options_p->destdirsize, options_p->destdirwslashsize);
+	debug(3, "%i %i %i %i", glob_p->watchdirsize, glob_p->watchdirwslashsize, glob_p->destdirsize, glob_p->destdirwslashsize);
 
 	return 0;
 }
 
-int main_rehash(options_t *options_p) {
-	printf_ddd("Debug3: main_rehash()\n");
+int main_rehash(glob_t *glob_p) {
+	debug(3, "main_rehash()");
 	int ret=0;
 
-	main_cleanup(options_p);
+	main_cleanup(glob_p);
 
-	if(options_p->rulfpath != NULL) {
-		ret = parse_rules_fromfile(options_p);
+	if(glob_p->rulfpath != NULL) {
+		ret = parse_rules_fromfile(glob_p);
 		if(ret)
-			printf_e("Error: main_rehash(): Got error from parse_rules_fromfile(): %s (errno: %i).\n", strerror(ret), ret);
+			error("Got error from parse_rules_fromfile().");
 	} else {
-		options_p->rules[0].perm = DEFAULT_RULES_PERM;
-		options_p->rules[0].mask = RA_NONE;		// Terminator. End of rules.
+		glob_p->rules[0].perm = DEFAULT_RULES_PERM;
+		glob_p->rules[0].mask = RA_NONE;		// Terminator. End of rules.
 	}
 
 	return ret;
 }
 
-int main_status_update(options_t *options_p, state_t state) {
+int main_status_update(glob_t *glob_p, state_t state) {
 	static state_t state_old = STATE_UNKNOWN;
 
 	if(state == state_old) {
-		printf_ddd("Debug3: main_status_update: State unchanged: %u == %u\n", state, state_old);
+		debug(3, "main_status_update: State unchanged: %u == %u", state, state_old);
 		return 0;
 	}
 
 #ifdef VERYPARANOID
 	if(status_descr[state] == NULL) {
-		printf_e("Error: main_status_update(): status_descr[%u] == NULL.\n", state);
+		error("status_descr[%u] == NULL.", state);
 		return EINVAL;
 	}
 #endif
 
 	setenv("CLSYNC_STATUS", status_descr[state], 1);
 
-	if(options_p->statusfile == NULL)
+	if(glob_p->statusfile == NULL)
 		return 0;
 
-	FILE *f = fopen(options_p->statusfile, "w");
+	FILE *f = fopen(glob_p->statusfile, "w");
 	if(f == NULL) {
-		printf_e("Error: main_status_update(): Cannot open file \"%s\" for writing: %s (errno: %u).\n", 
-			options_p->statusfile, strerror(errno), errno);
+		error("Cannot open file \"%s\" for writing: %s (errno: %u).", 
+			glob_p->statusfile);
 		return errno;
 	}
 
-	printf_ddd("Debug3: main_status_update(): Setting status to %i: %s.\n", state, status_descr[state]);
+	debug(3, "Setting status to %i: %s.", state, status_descr[state]);
 	state_old=state;
 
 	int ret = 0;
 
-	if(fprintf(f, "%s\n", status_descr[state]) <= 0) {	// TODO: check output length
-		printf_e("Error: main_status_update(): Cannot write to file \"%s\": %s (errno: %u).\n",
-			options_p->statusfile, strerror(errno), errno);
+	if(fprintf(f, "%s", status_descr[state]) <= 0) {	// TODO: check output length
+		error("Cannot write to file \"%s\": %s (errno: %u).",
+			glob_p->statusfile);
 		ret = errno;
 	}
 
 	if(fclose(f)) {
-		printf_e("Error: main_status_update(): Cannot close file \"%s\": %s (errno: %u).\n", 
-			options_p->statusfile, strerror(errno), errno);
+		error("Cannot close file \"%s\": %s (errno: %u).", 
+			glob_p->statusfile);
 		ret = errno;
 	}
 
@@ -948,466 +966,471 @@ int main_status_update(options_t *options_p, state_t state) {
 }
 
 int main(int argc, char *argv[]) {
-	struct options options;
+	struct glob glob;
 #ifdef CLUSTER_SUPPORT
 	struct utsname utsname;
 #endif
-	memset(&options, 0, sizeof(options));
+	memset(&glob, 0, sizeof(glob));
+
 	int ret = 0, nret;
-	options.notifyengine 			   = DEFAULT_NOTIFYENGINE;
-	options.syncdelay 			   = DEFAULT_SYNCDELAY;
-	options._queues[QUEUE_NORMAL].collectdelay = DEFAULT_COLLECTDELAY;
-	options._queues[QUEUE_BIGFILE].collectdelay= DEFAULT_BFILECOLLECTDELAY;
-	options._queues[QUEUE_INSTANT].collectdelay= COLLECTDELAY_INSTANT;
-	options.bfilethreshold			   = DEFAULT_BFILETHRESHOLD;
-	options.label				   = DEFAULT_LABEL;
-	options.rsyncinclimit			   = DEFAULT_RSYNCINCLUDELINESLIMIT;
-	options.synctimeout			   = DEFAULT_SYNCTIMEOUT;
+	glob.notifyengine 			 = DEFAULT_NOTIFYENGINE;
+	glob.syncdelay 				 = DEFAULT_SYNCDELAY;
+	glob._queues[QUEUE_NORMAL].collectdelay  = DEFAULT_COLLECTDELAY;
+	glob._queues[QUEUE_BIGFILE].collectdelay = DEFAULT_BFILECOLLECTDELAY;
+	glob._queues[QUEUE_INSTANT].collectdelay = COLLECTDELAY_INSTANT;
+	glob.bfilethreshold			 = DEFAULT_BFILETHRESHOLD;
+	glob.label				 = DEFAULT_LABEL;
+	glob.rsyncinclimit			 = DEFAULT_RSYNCINCLUDELINESLIMIT;
+	glob.synctimeout			 = DEFAULT_SYNCTIMEOUT;
 #ifdef CLUSTER_SUPPORT
-	options.cluster_hash_dl_min		   = DEFAULT_CLUSTERHDLMIN;
-	options.cluster_hash_dl_max		   = DEFAULT_CLUSTERHDLMAX;
-	options.cluster_scan_dl_max		   = DEFAULT_CLUSTERSDLMAX;
+	glob.cluster_hash_dl_min		 = DEFAULT_CLUSTERHDLMIN;
+	glob.cluster_hash_dl_max		 = DEFAULT_CLUSTERHDLMAX;
+	glob.cluster_scan_dl_max		 = DEFAULT_CLUSTERSDLMAX;
 #endif
-	options.config_block			   = DEFAULT_CONFIG_BLOCK;
-	options.retries				   = DEFAULT_RETRIES;
+	glob.config_block			 = DEFAULT_CONFIG_BLOCK;
+	glob.retries				 = DEFAULT_RETRIES;
+	glob.flags[VERBOSE]			 = DEFAULT_VERBOSE;
 
-	nret = arguments_parse(argc, argv, &options);
+	error_init(&glob.flags[OUTPUT_METHOD], &glob.flags[QUIET], &glob.flags[VERBOSE], &glob.flags[DEBUG]);
+
+	nret = arguments_parse(argc, argv, &glob);
 	if(nret) ret = nret;
-	out_init(options.flags);
-	nret = configs_parse(&options);
-	if(nret) ret = nret;
-	out_init(options.flags);
 
-	main_status_update(&options, STATE_STARTING);
+	if(!ret) {
+		nret = configs_parse(&glob);
+		if(nret) ret = nret;
+	}
 
-	if(options.socketpath != NULL) {
+	debug(4, "debugging flags: %u %u %u %u", glob.flags[OUTPUT_METHOD], glob.flags[QUIET], glob.flags[VERBOSE], glob.flags[DEBUG]);
+
+	main_status_update(&glob, STATE_STARTING);
+
+	if(glob.socketpath != NULL) {
 #ifndef ENABLE_SOCKET
-		printf_e("Error: clsync is compiled without control socket support, option \"--socket\" cannot be used.\n");
 		ret = EINVAL;
+		error("clsync is compiled without control socket support, option \"--socket\" cannot be used.");
 #endif
-		if(options.flags[SOCKETAUTH] == SOCKAUTH_UNSET)
-			options.flags[SOCKETAUTH] = SOCKAUTH_NULL;
+		if(glob.flags[SOCKETAUTH] == SOCKAUTH_UNSET)
+			glob.flags[SOCKETAUTH] = SOCKAUTH_NULL;
 	}
 
-	if((options.flags[SOCKETOWN]) && (options.socketpath == NULL)) {
-		printf_e("Error: \"--socket-own\" is useless without \"--socket\"");
-		ret = EINVAL;
+	if((glob.flags[SOCKETOWN]) && (glob.socketpath == NULL)) {
+		ret = errno = EINVAL;
+		error("\"--socket-own\" is useless without \"--socket\"");
 	}
 
-	if((options.flags[SOCKETMOD]) && (options.socketpath == NULL)) {
-		printf_e("Error: \"--socket-mod\" is useless without \"--socket\"");
-		ret = EINVAL;
+	if((glob.flags[SOCKETMOD]) && (glob.socketpath == NULL)) {
+		ret = errno = EINVAL;
+		error("\"--socket-mod\" is useless without \"--socket\"");
 	}
 
-	if((options.flags[SOCKETAUTH]) && (options.socketpath == NULL)) {
-		printf_e("Error: \"--socket-auth\" is useless without \"--socket\"");
-		ret = EINVAL;
+	if((glob.flags[SOCKETAUTH]) && (glob.socketpath == NULL)) {
+		ret = errno = EINVAL;
+		error("\"--socket-auth\" is useless without \"--socket\"");
 	}
 
 #ifdef VERYPARANOID
-	if((options.retries != 1) && options.flags[PTHREAD]) {
-		printf_e("Error: \"--retries\" values should be equal to \"1\" for \"--pthread\" mode.\n");
-		ret = EINVAL;
+	if((glob.retries != 1) && glob.flags[PTHREAD]) {
+		ret = errno = EINVAL;
+		error("\"--retries\" values should be equal to \"1\" for \"--pthread\" mode.");
 	}
 #endif
 
-	if(options.flags[STANDBYFILE] && (options.flags[MODE] == MODE_SIMPLE)) {
-		printf_e("Error: Sorry but option \"--standby-file\" cannot be used in mode \"simple\", yet.\n");
-		ret = EINVAL;
+	if(glob.flags[STANDBYFILE] && (glob.flags[MODE] == MODE_SIMPLE)) {
+		ret = errno = EINVAL;
+		error("Sorry but option \"--standby-file\" cannot be used in mode \"simple\", yet.");
 	}
 
-	if(options.flags[PTHREAD] && options.flags[ONLYINITSYNC]) {
-		printf_e("Error: Conflicting options: \"--pthread\" and \"--only-initialsync\" cannot be used together.\n");
-		ret = EINVAL;
+	if(glob.flags[PTHREAD] && glob.flags[ONLYINITSYNC]) {
+		ret = errno = EINVAL;
+		error("Conflicting glob: \"--pthread\" and \"--only-initialsync\" cannot be used together.");
 	}
 
-	if(options.flags[PTHREAD] && options.flags[EXITONNOEVENTS]) {
-		printf_e("Error: Conflicting options: \"--pthread\" and \"--exit-on-no-events\" cannot be used together.\n");
-		ret = EINVAL;
+	if(glob.flags[PTHREAD] && glob.flags[EXITONNOEVENTS]) {
+		ret = errno = EINVAL;
+		error("Conflicting glob: \"--pthread\" and \"--exit-on-no-events\" cannot be used together.");
 	}
-	if(options.flags[PTHREAD] && options.flags[MAXITERATIONS]) {
-		printf_e("Error: Conflicting options: \"--pthread\" and \"--max-iterations\" cannot be used together.\n");
-		ret = EINVAL;
+	if(glob.flags[PTHREAD] && glob.flags[MAXITERATIONS]) {
+		ret = errno = EINVAL;
+		error("Conflicting glob: \"--pthread\" and \"--max-iterations\" cannot be used together.");
 	}
-	if(options.flags[SKIPINITSYNC] && options.flags[EXITONNOEVENTS]) {
-		printf_e("Error: Conflicting options: \"--skip-initialsync\" and \"--exit-on-no-events\" cannot be used together.\n");
-		ret = EINVAL;
+	if(glob.flags[SKIPINITSYNC] && glob.flags[EXITONNOEVENTS]) {
+		ret = errno = EINVAL;
+		error("Conflicting glob: \"--skip-initialsync\" and \"--exit-on-no-events\" cannot be used together.");
 	}
-	if(options.flags[ONLYINITSYNC] && options.flags[EXITONNOEVENTS]) {
-		printf_e("Error: Conflicting options: \"--only-initialsync\" and \"--exit-on-no-events\" cannot be used together.\n");
-		ret = EINVAL;
-	}
-
-	if(options.flags[SKIPINITSYNC] && options.flags[ONLYINITSYNC]) {
-		printf_e("Error: Conflicting options: \"--skip-initialsync\" and \"--only-initialsync\" cannot be used together.\n");
-		ret = EINVAL;
+	if(glob.flags[ONLYINITSYNC] && glob.flags[EXITONNOEVENTS]) {
+		ret = errno = EINVAL;
+		error("Conflicting glob: \"--only-initialsync\" and \"--exit-on-no-events\" cannot be used together.");
 	}
 
-	if(options.flags[INITFULL] && options.flags[SKIPINITSYNC]) {
-		printf_e("Error: Conflicting options: \"--full-initialsync\" and \"--skip-initialsync\" cannot be used together.\n");
-		ret = EINVAL;
+	if(glob.flags[SKIPINITSYNC] && glob.flags[ONLYINITSYNC]) {
+		ret = errno = EINVAL;
+		error("Conflicting glob: \"--skip-initialsync\" and \"--only-initialsync\" cannot be used together.");
 	}
 
-	if(options.flags[EXCLUDEMOUNTPOINTS])
-		options.flags[ONEFILESYSTEM]=1;
-
-	if(options.flags[MODE] == MODE_UNSET) {
-		printf_e("Error: \"--mode\" is not set.\n");
-		ret = EINVAL;
+	if(glob.flags[INITFULL] && glob.flags[SKIPINITSYNC]) {
+		ret = errno = EINVAL;
+		error("Conflicting glob: \"--full-initialsync\" and \"--skip-initialsync\" cannot be used together.");
 	}
 
-	if(options.watchdir == NULL) {
-		printf_e("Error: \"--watchdir\" is not set.\n");
-		ret = EINVAL;
+	if(glob.flags[EXCLUDEMOUNTPOINTS])
+		glob.flags[ONEFILESYSTEM]=1;
+
+	if(glob.flags[MODE] == MODE_UNSET) {
+		ret = errno = EINVAL;
+		error("\"--mode\" is not set.");
 	}
 
-	if(options.handlerfpath == NULL) {
-		printf_e("Error: \"--sync-handler\" path is not set.\n");
-		ret = EINVAL;
+	if(glob.watchdir == NULL) {
+		ret = errno = EINVAL;
+		error("\"--watchdir\" is not set.");
+	}
+
+	if(glob.handlerfpath == NULL) {
+		ret = errno = EINVAL;
+		error("\"--sync-handler\" path is not set.");
 	}
 /*
-	if(options.flags[SYNCHANDLERSO] && options.flags[RSYNC]) {
-		printf_e("Error: Option \"--rsync\" cannot be used in conjunction with \"--synchandler-so-module\".\n");
+	if(glob.flags[SYNCHANDLERSO] && glob.flags[RSYNC]) {
 		ret = EINVAL;
+		ret = errno = EINVAL;
+		error("Option \"--rsync\" cannot be used in conjunction with \"--synchandler-so-module\".");
 	}
 */
-//	if(options.flags[SYNCHANDLERSO] && (options.listoutdir != NULL))
-//		printf_e("Warning: Option \"--dir-lists\" has no effect conjunction with \"--synchandler-so-module\".\n");
+//	if(glob.flags[SYNCHANDLERSO] && (glob.listoutdir != NULL))
+//		error("Warning: Option \"--dir-lists\" has no effect conjunction with \"--synchandler-so-module\".");
 
-//	if(options.flags[SYNCHANDLERSO] && (options.destdir != NULL))
-//		printf_e("Warning: Destination directory argument has no effect conjunction with \"--synchandler-so-module\".\n");
+//	if(glob.flags[SYNCHANDLERSO] && (glob.destdir != NULL))
+//		error("Warning: Destination directory argument has no effect conjunction with \"--synchandler-so-module\".");
 
-	if((options.flags[MODE] == MODE_RSYNCDIRECT) && (options.destdir == NULL)) {
-		printf_e("Error: Mode \"rsyncdirect\" cannot be used without specifying \"destination directory\".\n");
-		ret = EINVAL;
+	if((glob.flags[MODE] == MODE_RSYNCDIRECT) && (glob.destdir == NULL)) {
+		ret = errno = EINVAL;
+		error("Mode \"rsyncdirect\" cannot be used without specifying \"destination directory\".");
 	}
 
 #ifdef CLUSTER_SUPPORT
-	if((options.flags[MODE] == MODE_RSYNCDIRECT ) && (options.cluster_iface != NULL)) {
-		printf_e("Error: Mode \"rsyncdirect\" cannot be used in conjunction with \"--cluster-iface\".\n");
-		ret = EINVAL;
+	if((glob.flags[MODE] == MODE_RSYNCDIRECT ) && (glob.cluster_iface != NULL)) {
+		ret = errno = EINVAL;
+		error("Mode \"rsyncdirect\" cannot be used in conjunction with \"--cluster-iface\".");
 	}
 
-	if((options.cluster_iface == NULL) && ((options.cluster_mcastipaddr != NULL) || (options.cluster_nodename != NULL) || (options.cluster_timeout) || (options.cluster_mcastipport))) {
-		printf_e("Error: Options \"--cluster-ip\", \"--cluster-node-name\", \"--cluster_timeout\" and/or \"cluster_ipport\" cannot be used without \"--cluster-iface\".\n");
-		ret = EINVAL;
+	if((glob.cluster_iface == NULL) && ((glob.cluster_mcastipaddr != NULL) || (glob.cluster_nodename != NULL) || (glob.cluster_timeout) || (glob.cluster_mcastipport))) {
+		ret = errno = EINVAL;
+		error("glob \"--cluster-ip\", \"--cluster-node-name\", \"--cluster_timeout\" and/or \"cluster_ipport\" cannot be used without \"--cluster-iface\".");
 	}
 
-	if(options.cluster_hash_dl_min > options.cluster_hash_dl_max) {
-		printf_e("Error: \"--cluster-hash-dl-min\" cannot be greater than \"--cluster-hash-dl-max\".\n");
-		ret = EINVAL;
+	if(glob.cluster_hash_dl_min > glob.cluster_hash_dl_max) {
+		ret = errno = EINVAL;
+		error("\"--cluster-hash-dl-min\" cannot be greater than \"--cluster-hash-dl-max\".");
 	}
 
-	if(options.cluster_hash_dl_max > options.cluster_scan_dl_max) {
-		printf_e("Error: \"--cluster-hash-dl-max\" cannot be greater than \"--cluster-scan-dl-max\".\n");
-		ret = EINVAL;
+	if(glob.cluster_hash_dl_max > glob.cluster_scan_dl_max) {
+		ret = errno = EINVAL;
+		error("\"--cluster-hash-dl-max\" cannot be greater than \"--cluster-scan-dl-max\".");
 	}
 
-	if(!options.cluster_timeout)
-		options.cluster_timeout	    = DEFAULT_CLUSTERTIMEOUT;
-	if(!options.cluster_mcastipport)
-		options.cluster_mcastipport = DEFAULT_CLUSTERIPPORT;
-	if(!options.cluster_mcastipaddr)
-		options.cluster_mcastipaddr = DEFAULT_CLUSTERIPADDR;
+	if(!glob.cluster_timeout)
+		glob.cluster_timeout	    = DEFAULT_CLUSTERTIMEOUT;
+	if(!glob.cluster_mcastipport)
+		glob.cluster_mcastipport = DEFAULT_CLUSTERIPPORT;
+	if(!glob.cluster_mcastipaddr)
+		glob.cluster_mcastipaddr = DEFAULT_CLUSTERIPADDR;
 
-	if(options.cluster_iface != NULL) {
+	if(glob.cluster_iface != NULL) {
 #ifndef _DEBUG
-		printf_e("Error: Cluster subsystem is not implemented, yet. Sorry.\n");
-		ret = EINVAL;
+		ret = errno = EINVAL;
+		error("Cluster subsystem is not implemented, yet. Sorry.");
 #endif
-		if(options.cluster_nodename == NULL) {
+		if(glob.cluster_nodename == NULL) {
 
 			if(!uname(&utsname))
-				options.cluster_nodename = utsname.nodename;
+				glob.cluster_nodename = utsname.nodename;
 
-			printf_d("Debug: cluster node name is: %s\n", options.cluster_nodename);
+			debug(1, "cluster node name is: %s", glob.cluster_nodename);
 		}
-		if(options.cluster_nodename == NULL) {
-			printf_e("Error: Option \"--cluster-iface\" is set, but \"--cluster-node-name\" is not set and cannot get the nodename with uname().\n");
-			ret = EINVAL;
+		if(glob.cluster_nodename == NULL) {
+			ret = errno = EINVAL;
+			error("Option \"--cluster-iface\" is set, but \"--cluster-node-name\" is not set and cannot get the nodename with uname().");
 		} else {
-			options.cluster_nodename_len = strlen(options.cluster_nodename);
+			glob.cluster_nodename_len = strlen(glob.cluster_nodename);
 		}
 	}
 #endif // CLUSTER_SUPPORT
 
 	{
-		char *rwatchdir = realpath(options.watchdir, NULL);
+		char *rwatchdir = realpath(glob.watchdir, NULL);
 		if(rwatchdir == NULL) {
-			printf_e("Error: main(): Got error while realpath() on \"%s\": %s (errno: %i) [#0].\n", options.watchdir, strerror(errno), errno);
+			error("Got error while realpath() on \"%s\" [#0].", glob.watchdir);
 			ret = errno;
 		}
 
 		struct stat64 stat64={0};
-		if(lstat64(options.watchdir, &stat64)) {
-			printf_e("Error: main(): Cannot lstat64() on \"%s\": %s (errno: %i)\n", options.watchdir, strerror(errno), errno);
+		if(lstat64(glob.watchdir, &stat64)) {
+			error("Cannot lstat64() on \"%s\"", glob.watchdir);
 			if(!ret)
 				ret = errno;
 		} else {
-			if(options.flags[EXCLUDEMOUNTPOINTS])
-				options.st_dev = stat64.st_dev;
+			if(glob.flags[EXCLUDEMOUNTPOINTS])
+				glob.st_dev = stat64.st_dev;
 			if((stat64.st_mode & S_IFMT) == S_IFLNK) {
 				// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
 				// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
 				// it disables filters, because exclude-list will be empty.
 #ifdef VERYPARANOID
-				printf_e("Error: Watch dir cannot be symlink, but \"%s\" is a symlink.\n", options.watchdir);
+				error("Watch dir cannot be symlink, but \"%s\" is a symlink.", glob.watchdir);
 				ret = EINVAL;
 #else
 				char *watchdir_resolved_part = alloca(PATH_MAX+1);
-				ssize_t r = readlink(options.watchdir, watchdir_resolved_part, PATH_MAX+1);
+				ssize_t r = readlink(glob.watchdir, watchdir_resolved_part, PATH_MAX+1);
 	
 				if(r>=PATH_MAX) {	// TODO: check if it's possible
-					printf_e("Error: Too long file path resolved from symbolic link \"%s\"\n", options.watchdir);
-					ret = EINVAL;
+					ret = errno = EINVAL;
+					error("Too long file path resolved from symbolic link \"%s\"", glob.watchdir);
 				} else
 				if(r<0) {
-					printf_e("Error: Cannot resolve symbolic link \"%s\": readlink() error: %s (errno: %i)\n", options.watchdir, strerror(errno), errno);
+					error("Cannot resolve symbolic link \"%s\": readlink() error", glob.watchdir);
 					ret = EINVAL;
 				} else {
 					char *watchdir_resolved;
 #ifdef VERYPARANOID
-					if(options.watchdirsize)
-						if(options.watchdir != NULL)
-							free(options.watchdir);
+					if(glob.watchdirsize)
+						if(glob.watchdir != NULL)
+							free(glob.watchdir);
 #endif
 
 					size_t watchdir_resolved_part_len = strlen(watchdir_resolved_part);
-					options.watchdirsize = watchdir_resolved_part_len+1;	// Not true for case of relative symlink
+					glob.watchdirsize = watchdir_resolved_part_len+1;	// Not true for case of relative symlink
 					if(*watchdir_resolved_part == '/') {
 						// Absolute symlink
-						watchdir_resolved = malloc(options.watchdirsize);
-						memcpy(watchdir_resolved, watchdir_resolved_part, options.watchdirsize);
+						watchdir_resolved = malloc(glob.watchdirsize);
+						memcpy(watchdir_resolved, watchdir_resolved_part, glob.watchdirsize);
 					} else {
 						// Relative symlink :(
-						char *rslash = strrchr(options.watchdir, '/');
+						char *rslash = strrchr(glob.watchdir, '/');
 
 						char *watchdir_resolved_rel  = alloca(PATH_MAX+1);
-						size_t watchdir_resolved_rel_len = rslash-options.watchdir + 1;
-						memcpy(watchdir_resolved_rel, options.watchdir, watchdir_resolved_rel_len);
+						size_t watchdir_resolved_rel_len = rslash-glob.watchdir + 1;
+						memcpy(watchdir_resolved_rel, glob.watchdir, watchdir_resolved_rel_len);
 						memcpy(&watchdir_resolved_rel[watchdir_resolved_rel_len], watchdir_resolved_part, watchdir_resolved_part_len+1);
 
 						watchdir_resolved = realpath(watchdir_resolved_rel, NULL);
 					}
 
 					
-					printf_d("Debug: Symlink resolved: watchdir \"%s\" -> \"%s\"\n", options.watchdir, watchdir_resolved);
-					options.watchdir = watchdir_resolved;
+					debug(1, "Symlink resolved: watchdir \"%s\" -> \"%s\"", glob.watchdir, watchdir_resolved);
+					glob.watchdir = watchdir_resolved;
 				}
 #endif
 			}
 		}
 
 		if(!ret) {
-			options.watchdir     = rwatchdir;
-			options.watchdirlen  = strlen(options.watchdir);
-			options.watchdirsize = options.watchdirlen;
+			glob.watchdir     = rwatchdir;
+			glob.watchdirlen  = strlen(glob.watchdir);
+			glob.watchdirsize = glob.watchdirlen;
 
 #ifdef VERYPARANOID
-			if(options.watchdirlen == 1) {
-				printf_e("Very-Paranoid: --watch-dir is supposed to be not \"/\".\n");
-				ret = EINVAL;
+			if(glob.watchdirlen == 1) {
+				ret = errno = EINVAL;
+				error("Very-Paranoid: --watch-dir is supposed to be not \"/\".");
 			}
 #endif
 		}
 
 		if(!ret) {
-			if(options.watchdirlen == 1) {
-				options.watchdirwslash     = options.watchdir;
-				options.watchdirwslashsize = 0;
-				options.watchdir_dirlevel  = 0;
+			if(glob.watchdirlen == 1) {
+				glob.watchdirwslash     = glob.watchdir;
+				glob.watchdirwslashsize = 0;
+				glob.watchdir_dirlevel  = 0;
 			} else {
-				size_t size = options.watchdirlen + 2;
+				size_t size = glob.watchdirlen + 2;
 				char *newwatchdir = xmalloc(size);
-				memcpy( newwatchdir, options.watchdir, options.watchdirlen);
-				options.watchdirwslash     = newwatchdir;
-				options.watchdirwslashsize = size;
-				memcpy(&options.watchdirwslash[options.watchdirlen], "/", 2);
+				memcpy( newwatchdir, glob.watchdir, glob.watchdirlen);
+				glob.watchdirwslash     = newwatchdir;
+				glob.watchdirwslashsize = size;
+				memcpy(&glob.watchdirwslash[glob.watchdirlen], "/", 2);
 
-				options.watchdir_dirlevel  = fileutils_calcdirlevel(options.watchdirwslash);
+				glob.watchdir_dirlevel  = fileutils_calcdirlevel(glob.watchdirwslash);
 			}
 		}
 	}
 
-	if(options.destdir != NULL) {
-		char *rdestdir = realpath(options.destdir, NULL);
+	if(glob.destdir != NULL) {
+		char *rdestdir = realpath(glob.destdir, NULL);
 		if(rdestdir == NULL) {
-			printf_e("Error: main(): Got error while realpath() on \"%s\": %s (errno: %i) [#1].\n", options.destdir, strerror(errno), errno);
+			error("Got error while realpath() on \"%s\" [#1].", glob.destdir);
 			ret = errno;
 		}
 
 		if(!ret) {
-			options.destdir     = rdestdir;
-			options.destdirlen  = strlen(options.destdir);
-			options.destdirsize = options.destdirlen;
+			glob.destdir     = rdestdir;
+			glob.destdirlen  = strlen(glob.destdir);
+			glob.destdirsize = glob.destdirlen;
 
-			if(options.destdirlen == 1) {
-				printf_e("Error: destdir is supposed to be not \"/\".\n");
-				ret = EINVAL;
+			if(glob.destdirlen == 1) {
+				ret = errno = EINVAL;
+				error("destdir is supposed to be not \"/\".");
 			}
 		}
 
 		if(!ret) {
-			size_t size = options.destdirlen  + 2;
+			size_t size = glob.destdirlen  + 2;
 			char *newdestdir  = xmalloc(size);
-			memcpy( newdestdir,  options.destdir,  options.destdirlen);
-			options.destdirwslash     = newdestdir;
-			options.destdirwslashsize = size;
-			memcpy(&options.destdirwslash[options.destdirlen], "/", 2);
+			memcpy( newdestdir,  glob.destdir,  glob.destdirlen);
+			glob.destdirwslash     = newdestdir;
+			glob.destdirwslashsize = size;
+			memcpy(&glob.destdirwslash[glob.destdirlen], "/", 2);
 		}
 	}
 
-	printf_d("Debug: %s [%s] (%p) -> %s [%s]\n", options.watchdir, options.watchdirwslash, options.watchdirwslash, options.destdir?options.destdir:"", options.destdirwslash?options.destdirwslash:"");
+	debug(1, "%s [%s] (%p) -> %s [%s]", glob.watchdir, glob.watchdirwslash, glob.watchdirwslash, glob.destdir?glob.destdir:"", glob.destdirwslash?glob.destdirwslash:"");
 
 	if(
 		(
-			(options.flags[MODE]==MODE_RSYNCDIRECT) || 
-			(options.flags[MODE]==MODE_RSYNCSHELL)  ||
-			(options.flags[MODE]==MODE_RSYNCSO)
-		) && (options.listoutdir == NULL)
+			(glob.flags[MODE]==MODE_RSYNCDIRECT) || 
+			(glob.flags[MODE]==MODE_RSYNCSHELL)  ||
+			(glob.flags[MODE]==MODE_RSYNCSO)
+		) && (glob.listoutdir == NULL)
 	) {
-		printf_e("Error: Modes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" cannot be used without \"--lists-dir\".\n");
-		ret = EINVAL;
+		ret = errno = EINVAL;
+		error("Modes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" cannot be used without \"--lists-dir\".");
 	}
 
 	if(
-		options.flags[RSYNCPREFERINCLUDE] && 
+		glob.flags[RSYNCPREFERINCLUDE] && 
 		!(
-			options.flags[MODE] == MODE_RSYNCDIRECT ||
-			options.flags[MODE] == MODE_RSYNCSHELL  ||
-			options.flags[MODE] == MODE_RSYNCSO
+			glob.flags[MODE] == MODE_RSYNCDIRECT ||
+			glob.flags[MODE] == MODE_RSYNCSHELL  ||
+			glob.flags[MODE] == MODE_RSYNCSO
 		)
 	)
-		printf_e("Warning: Option \"--rsyncpreferinclude\" is useless if mode is not \"rsyncdirect\", \"rsyncshell\" or \"rsyncso\".\n");
+		warning("Option \"--rsyncpreferinclude\" is useless if mode is not \"rsyncdirect\", \"rsyncshell\" or \"rsyncso\".");
 
 	if(
 		(
-			options.flags[MODE] == MODE_RSYNCDIRECT ||
-			options.flags[MODE] == MODE_RSYNCSHELL  ||
-			options.flags[MODE] == MODE_RSYNCSO
+			glob.flags[MODE] == MODE_RSYNCDIRECT ||
+			glob.flags[MODE] == MODE_RSYNCSHELL  ||
+			glob.flags[MODE] == MODE_RSYNCSO
 		)
-		&& options.flags[AUTORULESW]
+		&& glob.flags[AUTORULESW]
 	)
-		printf_e("Warning: Option \"--auto-add-rules-w\" in modes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" may cause unexpected problems.\n");
+		warning("Option \"--auto-add-rules-w\" in modes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" may cause unexpected problems.");
 
-	if(options.flags[DEBUG])
-		debug_print_flags();
-
-	if(options.listoutdir != NULL) {
+	if(glob.listoutdir != NULL) {
 		struct stat st={0};
 		errno = 0;
-		if(stat(options.listoutdir, &st)) {
+		if(stat(glob.listoutdir, &st)) {
 			if(errno == ENOENT) {
-				printf_e("Warning: Directory \"%s\" doesn't exist. Creating it.\n", options.listoutdir);
+				warning("Directory \"%s\" doesn't exist. Creating it.", glob.listoutdir);
 				errno = 0;
-				if(mkdir(options.listoutdir, S_IRWXU)) {
-					printf_e("Error: main(): Cannot create directory \"%s\": %s (errno: %i).\n", options.listoutdir, strerror(errno), errno);
+				if(mkdir(glob.listoutdir, S_IRWXU)) {
+					error("Cannot create directory \"%s\".", glob.listoutdir);
 					ret = errno;
 				}
 			} else {
-				printf_e("Error: main(): Got error while stat() on \"%s\": %s (errno: %i).\n", options.listoutdir, strerror(errno), errno);
+				error("Got error while stat() on \"%s\".", glob.listoutdir);
 				ret = errno;
 			}
 		}
 		if(!errno)
 			if(st.st_mode & (S_IRWXG|S_IRWXO)) {
 #ifdef PARANOID
-				printf_e("Error: Insecure: Others have access to directory \"%s\". Exit.\n", options.listoutdir);
-				ret = EACCES;
+				ret = errno = EACCES;
+				error("Insecure: Others have access to directory \"%s\". Exit.", glob.listoutdir);
 #else
-				printf_e("Warning: Insecure: Others have access to directory \"%s\".\n", options.listoutdir);
+				warning("Insecure: Others have access to directory \"%s\".", glob.listoutdir);
 #endif
 			}
 	}
 
 /*
-	if(options.flags[HAVERECURSIVESYNC] && (options.listoutdir == NULL)) {
-		printf_e("Error: main(): Option \"--dir-lists\" should be set to use option \"--have-recursive-sync\".\n");
+	if(glob.flags[HAVERECURSIVESYNC] && (glob.listoutdir == NULL)) {
+		error("Option \"--dir-lists\" should be set to use option \"--have-recursive-sync\".");
 		ret = EINVAL;
 	}
 */
 
 	if(
-		options.flags[HAVERECURSIVESYNC] &&
+		glob.flags[HAVERECURSIVESYNC] &&
 		(
-			options.flags[MODE] == MODE_RSYNCDIRECT ||
-			options.flags[MODE] == MODE_RSYNCSHELL  ||
-			options.flags[MODE] == MODE_RSYNCSO
+			glob.flags[MODE] == MODE_RSYNCDIRECT ||
+			glob.flags[MODE] == MODE_RSYNCSHELL  ||
+			glob.flags[MODE] == MODE_RSYNCSO
 		)
 	) {
-		printf_e("Error: main(): Option \"--have-recursive-sync\" with nodes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" are incompatible.\n");
-		ret = EINVAL;
+		ret = errno = EINVAL;
+		error("Option \"--have-recursive-sync\" with nodes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" are incompatible.");
 	}
 
-	if(options.flags[SYNCLISTSIMPLIFY] && (options.listoutdir == NULL)) {
-		printf_e("Error: main(): Option \"--dir-lists\" should be set to use option \"--synclist-simplify\".\n");
-		ret = EINVAL;
+	if(glob.flags[SYNCLISTSIMPLIFY] && (glob.listoutdir == NULL)) {
+		ret = errno = EINVAL;
+		error("Option \"--dir-lists\" should be set to use option \"--synclist-simplify\".");
 	}
 
 	if(
-		options.flags[SYNCLISTSIMPLIFY] && 
+		glob.flags[SYNCLISTSIMPLIFY] && 
 		(
-			options.flags[MODE] == MODE_RSYNCDIRECT ||
-			options.flags[MODE] == MODE_RSYNCSHELL  ||
-			options.flags[MODE] == MODE_RSYNCSO
+			glob.flags[MODE] == MODE_RSYNCDIRECT ||
+			glob.flags[MODE] == MODE_RSYNCSHELL  ||
+			glob.flags[MODE] == MODE_RSYNCSO
 		)
 	) {
-		printf_e("Error: main(): Option \"--synclist-simplify\" with nodes \"rsyncdirect\" and \"rsyncshell\" are incompatible.\n");
-		ret = EINVAL;
+		ret = errno = EINVAL;
+		error("Option \"--synclist-simplify\" with nodes \"rsyncdirect\" and \"rsyncshell\" are incompatible.");
 	}
 
 #ifdef FANOTIFY_SUPPORT
-	if(options.notifyengine != NE_INOTIFY) {
-		printf_e("Warning: fanotify is not fully supported, yet!\n");
+	if(glob.notifyengine != NE_INOTIFY) {
+		warning("fanotify is not supported, now!");
 	}
 #endif
 
-	if(options.flags[EXITHOOK]) {
+	if(glob.flags[EXITHOOK]) {
 #ifdef VERYPARANOID
-		if(options.exithookfile == NULL) {
-			printf_e("Error: main(): options.exithookfile == NULL\n");
-			ret = EINVAL;
+		if(glob.exithookfile == NULL) {
+			ret = errno = EINVAL;
+			error("glob.exithookfile == NULL");
 		} else 
 #endif
 		{
-			if(access(options.exithookfile, X_OK) == -1) {
-				printf_e("Error: \"%s\" is not executable: %s (errno: %i).\n", options.exithookfile, strerror(errno), errno);
+			if(access(glob.exithookfile, X_OK) == -1) {
+				error("\"%s\" is not executable.", glob.exithookfile);
 				if(!ret)
 					ret = errno;
 			}
 		}
 	}
 
-	if(access(options.handlerfpath, X_OK) == -1) {
-		printf_e("Error: \"%s\" is not executable: %s (errno: %i).\n", options.handlerfpath, strerror(errno), errno);
+	if(access(glob.handlerfpath, X_OK) == -1) {
+		error("\"%s\" is not executable.", glob.handlerfpath);
 		if(!ret)
 			ret = errno;
 	}
 
-	nret=main_rehash(&options);
+	nret=main_rehash(&glob);
 	if(nret)
 		ret = nret;
 
-	if(options.flags[BACKGROUND]) {
+	if(glob.flags[BACKGROUND]) {
 		nret = becomedaemon();
 		if(nret)
 			ret = nret;
 	}
 
 #ifdef HAVE_CAPABILITIES
-	if(options.flags[CAP_PRESERVE_FILEACCESS]) {
+	if(glob.flags[CAP_PRESERVE_FILEACCESS]) {
 		// Doesn't work, yet :(
 		//
 		// Error: Cannot inotify_add_watch() on "/home/xaionaro/clsync/examples/testdir/from": Permission denied (errno: 13).
 
-		printf_d("Debug: main(): Preserving access to files with using linux capabilites\n");
+		debug(1, "Preserving access to files with using linux capabilites");
 
 		struct __user_cap_header_struct	cap_hdr = {0};
 		struct __user_cap_data_struct	cap_dat = {0};
 
 		cap_hdr.version = _LINUX_CAPABILITY_VERSION;
 		if(capget(&cap_hdr, &cap_dat) < 0) {
-			printf_e("Error: main() cannot get capabilites with capget(): %s (errno: %i)\n", strerror(errno), errno);
+			error("main() cannot get capabilites with capget()");
 			ret = errno;
 
 			goto preserve_fileaccess_end;
@@ -1421,11 +1444,11 @@ int main(int argc, char *argv[]) {
 		cap_dat.permitted    =  (CAP_TO_MASK(CAP_DAC_OVERRIDE)|CAP_TO_MASK(CAP_DAC_READ_SEARCH)|CAP_TO_MASK(CAP_FOWNER)|CAP_TO_MASK(CAP_SYS_ADMIN)|CAP_TO_MASK(CAP_SETUID));
 		cap_dat.inheritable  = 0;
 
-		printf_ddd("Debug3: main(): cap.eff == %p; cap.prm == %p.\n",
+		debug(3, "cap.eff == %p; cap.prm == %p.",
 			(void *)(long)cap_dat.effective, (void *)(long)cap_dat.permitted);
 
 		if(capset(&cap_hdr, &cap_dat) < 0) {
-			printf_e("Error: main(): Cannot set capabilities with capset(): %s (errno: %i).\n", strerror(errno), errno);
+			error("Cannot set capabilities with capset().");
 			ret = errno;
 
 			goto preserve_fileaccess_end;
@@ -1433,8 +1456,7 @@ int main(int argc, char *argv[]) {
 
 		// Tell kernel not clear capabilities when dropping root 
 		if(prctl(PR_SET_KEEPCAPS, 1) < 0) {
-			printf_e("Error: main(): Cannot prctl(PR_SET_KEEPCAPS, 1) to preserve capabilities: %s (errno: %i)\n",
-				strerror(errno), errno);
+			error("Cannot prctl(PR_SET_KEEPCAPS, 1) to preserve capabilities");
 			ret = errno;
 
 			goto preserve_fileaccess_end;
@@ -1443,79 +1465,76 @@ int main(int argc, char *argv[]) {
 preserve_fileaccess_end:
 #endif
 
-	if(options.flags[UID]) {
-		if(setuid(options.uid)) {
-			printf_e("Error: main(): Cannot setuid(%u): %s (errno: %i)\n", options.uid, strerror(errno), errno);
+	if(glob.flags[UID]) {
+		if(setuid(glob.uid)) {
+			error("Cannot setuid(%u)", glob.uid);
 			ret = errno;
 		}
 	}
 
-	if(options.flags[GID]) {
-		if(setuid(options.gid)) {
-			printf_e("Error: main(): Cannot setgid(%u): %s (errno: %i)\n", options.gid, strerror(errno), errno);
+	if(glob.flags[GID]) {
+		if(setuid(glob.gid)) {
+			error("Cannot setgid(%u)", glob.gid);
 			ret = errno;
 		}
 	}
 
-	if(options.pidfile != NULL) {
+	if(glob.pidfile != NULL) {
 		pid_t pid = getpid();
-		FILE *pidfile = fopen(options.pidfile, "w");
+		FILE *pidfile = fopen(glob.pidfile, "w");
 		if(pidfile == NULL) {
-			printf_e("Error: main(): Cannot open file \"%s\" to write a pid there: %s (errno: %i)\n",
-				options.pidfile, strerror(errno), errno);
+			error("Cannot open file \"%s\" to write a pid there",
+				glob.pidfile);
 			ret = errno;
 		} else {
-			if(fprintf(pidfile, "%u\n", pid) < 0) {
-				printf_e("Error: main(): Cannot write pid into file \"%s\": %s (errno: %i)\n",
-					options.pidfile, strerror(errno), errno);
+			if(fprintf(pidfile, "%u", pid) < 0) {
+				error("Cannot write pid into file \"%s\"",
+					glob.pidfile);
 				ret = errno;
 			}
 			fclose(pidfile);
 		}
 	}
 
-	printf_ddd("Debug3: main(): Current errno is %i.\n", ret);
+	debug(3, "Current errno is %i.", ret);
 
 	// == RUNNING ==
 	if(ret == 0)
-		ret = sync_run(&options);
+		ret = sync_run(&glob);
 	// == RUNNING ==
 
-	if(options.pidfile != NULL) {
-		if(unlink(options.pidfile)) {
-			printf_e("Error: main(): Cannot unlink pidfile \"%s\": %s (errno: %i)\n",
-				options.pidfile, strerror(errno), errno);
+	if(glob.pidfile != NULL) {
+		if(unlink(glob.pidfile)) {
+			error("Cannot unlink pidfile \"%s\"",
+				glob.pidfile);
 			ret = errno;
 		}
 	}
 
-	if(options.statusfile != NULL) {
-		if(unlink(options.statusfile)) {
-			printf_e("Error: main(): Cannot unlink status file \"%s\": %s (errno: %i)\n",
-				options.statusfile, strerror(errno), errno);
+	if(glob.statusfile != NULL) {
+		if(unlink(glob.statusfile)) {
+			error("Cannot unlink status file \"%s\"",
+				glob.statusfile);
 			ret = errno;
 		}
 	}
 
-	main_cleanup(&options);
+	main_cleanup(&glob);
 
-	if(options.watchdirsize)
-		free(options.watchdir);
+	if(glob.watchdirsize)
+		free(glob.watchdir);
 
-	if(options.watchdirwslashsize)
-		free(options.watchdirwslash);
+	if(glob.watchdirwslashsize)
+		free(glob.watchdirwslash);
 
-	if(options.destdirsize)
-		free(options.destdir);
+	if(glob.destdirsize)
+		free(glob.destdir);
 
-	if(options.destdirwslashsize)
-		free(options.destdirwslash);
+	if(glob.destdirwslashsize)
+		free(glob.destdirwslash);
 
 	configs_cleanup();
-	out_flush();
-	printf_d("Debug: finished, exitcode: %i: %s.\n", ret, strerror(ret));
-	out_flush();
-	out_deinit();
+	debug(1, "finished, exitcode: %i: %s.", ret, strerror(ret));
 	return ret;
 }
 
