@@ -41,6 +41,8 @@ static int *debug	 = &zero;
 static int *quiet	 = &zero;
 static int *verbose	 = &one;
 
+pthread_mutex_t error_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 static int printf_stderr(const char *fmt, ...) {
 	va_list args;
 	int rc;
@@ -148,6 +150,8 @@ void _critical(const char *const function_name, const char *fmt, ...) {
 	if (*quiet)
 		return;
 
+	pthread_mutex_lock(&error_mutex);
+
 	outputmethod_t method = *outputmethod;
 
 	{
@@ -183,6 +187,7 @@ void _critical(const char *const function_name, const char *fmt, ...) {
 
 	exit(errno);
 
+	pthread_mutex_unlock(&error_mutex);
 	return;
 }
 
@@ -195,6 +200,8 @@ void _error(const char *const function_name, const char *fmt, ...) {
 	if (*verbose < 1)
 		return;
 
+	pthread_mutex_lock(&error_mutex);
+
 	pthread_t thread = pthread_self();
 	outputmethod_t method = *outputmethod;
 
@@ -206,6 +213,7 @@ void _error(const char *const function_name, const char *fmt, ...) {
 		outfunct[method](" (%i: %s)", errno, strerror(errno));
 	flushfunct[method](LOG_ERR);
 
+	pthread_mutex_unlock(&error_mutex);
 	return;
 }
 
@@ -218,6 +226,8 @@ void _info(const char *const function_name, const char *fmt, ...) {
 	if (*verbose < 3)
 		return;
 
+	pthread_mutex_lock(&error_mutex);
+
 	pthread_t thread = pthread_self();
 	outputmethod_t method = *outputmethod;
 
@@ -227,6 +237,7 @@ void _info(const char *const function_name, const char *fmt, ...) {
 	va_end(args);
 	flushfunct[method](LOG_INFO);
 
+	pthread_mutex_unlock(&error_mutex);
 	return;
 }
 
@@ -239,6 +250,8 @@ void _warning(const char *const function_name, const char *fmt, ...) {
 	if (*verbose < 2)
 		return;
 
+	pthread_mutex_lock(&error_mutex);
+
 	pthread_t thread = pthread_self();
 	outputmethod_t method = *outputmethod;
 
@@ -248,6 +261,7 @@ void _warning(const char *const function_name, const char *fmt, ...) {
 	va_end(args);
 	flushfunct[method](LOG_WARNING);
 
+	pthread_mutex_unlock(&error_mutex);
 	return;
 }
 
@@ -260,6 +274,8 @@ void _debug(int debug_level, const char *const function_name, const char *fmt, .
 	if (debug_level > *debug)
 		return;
 
+	pthread_mutex_lock(&error_mutex);
+
 	pthread_t thread = pthread_self();
 	outputmethod_t method = *outputmethod;
 
@@ -269,6 +285,7 @@ void _debug(int debug_level, const char *const function_name, const char *fmt, .
 	va_end(args);
 	flushfunct[method](LOG_DEBUG);
 
+	pthread_mutex_unlock(&error_mutex);
 	return;
 }
 
@@ -277,6 +294,8 @@ void error_init(void *_outputmethod, int *_quiet, int *_verbose, int *_debug) {
 	quiet		= _quiet;
 	verbose		= _verbose;
 	debug		= _debug;
+
+	pthread_mutex_init(&error_mutex, NULL);
 
 	return;
 }

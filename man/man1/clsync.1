@@ -87,39 +87,40 @@ Is not set by default.
 .RS 8
 Sets syncing mode. Possible values:
 .RS
-simple      \- calls
-.I sync\-handler
-for every event
-.br
-shell       \- calls
-.I sync\-handler
-for every sync
-.br
-rsyncdirect \- calls rsync by path
-.I sync\-handler
-directly (inflexible and unreliable, should be used only as a proof of
-concept)
-.br
-rsyncshell  \- calls
-.I sync\-handler
-that supposed to run rsync for every sync (recommended
-mode)
-.br
-rsyncso     \- loads shared object by path
-.I sync\-handler
-with
-.BR dlopen (3)
-and calls function
-.B clsyncapi_rsync
-function for every sync
-.br
-so          \- loads shared object by path
-.I sync\-handler
-with
-.BR dlopen (3)
-and calls function
-.B clsyncapi_sync
-function for every sync
+.IR simple 
+.RS 
+calls
+.IR sync\-handler " for every event"
+.RE
+.IR shell
+.RS
+calls
+.IR sync\-handler " for every sync"
+.RE
+.IR rsyncdirect
+.RS
+calls rsync by path
+.IR sync\-handler " directly (inflexible and unreliable, should be used only
+as a proof of concept)"
+.RE
+.IR rsyncshell
+.RS
+calls
+.IR sync\-handler " that supposed to run rsync for every sync (recommended
+mode)"
+.RE
+.IR rsyncso
+.RS
+loads shared object by path
+.IR sync\-handler " with "
+.BR dlopen "(3) and calls function " clsyncapi_rsync " function for every sync"
+.RE
+.IR so
+.RS
+loads shared object by path
+.IR sync\-handler " with "
+.BR dlopen "(3) and calls function " clsyncapi_sync " function for every sync"
+.RE
 .RE
 
 See
@@ -181,21 +182,36 @@ Write status description into file with path
 
 Possible statuses:
 .RS 8
-starting    \- initializing subsystems and marking file tree with FS monitor
+.IR starting
+.RS
+initializing subsystems and marking file tree with FS monitor
 subsystem
-.br
-initsync    \- processing initial syncing
-.br
-running     \- waiting for events or syncing
-.br
-rehashing   \- reloading configuration files
-.br
-pthread gc  \- running threads' garbage collector
-.br
-terminating \- received signal to die, preparing to die
-.br
-exiting     \- cleaning up [for 
+.RE
+.IR initsync
+.RS
+processing initial syncing
+.RE
+.IR running
+.RS
+waiting for events or syncing
+.RE
+.IR rehashing
+.RS
+reloading configuration files
+.RE
+.IR "thread gc"
+.RS
+running threads' garbage collector
+.RE
+.IR terminating
+.RS
+received signal to die, preparing to die
+.RE
+.IR exiting
+.RS
+cleaning up [for
 .BR valgrind (1)]
+.RE
 .RE
 
 Is not set by default.
@@ -246,17 +262,61 @@ value.
 Default value is "1".
 .RE
 
-.B \-p, \-\-pthread
+.B \-p, \-\-threading
+.I threading-mode
 .RS 8
 Use
 .BR pthreads (7)
-to parallelize syncing processes. Every sync will be done asynchronous without
-blocking.
+to parallelize syncing processes. For example if
+.B clsync
+(with
+.BR  \-\-threading=off )
+is already syncing a huge file then all other syncs will be suspended
+until the huge file syncing finish. To prevent this suspends you can use
+"safe" or "full" threading mode.
+
+Possbile values:
+.RS
+.IR off
+.RS
+disable threading for syncing processes.
+.RE
+.IR safe 
+.RS
+parallelize syncs but suspend syncings of object that are already
+syncing in another process (until the process finish).
+.RE
+.IR full 
+.RS
+parallelize syncs without suspendings.
+.RE
+.RE
+
+Characteristics:
+.RS
+.IR off
+.RS
+New modifications won't be synced until old ones finish.
+.RE
+.IR safe 
+.RS
+Theoretically is the best way. But may utilize of lot of CPU if
+there's a lot of simultaneous parallel syncs. (also this way is not well
+tested)
+.RE
+.IR full
+.RS
+May cause multiple simultaneous syncing of the same file, which
+in turn can cause bug inside
+.IR sync\-handler " (see below)."
+.RE
+
+.RE
 
 If you're running
 .B clsync
 with option
-.B \-\-pthread
+.B \-\-threading=full
 in conjunction with
 .B rsync
 with option
@@ -265,9 +325,7 @@ you may catch a bug due to nonatomicity of rsync's file replace operation.
 (see
 .BR DIAGNOSTICS )
 
-Is not set by default.
-
-Don't use this option if not sure.
+Default value is "off".
 .RE
 
 .B \-Y, \-\-output
@@ -1285,7 +1343,7 @@ this may happend, for example in next cases:
 \- Not enough space on destination.
 
 \- You're running clsync with 
-.B \-\-pthread
+.B \-\-threading
 and rsync with
 .BR \-\-backup .
 See bugreport by URL:

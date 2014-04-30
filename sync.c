@@ -267,6 +267,7 @@ static inline eventinfo_t *indexes_fpath2ei(indexes_t *indexes_p, const char *fp
 }
 
 static inline int indexes_fpath2ei_add(indexes_t *indexes_p, char *fpath, eventinfo_t *evinfo) {
+	debug(5, "\"%s\"", fpath);
 	g_hash_table_replace(indexes_p->fpath2ei_ht, fpath, evinfo);
 
 	return 0;
@@ -356,6 +357,26 @@ static threadsinfo_t *thread_getinfo() {	// TODO: optimize this
 //	pthread_mutex_lock(&threadsinfo._mutex);
 
 	return &threadsinfo;
+}
+
+int threads_foreach(int (*funct)(threadinfo_t *, void *), state_t state, void *arg) {
+	int i, rc;
+	threadsinfo_t *threadsinfo_p = thread_getinfo();
+	pthread_mutex_lock  (&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
+
+	rc = 0;
+	i  = 0;
+	while (i < threadsinfo_p->used) {
+		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[i++];
+		if ((state == STATE_UNKNOWN) || (threadinfo_p->state == state)) {
+			if((rc=funct(threadinfo_p, arg)))
+				break;
+		}
+	}
+
+	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
+
+	return rc;
 }
 
 time_t thread_nextexpiretime() {
@@ -475,7 +496,7 @@ int thread_gc(ctx_t *ctx_p) {
 	int thread_num;
 	time_t tm = time(NULL);
 	debug(3, "tm == %i; thread %p", tm, pthread_self());
-	if(!ctx_p->flags[PTHREAD])
+	if(!ctx_p->flags[THREADING])
 		return 0;
 
 	threadsinfo_t *threadsinfo_p = thread_getinfo();
@@ -679,7 +700,7 @@ static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode ) {
 	// Notifying the parent-thread, that it's time to collect garbage threads
 	threadinfo_p->state    = STATE_TERM;
 	debug(3, "thread %p is sending signal to sighandler to call GC", threadinfo_p->pthread);
-	return pthread_kill(pthread_sighandler, SIGUSR_PTHREAD_GC);
+	return pthread_kill(pthread_sighandler, SIGUSR_THREAD_GC);
 }
 
 static inline void so_call_sync_finished(int n, api_eventinfo_t *ei) {
@@ -747,7 +768,7 @@ int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_eventinfo_t *ei) {
 	debug(2, "n == %i", n);
 
-	if(!ctx_p->flags[PTHREAD]) {
+	if(!ctx_p->flags[THREADING]) {
 		int rc=0, ret=0, err=0;
 		int try_n=0, try_again;
 		do {
@@ -872,7 +893,7 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *inclistfile, const char *exclistfile) {
 	debug(2, "inclistfile == \"%s\"; exclistfile == \"%s\"", inclistfile, exclistfile);
 
-	if(!ctx_p->flags[PTHREAD]) {
+	if(!ctx_p->flags[THREADING]) {
 		debug(3, "ctx_p->handler_funct.rsync == %p", ctx_p->handler_funct.rsync);
 
 		int rc=0, err=0;
@@ -934,7 +955,7 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 
 // === SYNC_EXEC() === {
 
-#define SYNC_EXEC(...) (ctx_p->flags[PTHREAD]?sync_exec_thread:sync_exec)(__VA_ARGS__)
+#define SYNC_EXEC(...) (ctx_p->flags[THREADING]?sync_exec_thread:sync_exec)(__VA_ARGS__)
 
 
 #define _sync_exec_getargv(argv, firstarg, COPYARG) {\
@@ -956,33 +977,57 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 	va_end(arglist);\
 }
 
-char *sync_path_abs2rel(ctx_t *ctx_p, const char *path_abs, size_t path_abs_len, size_t *path_rel_len_p, char *path_rel_oldptr) {
-	if(path_abs == NULL)
+char *sync_path_rel2abs(ctx_t *ctx_p, const char *path_rel, size_t path_rel_len, size_t *path_abs_len_p, char *path_abs_oldptr) {
+	if (path_rel == NULL)
 		return NULL;
 
-	if(path_abs_len == -1)
+	if (path_rel_len == -1)
+		path_rel_len = strlen(path_rel);
+
+	char  *path_abs;
+	size_t watchdirlen = 
+		(ctx_p->watchdir == ctx_p->watchdirwslash) ? 0 : ctx_p->watchdirlen;
+		// if [watchdir == "/"] ? 0 : watchdir.length()
+
+	size_t path_abs_len = path_rel_len + watchdirlen + 1;
+
+	path_abs = (path_abs_len_p == NULL || path_abs_len >= *path_abs_len_p) ?
+			xrealloc(path_abs_oldptr, path_abs_len+1) :
+			path_abs_oldptr;
+
+	if (path_abs_oldptr == NULL) {
+		memcpy(path_abs, ctx_p->watchdir, watchdirlen);
+		path_abs[watchdirlen] = '/';
+	}
+	memcpy(&path_abs[watchdirlen+1], path_rel, path_rel_len+1);
+
+	if (path_abs_len_p != NULL)
+		*path_abs_len_p = path_abs_len;
+
+	return path_abs;
+}
+
+char *sync_path_abs2rel(ctx_t *ctx_p, const char *path_abs, size_t path_abs_len, size_t *path_rel_len_p, char *path_rel_oldptr) {
+	if (path_abs == NULL)
+		return NULL;
+
+	if (path_abs_len == -1)
 		path_abs_len = strlen(path_abs);
 
 	size_t path_rel_len;
 	char  *path_rel;
-	size_t watchdirlen = (ctx_p->watchdir == ctx_p->watchdirwslash /* if watch-dir == "/" */) 
-				? 0 : ctx_p->watchdirlen;
+	size_t watchdirlen = 
+		(ctx_p->watchdir == ctx_p->watchdirwslash) ? 0 : ctx_p->watchdirlen;
 
 	signed long path_rel_len_signed = path_abs_len - (watchdirlen+1);
 
 	path_rel_len = (path_rel_len_signed > 0) ? path_rel_len_signed : 0;
 
-	if(path_rel_oldptr == NULL) {
-		path_rel = xmalloc(path_abs_len+1);
-	} else {
-		if(path_rel_len > *path_rel_len_p) {
-			path_rel = xrealloc(path_rel_oldptr, path_rel_len+1);
-		} else {
-			path_rel = path_rel_oldptr;
-		}
-	}
+	path_rel = (path_rel_len_p == NULL || path_rel_len >= *path_rel_len_p) ? 
+			xrealloc(path_rel_oldptr, path_rel_len+1) : 
+			path_rel_oldptr;
 
-	if(!path_rel_len) {
+	if (!path_rel_len) {
 		path_rel[0] = 0;
 		return path_rel;
 	}
@@ -991,7 +1036,7 @@ char *sync_path_abs2rel(ctx_t *ctx_p, const char *path_abs, size_t path_abs_len,
 
 #ifdef VERYPARANOID
 	// Removing "/" on the end
-	debug(3, "sync_path_abs2rel(): \"%s\" (len: %i) --%i--> \"%s\" (len: %i) + ", 
+	debug(3, "\"%s\" (len: %i) --%i--> \"%s\" (len: %i) + ", 
 		path_abs, path_abs_len, path_rel[path_rel_len - 1] == '/',
 		ctx_p->watchdirwslash, watchdirlen+1);
 	if(path_rel[path_rel_len - 1] == '/')
@@ -1006,7 +1051,7 @@ char *sync_path_abs2rel(ctx_t *ctx_p, const char *path_abs, size_t path_abs_len,
 }
 
 pid_t clsyncapi_fork(ctx_t *ctx_p) {
-//	if(ctx_p->flags[PTHREAD])
+//	if(ctx_p->flags[THREADING])
 //		return fork();
 
 	// Cleaning stale pids. TODO: Optimize this. Remove this GC.
@@ -1381,11 +1426,6 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 		)
 	) {
 		debug(3, "syncing \"%s\"", path);
-/*
-		if(ctx_p->flags[PTHREAD])
-			return sync_exec_thread(ctx_p, NULL, ctx_p->handlerfpath, "initialsync", ctx_p->label, path, NULL);
-		else
-			return sync_exec       (ctx_p, NULL, ctx_p->handlerfpath, "initialsync", ctx_p->label, path, NULL);*/
 
 		if(ctx_p->flags[HAVERECURSIVESYNC]) {
 			if(ctx_p->flags[MODE] == MODE_SO) {
@@ -1658,11 +1698,6 @@ int sync_notify_init(ctx_t *ctx_p) {
 }
 
 static inline int sync_dosync_exec(ctx_t *ctx_p, indexes_t *indexes_p, const char *evmask_str, const char *fpath) {
-/*
-	if(ctx_p->flags[PTHREAD])
-		return sync_exec_thread(ctx_p, NULL, ctx_p->handlerfpath, "sync", ctx_p->label, evmask_str, fpath, NULL);
-	else
-		return sync_exec       (ctx_p, NULL, ctx_p->handlerfpath, "sync", ctx_p->label, evmask_str, fpath, NULL);*/
 	return SYNC_EXEC(ctx_p, indexes_p, NULL, ctx_p->handlerfpath, "sync", ctx_p->label, evmask_str, fpath, NULL);
 
 #ifdef DOXYGEN
@@ -1691,6 +1726,161 @@ static int sync_dosync(const char *fpath, uint32_t evmask, ctx_t *ctx_p, indexes
 	return ret;
 }
 
+static inline uint8_t monsystems_unifyevmask(ctx_t *ctx_p, uint32_t event_mask) {
+	int is_dir=0, is_created=0, is_deleted=0;
+
+	if (ctx_p->flags[INOTIFY]) {
+		is_dir     = event_mask &  IN_ISDIR;
+		is_created = event_mask & (IN_CREATE|IN_MOVED_TO);
+		is_deleted = event_mask & (IN_DELETE_SELF|IN_DELETE|IN_MOVED_FROM);
+	}
+
+	is_dir     = is_dir     != 0;
+	is_created = is_created != 0;
+	is_deleted = is_deleted != 0;
+
+	return
+			(is_dir     * UEM_DIR		) |
+			(is_created * UEM_CREATED	) |
+			(is_deleted * UEM_DELETED	) |
+		0;
+}
+
+int sync_prequeue_loadmark
+(
+		int fsmon_d,
+
+		ctx_t     *ctx_p,
+		indexes_t *indexes_p,
+
+		const char *path_full,
+		const char *path_rel,
+
+		uint32_t event_mask,
+		int      event_wd,
+		mode_t st_mode,
+		off_t  st_size,
+
+		char  **path_buf_p,
+		size_t *path_buf_len_p,
+
+		eventinfo_t *evinfo
+) {
+#ifdef PARANOID
+	// &path_buf and &path_buf_len are passed to do not reallocate memory for path_rel/path_full each time
+	if ((path_buf_p == NULL || path_buf_len_p == NULL) && (path_full == NULL || path_rel == NULL)) {
+		error("path_rel_p == NULL || path_rel_len_p == NULL");
+		return EINVAL;
+	}
+#endif
+#ifdef VERYPARANOID
+	if (path_full_p == NULL && path_rel_p == NULL) {
+		error("path_full == NULL && path_rel == NULL")
+		return EINVAL;
+	}
+#endif
+
+
+	if (path_rel == NULL) {
+		*path_buf_p   = sync_path_abs2rel(ctx_p, path_full, -1, path_buf_len_p, *path_buf_p);
+		 path_rel     = *path_buf_p;
+	}
+
+	ruleaction_t perm = RA_ALL;
+	if (st_mode) {
+		// Checking by filter rules
+		perm = rules_getperm(path_rel, st_mode, ctx_p->rules, RA_WALK|RA_MONITOR);
+
+		if(!(perm&(RA_MONITOR|RA_WALK))) {
+			return 0;
+		}
+	}
+
+	// Handling different cases
+
+	uint8_t event_mask_unified = monsystems_unifyevmask(ctx_p, event_mask);
+
+	int is_dir	= event_mask_unified & UEM_DIR;
+	int is_created	= event_mask_unified & UEM_CREATED;
+	int is_deleted	= event_mask_unified & UEM_DELETED;
+
+	if (is_dir) {
+		if (is_created) {
+			int ret;
+
+			if (perm & RA_WALK) {
+				if (path_full == NULL) {
+					*path_buf_p   = sync_path_rel2abs(ctx_p, path_rel,  -1, path_buf_len_p, *path_buf_p);
+					path_full    = *path_buf_p;
+				}
+
+				if (fsmon_d) {
+					ret = sync_mark_walk(fsmon_d, ctx_p, path_full, indexes_p);
+					if(ret) {
+						debug(1, "Seems, that directory \"%s\" disappeared, while trying to mark it.", path_full);
+						return 0;
+					}
+				}
+
+				ret = sync_initialsync(path_full, ctx_p, indexes_p, INITSYNC_SUBDIR);
+				if (ret) {
+					errno = ret;
+					error("Got error from sync_initialsync()");
+					return errno;
+				}
+			}
+
+			return 0;
+		} else 
+		if (is_deleted) {
+			debug(2, "Disappeared \".../%s\".", path_rel);
+		}
+	}
+
+	if (!(perm&RA_WALK)) {
+		return 0;
+	}
+
+	// Locally queueing the event
+
+	int isnew = 0;
+
+	if (evinfo == NULL)
+		evinfo = indexes_fpath2ei(indexes_p, path_rel);
+	else
+		isnew++;	// It's new for prequeue (but old for lockwait queue)
+
+	if (evinfo == NULL) {
+		evinfo = (eventinfo_t *)xmalloc(sizeof(*evinfo));
+		memset(evinfo, 0, sizeof(*evinfo));
+		evinfo->fsize        = st_size;
+		evinfo->wd           = event_wd;
+		evinfo->seqid_min    = sync_seqid();
+		evinfo->seqid_max    = evinfo->seqid_min;
+		evinfo->objtype_old  =   is_created 	? EOT_DOESNTEXIST	:
+					(is_dir 	? EOT_DIR 		:EOT_FILE);
+		isnew++;
+		debug(3, "new event: fsize == %i; wd == %i", evinfo->fsize, evinfo->wd);
+	} else {
+		evinfo->seqid_max    = sync_seqid();
+	}
+	evinfo->evmask |= event_mask;
+
+	evinfo->objtype_new =	 is_deleted ? EOT_DOESNTEXIST :
+				(is_dir     ? EOT_DIR         : EOT_FILE);
+
+	debug(2, "path_rel == \"%s\"; evinfo->objtype_old == %i; evinfo->objtype_new == %i; "
+		 "evinfo->seqid_min == %u; evinfo->seqid_max == %u", 
+		 path_rel, evinfo->objtype_old, evinfo->objtype_new,
+		 evinfo->seqid_min, evinfo->seqid_max
+	     );
+
+	if (isnew)
+		indexes_fpath2ei_add(indexes_p, strdup(path_rel), evinfo);
+
+	return 0;
+}
+
 void _sync_idle_dosync_collectedexcludes(gpointer fpath_gp, gpointer flags_gp, gpointer arg_gp) {
 	char *fpath		  = (char *)fpath_gp;
 	indexes_t *indexes_p 	  = ((struct dosync_arg *)arg_gp)->indexes_p;
@@ -1702,18 +1892,84 @@ void _sync_idle_dosync_collectedexcludes(gpointer fpath_gp, gpointer flags_gp, g
 	return;
 }
 
+// Is not a thread-save function!
+eventinfo_t *ht_fpath_isincluded(GHashTable *ht, const char *const fpath) {
+	static char buf[PATH_MAX+2]={0};
+	char *ptr, *end;
+	eventinfo_t *evinfo = g_hash_table_lookup(ht, fpath);
+	debug(5, "looking up for \"%s\": %p", fpath, evinfo);
+	if (evinfo != NULL)
+		return evinfo;
+
+	if (!*fpath)
+		return NULL;
+
+	evinfo = g_hash_table_lookup(ht, "");
+	debug(5, "recursive looking up for \"\": %p (%x: recusively: %x)", evinfo, evinfo->flags, evinfo->flags & EVIF_RECURSIVELY);
+	if (evinfo->flags & EVIF_RECURSIVELY)
+		return evinfo;
+
+	size_t fpath_len = strlen(fpath);
+	memcpy(buf, fpath, fpath_len+1);
+	ptr  =  buf;
+	end  = &buf[fpath_len];
+
+	while(ptr < end) {
+		if (*ptr == '/') {
+			*ptr = 0;
+			evinfo = g_hash_table_lookup(ht, buf);
+			debug(5, "recursive looking up for \"%s\": %p (%x: recusively: %x)", buf, evinfo, evinfo->flags, evinfo->flags & EVIF_RECURSIVELY);
+			*ptr = '/';
+			if (evinfo->flags & EVIF_RECURSIVELY)
+				return evinfo;
+		}
+
+		ptr++;
+	}
+
+	return evinfo;
+}
+
+int _sync_islocked(threadinfo_t *threadinfo_p, void *_fpath) {
+	char *fpath = _fpath;
+
+	eventinfo_t *evinfo = ht_fpath_isincluded(threadinfo_p->fpath2ei_ht, fpath);
+	debug(4, "scanning thread %p: fpath<%s> -> evinfo<%p>", threadinfo_p->pthread, fpath, evinfo);
+	if (evinfo != NULL)
+		return 1;
+
+	return 0;
+}
+
+static inline int sync_islocked(const char *const fpath) {
+	int rc = threads_foreach(_sync_islocked, STATE_RUNNING, (void *)fpath);
+	debug(3, "<%s>: %u", fpath, rc);
+	return rc;
+}
+
 void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
 	char *fpath		  = (char *)fpath_gp;
 	eventinfo_t *evinfo	  = (eventinfo_t *)evinfo_gp;
 	int *evcount_p		  =&((struct dosync_arg *)arg_gp)->evcount;
-//	FILE *outf		  = ((struct dosync_arg *)arg_gp)->outf;
-	ctx_t *ctx_p 	  = ((struct dosync_arg *)arg_gp)->ctx_p;
+	ctx_t *ctx_p 		  = ((struct dosync_arg *)arg_gp)->ctx_p;
 	indexes_t *indexes_p 	  = ((struct dosync_arg *)arg_gp)->indexes_p;
 	queue_id_t queue_id	  = (queue_id_t)((struct dosync_arg *)arg_gp)->data;
 
 	debug(3, "queue_id == %i.", queue_id);
 
-	if((ctx_p->listoutdir == NULL) && (!(ctx_p->flags[MODE]==MODE_SO))) {
+	if (ctx_p->flags[THREADING] == PM_SAFE)
+		if (sync_islocked(fpath)) {
+			debug(3, "\"%s\" is locked, dropping to waitlock queue", fpath);
+
+			eventinfo_t *evinfo_dup = xmalloc(sizeof(*evinfo_dup));
+			memcpy(evinfo_dup, evinfo, sizeof(*evinfo));
+			
+			sync_queuesync(fpath, evinfo_dup, ctx_p, indexes_p, QUEUE_LOCKWAIT);
+			return;
+		}
+	
+
+	if ((ctx_p->listoutdir == NULL) && (!(ctx_p->flags[MODE]==MODE_SO))) {
 		debug(3, "calling sync_dosync()");
 		int ret;
 		if((ret=sync_dosync(fpath, evinfo->evmask, ctx_p, indexes_p))) {
@@ -1725,7 +1981,7 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 	int isnew = 0;
 	eventinfo_t *evinfo_idx = indexes_fpath2ei(indexes_p, fpath);
 
-	if(evinfo_idx == NULL) {
+	if (evinfo_idx == NULL) {
 		evinfo_idx = (eventinfo_t *)xmalloc(sizeof(*evinfo_idx));
 		memset(evinfo_idx, 0, sizeof(*evinfo_idx));
 		isnew++;
@@ -1742,7 +1998,7 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 
 
 	int _queue_id = 0;
-	while(_queue_id < QUEUE_MAX) {
+	while (_queue_id < QUEUE_MAX) {
 		if(_queue_id == queue_id) {
 			_queue_id++;
 			continue;
@@ -1759,12 +2015,39 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 		_queue_id++;
 	}
 
-	if(isnew)
+	if (isnew) {
+		debug(4, "Collecting \"%s\"", fpath);
 		indexes_fpath2ei_add(indexes_p, strdup(fpath), evinfo_idx);
-	else
+	} else
 		free(fpath);
 
 	return;
+}
+
+struct trylocked_arg {
+	char   *path_full;
+	size_t  path_full_len;
+};
+gboolean sync_trylocked(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
+	char *fpath		   = (char *)fpath_gp;
+	eventinfo_t *evinfo	   = (eventinfo_t *)evinfo_gp;
+
+	struct dosync_arg *arg_p   = (struct dosync_arg *)arg_gp;
+
+	ctx_t *ctx_p 		   =  arg_p->ctx_p;
+	indexes_t *indexes_p 	   =  arg_p->indexes_p;
+
+	struct trylocked_arg *data =  arg_p->data;
+
+	if (!sync_islocked(fpath)) {
+		if (sync_prequeue_loadmark(0, ctx_p, indexes_p, NULL, fpath, evinfo->evmask, 0, 0, 0, &data->path_full, &data->path_full_len, evinfo)) {
+			critical("Cannot re-queue \"%s\" to be synced", fpath);
+			return FALSE;
+		}
+		return TRUE;
+	}
+
+	return FALSE;
 }
 
 int sync_idle_dosync_collectedevents_cleanup(ctx_t *ctx_p, char **argv) {
@@ -1828,33 +2111,76 @@ int sync_idle_dosync_collectedevents_cleanup(ctx_t *ctx_p, char **argv) {
 	return ret0;
 }
 
+void sync_queuesync_wrapper(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
+	char *fpath_rel		  = (char *)fpath_gp;
+	eventinfo_t *evinfo	  = (eventinfo_t *)evinfo_gp;
+	ctx_t *ctx_p 		  = ((struct dosync_arg *)arg_gp)->ctx_p;
+	indexes_t *indexes_p 	  = ((struct dosync_arg *)arg_gp)->indexes_p;
+
+	sync_queuesync(fpath_rel, evinfo, ctx_p, indexes_p, QUEUE_AUTO);
+
+	return;
+}
+
+int sync_prequeue_unload(ctx_t *ctx_p, indexes_t *indexes_p) {
+	struct dosync_arg dosync_arg;
+	dosync_arg.ctx_p 	= ctx_p;
+	dosync_arg.indexes_p	= indexes_p;
+
+	debug(3, "collected %i events per this time.", g_hash_table_size(indexes_p->fpath2ei_ht));
+
+	g_hash_table_foreach(indexes_p->fpath2ei_ht, sync_queuesync_wrapper, &dosync_arg);
+	g_hash_table_remove_all(indexes_p->fpath2ei_ht);
+
+	return 0;
+}
+
 int sync_idle_dosync_collectedevents_aggrqueue(queue_id_t queue_id, ctx_t *ctx_p, indexes_t *indexes_p, struct dosync_arg *dosync_arg) {
-//	char *buf, *fpath;
 	time_t tm = time(NULL);
 
 	queueinfo_t *queueinfo = &ctx_p->_queues[queue_id];
 
-	if((queueinfo->stime + queueinfo->collectdelay > tm) && (queueinfo->collectdelay != COLLECTDELAY_INSTANT) && (!ctx_p->flags[EXITONNOEVENTS])) {
-		debug(3, "sync_idle_dosync_collectedevents_procqueue(%i, ...): too early (%i + %i > %i).", queue_id, queueinfo->stime, queueinfo->collectdelay, tm);
+	if ((queueinfo->stime + queueinfo->collectdelay > tm) && (queueinfo->collectdelay != COLLECTDELAY_INSTANT) && (!ctx_p->flags[EXITONNOEVENTS])) {
+		debug(3, "(%i, ...): too early (%i + %i > %i).", queue_id, queueinfo->stime, queueinfo->collectdelay, tm);
 		return 0;
 	}
 	queueinfo->stime = 0;
 
 	int evcount_real = g_hash_table_size(indexes_p->fpath2ei_coll_ht[queue_id]);
 
-	debug(3, "sync_idle_dosync_collectedevents_procqueue(%i, ...): evcount_real == %i", queue_id, evcount_real);
+	debug(3, "(%i, ...): evcount_real == %i", queue_id, evcount_real);
 
-	if(evcount_real<=0) {
-		debug(3, "sync_idle_dosync_collectedevents_procqueue(%i, ...): no events, return 0.", queue_id);
+	if (evcount_real<=0) {
+		debug(3, "(%i, ...): no events, return 0.", queue_id);
 		return 0;
 	}
 
-	g_hash_table_foreach(indexes_p->fpath2ei_coll_ht[queue_id], _sync_idle_dosync_collectedevents, dosync_arg);
-	g_hash_table_remove_all(indexes_p->fpath2ei_coll_ht[queue_id]);
+	switch (queue_id) {
+		case QUEUE_LOCKWAIT: {
+			struct trylocked_arg arg_data = {0};
 
-	if(!ctx_p->flags[RSYNCPREFERINCLUDE]) {
-		g_hash_table_foreach(indexes_p->exc_fpath_coll_ht[queue_id], _sync_idle_dosync_collectedexcludes, dosync_arg);
-		g_hash_table_remove_all(indexes_p->exc_fpath_coll_ht[queue_id]);
+			dosync_arg->data = &arg_data;
+			g_hash_table_foreach_remove(indexes_p->fpath2ei_coll_ht[queue_id], sync_trylocked, dosync_arg);
+
+			// Placing to global queues recently unlocked objects
+			sync_prequeue_unload(ctx_p, indexes_p);
+
+#ifdef PARANOID
+			if (arg_data.path_full != NULL)
+#endif
+				free(arg_data.path_full);
+			break;
+		}
+		default: {
+			g_hash_table_foreach(indexes_p->fpath2ei_coll_ht[queue_id], _sync_idle_dosync_collectedevents, dosync_arg);
+			g_hash_table_remove_all(indexes_p->fpath2ei_coll_ht[queue_id]);
+
+			if(!ctx_p->flags[RSYNCPREFERINCLUDE]) {
+				g_hash_table_foreach(indexes_p->exc_fpath_coll_ht[queue_id], _sync_idle_dosync_collectedexcludes, dosync_arg);
+				g_hash_table_remove_all(indexes_p->exc_fpath_coll_ht[queue_id]);
+			}
+			break;
+		}
 	}
 
 	return 0;
@@ -1913,8 +2239,6 @@ void rsync_escape_cleanup() {
 }
 
 const char *rsync_escape(const char *path) {
-//	size_t sc_coords_size = ALLOC_PORTION;
-//	size_t *sc_coords     = malloc(sizeof(*sc_coords) * sc_coords_size);
 	size_t sc_count       = 0;
 
 	size_t i = 0;
@@ -1928,13 +2252,6 @@ const char *rsync_escape(const char *path) {
 			case '*':
 			case '?':
 			case '\\':
-/*
-				if(sc_count >= sc_coords_size-1) {
-					sc_coords_size += ALLOC_PORTION;
-					sc_coords       = realloc(sc_coords, sizeof(*sc_coords) * sc_coords_size);
-				}
-				sc_coords[sc_count++] = i;
-*/
 				sc_count++;
 		}
 		i++;
@@ -1963,29 +2280,9 @@ l_rsync_escape_loop0_end:
 			case '\\':
 				sc_count--;
 				rsync_escape_result[i+sc_count] = '\\';
-//					if(!sc_count)
-//						goto l_rsync_escape_loop1_end;
 				break;
 		}
 	} 
-
-/*		size_t end = i+sc_count;
-
-	char *from, *to;
-
-	sc_coords[sc_count] = end;
-
-	while(sc_count) {
-		char *from, *to;
-		sc_count--;
-
-		to   = &path[sc_coords[sc_count]+sc_count];
-		from = &path[sc_coords[sc_count]+1];
-
-		memmove(to, from, sc_coords[sc_count+1]-sc_coords[sc_count]-1);
-	}
-*/
-//l_rsync_escape_loop1_end:
 
 	return rsync_escape_result;
 }
@@ -2119,25 +2416,7 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 	}
 
 	if(dosync_arg_p->evcount > 0) {
-/*
-		if(ctx_p->flags[PTHREAD])
-			return sync_exec_thread(ctx_p,
-						sync_idle_dosync_collectedevents_cleanup,
-						ctx_p->handlerfpath,
-						ctx_p->flags[RSYNC]?"rsynclist":"synclist",
-						ctx_p->label,
-						dosync_arg_p->outf_path,
-						*(dosync_arg_p->outf_path)?dosync_arg_p->outf_path:NULL,
-						NULL);
-		else
-			return sync_exec       (ctx_p,
-						sync_idle_dosync_collectedevents_cleanup,
-						ctx_p->handlerfpath,
-						ctx_p->flags[RSYNC]?"rsynclist":"synclist", 
-						ctx_p->label,
-						dosync_arg_p->outf_path,
-						*(dosync_arg_p->outf_path)?dosync_arg_p->outf_path:NULL,
-						NULL);*/
+
 		debug(3, "%s [%s] (%p) -> %s [%s]", ctx_p->watchdir, ctx_p->watchdirwslash, ctx_p->watchdirwslash, 
 								ctx_p->destdir?ctx_p->destdir:"", ctx_p->destdirwslash?ctx_p->destdirwslash:"");
 
@@ -2279,7 +2558,7 @@ static inline void setenv_iteration(uint32_t iteration_num)
 }
 
 int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
-	debug(3, "sync_idle_dosync_collectedevents()");
+	debug(3, "");
 	struct dosync_arg dosync_arg = {0};
 
 	dosync_arg.ctx_p 	= ctx_p;
@@ -2305,8 +2584,14 @@ int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
 	debug(3, "Next sync will be not before: %u", ctx_p->synctime);
 
 	int queue_id=0;
-	while(queue_id < QUEUE_MAX) {
+	while (queue_id < QUEUE_MAX) {
 		int ret;
+
+		if ((queue_id == QUEUE_LOCKWAIT) && (ctx_p->flags[THREADING] != PM_SAFE)) {
+			queue_id++;
+			continue;
+		}
+
 		queue_id_t *queue_id_p = (queue_id_t *)&dosync_arg.data;
 		*queue_id_p = queue_id;
 		ret = sync_idle_dosync_collectedevents_aggrqueue(queue_id, ctx_p, indexes_p, &dosync_arg);
@@ -2321,24 +2606,24 @@ int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
 		queue_id++;
 	}
 
-	if(!dosync_arg.evcount) {
+	if (!dosync_arg.evcount) {
 		debug(3, "Summary events' count is zero. Return 0.");
 		return 0;
 	}
 
-	if(ctx_p->flags[MODE] == MODE_SO) {
+	if (ctx_p->flags[MODE] == MODE_SO) {
 		//dosync_arg.evcount = g_hash_table_size(indexes_p->fpath2ei_ht);
 		debug(3, "There's %i events. Processing.", dosync_arg.evcount);
 		dosync_arg.api_ei = (api_eventinfo_t *)xmalloc(dosync_arg.evcount * sizeof(*dosync_arg.api_ei));
 	}
 
-	if((ctx_p->listoutdir != NULL) || (ctx_p->flags[MODE] == MODE_SO)) {
+	if ((ctx_p->listoutdir != NULL) || (ctx_p->flags[MODE] == MODE_SO)) {
 		int ret;
 
-		if(!(ctx_p->flags[MODE]==MODE_SO)) {
+		if (!(ctx_p->flags[MODE]==MODE_SO)) {
 			*(dosync_arg.excf_path) = 0x00;
-			if(isrsyncpreferexclude) {
-				if((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "exclist"))) {
+			if (isrsyncpreferexclude) {
+				if ((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "exclist"))) {
 					error("Cannot create list-file");
 					return ret;
 				}
@@ -2352,7 +2637,7 @@ int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
 				strcpy(dosync_arg.excf_path, dosync_arg.outf_path);	// TODO: remove this strcpy()
 			}
 
-			if((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "list"))) {
+			if ((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "list"))) {
 				error("Cannot create list-file");
 				return ret;
 			}
@@ -2364,7 +2649,7 @@ int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 		g_hash_table_foreach(indexes_p->fpath2ei_ht, sync_idle_dosync_collectedevents_listpush, &dosync_arg);
 
-		if((ret=sync_idle_dosync_collectedevents_commitpart(&dosync_arg))) {
+		if ((ret=sync_idle_dosync_collectedevents_commitpart(&dosync_arg))) {
 			error("Cannot submit to sync the list \"%s\"", dosync_arg.outf_path);
 			// TODO: free dosync_arg.api_ei on case of error
 			g_hash_table_remove_all(indexes_p->fpath2ei_ht);
@@ -2374,7 +2659,7 @@ int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
 		g_hash_table_remove_all(indexes_p->fpath2ei_ht);
 	}
 
-	if(!ctx_p->flags[PTHREAD]) {
+	if (!ctx_p->flags[THREADING]) {
 		if(ctx_p->iteration_num < ~0) // ~0 is the max value for unsigned variables
 			ctx_p->iteration_num++;
 		setenv_iteration(ctx_p->iteration_num); 
@@ -2389,13 +2674,13 @@ int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
 int apievinfo2rsynclist(indexes_t *indexes_p, FILE *listfile, int n, api_eventinfo_t *apievinfo) {
 	int i;
 
-	if(listfile == NULL) {
-		error("apievinfo2rsynclist(): listfile == NULL.");
+	if (listfile == NULL) {
+		error("listfile == NULL.");
 		return EINVAL;
 	}
 
 	i=0;
-	while(i<n) {
+	while (i<n) {
 		rsync_listpush(indexes_p, apievinfo[i].path, apievinfo[i].path_len, apievinfo[i].flags, NULL);
 		i++;
 	}
@@ -2525,7 +2810,7 @@ int sync_inotify_wait(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 	delay = MAX(delay, synctime_delay);
 	delay = delay > 0 ? delay : 0;
 
-	if(ctx_p->flags[PTHREAD]) {
+	if(ctx_p->flags[THREADING]) {
 		time_t _thread_nextexpiretime = thread_nextexpiretime();
 		debug(3, "thread_nextexpiretime == %i", _thread_nextexpiretime);
 		if(_thread_nextexpiretime) {
@@ -2571,17 +2856,6 @@ int sync_inotify_wait(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 	return ret;
 }
 
-void sync_inotify_handle_dosync(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
-	char *fpath_rel		  = (char *)fpath_gp;
-	eventinfo_t *evinfo	  = (eventinfo_t *)evinfo_gp;
-	ctx_t *ctx_p 	  = ((struct dosync_arg *)arg_gp)->ctx_p;
-	indexes_t *indexes_p 	  = ((struct dosync_arg *)arg_gp)->indexes_p;
-
-	sync_queuesync(fpath_rel, evinfo, ctx_p, indexes_p, QUEUE_AUTO);
-
-	return;
-}
-
 #define SYNC_INOTIFY_HANDLE_CONTINUE {\
 	ptr += sizeof(struct inotify_event) + event->len;\
 	count++;\
@@ -2599,13 +2873,13 @@ int sync_inotify_handle(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 
 	char   *path_rel	= NULL;
 	size_t  path_rel_len	= 0;
-	char   *path_full	= 0;
+	char   *path_full	= NULL;
 	size_t  path_full_size	= 0;
-	while(select(FD_SETSIZE, &rfds, NULL, NULL, &tv)) {
+	while (select(FD_SETSIZE, &rfds, NULL, NULL, &tv)) {
 
 		char buf[BUFSIZ + 1];
 		size_t r = read(inotify_d, buf, BUFSIZ);
-		if(r <= 0) {
+		if (r <= 0) {
 			error("Got error while reading events from inotify with read().");
 			count = -1;
 			goto l_sync_inotify_handle_end;
@@ -2617,7 +2891,7 @@ int sync_inotify_handle(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 
 		char *ptr =  buf;
 		char *end = &buf[r];
-		while(ptr < end) {
+		while (ptr < end) {
 			struct inotify_event *event = (struct inotify_event *)ptr;
 
 			// Removing stale wd-s
@@ -2641,12 +2915,12 @@ int sync_inotify_handle(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 			// Getting full path
 
 			size_t path_full_memreq = strlen(fpath) + event->len + 2;
-			if(path_full_size < path_full_memreq) {
+			if (path_full_size < path_full_memreq) {
 				path_full      = xrealloc(path_full, path_full_memreq);
 				path_full_size = path_full_memreq;
 			}
 
-			if(event->len>0)
+			if (event->len>0)
 				sprintf(path_full, "%s/%s", fpath, event->name);
 			else
 				sprintf(path_full, "%s", fpath);
@@ -2656,7 +2930,7 @@ int sync_inotify_handle(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 			struct stat64 lstat;
 			mode_t st_mode;
 			size_t st_size;
-			if(lstat64(path_full, &lstat)) {
+			if (lstat64(path_full, &lstat)) {
 				debug(2, "Cannot lstat(\"%s\", lstat). Seems, that the object disappeared.", path_full);
 				if(event->mask & IN_ISDIR)
 					st_mode = S_IFDIR;
@@ -2668,104 +2942,24 @@ int sync_inotify_handle(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 				st_size = lstat.st_size;
 			}
 
-			// Checking by filter rules
-
-			path_rel = sync_path_abs2rel(ctx_p, path_full, -1, &path_rel_len, path_rel);
-			ruleaction_t perm = rules_getperm(path_rel, st_mode, ctx_p->rules, RA_WALK|RA_MONITOR);
-
-			if(!(perm&(RA_MONITOR|RA_WALK))) {
-				SYNC_INOTIFY_HANDLE_CONTINUE;
+			if (sync_prequeue_loadmark(inotify_d, ctx_p, indexes_p, path_full, NULL, event->mask, event->wd, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
+				count = -1;
+				goto l_sync_inotify_handle_end;
 			}
-
-			// Handling different cases
-
-			if(event->mask & IN_ISDIR) {
-				if(event->mask & (IN_CREATE|IN_MOVED_TO)) {			// Appeared
-					// If new dir is created
-
-					int ret;
-
-					if(perm & RA_WALK) {
-						ret = sync_mark_walk(inotify_d, ctx_p, path_full, indexes_p);
-						if(ret) {
-							debug(1, "Seems, that directory \"%s\" disappeared, while trying to mark it.", path_full);
-							SYNC_INOTIFY_HANDLE_CONTINUE;
-						}
-
-						ret = sync_initialsync(path_full, ctx_p, indexes_p, INITSYNC_SUBDIR);
-						if(ret) {
-							error("Got error from sync_initialsync()");
-							errno = ret;
-							count=-1;
-							goto l_sync_inotify_handle_end;
-						}
-					}
-
-					SYNC_INOTIFY_HANDLE_CONTINUE;
-				} else 
-				if(event->mask & (IN_DELETE_SELF|IN_DELETE|IN_MOVED_FROM)) {	// Disappered
-					debug(2, "Disappeared \"%s\".", path_full);
-				}
-			}
-
-			if(!(perm&RA_WALK)) {
-				SYNC_INOTIFY_HANDLE_CONTINUE;
-			}
-
-			// Locally queueing the event
-
-			int isnew = 0;
-			eventinfo_t *evinfo = indexes_fpath2ei(indexes_p, path_rel);
-			if(evinfo == NULL) {
-				evinfo = (eventinfo_t *)xmalloc(sizeof(*evinfo));
-				memset(evinfo, 0, sizeof(*evinfo));
-				evinfo->fsize        = st_size;
-				evinfo->wd           = event->wd;
-				evinfo->seqid_min    = sync_seqid();
-				evinfo->seqid_max    = evinfo->seqid_min;
-				evinfo->objtype_old  = (event->mask & IN_CREATE) 	? EOT_DOESNTEXIST	:
-				                       (event->mask & IN_ISDIR) 	? EOT_DIR 		:
-				                       EOT_FILE;
-				isnew++;
-				debug(3, "new event: fsize == %i; wd == %i", evinfo->fsize, evinfo->wd);
-			} else {
-				evinfo->seqid_max    = sync_seqid();
-			}
-			evinfo->evmask |= event->mask;
-
-			evinfo->objtype_new = (event->mask & (IN_DELETE_SELF|IN_DELETE|IN_MOVED_FROM))	? EOT_DOESNTEXIST :
-			                      (event->mask & IN_ISDIR)					? EOT_DIR 	  : 
-			                      EOT_FILE;
-
-			debug(2, "path_rel == \"%s\"; evinfo->objtype_old == %i; evinfo->objtype_new == %i; "
-					"evinfo->seqid_min == %u; evinfo->seqid_max == %u", 
-					path_rel, evinfo->objtype_old, evinfo->objtype_new,
-					evinfo->seqid_min, evinfo->seqid_max
-				);
-
-			if(isnew)
-				indexes_fpath2ei_add(indexes_p, strdup(path_rel), evinfo);
 
 			SYNC_INOTIFY_HANDLE_CONTINUE;
 		}
 
-		// Globally queueing captured events
-
-		struct dosync_arg dosync_arg;
-		dosync_arg.ctx_p 	= ctx_p;
-		dosync_arg.indexes_p	= indexes_p;
-
-		debug(3, "collected %i events per this time.", g_hash_table_size(indexes_p->fpath2ei_ht));
-
-		g_hash_table_foreach(indexes_p->fpath2ei_ht, sync_inotify_handle_dosync, &dosync_arg);
-		g_hash_table_remove_all(indexes_p->fpath2ei_ht);
+		// Globally queueing captured events:
+		// Moving events from local queue to global ones
+		sync_prequeue_unload(ctx_p, indexes_p);
 	}
 
 l_sync_inotify_handle_end:
 	if(path_full != NULL)
 		free(path_full);
 
-	if(path_rel  != NULL)
+	if(path_rel != NULL)
 		free(path_rel);
 
 	return count;
@@ -2799,7 +2993,7 @@ int sync_inotify_loop(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 			state, ctx_p->iteration_num, ctx_p->flags[MAXITERATIONS]);
 		events = 0;
 		switch(state) {
-			case STATE_PTHREAD_GC:
+			case STATE_THREAD_GC:
 				main_status_update(ctx_p, state);
 				if(thread_gc(ctx_p)) {
 					state=STATE_EXIT;
@@ -2808,7 +3002,7 @@ int sync_inotify_loop(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 				state = STATE_RUNNING;
 				SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
 			case STATE_INITSYNC:
-				if(!ctx_p->flags[PTHREAD]) {
+				if(!ctx_p->flags[THREADING]) {
 					ctx_p->iteration_num = 0;
 					setenv_iteration(ctx_p->iteration_num);
 				}
@@ -2828,7 +3022,7 @@ int sync_inotify_loop(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 				state = STATE_RUNNING;
 				continue;
 			case STATE_RUNNING:
-				if(!ctx_p->flags[PTHREAD])
+				if(!ctx_p->flags[THREADING])
 					if (ctx_p->flags[MAXITERATIONS] &&
 					    ctx_p->flags[MAXITERATIONS] <= ctx_p->iteration_num)
 							state = STATE_EXIT;
@@ -3043,8 +3237,8 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 			case SIGHUP:
 				sync_switch_state(pthread_parent, STATE_REHASH);
 				break;
-			case SIGUSR_PTHREAD_GC:
-				sync_switch_state(pthread_parent, STATE_PTHREAD_GC);
+			case SIGUSR_THREAD_GC:
+				sync_switch_state(pthread_parent, STATE_THREAD_GC);
 				break;
 			case SIGUSR_INITSYNC:
 				sync_switch_state(pthread_parent, STATE_INITSYNC);
@@ -3080,11 +3274,11 @@ int sync_run(ctx_t *ctx_p) {
 	sigaddset(&sigset_sighandler, SIGHUP);
 	sigaddset(&sigset_sighandler, SIGTERM);
 	sigaddset(&sigset_sighandler, SIGINT);
-	sigaddset(&sigset_sighandler, SIGUSR_PTHREAD_GC);
+	sigaddset(&sigset_sighandler, SIGUSR_THREAD_GC);
 	sigaddset(&sigset_sighandler, SIGUSR_INITSYNC);
 
 	ret = pthread_sigmask(SIG_BLOCK, &sigset_sighandler, NULL);
-	if(ret)	return ret;
+	if (ret) return ret;
 
 	sighandler_arg.ctx_p        =  ctx_p;
 //	sighandler_arg.indexes_p        = &indexes;
@@ -3092,14 +3286,14 @@ int sync_run(ctx_t *ctx_p) {
 	sighandler_arg.exitcode_p	= &ret;
 	sighandler_arg.sigset_p		= &sigset_sighandler;
 	ret = pthread_create(&pthread_sighandler, NULL, (void *(*)(void *))sync_sighandler, &sighandler_arg);
-	if(ret) return ret;
+	if (ret) return ret;
 
 	sigset_t sigset_parent;
 	sigemptyset(&sigset_parent);
 
 	sigaddset(&sigset_parent, SIGUSR_BLOPINT);
 	ret = pthread_sigmask(SIG_UNBLOCK, &sigset_parent, NULL);
-	if(ret)	return ret;
+	if (ret) return ret;
 
 	signal(SIGUSR_BLOPINT,	sync_sig_int);
 
@@ -3112,14 +3306,20 @@ int sync_run(ctx_t *ctx_p) {
 	indexes.exc_fpath_ht      = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
 	indexes.out_lines_aggr_ht = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
 	i=0;
-	while(i<QUEUE_MAX) {
-		indexes.fpath2ei_coll_ht[i]  = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, free);
-		indexes.exc_fpath_coll_ht[i] = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
+	while (i<QUEUE_MAX) {
+		switch (i) {
+			case QUEUE_LOCKWAIT:
+				indexes.fpath2ei_coll_ht[i]  = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
+				break;
+			default:
+				indexes.fpath2ei_coll_ht[i]  = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, free);
+				indexes.exc_fpath_coll_ht[i] = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
+		}
 		i++;
 	}
 
 	// Loading dynamical libraries
-	if(ctx_p->flags[MODE] == MODE_SO || ctx_p->flags[MODE] == MODE_RSYNCSO) {
+	if (ctx_p->flags[MODE] == MODE_SO || ctx_p->flags[MODE] == MODE_RSYNCSO) {
 		/* security checks before dlopen */
 		struct stat so_stat;
 		if (stat(ctx_p->handlerfpath, &so_stat) == -1) {
@@ -3285,8 +3485,14 @@ int sync_run(ctx_t *ctx_p) {
 	g_hash_table_destroy(indexes.out_lines_aggr_ht);
 	i=0;
 	while(i<QUEUE_MAX) {
-		g_hash_table_destroy(indexes.fpath2ei_coll_ht[i]);
-		g_hash_table_destroy(indexes.exc_fpath_coll_ht[i]);
+		switch (i) {
+			case QUEUE_LOCKWAIT:
+				g_hash_table_destroy(indexes.fpath2ei_coll_ht[i]);
+				break;
+			default:
+				g_hash_table_destroy(indexes.fpath2ei_coll_ht[i]);
+				g_hash_table_destroy(indexes.exc_fpath_coll_ht[i]);
+		}
 		i++;
 	}
 

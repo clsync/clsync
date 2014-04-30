@@ -40,7 +40,7 @@ enum flags_enum {
 	UID		= 'u',
 	GID		= 'g',
 	CAP_PRESERVE_FILEACCESS = 'C',
-	PTHREAD		= 'p',
+	THREADING	= 'p',
 	RETRIES		= 'r',
 	OUTPUT_METHOD	= 'Y',
 	EXCLUDEMOUNTPOINTS= 'X',
@@ -111,6 +111,8 @@ enum queue_id {
 	QUEUE_NORMAL,
 	QUEUE_BIGFILE,
 	QUEUE_INSTANT,
+	QUEUE_LOCKWAIT,
+
 	QUEUE_MAX,
 	QUEUE_AUTO
 };
@@ -132,7 +134,7 @@ typedef enum ruleaction_enum ruleaction_t;
 
 // signals (man 7 signal)
 enum sigusr_enum {
-	SIGUSR_PTHREAD_GC	= 10,
+	SIGUSR_THREAD_GC	= 10,
 	SIGUSR_INITSYNC  	= 12,
 	SIGUSR_BLOPINT		= 16
 };

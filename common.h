@@ -143,11 +143,18 @@ enum state_enum {
 	STATE_RUNNING,
 	STATE_REHASH,
 	STATE_TERM,
-	STATE_PTHREAD_GC,
+	STATE_THREAD_GC,
 	STATE_INITSYNC,
 	STATE_UNKNOWN
 };
 typedef enum state_enum state_t;
+
+enum threadingmode {
+	PM_OFF	= 0,
+	PM_SAFE,
+	PM_FULL
+};
+typedef enum threadingmode threadingmode_t;
 
 /*
 struct excludeinfo {
@@ -181,7 +188,7 @@ struct threadinfo {
 	int			  exitcode;
 	int			  errcode;
 	state_t			  state;
-	ctx_t		 *ctx_p;
+	ctx_t			 *ctx_p;
 	time_t			  starttime;
 	time_t			  expiretime;
 	int			  child_pid;
@@ -272,4 +279,10 @@ struct sighandler_arg {
 	sigset_t  *sigset_p;
 };
 typedef struct sighandler_arg sighandler_arg_t;
+
+enum unified_evetnmask {
+	UEM_DIR		= 0x01,
+	UEM_CREATED	= 0x02,
+	UEM_DELETED	= 0x04,
+};
 

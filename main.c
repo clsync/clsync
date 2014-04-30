@@ -54,7 +54,7 @@ static const struct option long_options[] =
 #ifdef HAVE_CAPABILITIES
 	{"preserve-file-access",optional_argument,	NULL,	CAP_PRESERVE_FILEACCESS},
 #endif
-	{"pthread",		optional_argument,	NULL,	PTHREAD},
+	{"threading",		required_argument,	NULL,	THREADING},
 	{"retries",		optional_argument,	NULL,	RETRIES},
 	{"output",		required_argument,	NULL,	OUTPUT_METHOD},
 	{"one-file-system",	optional_argument,	NULL,	ONEFILESYSTEM},
@@ -110,6 +110,13 @@ static char *const socketauth[] = {
 	NULL
 };
 
+static char *const threading_modes[] = {
+	[PM_OFF]		= "off",
+	[PM_SAFE]		= "safe",
+	[PM_FULL]		= "full",
+	NULL
+};
+
 static char *const output_methods[] = {
 	[OM_STDERR]		= "stderr",
 	[OM_STDOUT]		= "stdout",
@@ -134,7 +141,7 @@ static char *const status_descr[] = {
 	[STATE_RUNNING]		= "running",
 	[STATE_REHASH]		= "rehashing",
 	[STATE_TERM]		= "terminating",
-	[STATE_PTHREAD_GC]	= "pthread gc",
+	[STATE_THREAD_GC]	= "thread gc",
 	[STATE_INITSYNC]	= "initsync",
 	NULL
 };
@@ -207,6 +214,17 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 		case RETRIES:
 			ctx_p->retries		= (unsigned int)atol(arg);
 			break;
+		case THREADING: {
+			char *value, *arg_orig = arg;
+
+			threadingmode_t threadingmode = getsubopt(&arg, threading_modes, &value);
+			if(threadingmode == -1) {
+				errno = EINVAL;
+				error("Invalid threading mode entered: \"%s\"", arg_orig);
+				return EINVAL;
+			}
+			ctx_p->flags[THREADING] = threadingmode;
+		}
 		case OUTPUT_METHOD: {
 			char *value, *arg_orig = arg;
 
@@ -933,9 +951,10 @@ int main(int argc, char *argv[]) {
 	int ret = 0, nret;
 	ctx.notifyengine 			 = DEFAULT_NOTIFYENGINE;
 	ctx.syncdelay 				 = DEFAULT_SYNCDELAY;
-	ctx._queues[QUEUE_NORMAL].collectdelay  = DEFAULT_COLLECTDELAY;
-	ctx._queues[QUEUE_BIGFILE].collectdelay = DEFAULT_BFILECOLLECTDELAY;
-	ctx._queues[QUEUE_INSTANT].collectdelay = COLLECTDELAY_INSTANT;
+	ctx._queues[QUEUE_NORMAL].collectdelay   = DEFAULT_COLLECTDELAY;
+	ctx._queues[QUEUE_BIGFILE].collectdelay  = DEFAULT_BFILECOLLECTDELAY;
+	ctx._queues[QUEUE_INSTANT].collectdelay  = COLLECTDELAY_INSTANT;
+	ctx._queues[QUEUE_LOCKWAIT].collectdelay = COLLECTDELAY_INSTANT;
 	ctx.bfilethreshold			 = DEFAULT_BFILETHRESHOLD;
 	ctx.label				 = DEFAULT_LABEL;
 	ctx.rsyncinclimit			 = DEFAULT_RSYNCINCLUDELINESLIMIT;
@@ -988,9 +1007,9 @@ int main(int argc, char *argv[]) {
 	}
 
 #ifdef VERYPARANOID
-	if((ctx.retries != 1) && ctx.flags[PTHREAD]) {
+	if((ctx.retries != 1) && ctx.flags[THREADING]) {
 		ret = errno = EINVAL;
-		error("\"--retries\" values should be equal to \"1\" for \"--pthread\" mode.");
+		error("\"--retries\" values should be equal to \"1\" for this \"--threading\" value.");
 	}
 #endif
 
@@ -999,36 +1018,36 @@ int main(int argc, char *argv[]) {
 		error("Sorry but option \"--standby-file\" cannot be used in mode \"simple\", yet.");
 	}
 
-	if(ctx.flags[PTHREAD] && ctx.flags[ONLYINITSYNC]) {
+	if(ctx.flags[THREADING] && ctx.flags[ONLYINITSYNC]) {
 		ret = errno = EINVAL;
-		error("Conflicting ctx: \"--pthread\" and \"--only-initialsync\" cannot be used together.");
+		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--only-initialsync\".");
 	}
 
-	if(ctx.flags[PTHREAD] && ctx.flags[EXITONNOEVENTS]) {
+	if(ctx.flags[THREADING] && ctx.flags[EXITONNOEVENTS]) {
 		ret = errno = EINVAL;
-		error("Conflicting ctx: \"--pthread\" and \"--exit-on-no-events\" cannot be used together.");
+		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--exit-on-no-events\".");
 	}
-	if(ctx.flags[PTHREAD] && ctx.flags[MAXITERATIONS]) {
+	if(ctx.flags[THREADING] && ctx.flags[MAXITERATIONS]) {
 		ret = errno = EINVAL;
-		error("Conflicting ctx: \"--pthread\" and \"--max-iterations\" cannot be used together.");
+		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--max-iterations\".");
 	}
 	if(ctx.flags[SKIPINITSYNC] && ctx.flags[EXITONNOEVENTS]) {
 		ret = errno = EINVAL;
-		error("Conflicting ctx: \"--skip-initialsync\" and \"--exit-on-no-events\" cannot be used together.");
+		error("Conflicting options: \"--skip-initialsync\" and \"--exit-on-no-events\" cannot be used together.");
 	}
 	if(ctx.flags[ONLYINITSYNC] && ctx.flags[EXITONNOEVENTS]) {
 		ret = errno = EINVAL;
-		error("Conflicting ctx: \"--only-initialsync\" and \"--exit-on-no-events\" cannot be used together.");
+		error("Conflicting options: \"--only-initialsync\" and \"--exit-on-no-events\" cannot be used together.");
 	}
 
 	if(ctx.flags[SKIPINITSYNC] && ctx.flags[ONLYINITSYNC]) {
 		ret = errno = EINVAL;
-		error("Conflicting ctx: \"--skip-initialsync\" and \"--only-initialsync\" cannot be used together.");
+		error("Conflicting options: \"--skip-initialsync\" and \"--only-initialsync\" cannot be used together.");
 	}
 
 	if(ctx.flags[INITFULL] && ctx.flags[SKIPINITSYNC]) {
 		ret = errno = EINVAL;
-		error("Conflicting ctx: \"--full-initialsync\" and \"--skip-initialsync\" cannot be used together.");
+		error("Conflicting options: \"--full-initialsync\" and \"--skip-initialsync\" cannot be used together.");
 	}
 
 	if(ctx.flags[EXCLUDEMOUNTPOINTS])
