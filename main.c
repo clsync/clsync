@@ -475,56 +475,6 @@ int arguments_parse(int argc, char *argv[], struct ctx *ctx_p) {
 	}
 	if(optind+1 < argc)
 		syntax();
-/*
-	if(optind+1 >= argc)
-		syntax();
-
-	ctx_p->handlerfpath = argv[optind+1];
-
-	if(optind+2 < argc) {
-		ctx_p->rulfpath = argv[optind+2];
-		if(!strcmp(ctx_p->rulfpath, ""))
-			ctx_p->rulfpath = NULL;
-	}
-
-	if(optind+3 < argc) {
-		ctx_p->destdir    = argv[optind+3];
-		ctx_p->destdirlen = strlen(ctx_p->destdir);
-	}
-
-	ctx_p->watchdir    = argv[optind];
-	ctx_p->watchdirlen = strlen(ctx_p->watchdir);*/
-/*
-	if(optind+0 < argc) {
-		ctx_p->watchdir     = argv[optind];
-		ctx_p->watchdirlen  = strlen(ctx_p->watchdir);
-	} else {
-		ctx_p->watchdir     = NULL;
-		ctx_p->watchdirlen  = 0;
-	}
-
-	if(optind+1 < argc) {
-		ctx_p->handlerfpath = argv[optind+1];
-	} else {
-		ctx_p->handlerfpath = NULL;
-	}
-
-	if(optind+2 < argc) {
-		ctx_p->rulfpath = argv[optind+2];
-		if(!strcmp(ctx_p->rulfpath, ""))
-			ctx_p->rulfpath = NULL;
-	} else {
-		ctx_p->rulfpath = NULL;
-	}
-
-	if(optind+3 < argc) {
-		ctx_p->destdir    = argv[optind+3];
-		ctx_p->destdirlen = strlen(ctx_p->destdir);
-	} else {
-		ctx_p->destdir    = NULL;
-		ctx_p->destdirlen = 0;
-	}
-*/
 
 	return 0;
 }
