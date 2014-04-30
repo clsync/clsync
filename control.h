@@ -20,8 +20,8 @@
 #ifndef __CLSYNC_CONTROL_H
 #define __CLSYNC_CONTROL_H
 
-extern int control_run(glob_t *glob_p);
-extern int control_cleanup(glob_t *glob_p);
+extern int control_run(ctx_t *ctx_p);
+extern int control_cleanup(ctx_t *ctx_p);
 
 #endif
 

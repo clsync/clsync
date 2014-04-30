@@ -69,7 +69,7 @@
 #endif
 
 #include "clsync.h"
-#include "glob.h"
+#include "ctx.h"
 #include "indexes.h"
 
 #ifndef MIN
@@ -172,7 +172,7 @@ struct eventinfo {
 typedef struct eventinfo eventinfo_t;
 
 
-typedef int (*thread_callbackfunct_t)(glob_t *glob_p, char **argv);
+typedef int (*thread_callbackfunct_t)(ctx_t *ctx_p, char **argv);
 struct threadinfo {
 	int			  thread_num;
 	thread_callbackfunct_t 	  callback;
@@ -181,7 +181,7 @@ struct threadinfo {
 	int			  exitcode;
 	int			  errcode;
 	state_t			  state;
-	glob_t		 *glob_p;
+	ctx_t		 *ctx_p;
 	time_t			  starttime;
 	time_t			  expiretime;
 	int			  child_pid;
@@ -219,7 +219,7 @@ struct dosync_arg {
 	char excf_path[PATH_MAX+1];
 	char outf_path[PATH_MAX+1];
 	FILE *outf;
-	glob_t *glob_p;
+	ctx_t *ctx_p;
 	indexes_t *indexes_p;
 	void *data;
 	int linescount;
@@ -265,7 +265,7 @@ enum initsync {
 typedef enum initsync initsync_t;
 
 struct sighandler_arg {
-	glob_t    *glob_p;
+	ctx_t     *ctx_p;
 //	indexes_t *indexes_p;
 	pthread_t  pthread_parent;
 	int	  *exitcode_p;

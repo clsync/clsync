@@ -244,7 +244,7 @@ typedef int (*cluster_recvproc_funct_t)(clustercmd_t *clustercmd_p);
 
 // Externs
 
-extern int cluster_init(glob_t *glob_p, indexes_t *indexes_p);
+extern int cluster_init(ctx_t *ctx_p, indexes_t *indexes_p);
 extern int cluster_deinit();
 
 extern int cluster_lock(const char *fpath);

@@ -53,7 +53,7 @@ struct sockaddr_in sa_i		= {0};
 int sock_o			= -1;
 struct sockaddr_in sa_o		= {0};
 
-glob_t  *glob_p		= NULL;
+ctx_t  *ctx_p		= NULL;
 indexes_t  *indexes_p		= NULL;
 pthread_t   pthread_cluster	= 0;
 
@@ -875,11 +875,11 @@ static int cluster_recvproc_setid(clustercmd_t *clustercmd_p) {
 	// 	Is the node name length in message equals to our node name length? Skipping if not.
 	uint32_t recv_nodename_len;
 	recv_nodename_len = CLUSTER_RESTDATALEN(clustercmd_p, clustercmd_setiddata_t);
-	if(recv_nodename_len != glob_p->cluster_nodename_len)
+	if(recv_nodename_len != ctx_p->cluster_nodename_len)
 		return 0;
 
 	// 	Is the node name equals to ours? Skipping if not.
-	if(memcmp(data_setid_p->node_name, glob_p->cluster_nodename, recv_nodename_len))
+	if(memcmp(data_setid_p->node_name, ctx_p->cluster_nodename, recv_nodename_len))
 		return 0;
 
 	//	Remembering the node that answered us
@@ -897,7 +897,7 @@ extern int cluster_loop();
 /**
  * @brief 			Initializes cluster subsystem.
  * 
- * @param[in] 	_glob_p 	Pointer to "glob" variable, defined in main().
+ * @param[in] 	_ctx_p 	Pointer to "glob" variable, defined in main().
  * @param[in] 	_indexes_p	Pointer to "indexes" variable, defined in sync_run().
  *
  * @retval	zero 		Successfully initialized.
@@ -905,19 +905,19 @@ extern int cluster_loop();
  * 
  */
 
-int cluster_init(glob_t *_glob_p, indexes_t *_indexes_p) {
+int cluster_init(ctx_t *_ctx_p, indexes_t *_indexes_p) {
 	int ret;
 
 	// Preventing double initializing
-	if(glob_p != NULL) {
+	if(ctx_p != NULL) {
 		error("cluster subsystem is already initialized.");
 		return EALREADY;
 	}
 
 	// Initializing global variables, pt. 1
-	glob_p	= _glob_p;
+	ctx_p	= _ctx_p;
 	indexes_p	= _indexes_p;
-	cluster_timeout	= glob_p->cluster_timeout;
+	cluster_timeout	= ctx_p->cluster_timeout;
 	node_status_change(NODEID_NOID, NODESTATUS_ONLINE);
 
 	// Initializing network routines
@@ -944,7 +944,7 @@ int cluster_init(glob_t *_glob_p, indexes_t *_indexes_p) {
 	//		Binding
 
 	sa_i.sin_family		= AF_INET;
-	sa_i.sin_port 		= htons(glob_p->cluster_mcastipport);
+	sa_i.sin_port 		= htons(ctx_p->cluster_mcastipport);
 	sa_i.sin_addr.s_addr	= INADDR_ANY;
 
 	if(bind(sock_i, (struct sockaddr*)&sa_i, sizeof(sa_i))) {
@@ -955,13 +955,13 @@ int cluster_init(glob_t *_glob_p, indexes_t *_indexes_p) {
 	//		Joining to multicast group
 
 	struct ip_mreq group;
-	group.imr_interface.s_addr = inet_addr(glob_p->cluster_iface);
-	group.imr_multiaddr.s_addr = inet_addr(glob_p->cluster_mcastipaddr);
+	group.imr_interface.s_addr = inet_addr(ctx_p->cluster_iface);
+	group.imr_multiaddr.s_addr = inet_addr(ctx_p->cluster_mcastipaddr);
 
 	if(setsockopt(sock_i, IPPROTO_IP, IP_ADD_MEMBERSHIP, 
 				(char *)&group, sizeof(group)) < 0) {
 		error("Cannot setsockopt() to enter to membership %s -> %s",
-			glob_p->cluster_iface, glob_p->cluster_mcastipaddr);
+			ctx_p->cluster_iface, ctx_p->cluster_mcastipaddr);
 		return errno;
 	}
 
@@ -978,8 +978,8 @@ int cluster_init(glob_t *_glob_p, indexes_t *_indexes_p) {
 	//		Initializing the group sockaddr structure
 
 	sa_o.sin_family		= AF_INET;
-	sa_o.sin_port 		= htons(glob_p->cluster_mcastipport);
-	sa_o.sin_addr.s_addr	= inet_addr(glob_p->cluster_mcastipaddr);
+	sa_o.sin_port 		= htons(ctx_p->cluster_mcastipport);
+	sa_o.sin_addr.s_addr	= inet_addr(ctx_p->cluster_mcastipaddr);
 
 	//		Disable looping back output datagrams
 
@@ -995,7 +995,7 @@ int cluster_init(glob_t *_glob_p, indexes_t *_indexes_p) {
 
 	{
 		struct in_addr addr_o;
-		addr_o.s_addr = inet_addr(glob_p->cluster_iface);
+		addr_o.s_addr = inet_addr(ctx_p->cluster_iface);
 		if(setsockopt(sock_o, IPPROTO_IP, IP_MULTICAST_IF, &addr_o, sizeof(addr_o)) < 0) {
 			error("Cannot set local interface for outbound traffic");
 			return errno;
@@ -1011,10 +1011,10 @@ int cluster_init(glob_t *_glob_p, indexes_t *_indexes_p) {
 	//	Trying to preserve my node_id after restart. :)
 	//	Asking another nodes about my previous node_id
 	{
-		clustercmd_t *clustercmd_p = CLUSTER_ALLOCA(clustercmd_getmyid_t, glob_p->cluster_nodename_len);
+		clustercmd_t *clustercmd_p = CLUSTER_ALLOCA(clustercmd_getmyid_t, ctx_p->cluster_nodename_len);
 
-		clustercmd_p->h.data_len = glob_p->cluster_nodename_len;
-		memcpy(clustercmd_p->data.getmyid.node_name, glob_p->cluster_nodename, clustercmd_p->h.data_len+1);
+		clustercmd_p->h.data_len = ctx_p->cluster_nodename_len;
+		memcpy(clustercmd_p->data.getmyid.node_name, ctx_p->cluster_nodename, clustercmd_p->h.data_len+1);
 
 		clustercmd_p->h.cmd_id      = CLUSTERCMDID_GETMYID;
 		clustercmd_p->h.dst_node_id = NODEID_NOID; // broadcast
@@ -1054,12 +1054,12 @@ int cluster_init(glob_t *_glob_p, indexes_t *_indexes_p) {
 	// 	Sending registration information
 	node_status_change(node_id_my, NODESTATUS_SEEMSONLINE);
 	{
-		clustercmd_t *clustercmd_p = CLUSTER_ALLOCA(clustercmd_reg_t, glob_p->cluster_nodename_len);
+		clustercmd_t *clustercmd_p = CLUSTER_ALLOCA(clustercmd_reg_t, ctx_p->cluster_nodename_len);
 		clustercmd_reg_t *data_reg_p = &clustercmd_p->data.reg;
 
-		memcpy(data_reg_p->node_name, glob_p->cluster_nodename, glob_p->cluster_nodename_len+1);
+		memcpy(data_reg_p->node_name, ctx_p->cluster_nodename, ctx_p->cluster_nodename_len+1);
 
-		clustercmd_p->h.data_len    = glob_p->cluster_nodename_len+1;
+		clustercmd_p->h.data_len    = ctx_p->cluster_nodename_len+1;
 		clustercmd_p->h.cmd_id      = CLUSTERCMDID_REG;
 		clustercmd_p->h.dst_node_id = NODEID_NOID; // broadcast
 		if((ret=cluster_send(clustercmd_p)))
@@ -1284,13 +1284,13 @@ int cluster_modtime_update(const char *path, short int dirlevel, mode_t st_mode)
 	int ret;
 
 	// Getting relative directory level (depth)
-	short int dirlevel_rel = dirlevel - glob_p->watchdir_dirlevel;
+	short int dirlevel_rel = dirlevel - ctx_p->watchdir_dirlevel;
 
 	if((st_mode & S_IFMT) == S_IFDIR)
 		dirlevel_rel++;
 
 	// Don't remembering information about directories with level beyond the limits
-	if((dirlevel_rel > glob_p->cluster_scan_dl_max) || (dirlevel_rel < glob_p->cluster_hash_dl_min))
+	if((dirlevel_rel > ctx_p->cluster_scan_dl_max) || (dirlevel_rel < ctx_p->cluster_hash_dl_min))
 		return 0;
 
 
@@ -1318,8 +1318,8 @@ int cluster_modtime_update(const char *path, short int dirlevel, mode_t st_mode)
 	char   *dirpath_rel_p = xmalloc(dirpath_len+1);
 	char   *dirpath_rel   = dirpath_rel_p;
 
-	const char *dirpath_rel_full     = &dirpath[glob_p->watchdirlen];
-	size_t      dirpath_rel_full_len = dirpath_len - glob_p->watchdirlen;
+	const char *dirpath_rel_full     = &dirpath[ctx_p->watchdirlen];
+	size_t      dirpath_rel_full_len = dirpath_len - ctx_p->watchdirlen;
 
 	// 	Getting coodinate of the end (directory path is already canonized, so we can simply count number of slashes to get directory level)
 	int     slashcount=0;
@@ -1327,7 +1327,7 @@ int cluster_modtime_update(const char *path, short int dirlevel, mode_t st_mode)
 	while(dirpath_rel_full[dirpath_rel_end] && (dirpath_rel_end < dirpath_rel_full_len)) {
 		if(dirpath_rel_full[dirpath_rel_end] == '/') {
 			slashcount++;
-			if(slashcount >= glob_p->cluster_hash_dl_max)
+			if(slashcount >= ctx_p->cluster_hash_dl_max)
 				break;
 		}
 		dirpath_rel_end++;

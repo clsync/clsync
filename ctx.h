@@ -18,8 +18,8 @@
  */
 
 
-#ifndef __CLSYNC_GLOB_H
-#define __CLSYNC_GLOB_H
+#ifndef __CLSYNC_CTX_H
+#define __CLSYNC_CTX_H
 
 #include <regex.h>
 
@@ -160,7 +160,7 @@ struct api_functs {
 };
 typedef struct api_functs api_functs_t;
 
-struct glob {
+struct ctx {
 #ifndef LIBCLSYNC
 	uid_t uid;
 	gid_t gid;
@@ -224,7 +224,7 @@ struct glob {
 	char isignoredexitcode[(1<<8)];
 #endif
 };
-typedef struct glob glob_t;
+typedef struct ctx ctx_t;
 
 #endif
 

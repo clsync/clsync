@@ -17,6 +17,6 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-extern int main_rehash(glob_t *glob_p);
-extern int main_status_update(glob_t *glob_p, state_t state);
+extern int main_rehash(ctx_t *ctx_p);
+extern int main_status_update(ctx_t *ctx_p, state_t state);
 

@@ -39,7 +39,7 @@ clsync_include_HEADERS = \
 	clsync.h \
 	malloc.h \
 	indexes.h \
-	glob.h \
+	ctx.h \
 	error.h \
 	socket.h \
 	libclsync.h

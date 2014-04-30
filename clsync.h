@@ -41,9 +41,9 @@ struct api_eventinfo {
 };
 typedef struct api_eventinfo api_eventinfo_t;
 
-struct glob;
+struct ctx;
 struct indexes;
-typedef int(*api_funct_init)  (struct glob *, struct indexes *);
+typedef int(*api_funct_init)  (struct ctx *, struct indexes *);
 typedef int(*api_funct_sync)  (int n, api_eventinfo_t *);
 typedef int(*api_funct_rsync) (const char *inclist, const char *exclist);
 typedef int(*api_funct_deinit)();
@@ -80,12 +80,12 @@ extern int clsyncapi_getapiversion();
 /**
  * @brief 			clsync's wrapper for function "fork()". Should be used instead of "fork()" directly, to notify clsync about child's pid.
  *
- * @param[in]	glob_p	Pointer to "glob"
+ * @param[in]	ctx_p	Pointer to "ctx"
  * 
  * @retval	-1		If error (see "man 2 fork", added error code "ECANCELED" if too many children)
  * @retval	0		If child
  * @retval	pid		Pid of child of parent. (see "man 2 fork")
  * 
  */
-extern pid_t clsyncapi_fork(struct glob *glob_p);
+extern pid_t clsyncapi_fork(struct ctx *ctx_p);
 

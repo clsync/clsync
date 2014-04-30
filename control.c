@@ -30,11 +30,11 @@ static pthread_t pthread_control;
 
 int control_procclsyncsock(socket_sockthreaddata_t *arg, sockcmd_t *sockcmd_p) {
 	clsyncsock_t	*clsyncsock_p =              arg->clsyncsock_p;
-	glob_t 	*glob_p    = (glob_t *)arg->arg;
+	ctx_t 	*ctx_p    = (ctx_t *)arg->arg;
 
 	switch(sockcmd_p->cmd_id) {
 		case SOCKCMD_REQUEST_INFO: {
-			socket_send(clsyncsock_p, SOCKCMD_REPLY_INFO, glob_p->config_block, glob_p->label, glob_p->flags, glob_p->flags_set);
+			socket_send(clsyncsock_p, SOCKCMD_REPLY_INFO, ctx_p->config_block, ctx_p->label, ctx_p->flags, ctx_p->flags_set);
 			break;
 		}
 		case SOCKCMD_REQUEST_DIE: {
@@ -48,26 +48,26 @@ int control_procclsyncsock(socket_sockthreaddata_t *arg, sockcmd_t *sockcmd_p) {
 	return 0;
 }
 
-static inline void closecontrol(glob_t *glob_p) {
-	if(glob_p->socket) {
-		close(glob_p->socket);
-		glob_p->socket = 0;
+static inline void closecontrol(ctx_t *ctx_p) {
+	if(ctx_p->socket) {
+		close(ctx_p->socket);
+		ctx_p->socket = 0;
 	}
 }
 
-int control_loop(glob_t *glob_p) {
+int control_loop(ctx_t *ctx_p) {
 
 	// Starting
 
-	debug(1, "started (glob_p->socket == %u)", glob_p->socket);
+	debug(1, "started (ctx_p->socket == %u)", ctx_p->socket);
 	int s;
 
-	while((s=glob_p->socket)) {
+	while((s=ctx_p->socket)) {
 
 		// Check if the socket is still alive
 		if(socket_check_bysock(s)) {
 			debug(1, "Control socket closed [case 0]: %s", strerror(errno));
-			closecontrol(glob_p);
+			closecontrol(ctx_p);
 			continue;
 		}
 
@@ -91,13 +91,13 @@ int control_loop(glob_t *glob_p) {
 
 		if(count < 0) {
 			debug(1, "Got negative events count. Closing the socket.");
-			closecontrol(glob_p);
+			closecontrol(ctx_p);
 			continue;
 		}
 
 		if(!FD_ISSET(s, &rfds)) {
 			error("Got event, but not on the control socket. Closing the socket (cannot use \"select()\").");
-			closecontrol(glob_p);
+			closecontrol(ctx_p);
 			continue;
 		}
 
@@ -111,7 +111,7 @@ int control_loop(glob_t *glob_p) {
 
 			// Got unknown error. Closing control socket just in case.
 			error("Cannot socket_accept()");
-			closecontrol(glob_p);
+			closecontrol(ctx_p);
 			continue;
 		}
 
@@ -120,20 +120,20 @@ int control_loop(glob_t *glob_p) {
 
 		if (threaddata_p == NULL) {
 			error("Cannot create a thread for connection");
-			closecontrol(glob_p);
+			closecontrol(ctx_p);
 			continue;
 		}
 
 		threaddata_p->procfunct		=  control_procclsyncsock;
 		threaddata_p->clsyncsock_p	=  clsyncsock_p;
-		threaddata_p->arg		=  glob_p;
-		threaddata_p->running		= &glob_p->socket;
-		threaddata_p->authtype		=  glob_p->flags[SOCKETAUTH];
+		threaddata_p->arg		=  ctx_p;
+		threaddata_p->running		= &ctx_p->socket;
+		threaddata_p->authtype		=  ctx_p->flags[SOCKETAUTH];
 		threaddata_p->flags		=  0;
 
 		if (socket_thread_start(threaddata_p)) {
 			error("Cannot start a thread for connection");
-			closecontrol(glob_p);
+			closecontrol(ctx_p);
 			continue;
 		}
 #ifdef DEBUG
@@ -148,8 +148,8 @@ int control_loop(glob_t *glob_p) {
 	return 0;
 }
 
-int control_run(glob_t *glob_p) {
-	if(glob_p->socketpath != NULL) {
+int control_run(ctx_t *ctx_p) {
+	if(ctx_p->socketpath != NULL) {
 		int ret =  0;
 		int s   = -1;
 
@@ -159,7 +159,7 @@ int control_run(glob_t *glob_p) {
 
 
 		if (!ret) {
-			clsyncsock_t *clsyncsock = socket_listen_unix(glob_p->socketpath);
+			clsyncsock_t *clsyncsock = socket_listen_unix(ctx_p->socketpath);
 			if (clsyncsock == NULL) {
 				ret = errno;
 			} else {
@@ -170,16 +170,16 @@ int control_run(glob_t *glob_p) {
 
 		// fixing privileges
 		if (!ret) {
-			if(glob_p->flags[SOCKETMOD])
-				if(chmod(glob_p->socketpath, glob_p->socketmod)) {
+			if(ctx_p->flags[SOCKETMOD])
+				if(chmod(ctx_p->socketpath, ctx_p->socketmod)) {
 					error("Error, Cannot chmod(\"%s\", %o)", 
-						glob_p->socketpath, glob_p->socketmod);
+						ctx_p->socketpath, ctx_p->socketmod);
 					ret = errno;
 				}
-			if(glob_p->flags[SOCKETOWN])
-				if(chown(glob_p->socketpath, glob_p->socketuid, glob_p->socketgid)) {
+			if(ctx_p->flags[SOCKETOWN])
+				if(chown(ctx_p->socketpath, ctx_p->socketuid, ctx_p->socketgid)) {
 					error("Error, Cannot chown(\"%s\", %u, %u)", 
-						glob_p->socketpath, glob_p->socketuid, glob_p->socketgid);
+						ctx_p->socketpath, ctx_p->socketuid, ctx_p->socketgid);
 					ret = errno;
 				}
 		}
@@ -190,20 +190,20 @@ int control_run(glob_t *glob_p) {
 			return ret;
 		}
 
-		glob_p->socket = s;
+		ctx_p->socket = s;
 
-		debug(2, "glob_p->socket = %u", glob_p->socket);
+		debug(2, "ctx_p->socket = %u", ctx_p->socket);
 
-		ret = pthread_create(&pthread_control, NULL, (void *(*)(void *))control_loop, glob_p);
+		ret = pthread_create(&pthread_control, NULL, (void *(*)(void *))control_loop, ctx_p);
 	}
 	
 	return 0;
 }
 
-int control_cleanup(glob_t *glob_p) {
-	if(glob_p->socketpath != NULL) {
-		unlink(glob_p->socketpath);
-		closecontrol(glob_p);
+int control_cleanup(ctx_t *ctx_p) {
+	if(ctx_p->socketpath != NULL) {
+		unlink(ctx_p->socketpath);
+		closecontrol(ctx_p);
 		// TODO: kill pthread_control and join
 //		pthread_join(pthread_control, NULL);
 		socket_deinit();

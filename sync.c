@@ -81,11 +81,11 @@ static inline void evinfo_merge(eventinfo_t *evinfo_dst, eventinfo_t *evinfo_src
 	return;
 }
 
-static inline int _exitcode_process(glob_t *glob_p, int exitcode) {
-	if(glob_p->isignoredexitcode[(unsigned char)exitcode])
+static inline int _exitcode_process(ctx_t *ctx_p, int exitcode) {
+	if (ctx_p->isignoredexitcode[(unsigned char)exitcode])
 		return 0;
 
-	if(exitcode && !((glob_p->flags[MODE]==MODE_RSYNCDIRECT) && (exitcode == 24))) {
+	if (exitcode && !((ctx_p->flags[MODE]==MODE_RSYNCDIRECT) && (exitcode == 24))) {
 		error("Got non-zero exitcode %i from __sync_exec().", exitcode);
 		return exitcode;
 	}
@@ -93,8 +93,8 @@ static inline int _exitcode_process(glob_t *glob_p, int exitcode) {
 	return 0;
 }
 
-int exitcode_process(glob_t *glob_p, int exitcode) {
-	int err = _exitcode_process(glob_p, exitcode);
+int exitcode_process(ctx_t *ctx_p, int exitcode) {
+	int err = _exitcode_process(ctx_p, exitcode);
 
 	if(err) error("Got error-report from exitcode_process().\nExitcode is %i, strerror(%i) returns \"%s\". However strerror() is not ensures compliance "
 			"between exitcode and error description for every utility. So, e.g if you're using rsync, you should look for the error description "
@@ -396,7 +396,7 @@ threadinfo_t *thread_new() {
 
 	if(threadsinfo_p->stacklen) {
 		threadinfo_p = threadsinfo_p->threadsstack[--threadsinfo_p->stacklen];
-		thread_num   = threadinfo_p->thread_num;
+		thread_num   =  threadinfo_p->thread_num;
 	} else {
 		if(threadsinfo_p->used >= threadsinfo_p->allocated) {
 			threadsinfo_p->allocated += ALLOC_PORTION;
@@ -471,11 +471,11 @@ int thread_del_bynum(int thread_num) {
 	return 0;
 }
 
-int thread_gc(glob_t *glob_p) {
+int thread_gc(ctx_t *ctx_p) {
 	int thread_num;
 	time_t tm = time(NULL);
 	debug(3, "tm == %i; thread %p", tm, pthread_self());
-	if(!glob_p->flags[PTHREAD])
+	if(!ctx_p->flags[PTHREAD])
 		return 0;
 
 	threadsinfo_t *threadsinfo_p = thread_getinfo();
@@ -546,8 +546,8 @@ int thread_gc(glob_t *glob_p) {
 	return 0;
 }
 
-int thread_cleanup(glob_t *glob_p) {
-	debug(3, "thread_cleanup(). Thread %p", pthread_self());
+int thread_cleanup(ctx_t *ctx_p) {
+	debug(3, "");
 	threadsinfo_t *threadsinfo_p = thread_getinfo();
 	if(threadsinfo_p == NULL)
 		return errno;
@@ -566,7 +566,7 @@ int thread_cleanup(glob_t *glob_p) {
 		debug(2, "thread #%i exitcode: %i", threadsinfo_p->used, threadinfo_p->exitcode);
 /*
 		if(threadinfo_p->callback)
-			if((err=threadinfo_p->callback(glob_p, threadinfo_p->argv)))
+			if((err=threadinfo_p->callback(ctx_p, threadinfo_p->argv)))
 				error("Warning: Got error from callback function.", strerror(err), err);
 */
 		char **ptr = threadinfo_p->argv;
@@ -603,7 +603,7 @@ int thread_cleanup(glob_t *glob_p) {
 int *state_p = NULL;
 int exitcode = 0;
 
-int exec_argv(char **argv, int *child_pid DEBUGV(, int _rand)) {
+int exec_argv(char **argv, int *child_pid) {
 	debug(3, "Thread %p.", pthread_self());
 	pid_t pid;
 	int status;
@@ -618,7 +618,7 @@ int exec_argv(char **argv, int *child_pid DEBUGV(, int _rand)) {
 			execvp(argv[0], (char *const *)argv);
 			return errno;
 	}
-//	debug(3, "After fork thread %p"DEBUGV(" (%i)")".", pthread_self() DEBUGV(, _rand));
+//	debug(3, "After fork thread %p"")".", pthread_self() );
 
 	// Setting *child_pid value
 	if(child_pid)
@@ -632,12 +632,12 @@ int exec_argv(char **argv, int *child_pid DEBUGV(, int _rand)) {
 	pthread_sigmask(SIG_BLOCK, &sigset_exec, &sigset_old);
 #endif
 
-//	debug(3, "Pre-wait thread %p"DEBUGV(" (%i)")".", pthread_self() DEBUGV(, _rand));
+//	debug(3, "Pre-wait thread %p"")".", pthread_self() );
 	if(waitpid(pid, &status, 0) != pid) {
 		error("Cannot waitid().");
 		return errno;
 	}
-//	debug(3, "After-wait thread %p"DEBUGV(" (%i)")".", pthread_self() DEBUGV(, _rand));
+//	debug(3, "After-wait thread %p"")".", pthread_self() );
 
 #ifdef VERYPARANOID
 	pthread_sigmask(SIG_SETMASK, &sigset_old, NULL);
@@ -645,24 +645,24 @@ int exec_argv(char **argv, int *child_pid DEBUGV(, int _rand)) {
 
 	// Return
 	int exitcode = WEXITSTATUS(status);
-	debug(3, "execution completed with exitcode %i. Thread %p"DEBUGV(" (%i)")".", exitcode, pthread_self() DEBUGV(, _rand));
+	debug(3, "execution completed with exitcode %i", exitcode);
 
 	return exitcode;
 }
 
-static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode DEBUGV(, int _rand)) {
+static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode ) {
 	int err=0;
 	threadinfo_p->exitcode = exitcode;
 
 #if _DEBUG | VERYPARANOID
 	if(threadinfo_p->pthread != pthread_self()) {
-		error("pthread id mismatch! (i_p->p) %p != (p) %p"DEBUGV("; rand == %i")"", threadinfo_p->pthread, pthread_self() DEBUGV(, _rand));
+		error("pthread id mismatch! (i_p->p) %p != (p) %p""", threadinfo_p->pthread, pthread_self() );
 		return EINVAL;
 	}
 #endif
 
 	if(threadinfo_p->callback) {
-		if(threadinfo_p->glob_p->flags[DEBUG]>2) {
+		if(threadinfo_p->ctx_p->flags[DEBUG]>2) {
 			debug(3, "thread %p, argv: ", threadinfo_p->pthread);
 			char **argv = threadinfo_p->argv;
 			while(*argv) {
@@ -670,7 +670,7 @@ static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode DEBUGV(, 
 				argv++;
 			}
 		}
-		if((err=threadinfo_p->callback(threadinfo_p->glob_p, threadinfo_p->argv))) {
+		if((err=threadinfo_p->callback(threadinfo_p->ctx_p, threadinfo_p->argv))) {
 			error("Got error from callback function.", strerror(err), err);
 			threadinfo_p->errcode = err;
 		}
@@ -707,7 +707,7 @@ int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 	debug(3, "thread_num == %i; threadinfo_p == %p; i_p->pthread %p; thread %p", 
 			threadinfo_p->thread_num, threadinfo_p, threadinfo_p->pthread, pthread_self());
 
-	glob_t *glob_p	= threadinfo_p->glob_p;
+	ctx_t *ctx_p	= threadinfo_p->ctx_p;
 	int n			= threadinfo_p->n;
 	api_eventinfo_t *ei	= threadinfo_p->ei;
 
@@ -716,18 +716,18 @@ int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 		try_again = 0;
 		threadinfo_p->try_n++;
 
-		rc = glob_p->handler_funct.sync(n, ei);
+		rc = ctx_p->handler_funct.sync(n, ei);
 
-		if((err=exitcode_process(threadinfo_p->glob_p, rc))) {
-			try_again = ((!glob_p->retries) || (threadinfo_p->try_n < glob_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
+		if((err=exitcode_process(threadinfo_p->ctx_p, rc))) {
+			try_again = ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
 			error("Warning: so_call_sync_thread(): Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
 			if(try_again) {
-				debug(2, "Sleeping for %u seconds before the retry.", glob_p->syncdelay);
-				sleep(glob_p->syncdelay);
+				debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
+				sleep(ctx_p->syncdelay);
 			}
 		}
 
-	} while(err && ((!glob_p->retries) || (threadinfo_p->try_n < glob_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
+	} while(err && ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
 
 	if(err) {
 		error("Bad exitcode %i (errcode %i)", rc, err);
@@ -736,7 +736,7 @@ int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 
 	so_call_sync_finished(n, ei);
 
-	if((err=thread_exit(threadinfo_p, rc DEBUGV(, 0)))) {
+	if((err=thread_exit(threadinfo_p, rc ))) {
 		exitcode = err;	// This's global variable "exitcode"
 		pthread_kill(pthread_sighandler, SIGTERM);
 	}
@@ -744,29 +744,29 @@ int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 	return rc;
 }
 
-static inline int so_call_sync(glob_t *glob_p, indexes_t *indexes_p, int n, api_eventinfo_t *ei) {
+static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_eventinfo_t *ei) {
 	debug(2, "n == %i", n);
 
-	if(!glob_p->flags[PTHREAD]) {
+	if(!ctx_p->flags[PTHREAD]) {
 		int rc=0, ret=0, err=0;
 		int try_n=0, try_again;
 		do {
 			try_again = 0;
 			try_n++;
 
-			alarm(glob_p->synctimeout);
-			rc = glob_p->handler_funct.sync(n, ei);
+			alarm(ctx_p->synctimeout);
+			rc = ctx_p->handler_funct.sync(n, ei);
 			alarm(0);
 
-			if((err=exitcode_process(glob_p, rc))) {
-				try_again = ((!glob_p->retries) || (try_n < glob_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
+			if((err=exitcode_process(ctx_p, rc))) {
+				try_again = ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
 				error("Warning: so_call_sync(): Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
 				if(try_again) {
-					debug(2, "Sleeping for %u seconds before the retry.", glob_p->syncdelay);
-					sleep(glob_p->syncdelay);
+					debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
+					sleep(ctx_p->syncdelay);
 				}
 			}
-		} while(err && ((!glob_p->retries) || (try_n < glob_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
+		} while(err && ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
 		if(err) {
 			error("Bad exitcode %i (errcode %i)", rc, err);
 			ret = err;
@@ -782,14 +782,14 @@ static inline int so_call_sync(glob_t *glob_p, indexes_t *indexes_p, int n, api_
 	threadinfo_p->try_n       = 0;
 	threadinfo_p->callback    = NULL;
 	threadinfo_p->argv        = NULL;
-	threadinfo_p->glob_p   = glob_p;
+	threadinfo_p->ctx_p   = ctx_p;
 	threadinfo_p->starttime	  = time(NULL);
 	threadinfo_p->fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
 	threadinfo_p->n           = n;
 	threadinfo_p->ei          = ei;
 
-	if(glob_p->synctimeout)
-		threadinfo_p->expiretime = threadinfo_p->starttime + glob_p->synctimeout;
+	if(ctx_p->synctimeout)
+		threadinfo_p->expiretime = threadinfo_p->starttime + ctx_p->synctimeout;
 
 	if(pthread_create(&threadinfo_p->pthread, NULL, (void *(*)(void *))so_call_sync_thread, threadinfo_p)) {
 		error("Cannot pthread_create().");
@@ -800,7 +800,7 @@ static inline int so_call_sync(glob_t *glob_p, indexes_t *indexes_p, int n, api_
 
 }
 
-static inline int so_call_rsync_finished(glob_t *glob_p, const char *inclistfile, const char *exclistfile) {
+static inline int so_call_rsync_finished(ctx_t *ctx_p, const char *inclistfile, const char *exclistfile) {
 	int ret0, ret1;
 	if(inclistfile == NULL) {
 		error("inclistfile == NULL.");
@@ -810,7 +810,7 @@ static inline int so_call_rsync_finished(glob_t *glob_p, const char *inclistfile
 	debug(3, "unlink()-ing \"%s\"", inclistfile);
 	ret0 = unlink(inclistfile);
 
-	if(glob_p->flags[RSYNCPREFERINCLUDE])
+	if(ctx_p->flags[RSYNCPREFERINCLUDE])
 		return ret0;
 
 	if(exclistfile == NULL) {
@@ -828,7 +828,7 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 	debug(3, "thread_num == %i; threadinfo_p == %p; i_p->pthread %p; thread %p", 
 			threadinfo_p->thread_num, threadinfo_p, threadinfo_p->pthread, pthread_self());
 
-	glob_t *glob_p	= threadinfo_p->glob_p;
+	ctx_t *ctx_p	= threadinfo_p->ctx_p;
 	char **argv		= threadinfo_p->argv;
 
 	int err=0, rc=0, try_again;
@@ -836,13 +836,13 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 		try_again=0;
 		threadinfo_p->try_n++;
 
-		rc = glob_p->handler_funct.rsync(argv[0], argv[1]);
-		if((err=exitcode_process(threadinfo_p->glob_p, rc))) {
-			try_again = ((!glob_p->retries) || (threadinfo_p->try_n < glob_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
+		rc = ctx_p->handler_funct.rsync(argv[0], argv[1]);
+		if((err=exitcode_process(threadinfo_p->ctx_p, rc))) {
+			try_again = ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
 			error("Warning: so_call_rsync_thread(): Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
 			if(try_again) {
-				debug(2, "Sleeping for %u seconds before the retry.", glob_p->syncdelay);
-				sleep(glob_p->syncdelay);
+				debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
+				sleep(ctx_p->syncdelay);
 			}
 		}
 	} while(try_again);
@@ -852,7 +852,7 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 		threadinfo_p->errcode = err;
 	}
 
-	if((err=so_call_rsync_finished(glob_p, argv[0], argv[1]))) {
+	if((err=so_call_rsync_finished(ctx_p, argv[0], argv[1]))) {
 		exitcode = err;	// This's global variable "exitcode"
 		pthread_kill(pthread_sighandler, SIGTERM);
 	}
@@ -861,7 +861,7 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 	free(argv[1]);
 	free(argv);
 
-	if((err=thread_exit(threadinfo_p, rc DEBUGV(, 0)))) {
+	if((err=thread_exit(threadinfo_p, rc))) {
 		exitcode = err;	// This's global variable "exitcode"
 		pthread_kill(pthread_sighandler, SIGTERM);
 	}
@@ -869,11 +869,11 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 	return rc;
 }
 
-static inline int so_call_rsync(glob_t *glob_p, indexes_t *indexes_p, const char *inclistfile, const char *exclistfile) {
+static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *inclistfile, const char *exclistfile) {
 	debug(2, "inclistfile == \"%s\"; exclistfile == \"%s\"", inclistfile, exclistfile);
 
-	if(!glob_p->flags[PTHREAD]) {
-		debug(3, "glob_p->handler_funct.rsync == %p", glob_p->handler_funct.rsync);
+	if(!ctx_p->flags[PTHREAD]) {
+		debug(3, "ctx_p->handler_funct.rsync == %p", ctx_p->handler_funct.rsync);
 
 		int rc=0, err=0;
 		int try_n=0, try_again;
@@ -881,16 +881,16 @@ static inline int so_call_rsync(glob_t *glob_p, indexes_t *indexes_p, const char
 			try_again = 0;
 			try_n++;
 
-			alarm(glob_p->synctimeout);
-			rc = glob_p->handler_funct.rsync(inclistfile, exclistfile);
+			alarm(ctx_p->synctimeout);
+			rc = ctx_p->handler_funct.rsync(inclistfile, exclistfile);
 			alarm(0);
 
-			if((err=exitcode_process(glob_p, rc))) {
-				try_again = ((!glob_p->retries) || (try_n < glob_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
+			if((err=exitcode_process(ctx_p, rc))) {
+				try_again = ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
 				error("Warning: so_call_rsync(): Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
 				if(try_again) {
-					debug(2, "Sleeping for %u seconds before the retry.", glob_p->syncdelay);
-					sleep(glob_p->syncdelay);
+					debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
+					sleep(ctx_p->syncdelay);
 				}
 			}
 		} while(try_again);
@@ -900,7 +900,7 @@ static inline int so_call_rsync(glob_t *glob_p, indexes_t *indexes_p, const char
 		}
 
 		int ret_cleanup;
-		if((ret_cleanup=so_call_rsync_finished(glob_p, inclistfile, exclistfile)))
+		if((ret_cleanup=so_call_rsync_finished(ctx_p, inclistfile, exclistfile)))
 			return rc ? rc : ret_cleanup;
 		return rc;
 	}
@@ -912,15 +912,15 @@ static inline int so_call_rsync(glob_t *glob_p, indexes_t *indexes_p, const char
 	threadinfo_p->try_n       = 0;
 	threadinfo_p->callback    = NULL;
 	threadinfo_p->argv        = xmalloc(sizeof(char *) * 3);
-	threadinfo_p->glob_p   = glob_p;
+	threadinfo_p->ctx_p   = ctx_p;
 	threadinfo_p->starttime	  = time(NULL);
 	threadinfo_p->fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
 
 	threadinfo_p->argv[0]	  = strdup(inclistfile);
 	threadinfo_p->argv[1]	  = strdup(exclistfile);
 
-	if(glob_p->synctimeout)
-		threadinfo_p->expiretime = threadinfo_p->starttime + glob_p->synctimeout;
+	if(ctx_p->synctimeout)
+		threadinfo_p->expiretime = threadinfo_p->starttime + ctx_p->synctimeout;
 
 	if(pthread_create(&threadinfo_p->pthread, NULL, (void *(*)(void *))so_call_rsync_thread, threadinfo_p)) {
 		error("Cannot pthread_create().");
@@ -934,7 +934,7 @@ static inline int so_call_rsync(glob_t *glob_p, indexes_t *indexes_p, const char
 
 // === SYNC_EXEC() === {
 
-#define SYNC_EXEC(...) (glob_p->flags[PTHREAD]?sync_exec_thread:sync_exec)(__VA_ARGS__)
+#define SYNC_EXEC(...) (ctx_p->flags[PTHREAD]?sync_exec_thread:sync_exec)(__VA_ARGS__)
 
 
 #define _sync_exec_getargv(argv, firstarg, COPYARG) {\
@@ -956,7 +956,7 @@ static inline int so_call_rsync(glob_t *glob_p, indexes_t *indexes_p, const char
 	va_end(arglist);\
 }
 
-char *sync_path_abs2rel(glob_t *glob_p, const char *path_abs, size_t path_abs_len, size_t *path_rel_len_p, char *path_rel_oldptr) {
+char *sync_path_abs2rel(ctx_t *ctx_p, const char *path_abs, size_t path_abs_len, size_t *path_rel_len_p, char *path_rel_oldptr) {
 	if(path_abs == NULL)
 		return NULL;
 
@@ -965,8 +965,8 @@ char *sync_path_abs2rel(glob_t *glob_p, const char *path_abs, size_t path_abs_le
 
 	size_t path_rel_len;
 	char  *path_rel;
-	size_t watchdirlen = (glob_p->watchdir == glob_p->watchdirwslash /* if watch-dir == "/" */) 
-				? 0 : glob_p->watchdirlen;
+	size_t watchdirlen = (ctx_p->watchdir == ctx_p->watchdirwslash /* if watch-dir == "/" */) 
+				? 0 : ctx_p->watchdirlen;
 
 	signed long path_rel_len_signed = path_abs_len - (watchdirlen+1);
 
@@ -993,7 +993,7 @@ char *sync_path_abs2rel(glob_t *glob_p, const char *path_abs, size_t path_abs_le
 	// Removing "/" on the end
 	debug(3, "sync_path_abs2rel(): \"%s\" (len: %i) --%i--> \"%s\" (len: %i) + ", 
 		path_abs, path_abs_len, path_rel[path_rel_len - 1] == '/',
-		glob_p->watchdirwslash, watchdirlen+1);
+		ctx_p->watchdirwslash, watchdirlen+1);
 	if(path_rel[path_rel_len - 1] == '/')
 		path_rel[--path_rel_len] = 0x00;
 	debug(3, "\"%s\" (len: %i)", path_rel, path_rel_len);
@@ -1005,32 +1005,32 @@ char *sync_path_abs2rel(glob_t *glob_p, const char *path_abs, size_t path_abs_le
 	return path_rel;
 }
 
-pid_t clsyncapi_fork(glob_t *glob_p) {
-//	if(glob_p->flags[PTHREAD])
+pid_t clsyncapi_fork(ctx_t *ctx_p) {
+//	if(ctx_p->flags[PTHREAD])
 //		return fork();
 
 	// Cleaning stale pids. TODO: Optimize this. Remove this GC.
 	int i=0;
-	while(i < glob_p->children) {
-		if(waitpid(glob_p->child_pid[i], NULL, WNOHANG)<0)
+	while(i < ctx_p->children) {
+		if(waitpid(ctx_p->child_pid[i], NULL, WNOHANG)<0)
 			if(errno==ECHILD)
-				glob_p->child_pid[i] = glob_p->child_pid[--glob_p->children];
+				ctx_p->child_pid[i] = ctx_p->child_pid[--ctx_p->children];
 		i++;
 	}
 
 	// Too many children
-	if(glob_p->children >= MAXCHILDREN) {
+	if(ctx_p->children >= MAXCHILDREN) {
 		errno = ECANCELED;
 		return -1;
 	}
 
 	// Forking
 	pid_t pid = fork();
-	glob_p->child_pid[glob_p->children++] = pid;
+	ctx_p->child_pid[ctx_p->children++] = pid;
 	return pid;
 }
 
-static inline int sync_exec(glob_t *glob_p, indexes_t *indexes_p, thread_callbackfunct_t callback, ...) {
+static inline int sync_exec(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callback, ...) {
 	debug(2, "sync_exec()");
 
 	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
@@ -1043,20 +1043,20 @@ static inline int sync_exec(glob_t *glob_p, indexes_t *indexes_p, thread_callbac
 	do {
 		try_again = 0;
 		try_n++;
-		debug(2, "try_n == %u (retries == %u)", try_n, glob_p->retries);
+		debug(2, "try_n == %u (retries == %u)", try_n, ctx_p->retries);
 
-		alarm(glob_p->synctimeout);
-		glob_p->children = 1;
-		exitcode = exec_argv(argv, glob_p->child_pid DEBUGV(, 0));
-		glob_p->children = 0;
+		alarm(ctx_p->synctimeout);
+		ctx_p->children = 1;
+		exitcode = exec_argv(argv, ctx_p->child_pid );
+		ctx_p->children = 0;
 		alarm(0);
 
-		if((err=exitcode_process(glob_p, exitcode))) {
-			try_again = ((!glob_p->retries) || (try_n < glob_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
+		if((err=exitcode_process(ctx_p, exitcode))) {
+			try_again = ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
 			error("Warning: sync_exec(): Bad exitcode %i (errcode %i). %s.", exitcode, err, try_again?"Retrying":"Give up");
 			if(try_again) {
-				debug(2, "Sleeping for %u seconds before the retry.", glob_p->syncdelay);
-				sleep(glob_p->syncdelay);
+				debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
+				sleep(ctx_p->syncdelay);
 			}
 		}
 	} while(try_again);
@@ -1068,7 +1068,7 @@ static inline int sync_exec(glob_t *glob_p, indexes_t *indexes_p, thread_callbac
 	}
 
 	if(callback != NULL) {
-		int nret = callback(glob_p, argv);
+		int nret = callback(ctx_p, argv);
 		if(nret) {
 			error("Got error while callback().");
 			if(!ret) ret=nret;
@@ -1083,27 +1083,27 @@ static inline int sync_exec(glob_t *glob_p, indexes_t *indexes_p, thread_callbac
 
 int __sync_exec_thread(threadinfo_t *threadinfo_p) {
 	char **argv			= threadinfo_p->argv;
-	glob_t *glob_p		= threadinfo_p->glob_p;
+	ctx_t *ctx_p		= threadinfo_p->ctx_p;
 #ifdef _DEBUG
 	int _rand=rand();
 #endif
 
-	debug(3, "thread_num == %i; threadinfo_p == %p; i_p->pthread %p; thread %p"DEBUGV("; rand == %i")"", 
-			threadinfo_p->thread_num, threadinfo_p, threadinfo_p->pthread, pthread_self() DEBUGV(, _rand));
+	debug(3, "thread_num == %i; threadinfo_p == %p; i_p->pthread %p; thread %p""", 
+			threadinfo_p->thread_num, threadinfo_p, threadinfo_p->pthread, pthread_self() );
 
 	int err=0, exec_exitcode=0, try_again;
 	do {
 		try_again = 0;
 		threadinfo_p->try_n++;
 
-		exec_exitcode = exec_argv(argv, &threadinfo_p->child_pid DEBUGV(, _rand));
+		exec_exitcode = exec_argv(argv, &threadinfo_p->child_pid );
 
-		if((err=exitcode_process(threadinfo_p->glob_p, exec_exitcode))) {
-			try_again = ((!glob_p->retries) || (threadinfo_p->try_n < glob_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
+		if((err=exitcode_process(threadinfo_p->ctx_p, exec_exitcode))) {
+			try_again = ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
 			error("Warning: __sync_exec_thread(): Bad exitcode %i (errcode %i). %s.", exec_exitcode, err, try_again?"Retrying":"Give up");
 			if(try_again) {
-				debug(2, "Sleeping for %u seconds before the retry.", glob_p->syncdelay);
-				sleep(glob_p->syncdelay);
+				debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
+				sleep(ctx_p->syncdelay);
 			}
 		}
 
@@ -1116,17 +1116,17 @@ int __sync_exec_thread(threadinfo_t *threadinfo_p) {
 
 	g_hash_table_destroy(threadinfo_p->fpath2ei_ht);
 
-	if((err=thread_exit(threadinfo_p, exec_exitcode DEBUGV(, _rand)))) {
+	if((err=thread_exit(threadinfo_p, exec_exitcode ))) {
 		exitcode = err;	// This's global variable "exitcode"
 		pthread_kill(pthread_sighandler, SIGTERM);
 	}
 
-	debug(3, "thread_num == %i; threadinfo_p == %p; i_p->pthread %p; thread %p"DEBUGV("; rand == %i")"; errcode %i", 
-			threadinfo_p->thread_num, threadinfo_p, threadinfo_p->pthread, pthread_self(), DEBUGV(_rand,) threadinfo_p->errcode);
+	debug(3, "thread_num == %i; threadinfo_p == %p; i_p->pthread %p; thread %p""; errcode %i", 
+			threadinfo_p->thread_num, threadinfo_p, threadinfo_p->pthread, pthread_self(),  threadinfo_p->errcode);
 	return exec_exitcode;
 }
 
-static inline int sync_exec_thread(glob_t *glob_p, indexes_t *indexes_p, thread_callbackfunct_t callback, ...) {
+static inline int sync_exec_thread(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callback, ...) {
 	debug(2, "sync_exec_thread()");
 
 	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
@@ -1141,12 +1141,12 @@ static inline int sync_exec_thread(glob_t *glob_p, indexes_t *indexes_p, thread_
 	threadinfo_p->try_n       = 0;
 	threadinfo_p->callback    = callback;
 	threadinfo_p->argv        = argv;
-	threadinfo_p->glob_p   = glob_p;
+	threadinfo_p->ctx_p   = ctx_p;
 	threadinfo_p->starttime	  = time(NULL);
 	threadinfo_p->fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
 
-	if(glob_p->synctimeout)
-		threadinfo_p->expiretime = threadinfo_p->starttime + glob_p->synctimeout;
+	if(ctx_p->synctimeout)
+		threadinfo_p->expiretime = threadinfo_p->starttime + ctx_p->synctimeout;
 
 	if(pthread_create(&threadinfo_p->pthread, NULL, (void *(*)(void *))__sync_exec_thread, threadinfo_p)) {
 		error("Cannot pthread_create().");
@@ -1158,18 +1158,18 @@ static inline int sync_exec_thread(glob_t *glob_p, indexes_t *indexes_p, thread_
 
 // } === SYNC_EXEC() ===
 
-static int sync_queuesync(const char *fpath_rel, eventinfo_t *evinfo, glob_t *glob_p, indexes_t *indexes_p, queue_id_t queue_id) {
+static int sync_queuesync(const char *fpath_rel, eventinfo_t *evinfo, ctx_t *ctx_p, indexes_t *indexes_p, queue_id_t queue_id) {
 
-	debug(3, "sync_queuesync(\"%s\", ...): fsize == %lu; tres == %lu, queue_id == %u", fpath_rel, evinfo->fsize, glob_p->bfilethreshold, queue_id);
+	debug(3, "sync_queuesync(\"%s\", ...): fsize == %lu; tres == %lu, queue_id == %u", fpath_rel, evinfo->fsize, ctx_p->bfilethreshold, queue_id);
 	if(queue_id == QUEUE_AUTO)
-		queue_id = (evinfo->fsize > glob_p->bfilethreshold) ? QUEUE_BIGFILE : QUEUE_NORMAL;
+		queue_id = (evinfo->fsize > ctx_p->bfilethreshold) ? QUEUE_BIGFILE : QUEUE_NORMAL;
 
-	queueinfo_t *queueinfo = &glob_p->_queues[queue_id];
+	queueinfo_t *queueinfo = &ctx_p->_queues[queue_id];
 
 	if(!queueinfo->stime)
 		queueinfo->stime = time(NULL);
 
-//	char *fpath_rel = sync_path_abs2rel(glob_p, fpath, -1, NULL, NULL);
+//	char *fpath_rel = sync_path_abs2rel(ctx_p, fpath, -1, NULL, NULL);
 
 	// Filename can contain "" character that conflicts with event-row separator of list-files.
 	if(strchr(fpath_rel, '\n')) {
@@ -1179,7 +1179,7 @@ static int sync_queuesync(const char *fpath_rel, eventinfo_t *evinfo, glob_t *gl
 	}
 
 #ifdef CLUSTER_SUPPORT
-	if(glob_p->cluster_iface)
+	if(ctx_p->cluster_iface)
 		cluster_capture(fpath_rel);
 #endif
 
@@ -1195,32 +1195,32 @@ static int sync_queuesync(const char *fpath_rel, eventinfo_t *evinfo, glob_t *gl
 	return 0;
 }
 
-int sync_initialsync_walk(glob_t *glob_p, const char *dirpath, indexes_t *indexes_p, queue_id_t queue_id, initsync_t initsync) {
+int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p, queue_id_t queue_id, initsync_t initsync) {
 	int ret = 0;
 	const char *rootpaths[] = {dirpath, NULL};
 	eventinfo_t evinfo;
 	FTS *tree;
-	rule_t *rules_p = glob_p->rules;
-	debug(2, "sync_initialsync_walk(glob_p, \"%s\", indexes_p, %i, %i).", dirpath, queue_id, initsync);
+	rule_t *rules_p = ctx_p->rules;
+	debug(2, "sync_initialsync_walk(ctx_p, \"%s\", indexes_p, %i, %i).", dirpath, queue_id, initsync);
 
-	char skip_rules = (initsync==INITSYNC_FULL) && glob_p->flags[INITFULL];
+	char skip_rules = (initsync==INITSYNC_FULL) && ctx_p->flags[INITFULL];
 
 	char rsync_and_prefer_excludes =
 			(
-				(glob_p->flags[MODE]==MODE_RSYNCDIRECT) ||
-				(glob_p->flags[MODE]==MODE_RSYNCSHELL)  ||
-				(glob_p->flags[MODE]==MODE_RSYNCSO)
+				(ctx_p->flags[MODE]==MODE_RSYNCDIRECT) ||
+				(ctx_p->flags[MODE]==MODE_RSYNCSHELL)  ||
+				(ctx_p->flags[MODE]==MODE_RSYNCSO)
 			) && 
-			!glob_p->flags[RSYNCPREFERINCLUDE];
+			!ctx_p->flags[RSYNCPREFERINCLUDE];
 
-	if((!glob_p->flags[RSYNCPREFERINCLUDE]) && skip_rules)
+	if((!ctx_p->flags[RSYNCPREFERINCLUDE]) && skip_rules)
 		return 0;
 
-	char fts_no_stat = (initsync==INITSYNC_FULL) && !(glob_p->flags[EXCLUDEMOUNTPOINTS]);
+	char fts_no_stat = (initsync==INITSYNC_FULL) && !(ctx_p->flags[EXCLUDEMOUNTPOINTS]);
 
 	int fts_opts =  FTS_NOCHDIR | FTS_PHYSICAL | 
 			(fts_no_stat				? FTS_NOSTAT	: 0) | 
-			(glob_p->flags[ONEFILESYSTEM] 	? FTS_XDEV	: 0); 
+			(ctx_p->flags[ONEFILESYSTEM] 	? FTS_XDEV	: 0); 
 
         debug(3, "sync_initialsync_walk() fts_opts == %p", (void *)(long)fts_opts);
 
@@ -1270,13 +1270,13 @@ int sync_initialsync_walk(glob_t *glob_p, const char *dirpath, indexes_t *indexe
 				ret = EINVAL;
 				goto l_sync_initialsync_walk_end;
 		}
-		path_rel = sync_path_abs2rel(glob_p, node->fts_path, -1, &path_rel_len, path_rel);
+		path_rel = sync_path_abs2rel(ctx_p, node->fts_path, -1, &path_rel_len, path_rel);
 
 		debug(3, "Pointing to \"%s\" (node->fts_info == %i)", path_rel, node->fts_info);
 
-		if(glob_p->flags[EXCLUDEMOUNTPOINTS] && node->fts_info==FTS_D) {
+		if(ctx_p->flags[EXCLUDEMOUNTPOINTS] && node->fts_info==FTS_D) {
 			if(rsync_and_prefer_excludes) {
-				if(node->fts_statp->st_dev != glob_p->st_dev) {
+				if(node->fts_statp->st_dev != ctx_p->st_dev) {
 					if(queue_id == QUEUE_AUTO) {
 						int i=0;
 						while(i<QUEUE_MAX)
@@ -1318,7 +1318,7 @@ int sync_initialsync_walk(glob_t *glob_p, const char *dirpath, indexes_t *indexe
 		evinfo.objtype_old  = EOT_DOESNTEXIST;
 		evinfo.objtype_new  = node->fts_info==FTS_D ? EOT_DIR : EOT_FILE;
 		evinfo.fsize        = fts_no_stat ? 0 : node->fts_statp->st_size;
-		switch(glob_p->notifyengine) {
+		switch(ctx_p->notifyengine) {
 #ifdef FANOTIFY_SUPPORT
 			case NE_FANOTIFY:
 				break;
@@ -1333,7 +1333,7 @@ int sync_initialsync_walk(glob_t *glob_p, const char *dirpath, indexes_t *indexe
 
 		if(!rsync_and_prefer_excludes) {
 			debug(3, "queueing \"%s\" (depth: %i) with int-flags %p", node->fts_path, node->fts_level, (void *)(unsigned long)evinfo.flags);
-			int _ret = sync_queuesync(path_rel, &evinfo, glob_p, indexes_p, queue_id);
+			int _ret = sync_queuesync(path_rel, &evinfo, ctx_p, indexes_p, queue_id);
 
 			if(_ret) {
 				error("Got error while queueing \"%s\".", node->fts_path);
@@ -1360,12 +1360,12 @@ l_sync_initialsync_walk_end:
 	return ret;
 }
 
-int sync_initialsync(const char *path, glob_t *glob_p, indexes_t *indexes_p, initsync_t initsync) {
-	debug(3, "sync_initialsync(\"%s\", glob_p, indexes_p, %i)", path, initsync);
+int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, initsync_t initsync) {
+	debug(3, "sync_initialsync(\"%s\", ctx_p, indexes_p, %i)", path, initsync);
 
 #ifdef CLUSTER_SUPPORT
 	if(initsync == INITSYNC_FULL) {
-		if(glob_p->cluster_iface)
+		if(ctx_p->cluster_iface)
 			return cluster_initialsync();
 	}
 #endif
@@ -1375,20 +1375,20 @@ int sync_initialsync(const char *path, glob_t *glob_p, indexes_t *indexes_p, ini
 	// non-RSYNC case:
 	if(
 		!(
-			(glob_p->flags[MODE]==MODE_RSYNCDIRECT)	||
-			(glob_p->flags[MODE]==MODE_RSYNCSHELL)	||
-			(glob_p->flags[MODE]==MODE_RSYNCSO)
+			(ctx_p->flags[MODE]==MODE_RSYNCDIRECT)	||
+			(ctx_p->flags[MODE]==MODE_RSYNCSHELL)	||
+			(ctx_p->flags[MODE]==MODE_RSYNCSO)
 		)
 	) {
 		debug(3, "syncing \"%s\"", path);
 /*
-		if(glob_p->flags[PTHREAD])
-			return sync_exec_thread(glob_p, NULL, glob_p->handlerfpath, "initialsync", glob_p->label, path, NULL);
+		if(ctx_p->flags[PTHREAD])
+			return sync_exec_thread(ctx_p, NULL, ctx_p->handlerfpath, "initialsync", ctx_p->label, path, NULL);
 		else
-			return sync_exec       (glob_p, NULL, glob_p->handlerfpath, "initialsync", glob_p->label, path, NULL);*/
+			return sync_exec       (ctx_p, NULL, ctx_p->handlerfpath, "initialsync", ctx_p->label, path, NULL);*/
 
-		if(glob_p->flags[HAVERECURSIVESYNC]) {
-			if(glob_p->flags[MODE] == MODE_SO) {
+		if(ctx_p->flags[HAVERECURSIVESYNC]) {
+			if(ctx_p->flags[MODE] == MODE_SO) {
 				api_eventinfo_t *ei = (api_eventinfo_t *)xmalloc(sizeof(*ei));
 #ifdef PARANIOD
 				memset(ei, 0, sizeof(*ei));
@@ -1401,15 +1401,15 @@ int sync_initialsync(const char *path, glob_t *glob_p, indexes_t *indexes_p, ini
 				ei->objtype_old = EOT_DOESNTEXIST;
 				ei->objtype_new = EOT_DIR;
 
-				return so_call_sync(glob_p, indexes_p, 1, ei);
+				return so_call_sync(ctx_p, indexes_p, 1, ei);
 			} else {
 				return SYNC_EXEC(
-						glob_p,
+						ctx_p,
 						indexes_p,
 						NULL,
-						glob_p->handlerfpath, 
+						ctx_p->handlerfpath, 
 						"initialsync",
-						glob_p->label,
+						ctx_p->label,
 						path,
 						NULL
 					);
@@ -1419,7 +1419,7 @@ int sync_initialsync(const char *path, glob_t *glob_p, indexes_t *indexes_p, ini
 		sync_exec(NULL, NULL); sync_exec_thread(NULL, NULL);
 #endif
 
-		int ret = sync_initialsync_walk(glob_p, path, indexes_p, queue_id, initsync);
+		int ret = sync_initialsync_walk(ctx_p, path, indexes_p, queue_id, initsync);
 		if(ret)
 			error("Cannot get synclist");
 
@@ -1428,8 +1428,8 @@ int sync_initialsync(const char *path, glob_t *glob_p, indexes_t *indexes_p, ini
 
 	// RSYNC case:
 
-	if(!glob_p->flags[RSYNCPREFERINCLUDE]) {
-		queueinfo_t *queueinfo = &glob_p->_queues[queue_id];
+	if(!ctx_p->flags[RSYNCPREFERINCLUDE]) {
+		queueinfo_t *queueinfo = &ctx_p->_queues[queue_id];
 
 		if(!queueinfo->stime)
 			queueinfo->stime = time(NULL); // Useful for debugging
@@ -1444,7 +1444,7 @@ int sync_initialsync(const char *path, glob_t *glob_p, indexes_t *indexes_p, ini
 		evinfo->objtype_new  = EOT_DIR;
 
 		// Searching for excludes
-		int ret = sync_initialsync_walk(glob_p, path, indexes_p, queue_id, initsync);
+		int ret = sync_initialsync_walk(ctx_p, path, indexes_p, queue_id, initsync);
 		if(ret) {
 			error("Cannot get exclude what to exclude");
 			return ret;
@@ -1452,16 +1452,16 @@ int sync_initialsync(const char *path, glob_t *glob_p, indexes_t *indexes_p, ini
 
 		debug(3, "queueing \"%s\" with int-flags %p", path, (void *)(unsigned long)evinfo->flags);
 
-		char *path_rel = sync_path_abs2rel(glob_p, path, -1, NULL, NULL);
+		char *path_rel = sync_path_abs2rel(ctx_p, path, -1, NULL, NULL);
 
 		return indexes_queueevent(indexes_p, path_rel, evinfo, queue_id);
 	}
 
 	// Searching for includes
-	return sync_initialsync_walk(glob_p, path, indexes_p, queue_id, initsync);
+	return sync_initialsync_walk(ctx_p, path, indexes_p, queue_id, initsync);
 }
 
-int sync_notify_mark(int notify_d, glob_t *glob_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p) {
+int sync_notify_mark(int notify_d, ctx_t *ctx_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p) {
 	debug(3, "sync_notify_mark(..., \"%s\", %i,...)", path, pathlen);
 	int wd = indexes_fpath2wd(indexes_p, path);
 	if(wd != -1) {
@@ -1469,7 +1469,7 @@ int sync_notify_mark(int notify_d, glob_t *glob_p, const char *accpath, const ch
 		return wd;
 	}
 
-	switch(glob_p->notifyengine) {
+	switch(ctx_p->notifyengine) {
 #ifdef FANOTIFY_SUPPORT
 		case NE_FANOTIFY: {
 			int fanotify_d = notify_d;
@@ -1501,7 +1501,7 @@ int sync_notify_mark(int notify_d, glob_t *glob_p, const char *accpath, const ch
 			break;
 		}
 		default: {
-			error("unknown notify-engine: %i", glob_p->notifyengine);
+			error("unknown notify-engine: %i", ctx_p->notifyengine);
 			errno = EINVAL;
 			return -1;
 		}
@@ -1512,8 +1512,8 @@ int sync_notify_mark(int notify_d, glob_t *glob_p, const char *accpath, const ch
 }
 
 #ifdef CLUSTER_SUPPORT
-static inline int sync_mark_walk_cluster_modtime_update(glob_t *glob_p, const char *path, short int dirlevel, mode_t st_mode) {
-	if(glob_p->cluster_iface) {
+static inline int sync_mark_walk_cluster_modtime_update(ctx_t *ctx_p, const char *path, short int dirlevel, mode_t st_mode) {
+	if(ctx_p->cluster_iface) {
 		int ret=cluster_modtime_update(path, dirlevel, st_mode);
 		if(ret) error("sync_mark_walk() cannot cluster_modtime_update()");
 		return ret;
@@ -1522,14 +1522,14 @@ static inline int sync_mark_walk_cluster_modtime_update(glob_t *glob_p, const ch
 }
 #endif
 
-int sync_mark_walk(int notify_d, glob_t *glob_p, const char *dirpath, indexes_t *indexes_p) {
+int sync_mark_walk(int notify_d, ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 	int ret = 0;
 	const char *rootpaths[] = {dirpath, NULL};
 	FTS *tree;
-	rule_t *rules_p = glob_p->rules;
-	debug(2, "sync_mark_walk(%i, glob_p, \"%s\", indexes_p).", notify_d, dirpath);
+	rule_t *rules_p = ctx_p->rules;
+	debug(2, "sync_mark_walk(%i, ctx_p, \"%s\", indexes_p).", notify_d, dirpath);
 
-	int fts_opts = FTS_NOCHDIR|FTS_PHYSICAL|FTS_NOSTAT|(glob_p->flags[ONEFILESYSTEM]?FTS_XDEV:0);
+	int fts_opts = FTS_NOCHDIR|FTS_PHYSICAL|FTS_NOSTAT|(ctx_p->flags[ONEFILESYSTEM]?FTS_XDEV:0);
 
         debug(3, "fts_opts == %p", (void *)(long)fts_opts);
 	tree = fts_open((char *const *)&rootpaths, fts_opts, NULL);
@@ -1559,7 +1559,7 @@ int sync_mark_walk(int notify_d, glob_t *glob_p, const char *dirpath, indexes_t 
 			case FTS_F:
 			case FTS_NSOK:
 #ifdef CLUSTER_SUPPORT
-				if((ret=sync_mark_walk_cluster_modtime_update(glob_p, node->fts_path, node->fts_level, S_IFREG)))
+				if((ret=sync_mark_walk_cluster_modtime_update(ctx_p, node->fts_path, node->fts_level, S_IFREG)))
 					goto l_sync_mark_walk_end;
 #endif
 				continue;
@@ -1568,7 +1568,7 @@ int sync_mark_walk(int notify_d, glob_t *glob_p, const char *dirpath, indexes_t 
 			case FTS_DC:    // TODO: think about case of FTS_DC
 			case FTS_DOT:
 #ifdef CLUSTER_SUPPORT
-				if((ret=sync_mark_walk_cluster_modtime_update(glob_p, node->fts_path, node->fts_level, S_IFDIR)))
+				if((ret=sync_mark_walk_cluster_modtime_update(ctx_p, node->fts_path, node->fts_level, S_IFDIR)))
 					goto l_sync_mark_walk_end;
 #endif
 				break;
@@ -1590,7 +1590,7 @@ int sync_mark_walk(int notify_d, glob_t *glob_p, const char *dirpath, indexes_t 
 				goto l_sync_mark_walk_end;
 		}
 
-		path_rel = sync_path_abs2rel(glob_p, node->fts_path, -1, &path_rel_len, path_rel);
+		path_rel = sync_path_abs2rel(ctx_p, node->fts_path, -1, &path_rel_len, path_rel);
 		ruleaction_t perm = rules_search_getperm(path_rel, S_IFDIR, rules_p, RA_WALK, NULL);
 
 		if(!(perm&RA_WALK)) {
@@ -1599,7 +1599,7 @@ int sync_mark_walk(int notify_d, glob_t *glob_p, const char *dirpath, indexes_t 
 		}
 
 		debug(2, "marking \"%s\" (depth %u)", node->fts_path, node->fts_level);
-		int wd = sync_notify_mark(notify_d, glob_p, node->fts_accpath, node->fts_path, node->fts_pathlen, indexes_p);
+		int wd = sync_notify_mark(notify_d, ctx_p, node->fts_accpath, node->fts_path, node->fts_pathlen, indexes_p);
 		if(wd == -1) {
 			error_or_debug(STATE_STARTING(state_p)?-1:2, "Got error while notify-marking \"%s\".", node->fts_path);
 			ret = errno;
@@ -1625,8 +1625,8 @@ l_sync_mark_walk_end:
 	return ret;
 }
 
-int sync_notify_init(glob_t *glob_p) {
-	switch(glob_p->notifyengine) {
+int sync_notify_init(ctx_t *ctx_p) {
+	switch(ctx_p->notifyengine) {
 #ifdef FANOTIFY_SUPPORT
 		case NE_FANOTIFY: {
 			int fanotify_d = fanotify_init(FANOTIFY_FLAGS, FANOTIFY_EVFLAGS);
@@ -1652,18 +1652,18 @@ int sync_notify_init(glob_t *glob_p) {
 			return inotify_d;
 		}
 	}
-	error("unknown notify-engine: %i", glob_p->notifyengine);
+	error("unknown notify-engine: %i", ctx_p->notifyengine);
 	errno = EINVAL;
 	return -1;
 }
 
-static inline int sync_dosync_exec(glob_t *glob_p, indexes_t *indexes_p, const char *evmask_str, const char *fpath) {
+static inline int sync_dosync_exec(ctx_t *ctx_p, indexes_t *indexes_p, const char *evmask_str, const char *fpath) {
 /*
-	if(glob_p->flags[PTHREAD])
-		return sync_exec_thread(glob_p, NULL, glob_p->handlerfpath, "sync", glob_p->label, evmask_str, fpath, NULL);
+	if(ctx_p->flags[PTHREAD])
+		return sync_exec_thread(ctx_p, NULL, ctx_p->handlerfpath, "sync", ctx_p->label, evmask_str, fpath, NULL);
 	else
-		return sync_exec       (glob_p, NULL, glob_p->handlerfpath, "sync", glob_p->label, evmask_str, fpath, NULL);*/
-	return SYNC_EXEC(glob_p, indexes_p, NULL, glob_p->handlerfpath, "sync", glob_p->label, evmask_str, fpath, NULL);
+		return sync_exec       (ctx_p, NULL, ctx_p->handlerfpath, "sync", ctx_p->label, evmask_str, fpath, NULL);*/
+	return SYNC_EXEC(ctx_p, indexes_p, NULL, ctx_p->handlerfpath, "sync", ctx_p->label, evmask_str, fpath, NULL);
 
 #ifdef DOXYGEN
 	sync_exec(NULL, NULL); sync_exec_thread(NULL, NULL);
@@ -1671,7 +1671,7 @@ static inline int sync_dosync_exec(glob_t *glob_p, indexes_t *indexes_p, const c
 
 }
 
-static int sync_dosync(const char *fpath, uint32_t evmask, glob_t *glob_p, indexes_t *indexes_p) {
+static int sync_dosync(const char *fpath, uint32_t evmask, ctx_t *ctx_p, indexes_t *indexes_p) {
 	int ret;
 
 #ifdef CLUSTER_SUPPORT
@@ -1681,7 +1681,7 @@ static int sync_dosync(const char *fpath, uint32_t evmask, glob_t *glob_p, index
 
 	char *evmask_str = xmalloc(1<<8);
 	sprintf(evmask_str, "%u", evmask);
-	ret = sync_dosync_exec(glob_p, indexes_p, evmask_str, fpath);
+	ret = sync_dosync_exec(ctx_p, indexes_p, evmask_str, fpath);
 	free(evmask_str);
 
 #ifdef CLUSTER_SUPPORT
@@ -1707,16 +1707,16 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 	eventinfo_t *evinfo	  = (eventinfo_t *)evinfo_gp;
 	int *evcount_p		  =&((struct dosync_arg *)arg_gp)->evcount;
 //	FILE *outf		  = ((struct dosync_arg *)arg_gp)->outf;
-	glob_t *glob_p 	  = ((struct dosync_arg *)arg_gp)->glob_p;
+	ctx_t *ctx_p 	  = ((struct dosync_arg *)arg_gp)->ctx_p;
 	indexes_t *indexes_p 	  = ((struct dosync_arg *)arg_gp)->indexes_p;
 	queue_id_t queue_id	  = (queue_id_t)((struct dosync_arg *)arg_gp)->data;
 
 	debug(3, "queue_id == %i.", queue_id);
 
-	if((glob_p->listoutdir == NULL) && (!(glob_p->flags[MODE]==MODE_SO))) {
+	if((ctx_p->listoutdir == NULL) && (!(ctx_p->flags[MODE]==MODE_SO))) {
 		debug(3, "calling sync_dosync()");
 		int ret;
-		if((ret=sync_dosync(fpath, evinfo->evmask, glob_p, indexes_p))) {
+		if((ret=sync_dosync(fpath, evinfo->evmask, ctx_p, indexes_p))) {
 			error("unable to sync \"%s\" (evmask %i).", fpath, evinfo->evmask);
 			exit(ret);	// TODO: remove this from here
 		}
@@ -1754,7 +1754,7 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 
 			indexes_removefromqueue(indexes_p, fpath, _queue_id);
 			if(!indexes_queuelen(indexes_p, _queue_id))
-				glob_p->_queues[_queue_id].stime = 0;
+				ctx_p->_queues[_queue_id].stime = 0;
 		}
 		_queue_id++;
 	}
@@ -1767,13 +1767,13 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 	return;
 }
 
-int sync_idle_dosync_collectedevents_cleanup(glob_t *glob_p, char **argv) {
-	if(glob_p->flags[DONTUNLINK]) 
+int sync_idle_dosync_collectedevents_cleanup(ctx_t *ctx_p, char **argv) {
+	if(ctx_p->flags[DONTUNLINK]) 
 		return 0;
 
 	debug(3, "thread %p", pthread_self());
 
-	if(glob_p->flags[MODE] == MODE_RSYNCDIRECT) {
+	if(ctx_p->flags[MODE] == MODE_RSYNCDIRECT) {
 		int ret0, ret1;
 		if(argv[5] == NULL) {
 			error("Unexpected *argv[] end.");
@@ -1783,7 +1783,7 @@ int sync_idle_dosync_collectedevents_cleanup(glob_t *glob_p, char **argv) {
 		debug(3, "unlink()-ing \"%s\"", argv[5]);
 		ret0 = unlink(argv[5]);
 
-		if(glob_p->flags[RSYNCPREFERINCLUDE])
+		if(ctx_p->flags[RSYNCPREFERINCLUDE])
 			return ret0;
 
 		if(argv[7] == NULL) {
@@ -1806,11 +1806,11 @@ int sync_idle_dosync_collectedevents_cleanup(glob_t *glob_p, char **argv) {
 	debug(3, "unlink()-ing \"%s\"", argv[3]);
 	ret0 = unlink(argv[3]);
 
-	if(glob_p->flags[MODE] == MODE_RSYNCSHELL) {
+	if(ctx_p->flags[MODE] == MODE_RSYNCSHELL) {
 		int ret1;
 
 		// There's no exclude file-list if "--rsyncpreferinclude" is enabled, so return
-		if(glob_p->flags[RSYNCPREFERINCLUDE])
+		if(ctx_p->flags[RSYNCPREFERINCLUDE])
 			return ret0;
 
 		if(argv[4] == NULL) 
@@ -1828,13 +1828,13 @@ int sync_idle_dosync_collectedevents_cleanup(glob_t *glob_p, char **argv) {
 	return ret0;
 }
 
-int sync_idle_dosync_collectedevents_aggrqueue(queue_id_t queue_id, glob_t *glob_p, indexes_t *indexes_p, struct dosync_arg *dosync_arg) {
+int sync_idle_dosync_collectedevents_aggrqueue(queue_id_t queue_id, ctx_t *ctx_p, indexes_t *indexes_p, struct dosync_arg *dosync_arg) {
 //	char *buf, *fpath;
 	time_t tm = time(NULL);
 
-	queueinfo_t *queueinfo = &glob_p->_queues[queue_id];
+	queueinfo_t *queueinfo = &ctx_p->_queues[queue_id];
 
-	if((queueinfo->stime + queueinfo->collectdelay > tm) && (queueinfo->collectdelay != COLLECTDELAY_INSTANT) && (!glob_p->flags[EXITONNOEVENTS])) {
+	if((queueinfo->stime + queueinfo->collectdelay > tm) && (queueinfo->collectdelay != COLLECTDELAY_INSTANT) && (!ctx_p->flags[EXITONNOEVENTS])) {
 		debug(3, "sync_idle_dosync_collectedevents_procqueue(%i, ...): too early (%i + %i > %i).", queue_id, queueinfo->stime, queueinfo->collectdelay, tm);
 		return 0;
 	}
@@ -1852,7 +1852,7 @@ int sync_idle_dosync_collectedevents_aggrqueue(queue_id_t queue_id, glob_t *glob
 	g_hash_table_foreach(indexes_p->fpath2ei_coll_ht[queue_id], _sync_idle_dosync_collectedevents, dosync_arg);
 	g_hash_table_remove_all(indexes_p->fpath2ei_coll_ht[queue_id]);
 
-	if(!glob_p->flags[RSYNCPREFERINCLUDE]) {
+	if(!ctx_p->flags[RSYNCPREFERINCLUDE]) {
 		g_hash_table_foreach(indexes_p->exc_fpath_coll_ht[queue_id], _sync_idle_dosync_collectedexcludes, dosync_arg);
 		g_hash_table_remove_all(indexes_p->exc_fpath_coll_ht[queue_id]);
 	}
@@ -1860,14 +1860,14 @@ int sync_idle_dosync_collectedevents_aggrqueue(queue_id_t queue_id, glob_t *glob
 	return 0;
 }
 
-int sync_idle_dosync_collectedevents_uniqfname(glob_t *glob_p, char *fpath, char *name) {
+int sync_idle_dosync_collectedevents_uniqfname(ctx_t *ctx_p, char *fpath, char *name) {
 	pid_t pid = getpid();
 	time_t tm = time(NULL);
 	struct stat64 stat64;
 
 	int counter = 0;
 	do {
-		snprintf(fpath, PATH_MAX, "%s/.clsync-%s.%u.%lu.%lu.%u", glob_p->listoutdir, name, pid, (long)pthread_self(), (unsigned long)tm, rand());	// To be unique
+		snprintf(fpath, PATH_MAX, "%s/.clsync-%s.%u.%lu.%lu.%u", ctx_p->listoutdir, name, pid, (long)pthread_self(), (unsigned long)tm, rand());	// To be unique
 		lstat64(fpath, &stat64);
 		if(counter++ > COUNTER_LIMIT) {
 			error("Cannot file unused filename for list-file. The last try was \"%s\".", fpath);
@@ -1882,10 +1882,10 @@ int sync_idle_dosync_collectedevents_uniqfname(glob_t *glob_p, char *fpath, char
 int sync_idle_dosync_collectedevents_listcreate(struct dosync_arg *dosync_arg_p, char *name) {
 	debug(3, "Creating %s file", name);
 	char *fpath = dosync_arg_p->outf_path;
-	glob_t *glob_p = dosync_arg_p->glob_p;
+	ctx_t *ctx_p = dosync_arg_p->ctx_p;
 
 	int ret;
-	if((ret=sync_idle_dosync_collectedevents_uniqfname(glob_p, fpath, name))) {
+	if((ret=sync_idle_dosync_collectedevents_uniqfname(ctx_p, fpath, name))) {
 		error("sync_idle_dosync_collectedevents_listcreate: Cannot get unique file name.");
 		return ret;
 	}
@@ -2071,7 +2071,7 @@ gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, g
 	char *fpath		  = (char *)fpath_gp;
 	FILE *excf		  = dosync_arg_p->outf;
 	eventinfo_flags_t flags	  = GPOINTER_TO_INT(flags_gp);
-//	glob_t *glob_p 	  = dosync_arg_p->glob_p;
+//	ctx_t *ctx_p 	  = dosync_arg_p->ctx_p;
 //	indexes_t *indexes_p	  = dosync_arg_p->indexes_p;
 	debug(3, "\"%s\"", fpath);
 
@@ -2101,79 +2101,79 @@ gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, g
 }
 
 int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p) {
-	glob_t *glob_p = dosync_arg_p->glob_p;
+	ctx_t *ctx_p = dosync_arg_p->ctx_p;
 	indexes_t *indexes_p = dosync_arg_p->indexes_p;
 
-	debug(3, "Committing the file (flags[MODE] == %i)", glob_p->flags[MODE]);
+	debug(3, "Committing the file (flags[MODE] == %i)", ctx_p->flags[MODE]);
 
 	if(
-		(glob_p->flags[MODE] == MODE_RSYNCDIRECT)	|| 
-		(glob_p->flags[MODE] == MODE_RSYNCSHELL)	||
-		(glob_p->flags[MODE] == MODE_RSYNCSO)
+		(ctx_p->flags[MODE] == MODE_RSYNCDIRECT)	|| 
+		(ctx_p->flags[MODE] == MODE_RSYNCSHELL)	||
+		(ctx_p->flags[MODE] == MODE_RSYNCSO)
 	)
 		g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, rsync_aggrout, dosync_arg_p);
 
-	if(glob_p->flags[MODE] != MODE_SO) {
+	if(ctx_p->flags[MODE] != MODE_SO) {
 		fclose(dosync_arg_p->outf);
 		dosync_arg_p->outf = NULL;
 	}
 
 	if(dosync_arg_p->evcount > 0) {
 /*
-		if(glob_p->flags[PTHREAD])
-			return sync_exec_thread(glob_p,
+		if(ctx_p->flags[PTHREAD])
+			return sync_exec_thread(ctx_p,
 						sync_idle_dosync_collectedevents_cleanup,
-						glob_p->handlerfpath,
-						glob_p->flags[RSYNC]?"rsynclist":"synclist",
-						glob_p->label,
+						ctx_p->handlerfpath,
+						ctx_p->flags[RSYNC]?"rsynclist":"synclist",
+						ctx_p->label,
 						dosync_arg_p->outf_path,
 						*(dosync_arg_p->outf_path)?dosync_arg_p->outf_path:NULL,
 						NULL);
 		else
-			return sync_exec       (glob_p,
+			return sync_exec       (ctx_p,
 						sync_idle_dosync_collectedevents_cleanup,
-						glob_p->handlerfpath,
-						glob_p->flags[RSYNC]?"rsynclist":"synclist", 
-						glob_p->label,
+						ctx_p->handlerfpath,
+						ctx_p->flags[RSYNC]?"rsynclist":"synclist", 
+						ctx_p->label,
 						dosync_arg_p->outf_path,
 						*(dosync_arg_p->outf_path)?dosync_arg_p->outf_path:NULL,
 						NULL);*/
-		debug(3, "%s [%s] (%p) -> %s [%s]", glob_p->watchdir, glob_p->watchdirwslash, glob_p->watchdirwslash, 
-								glob_p->destdir?glob_p->destdir:"", glob_p->destdirwslash?glob_p->destdirwslash:"");
+		debug(3, "%s [%s] (%p) -> %s [%s]", ctx_p->watchdir, ctx_p->watchdirwslash, ctx_p->watchdirwslash, 
+								ctx_p->destdir?ctx_p->destdir:"", ctx_p->destdirwslash?ctx_p->destdirwslash:"");
 
-		if(glob_p->flags[MODE] == MODE_SO) {
+		if(ctx_p->flags[MODE] == MODE_SO) {
 			api_eventinfo_t *ei = dosync_arg_p->api_ei;
-			return so_call_sync(glob_p, indexes_p, dosync_arg_p->evcount, ei);
+			return so_call_sync(ctx_p, indexes_p, dosync_arg_p->evcount, ei);
 		}
 
-		if(glob_p->flags[MODE] == MODE_RSYNCSO) 
+		if(ctx_p->flags[MODE] == MODE_RSYNCSO) 
 			return so_call_rsync(
-				glob_p, 
+				ctx_p, 
 				indexes_p, 
 				dosync_arg_p->outf_path, 
 				*(dosync_arg_p->excf_path) ? dosync_arg_p->excf_path : NULL);
 
-		if(glob_p->flags[MODE] == MODE_RSYNCDIRECT)
-			return SYNC_EXEC(glob_p, indexes_p,
+		if(ctx_p->flags[MODE] == MODE_RSYNCDIRECT)
+			return SYNC_EXEC(ctx_p, indexes_p,
 				sync_idle_dosync_collectedevents_cleanup,
-				glob_p->handlerfpath,
+				ctx_p->handlerfpath,
 				"--inplace",
 				"-aH", 
 				"--delete-before",
 				*(dosync_arg_p->excf_path) ? "--exclude-from"		: "--include-from",
 				*(dosync_arg_p->excf_path) ? dosync_arg_p->excf_path	: dosync_arg_p->outf_path,
 				*(dosync_arg_p->excf_path) ? "--include-from"		: "--exclude=*",
-				*(dosync_arg_p->excf_path) ? dosync_arg_p->outf_path	: glob_p->watchdirwslash,
-				*(dosync_arg_p->excf_path) ? "--exclude=*"		: glob_p->destdirwslash,
-				*(dosync_arg_p->excf_path) ? glob_p->watchdirwslash	: NULL,
-				*(dosync_arg_p->excf_path) ? glob_p->destdirwslash	: NULL,
+				*(dosync_arg_p->excf_path) ? dosync_arg_p->outf_path	: ctx_p->watchdirwslash,
+				*(dosync_arg_p->excf_path) ? "--exclude=*"		: ctx_p->destdirwslash,
+				*(dosync_arg_p->excf_path) ? ctx_p->watchdirwslash	: NULL,
+				*(dosync_arg_p->excf_path) ? ctx_p->destdirwslash	: NULL,
 				NULL);
 
-		return SYNC_EXEC(glob_p, indexes_p,
+		return SYNC_EXEC(ctx_p, indexes_p,
 			sync_idle_dosync_collectedevents_cleanup,
-			glob_p->handlerfpath,
-			glob_p->flags[MODE]==MODE_RSYNCSHELL?"rsynclist":"synclist", 
-			glob_p->label,
+			ctx_p->handlerfpath,
+			ctx_p->flags[MODE]==MODE_RSYNCSHELL?"rsynclist":"synclist", 
+			ctx_p->label,
 			dosync_arg_p->outf_path,
 			*(dosync_arg_p->excf_path)?dosync_arg_p->excf_path:NULL,
 			NULL);
@@ -2192,7 +2192,7 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 	eventinfo_t *evinfo	   =  (eventinfo_t *)evinfo_gp;
 	//int *evcount_p		  =&dosync_arg_p->evcount;
 	FILE *outf		   =  dosync_arg_p->outf;
-	glob_t *glob_p 	   =  dosync_arg_p->glob_p;
+	ctx_t *ctx_p 	   =  dosync_arg_p->ctx_p;
 	int *linescount_p	   = &dosync_arg_p->linescount;
 	indexes_t *indexes_p 	   =  dosync_arg_p->indexes_p;
 	api_eventinfo_t **api_ei_p = &dosync_arg_p->api_ei;
@@ -2205,7 +2205,7 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 		);
 
 	// so-module case:
-	if(glob_p->flags[MODE] == MODE_SO) {
+	if(ctx_p->flags[MODE] == MODE_SO) {
 		api_eventinfo_t *ei = &(*api_ei_p)[(*api_ei_count_p)++];
 		ei->evmask      = evinfo->evmask;
 		ei->flags       = evinfo->flags;
@@ -2217,25 +2217,25 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 	}
 
 	if(!(
-		(glob_p->flags[MODE] == MODE_RSYNCSHELL)	|| 
-		(glob_p->flags[MODE] == MODE_RSYNCDIRECT)	||
-		(glob_p->flags[MODE] == MODE_RSYNCSO)
+		(ctx_p->flags[MODE] == MODE_RSYNCSHELL)	|| 
+		(ctx_p->flags[MODE] == MODE_RSYNCDIRECT)	||
+		(ctx_p->flags[MODE] == MODE_RSYNCSO)
 	)) {
 		// non-RSYNC case
-		if(glob_p->flags[SYNCLISTSIMPLIFY])
+		if(ctx_p->flags[SYNCLISTSIMPLIFY])
 			fprintf(outf, "%s", fpath);
 		else 
-			fprintf(outf, "sync %s %i %s", glob_p->label, evinfo->evmask, fpath);
+			fprintf(outf, "sync %s %i %s", ctx_p->label, evinfo->evmask, fpath);
 		return;
 	}
 
 	// RSYNC case
-	if(glob_p->rsyncinclimit && (*linescount_p >= glob_p->rsyncinclimit)) {
+	if(ctx_p->rsyncinclimit && (*linescount_p >= ctx_p->rsyncinclimit)) {
 		int ret;
 
 		// TODO: optimize this out {
 		char newexc_path[PATH_MAX+1];
-		if((ret=sync_idle_dosync_collectedevents_uniqfname(glob_p, newexc_path, "exclist"))) {
+		if((ret=sync_idle_dosync_collectedevents_uniqfname(ctx_p, newexc_path, "exclist"))) {
 			error("Cannot get unique file name.");
 			exit(ret);
 		}
@@ -2278,22 +2278,22 @@ static inline void setenv_iteration(uint32_t iteration_num)
 	setenv("CLSYNC_ITERATION", iterations, 1);
 }
 
-int sync_idle_dosync_collectedevents(glob_t *glob_p, indexes_t *indexes_p) {
+int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
 	debug(3, "sync_idle_dosync_collectedevents()");
 	struct dosync_arg dosync_arg = {0};
 
-	dosync_arg.glob_p 	= glob_p;
+	dosync_arg.ctx_p 	= ctx_p;
 	dosync_arg.indexes_p	= indexes_p;
 
 	char isrsyncpreferexclude = 
 		(
-			(glob_p->flags[MODE] == MODE_RSYNCDIRECT)	||
-			(glob_p->flags[MODE] == MODE_RSYNCSHELL)	||
-			(glob_p->flags[MODE] == MODE_RSYNCSO)
-		) && (!glob_p->flags[RSYNCPREFERINCLUDE]);
+			(ctx_p->flags[MODE] == MODE_RSYNCDIRECT)	||
+			(ctx_p->flags[MODE] == MODE_RSYNCSHELL)	||
+			(ctx_p->flags[MODE] == MODE_RSYNCSO)
+		) && (!ctx_p->flags[RSYNCPREFERINCLUDE]);
 
 #ifdef PARANOID
-	if(glob_p->listoutdir != NULL) {
+	if(ctx_p->listoutdir != NULL) {
 		g_hash_table_remove_all(indexes_p->fpath2ei_ht);
 		if(isrsyncpreferexclude)
 			g_hash_table_remove_all(indexes_p->exc_fpath_ht);
@@ -2301,15 +2301,15 @@ int sync_idle_dosync_collectedevents(glob_t *glob_p, indexes_t *indexes_p) {
 #endif
 
 	// Setting the time to sync not before it:
-	glob_p->synctime = time(NULL) + glob_p->syncdelay;
-	debug(3, "Next sync will be not before: %u", glob_p->synctime);
+	ctx_p->synctime = time(NULL) + ctx_p->syncdelay;
+	debug(3, "Next sync will be not before: %u", ctx_p->synctime);
 
 	int queue_id=0;
 	while(queue_id < QUEUE_MAX) {
 		int ret;
 		queue_id_t *queue_id_p = (queue_id_t *)&dosync_arg.data;
 		*queue_id_p = queue_id;
-		ret = sync_idle_dosync_collectedevents_aggrqueue(queue_id, glob_p, indexes_p, &dosync_arg);
+		ret = sync_idle_dosync_collectedevents_aggrqueue(queue_id, ctx_p, indexes_p, &dosync_arg);
 		if(ret) {
 			error("Got error while processing queue #%i\n.", queue_id);
 			g_hash_table_remove_all(indexes_p->fpath2ei_ht);
@@ -2326,16 +2326,16 @@ int sync_idle_dosync_collectedevents(glob_t *glob_p, indexes_t *indexes_p) {
 		return 0;
 	}
 
-	if(glob_p->flags[MODE] == MODE_SO) {
+	if(ctx_p->flags[MODE] == MODE_SO) {
 		//dosync_arg.evcount = g_hash_table_size(indexes_p->fpath2ei_ht);
 		debug(3, "There's %i events. Processing.", dosync_arg.evcount);
 		dosync_arg.api_ei = (api_eventinfo_t *)xmalloc(dosync_arg.evcount * sizeof(*dosync_arg.api_ei));
 	}
 
-	if((glob_p->listoutdir != NULL) || (glob_p->flags[MODE] == MODE_SO)) {
+	if((ctx_p->listoutdir != NULL) || (ctx_p->flags[MODE] == MODE_SO)) {
 		int ret;
 
-		if(!(glob_p->flags[MODE]==MODE_SO)) {
+		if(!(ctx_p->flags[MODE]==MODE_SO)) {
 			*(dosync_arg.excf_path) = 0x00;
 			if(isrsyncpreferexclude) {
 				if((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "exclist"))) {
@@ -2374,13 +2374,13 @@ int sync_idle_dosync_collectedevents(glob_t *glob_p, indexes_t *indexes_p) {
 		g_hash_table_remove_all(indexes_p->fpath2ei_ht);
 	}
 
-	if(!glob_p->flags[PTHREAD]) {
-		if(glob_p->iteration_num < ~0) // ~0 is the max value for unsigned variables
-			glob_p->iteration_num++;
-		setenv_iteration(glob_p->iteration_num); 
+	if(!ctx_p->flags[PTHREAD]) {
+		if(ctx_p->iteration_num < ~0) // ~0 is the max value for unsigned variables
+			ctx_p->iteration_num++;
+		setenv_iteration(ctx_p->iteration_num); 
 
 		debug(3, "next iteration: %u/%u", 
-			glob_p->iteration_num, glob_p->flags[MAXITERATIONS]);
+			ctx_p->iteration_num, ctx_p->flags[MAXITERATIONS]);
 	}
 
 	return 0;
@@ -2407,18 +2407,18 @@ int apievinfo2rsynclist(indexes_t *indexes_p, FILE *listfile, int n, api_eventin
 	return 0;
 }
 
-int sync_idle(int notify_d, glob_t *glob_p, indexes_t *indexes_p) {
+int sync_idle(int notify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 
 	// Collecting garbage
 
-	int ret=thread_gc(glob_p);
+	int ret=thread_gc(ctx_p);
 	if(ret) return ret;
 
 	// Checking if we can sync
 
-	if(glob_p->flags[STANDBYFILE]) {
+	if(ctx_p->flags[STANDBYFILE]) {
 		struct stat st;
-		if(!stat(glob_p->standbyfile, &st)) {
+		if(!stat(ctx_p->standbyfile, &st)) {
 			debug(1, "Found standby file. Holding over syncs. Sleeping "XTOSTR(SLEEP_SECONDS)" second.");
 			sleep(SLEEP_SECONDS);
 			return 0;
@@ -2434,7 +2434,7 @@ int sync_idle(int notify_d, glob_t *glob_p, indexes_t *indexes_p) {
 	if(ret) return ret;
 #endif
 
-	ret = sync_idle_dosync_collectedevents(glob_p, indexes_p);
+	ret = sync_idle_dosync_collectedevents(ctx_p, indexes_p);
 	if(ret) return ret;
 
 #ifdef CLUSTER_SUPPORT
@@ -2446,7 +2446,7 @@ int sync_idle(int notify_d, glob_t *glob_p, indexes_t *indexes_p) {
 }
 
 #ifdef FANOTIFY_SUPPORT
-int sync_fanotify_loop(int fanotify_d, glob_t *glob_p, indexes_t *indexes_p) {
+int sync_fanotify_loop(int fanotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 	struct fanotify_event_metadata buf[BUFSIZ/sizeof(struct fanotify_event_metadata) + 1];
 	int state = STATE_RUNNING;
 	state_p = &state;
@@ -2464,7 +2464,7 @@ int sync_fanotify_loop(int fanotify_d, glob_t *glob_p, indexes_t *indexes_p) {
 			if (metadata->fd != FAN_NOFD) {
 				if (metadata->fd >= 0) {
 					char *fpath = fd2fpath_malloc(metadata->fd);
-					sync_queuesync(fpath_rel, 0, glob_p, indexes_p, QUEUE_AUTO);
+					sync_queuesync(fpath_rel, 0, ctx_p, indexes_p, QUEUE_AUTO);
 					debug(2, "Event %i on \"%s\".", metadata->mask, fpath);
 					free(fpath);
 				}
@@ -2473,7 +2473,7 @@ int sync_fanotify_loop(int fanotify_d, glob_t *glob_p, indexes_t *indexes_p) {
 			metadata = FAN_EVENT_NEXT(metadata, len);
 		}
 		int ret;
-		if((ret=sync_idle(fanotify_d, glob_p, indexes_p))) {
+		if((ret=sync_idle(fanotify_d, ctx_p, indexes_p))) {
 			error("got error while sync_idle().");
 			return ret;
 		}
@@ -2482,7 +2482,7 @@ int sync_fanotify_loop(int fanotify_d, glob_t *glob_p, indexes_t *indexes_p) {
 }
 #endif
 
-int sync_inotify_wait(int inotify_d, glob_t *glob_p, indexes_t *indexes_p) {
+int sync_inotify_wait(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 	static struct timeval tv;
 	time_t tm = time(NULL);
 	long delay = ((unsigned long)~0 >> 1);
@@ -2500,7 +2500,7 @@ int sync_inotify_wait(int inotify_d, glob_t *glob_p, indexes_t *indexes_p) {
 
 	long queue_id = 0;
 	while(queue_id < QUEUE_MAX) {
-		queueinfo_t *queueinfo = &glob_p->_queues[queue_id++];
+		queueinfo_t *queueinfo = &ctx_p->_queues[queue_id++];
 
 		if(!queueinfo->stime)
 			continue;
@@ -2512,20 +2512,20 @@ int sync_inotify_wait(int inotify_d, glob_t *glob_p, indexes_t *indexes_p) {
 
 		int qdelay = queueinfo->stime + queueinfo->collectdelay - tm;
 		debug(3, "queue #%i: %i %i %i -> %i", queue_id-1, queueinfo->stime, queueinfo->collectdelay, tm, qdelay);
-		if(qdelay < -(long)glob_p->syncdelay)
-			qdelay = -(long)glob_p->syncdelay;
+		if(qdelay < -(long)ctx_p->syncdelay)
+			qdelay = -(long)ctx_p->syncdelay;
 
 		delay = MIN(delay, qdelay);
 	}
 
-	long synctime_delay = ((long)glob_p->synctime) - ((long)tm);
+	long synctime_delay = ((long)ctx_p->synctime) - ((long)tm);
 	synctime_delay = synctime_delay > 0 ? synctime_delay : 0;
 
 	debug(3, "delay = MAX(%li, %li)", delay, synctime_delay);
 	delay = MAX(delay, synctime_delay);
 	delay = delay > 0 ? delay : 0;
 
-	if(glob_p->flags[PTHREAD]) {
+	if(ctx_p->flags[PTHREAD]) {
 		time_t _thread_nextexpiretime = thread_nextexpiretime();
 		debug(3, "thread_nextexpiretime == %i", _thread_nextexpiretime);
 		if(_thread_nextexpiretime) {
@@ -2540,7 +2540,7 @@ int sync_inotify_wait(int inotify_d, glob_t *glob_p, indexes_t *indexes_p) {
 	if((!delay) || (*state_p != STATE_RUNNING))
 		return 0;
 
-	if(glob_p->flags[EXITONNOEVENTS]) { // zero delay if "--exit-on-no-events" is set
+	if(ctx_p->flags[EXITONNOEVENTS]) { // zero delay if "--exit-on-no-events" is set
 		tv.tv_sec  = 0;
 		tv.tv_usec = 0;
 	} else {
@@ -2565,7 +2565,7 @@ int sync_inotify_wait(int inotify_d, glob_t *glob_p, indexes_t *indexes_p) {
 		ret   = 0;
 	}
 
-	if((glob_p->flags[EXITONNOEVENTS]) && (ret == 0)) // if not events and "--exit-on-no-events" is set
+	if((ctx_p->flags[EXITONNOEVENTS]) && (ret == 0)) // if not events and "--exit-on-no-events" is set
 		*state_p = STATE_EXIT;
 
 	return ret;
@@ -2574,10 +2574,10 @@ int sync_inotify_wait(int inotify_d, glob_t *glob_p, indexes_t *indexes_p) {
 void sync_inotify_handle_dosync(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
 	char *fpath_rel		  = (char *)fpath_gp;
 	eventinfo_t *evinfo	  = (eventinfo_t *)evinfo_gp;
-	glob_t *glob_p 	  = ((struct dosync_arg *)arg_gp)->glob_p;
+	ctx_t *ctx_p 	  = ((struct dosync_arg *)arg_gp)->ctx_p;
 	indexes_t *indexes_p 	  = ((struct dosync_arg *)arg_gp)->indexes_p;
 
-	sync_queuesync(fpath_rel, evinfo, glob_p, indexes_p, QUEUE_AUTO);
+	sync_queuesync(fpath_rel, evinfo, ctx_p, indexes_p, QUEUE_AUTO);
 
 	return;
 }
@@ -2588,7 +2588,7 @@ void sync_inotify_handle_dosync(gpointer fpath_gp, gpointer evinfo_gp, gpointer 
 	continue;\
 }
 
-int sync_inotify_handle(int inotify_d, glob_t *glob_p, indexes_t *indexes_p) {
+int sync_inotify_handle(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 	static struct timeval tv={0};
 
 	int count = 0;
@@ -2670,8 +2670,8 @@ int sync_inotify_handle(int inotify_d, glob_t *glob_p, indexes_t *indexes_p) {
 
 			// Checking by filter rules
 
-			path_rel = sync_path_abs2rel(glob_p, path_full, -1, &path_rel_len, path_rel);
-			ruleaction_t perm = rules_getperm(path_rel, st_mode, glob_p->rules, RA_WALK|RA_MONITOR);
+			path_rel = sync_path_abs2rel(ctx_p, path_full, -1, &path_rel_len, path_rel);
+			ruleaction_t perm = rules_getperm(path_rel, st_mode, ctx_p->rules, RA_WALK|RA_MONITOR);
 
 			if(!(perm&(RA_MONITOR|RA_WALK))) {
 				SYNC_INOTIFY_HANDLE_CONTINUE;
@@ -2686,13 +2686,13 @@ int sync_inotify_handle(int inotify_d, glob_t *glob_p, indexes_t *indexes_p) {
 					int ret;
 
 					if(perm & RA_WALK) {
-						ret = sync_mark_walk(inotify_d, glob_p, path_full, indexes_p);
+						ret = sync_mark_walk(inotify_d, ctx_p, path_full, indexes_p);
 						if(ret) {
 							debug(1, "Seems, that directory \"%s\" disappeared, while trying to mark it.", path_full);
 							SYNC_INOTIFY_HANDLE_CONTINUE;
 						}
 
-						ret = sync_initialsync(path_full, glob_p, indexes_p, INITSYNC_SUBDIR);
+						ret = sync_initialsync(path_full, ctx_p, indexes_p, INITSYNC_SUBDIR);
 						if(ret) {
 							error("Got error from sync_initialsync()");
 							errno = ret;
@@ -2752,7 +2752,7 @@ int sync_inotify_handle(int inotify_d, glob_t *glob_p, indexes_t *indexes_p) {
 		// Globally queueing captured events
 
 		struct dosync_arg dosync_arg;
-		dosync_arg.glob_p 	= glob_p;
+		dosync_arg.ctx_p 	= ctx_p;
 		dosync_arg.indexes_p	= indexes_p;
 
 		debug(3, "collected %i events per this time.", g_hash_table_size(indexes_p->fpath2ei_ht));
@@ -2773,7 +2773,7 @@ l_sync_inotify_handle_end:
 
 #define SYNC_INOTIFY_LOOP_IDLE {\
 	int ret;\
-	if((ret=sync_idle(inotify_d, glob_p, indexes_p))) {\
+	if((ret=sync_idle(inotify_d, ctx_p, indexes_p))) {\
 		error("got error while sync_idle().");\
 		return ret;\
 	}\
@@ -2785,8 +2785,8 @@ l_sync_inotify_handle_end:
 	continue;\
 }
 
-int sync_inotify_loop(int inotify_d, glob_t *glob_p, indexes_t *indexes_p) {
-	int state = glob_p->flags[SKIPINITSYNC] ? STATE_RUNNING : STATE_INITSYNC;
+int sync_inotify_loop(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
+	int state = ctx_p->flags[SKIPINITSYNC] ? STATE_RUNNING : STATE_INITSYNC;
 	int ret;
 	state_p = &state;
 
@@ -2796,30 +2796,30 @@ int sync_inotify_loop(int inotify_d, glob_t *glob_p, indexes_t *indexes_p) {
 		threadsinfo_t *threadsinfo_p = thread_getinfo();
 		pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 		debug(3, "current state is %i (iteration: %u/%u)",
-			state, glob_p->iteration_num, glob_p->flags[MAXITERATIONS]);
+			state, ctx_p->iteration_num, ctx_p->flags[MAXITERATIONS]);
 		events = 0;
 		switch(state) {
 			case STATE_PTHREAD_GC:
-				main_status_update(glob_p, state);
-				if(thread_gc(glob_p)) {
+				main_status_update(ctx_p, state);
+				if(thread_gc(ctx_p)) {
 					state=STATE_EXIT;
 					break;
 				}
 				state = STATE_RUNNING;
 				SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
 			case STATE_INITSYNC:
-				if(!glob_p->flags[PTHREAD]) {
-					glob_p->iteration_num = 0;
-					setenv_iteration(glob_p->iteration_num);
+				if(!ctx_p->flags[PTHREAD]) {
+					ctx_p->iteration_num = 0;
+					setenv_iteration(ctx_p->iteration_num);
 				}
 
-				main_status_update(glob_p, state);
+				main_status_update(ctx_p, state);
 				pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
 				pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
-				ret = sync_initialsync(glob_p->watchdir, glob_p, indexes_p, INITSYNC_FULL);
+				ret = sync_initialsync(ctx_p->watchdir, ctx_p, indexes_p, INITSYNC_FULL);
 				if(ret) return ret;
 
-				if(glob_p->flags[ONLYINITSYNC]) {
+				if(ctx_p->flags[ONLYINITSYNC]) {
 					SYNC_INOTIFY_LOOP_IDLE;
 					state = STATE_EXIT;
 					return ret;
@@ -2828,35 +2828,35 @@ int sync_inotify_loop(int inotify_d, glob_t *glob_p, indexes_t *indexes_p) {
 				state = STATE_RUNNING;
 				continue;
 			case STATE_RUNNING:
-				if(!glob_p->flags[PTHREAD])
-					if (glob_p->flags[MAXITERATIONS] &&
-					    glob_p->flags[MAXITERATIONS] <= glob_p->iteration_num)
+				if(!ctx_p->flags[PTHREAD])
+					if (ctx_p->flags[MAXITERATIONS] &&
+					    ctx_p->flags[MAXITERATIONS] <= ctx_p->iteration_num)
 							state = STATE_EXIT;
 
 				if(state == STATE_RUNNING)
-					events = sync_inotify_wait(inotify_d, glob_p, indexes_p);
+					events = sync_inotify_wait(inotify_d, ctx_p, indexes_p);
 
 				if(state != STATE_RUNNING)
 					SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
 				break;
 			case STATE_REHASH:
-				main_status_update(glob_p, state);
+				main_status_update(ctx_p, state);
 				debug(1, "rehashing.");
-				main_rehash(glob_p);
+				main_rehash(ctx_p);
 				state = STATE_RUNNING;
 				SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
 			case STATE_TERM:
-				main_status_update(glob_p, state);
+				main_status_update(ctx_p, state);
 				state = STATE_EXIT;
 			case STATE_EXIT:
-				main_status_update(glob_p, state);
+				main_status_update(ctx_p, state);
 				SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
 		}
 		pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
 		pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
 		if(events == 0) {
-			debug(2, "sync_inotify_wait(%i, glob_p, indexes_p) timed-out.", inotify_d);
+			debug(2, "sync_inotify_wait(%i, ctx_p, indexes_p) timed-out.", inotify_d);
 			SYNC_INOTIFY_LOOP_IDLE;
 			continue;	// Timeout
 		}
@@ -2865,14 +2865,14 @@ int sync_inotify_loop(int inotify_d, glob_t *glob_p, indexes_t *indexes_p) {
 			return errno;
 		}
 
-		int count=sync_inotify_handle(inotify_d, glob_p, indexes_p);
+		int count=sync_inotify_handle(inotify_d, ctx_p, indexes_p);
 		if(count  <= 0) {
 			error("Cannot handle with inotify events.");
 			return errno;
 		}
-		main_status_update(glob_p, state);
+		main_status_update(ctx_p, state);
 
-		if(glob_p->flags[EXITONNOEVENTS]) // clsync exits on no events, so sync_idle() is never called. We have to force the calling of it.
+		if(ctx_p->flags[EXITONNOEVENTS]) // clsync exits on no events, so sync_idle() is never called. We have to force the calling of it.
 			SYNC_INOTIFY_LOOP_IDLE;
 	}
 
@@ -2886,16 +2886,16 @@ int sync_inotify_loop(int inotify_d, glob_t *glob_p, indexes_t *indexes_p) {
 #endif
 }
 
-int sync_notify_loop(int notify_d, glob_t *glob_p, indexes_t *indexes_p) {
-	switch(glob_p->notifyengine) {
+int sync_notify_loop(int notify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
+	switch(ctx_p->notifyengine) {
 #ifdef FANOTIFY_SUPPORT
 		case NE_FANOTIFY:
-			return sync_fanotify_loop(notify_d, glob_p, indexes_p);
+			return sync_fanotify_loop(notify_d, ctx_p, indexes_p);
 #endif
 		case NE_INOTIFY:
-			return sync_inotify_loop (notify_d, glob_p, indexes_p);
+			return sync_inotify_loop (notify_d, ctx_p, indexes_p);
 	}
-	error("unknown notify-engine: %i", glob_p->notifyengine);
+	error("unknown notify-engine: %i", ctx_p->notifyengine);
 	errno = EINVAL;
 	return -1;
 }
@@ -2975,7 +2975,7 @@ l_sync_parent_interrupt_end:
 int *sync_sighandler_exitcode_p = NULL;
 int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 	int signal, ret;
-	glob_t *glob_p     = sighandler_arg_p->glob_p;
+	ctx_t *ctx_p     = sighandler_arg_p->ctx_p;
 //	indexes_t *indexes_p     = sighandler_arg_p->indexes_p;
 	pthread_t pthread_parent = sighandler_arg_p->pthread_parent;
 	sigset_t *sigset_p	 = sighandler_arg_p->sigset_p;
@@ -3017,8 +3017,8 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 			case SIGINT:
 				sync_switch_state(pthread_parent, STATE_TERM);
 				// bugfix of https://github.com/xaionaro/clsync/issues/44
-				while(glob_p->children) { // Killing children if non-pthread mode or/and (mode=="so" or mode=="rsyncso")
-					pid_t child_pid = glob_p->child_pid[--glob_p->children];
+				while(ctx_p->children) { // Killing children if non-pthread mode or/and (mode=="so" or mode=="rsyncso")
+					pid_t child_pid = ctx_p->child_pid[--ctx_p->children];
 					if(waitpid(child_pid, NULL, WNOHANG)>=0) {
 						debug(3, "Sending signal %u to child process with pid %u.",
 							signal, child_pid);
@@ -3069,7 +3069,7 @@ int sync_term(int exitcode) {
 	return pthread_kill(pthread_sighandler, SIGTERM);
 }
 
-int sync_run(glob_t *glob_p) {
+int sync_run(ctx_t *ctx_p) {
 	int ret, i;
 	sighandler_arg_t sighandler_arg = {0};
 
@@ -3086,7 +3086,7 @@ int sync_run(glob_t *glob_p) {
 	ret = pthread_sigmask(SIG_BLOCK, &sigset_sighandler, NULL);
 	if(ret)	return ret;
 
-	sighandler_arg.glob_p        =  glob_p;
+	sighandler_arg.ctx_p        =  ctx_p;
 //	sighandler_arg.indexes_p        = &indexes;
 	sighandler_arg.pthread_parent   =  pthread_self();
 	sighandler_arg.exitcode_p	= &ret;
@@ -3105,12 +3105,12 @@ int sync_run(glob_t *glob_p) {
 
 	// Creating hash tables
 
-	indexes_t indexes = {NULL};
-	indexes.wd2fpath_ht      = g_hash_table_new_full(g_direct_hash,	g_direct_equal,	0,    0);
-	indexes.fpath2wd_ht      = g_hash_table_new_full(g_str_hash,	g_str_equal,	free, 0);
-	indexes.fpath2ei_ht      = g_hash_table_new_full(g_str_hash,	g_str_equal,	free, free);
-	indexes.exc_fpath_ht     = g_hash_table_new_full(g_str_hash,	g_str_equal,	free, 0);
-	indexes.out_lines_aggr_ht= g_hash_table_new_full(g_str_hash,	g_str_equal,	free, 0);
+	indexes_t indexes         = {NULL};
+	indexes.wd2fpath_ht       = g_hash_table_new_full(g_direct_hash, g_direct_equal, 0,    0);
+	indexes.fpath2wd_ht       = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
+	indexes.fpath2ei_ht       = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, free);
+	indexes.exc_fpath_ht      = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
+	indexes.out_lines_aggr_ht = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
 	i=0;
 	while(i<QUEUE_MAX) {
 		indexes.fpath2ei_coll_ht[i]  = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, free);
@@ -3119,17 +3119,17 @@ int sync_run(glob_t *glob_p) {
 	}
 
 	// Loading dynamical libraries
-	if(glob_p->flags[MODE] == MODE_SO || glob_p->flags[MODE] == MODE_RSYNCSO) {
+	if(ctx_p->flags[MODE] == MODE_SO || ctx_p->flags[MODE] == MODE_RSYNCSO) {
 		/* security checks before dlopen */
 		struct stat so_stat;
-		if (stat(glob_p->handlerfpath, &so_stat) == -1) {
-			error("Can't stat shared object file \"%s\": %s", glob_p->handlerfpath, strerror(errno));
+		if (stat(ctx_p->handlerfpath, &so_stat) == -1) {
+			error("Can't stat shared object file \"%s\": %s", ctx_p->handlerfpath, strerror(errno));
 			return errno;
 		}
 		// allow normal files only (stat will follow symlinks)
 		if (!S_ISREG(so_stat.st_mode)) {
 			error("Shared object \"%s\" must be a regular file (or symlink to a regular file).",
-				glob_p->handlerfpath, so_stat.st_uid);
+				ctx_p->handlerfpath, so_stat.st_uid);
 			return EPERM;
 		}
 		// allowed owners are: root and real uid (who started clsync prior to setuid)
@@ -3146,7 +3146,7 @@ int sync_run(glob_t *glob_p) {
 			if (ret == -1 || so_stat.st_uid != cl_stat.st_uid) {
 				error("Wrong owner for shared object \"%s\": %i"
 					"Only root, clsync file owner and user started the program are allowed.",
-				glob_p->handlerfpath, so_stat.st_uid);
+				ctx_p->handlerfpath, so_stat.st_uid);
 				return EPERM;
 			}
 		}
@@ -3154,40 +3154,40 @@ int sync_run(glob_t *glob_p) {
 		if (so_stat.st_mode & (S_ISUID | S_ISGID | S_ISVTX | S_IWGRP | S_IWOTH)) {
 			error("Wrong shared object \"%s\" permissions: %#lo"
 				"Special bits, group and world writable are not allowed.",
-				glob_p->handlerfpath, so_stat.st_mode & 07777);
+				ctx_p->handlerfpath, so_stat.st_mode & 07777);
 			return EPERM;
 		}
 
 		// dlopen()
-		void *synchandler_handle = dlopen(glob_p->handlerfpath, RTLD_NOW|RTLD_LOCAL);
+		void *synchandler_handle = dlopen(ctx_p->handlerfpath, RTLD_NOW|RTLD_LOCAL);
 		if(synchandler_handle == NULL) {
-			error("Cannot load shared object file \"%s\": %s", glob_p->handlerfpath, dlerror());
+			error("Cannot load shared object file \"%s\": %s", ctx_p->handlerfpath, dlerror());
 			return -1;
 		}
 
 		// resolving init, sync and deinit functions' handlers
-		glob_p->handler_handle = synchandler_handle;
-		glob_p->handler_funct.init   = (api_funct_init)  dlsym(glob_p->handler_handle, API_PREFIX"init");
-		if(glob_p->flags[MODE] == MODE_RSYNCSO) {
-			glob_p->handler_funct.rsync  = (api_funct_rsync)dlsym(glob_p->handler_handle, API_PREFIX"rsync");
-			if(glob_p->handler_funct.rsync == NULL) {
+		ctx_p->handler_handle = synchandler_handle;
+		ctx_p->handler_funct.init   = (api_funct_init)  dlsym(ctx_p->handler_handle, API_PREFIX"init");
+		if(ctx_p->flags[MODE] == MODE_RSYNCSO) {
+			ctx_p->handler_funct.rsync  = (api_funct_rsync)dlsym(ctx_p->handler_handle, API_PREFIX"rsync");
+			if(ctx_p->handler_funct.rsync == NULL) {
 				char *dlerror_str = dlerror();
 				error("Cannot resolve symbol "API_PREFIX"rsync in shared object \"%s\": %s",
-					glob_p->handlerfpath, dlerror_str != NULL ? dlerror_str : "No error description returned.");
+					ctx_p->handlerfpath, dlerror_str != NULL ? dlerror_str : "No error description returned.");
 			}
 		} else {
-			glob_p->handler_funct.sync   =  (api_funct_sync)dlsym(glob_p->handler_handle, API_PREFIX"sync");
-			if(glob_p->handler_funct.sync == NULL) {
+			ctx_p->handler_funct.sync   =  (api_funct_sync)dlsym(ctx_p->handler_handle, API_PREFIX"sync");
+			if(ctx_p->handler_funct.sync == NULL) {
 				char *dlerror_str = dlerror();
 				error("Cannot resolve symbol "API_PREFIX"sync in shared object \"%s\": %s",
-					glob_p->handlerfpath, dlerror_str != NULL ? dlerror_str : "No error description returned.");
+					ctx_p->handlerfpath, dlerror_str != NULL ? dlerror_str : "No error description returned.");
 			}
 		}
-		glob_p->handler_funct.deinit = (api_funct_deinit)dlsym(glob_p->handler_handle, API_PREFIX"deinit");
+		ctx_p->handler_funct.deinit = (api_funct_deinit)dlsym(ctx_p->handler_handle, API_PREFIX"deinit");
 
 		// running init function
-		if(glob_p->handler_funct.init != NULL)
-			if((ret = glob_p->handler_funct.init(glob_p, &indexes))) {
+		if(ctx_p->handler_funct.init != NULL)
+			if((ret = ctx_p->handler_funct.init(ctx_p, &indexes))) {
 				error("Cannot init sync-handler module.");
 				return ret;
 			}
@@ -3196,8 +3196,8 @@ int sync_run(glob_t *glob_p) {
 #ifdef CLUSTER_SUPPORT
 	// Initializing cluster subsystem
 
-	if(glob_p->cluster_iface != NULL) {
-		ret = cluster_init(glob_p, &indexes);
+	if(ctx_p->cluster_iface != NULL) {
+		ret = cluster_init(ctx_p, &indexes);
 		if(ret) {
 			error("Cannot initialize cluster subsystem.");
 			cluster_deinit();
@@ -3208,39 +3208,39 @@ int sync_run(glob_t *glob_p) {
 
 	// Initializing rand-generator if it's required
 
-	if(glob_p->listoutdir)
+	if(ctx_p->listoutdir)
 		srand(time(NULL));
 
 	int notify_d=0;
 
 #ifdef ENABLE_SOCKET
 	// Creating control socket
-	if(glob_p->socketpath != NULL)
-		ret = control_run(glob_p);
+	if(ctx_p->socketpath != NULL)
+		ret = control_run(ctx_p);
 #endif
 
-	if(!glob_p->flags[ONLYINITSYNC]) {
+	if(!ctx_p->flags[ONLYINITSYNC]) {
 
 		// Initializing FS monitor kernel subsystem in this userspace application
 
-		notify_d = sync_notify_init(glob_p);
+		notify_d = sync_notify_init(ctx_p);
 		if(notify_d == -1) return errno;
 
 		// Marking file tree for FS monitor
-		ret = sync_mark_walk(notify_d, glob_p, glob_p->watchdir, &indexes);
+		ret = sync_mark_walk(notify_d, ctx_p, ctx_p->watchdir, &indexes);
 		if(ret) return ret;
 
 	}
 
 	// "Infinite" loop of processling the events
-	ret = sync_notify_loop(notify_d, glob_p, &indexes);
+	ret = sync_notify_loop(notify_d, ctx_p, &indexes);
 	if(ret) return ret;
 	debug(1, "sync_notify_loop() ended");
 
 #ifdef ENABLE_SOCKET
 	// Removing control socket
-	if(glob_p->socketpath != NULL)
-		control_cleanup(glob_p);
+	if(ctx_p->socketpath != NULL)
+		control_cleanup(ctx_p);
 #endif
 
 	debug(1, "killing sighandler");
@@ -3250,7 +3250,7 @@ int sync_run(glob_t *glob_p) {
 
 	// Killing children
 
-	thread_cleanup(glob_p);
+	thread_cleanup(ctx_p);
 
 	// Closing rest sockets and files
 
@@ -3258,17 +3258,17 @@ int sync_run(glob_t *glob_p) {
 	close(notify_d);
 
 	// Closing shared libraries
-	if(glob_p->flags[MODE] == MODE_SO) {
+	if(ctx_p->flags[MODE] == MODE_SO) {
 		int _ret;
-		if(glob_p->handler_funct.deinit != NULL)
-			if((_ret = glob_p->handler_funct.deinit())) {
+		if(ctx_p->handler_funct.deinit != NULL)
+			if((_ret = ctx_p->handler_funct.deinit())) {
 				error("Cannot deinit sync-handler module.");
 				if(!ret) ret = _ret;
 			}
 
-		if(dlclose(glob_p->handler_handle)) {
+		if(dlclose(ctx_p->handler_handle)) {
 			error("Cannot unload shared object file \"%s\": %s",
-				glob_p->handlerfpath, dlerror());
+				ctx_p->handlerfpath, dlerror());
 			if(!ret) ret = -1;
 		}
 	}
@@ -3292,7 +3292,7 @@ int sync_run(glob_t *glob_p) {
 
 	// Deinitializing cluster subsystem
 #ifdef CLUSTER_SUPPORT
-	if(glob_p->cluster_iface != NULL) {
+	if(ctx_p->cluster_iface != NULL) {
 		int _ret;
 		_ret = cluster_deinit();
 		if(_ret) {
@@ -3307,9 +3307,9 @@ int sync_run(glob_t *glob_p) {
 	sleep(1);
 #endif
 
-	if(glob_p->flags[EXITHOOK]) {
-		char *argv[] = { glob_p->exithookfile, glob_p->label, NULL};
-		exec_argv(argv, NULL DEBUGV(, 0));
+	if(ctx_p->flags[EXITHOOK]) {
+		char *argv[] = { ctx_p->exithookfile, ctx_p->label, NULL};
+		exec_argv(argv, NULL);
 	}
 	return ret;
 }
