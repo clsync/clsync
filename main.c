@@ -188,10 +188,10 @@ int parse_parameter(glob_t *glob_p, uint16_t param_id, char *arg, paramsource_t 
 			syntax();
 			break;
 		case CONFIGFILE:
-			glob_p->config_path  = arg;
+			glob_p->config_path  = *arg ? arg : NULL;
 			break;
 		case CONFIGBLOCK:
-			glob_p->config_block = arg;
+			glob_p->config_block = *arg ? arg : NULL;
 			break;
 		case GID:
 			glob_p->gid = (unsigned int)atol(arg);
@@ -556,10 +556,17 @@ int configs_parse(glob_t *glob_p) {
 
 	gkf = g_key_file_new();
 
-	if(glob_p->config_path) {
+	if (glob_p->config_path) {
+		GError *g_error = NULL;
+
+		if (!strcmp(glob_p->config_path, "/NULL/")) {
+			debug(2, "Empty path to config file. Don't read any of config files.");
+			return 0;
+		}
+
 		debug(1, "Trying config-file \"%s\"", glob_p->config_path);
-		if(!g_key_file_load_from_file(gkf, glob_p->config_path, G_KEY_FILE_NONE, NULL)) {
-			error("Cannot open/parse file \"%s\"", glob_p->config_path);
+		if (!g_key_file_load_from_file(gkf, glob_p->config_path, G_KEY_FILE_NONE, &g_error)) {
+			error("Cannot open/parse file \"%s\" (g_error #%u.%u: %s)", glob_p->config_path, g_error->domain, g_error->code, g_error->message);
 			g_key_file_free(gkf);
 			return -1;
 		} else
@@ -885,6 +892,7 @@ int becomedaemon() {
 			break;
 		default:
 			debug(1, "fork()-ed, pid is %i.", pid);
+			errno=0;
 			exit(0);
 	}
 	return 0;

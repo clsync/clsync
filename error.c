@@ -202,7 +202,8 @@ void _error(const char *const function_name, const char *fmt, ...) {
 	va_start(args, fmt);
 	voutfunct[method](fmt, args);
 	va_end(args);
-	outfunct[method](" (%i: %s)", errno, strerror(errno));
+	if (errno)
+		outfunct[method](" (%i: %s)", errno, strerror(errno));
 	flushfunct[method](LOG_ERR);
 
 	return;
