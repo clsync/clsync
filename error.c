@@ -34,12 +34,12 @@
 #include "common.h"
 
 static int zero     = 0;
-static int one      = 1;
+static int three    = 3;
 
 static int *outputmethod = &zero;
 static int *debug	 = &zero;
 static int *quiet	 = &zero;
-static int *verbose	 = &one;
+static int *verbose	 = &three;
 
 pthread_mutex_t error_mutex = PTHREAD_MUTEX_INITIALIZER;
 
