@@ -31,9 +31,6 @@ extern void _warning(const char *const function_name, const char *fmt, ...);
 extern void _info(const char *const function_name, const char *fmt, ...);
 #define info(...) 				_info(__FUNCTION__, __VA_ARGS__)
 
-extern void _info_short(const char *fmt, ...);
-#define info_short(...) 			_info_short(__VA_ARGS__)
-
 extern void _debug(int debug_level, const char *const function_name, const char *fmt, ...);
 #define debug(debug_level, ...)			_debug(debug_level, __FUNCTION__, __VA_ARGS__)
 

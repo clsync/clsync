@@ -140,11 +140,11 @@ static char *const status_descr[] = {
 };
 
 int syntax() {
-	info_short("possible glob:");
+	info("possible glob:");
 	int i=0;
 	while(long_glob[i].name != NULL) {
 		if(!(long_glob[i].val & OPTION_CONFIGONLY))
-			info_short("\t--%-24s%c%c%s", long_glob[i].name, 
+			info("\t--%-24s%c%c%s", long_glob[i].name, 
 				long_glob[i].val & OPTION_LONGOPTONLY ? ' ' : '-', 
 				long_glob[i].val & OPTION_LONGOPTONLY ? ' ' : long_glob[i].val, 
 				(long_glob[i].has_arg == required_argument ? " argument" : ""));
@@ -154,7 +154,7 @@ int syntax() {
 }
 
 int version() {
-	info_short(PROGRAM" v%i.%i"REVISION"\n\t"AUTHOR"", VERSION_MAJ, VERSION_MIN);
+	info(PROGRAM" v%i.%i"REVISION"\n\t"AUTHOR"", VERSION_MAJ, VERSION_MIN);
 	exit(0);
 }
 

@@ -198,7 +198,7 @@ void _error(const char *const function_name, const char *fmt, ...) {
 	pthread_t thread = pthread_self();
 	outputmethod_t method = *outputmethod;
 
-	outfunct[method]("Error (thread %p): %s(): ", thread, function_name);
+	outfunct[method](*debug ? "Error (thread %p): %s(): " : "Error: ", thread, function_name);
 	va_start(args, fmt);
 	voutfunct[method](fmt, args);
 	va_end(args);
@@ -220,26 +220,7 @@ void _info(const char *const function_name, const char *fmt, ...) {
 	pthread_t thread = pthread_self();
 	outputmethod_t method = *outputmethod;
 
-	outfunct[method]("Info (thread %p): %s(): ", thread, function_name);
-	va_start(args, fmt);
-	voutfunct[method](fmt, args);
-	va_end(args);
-	flushfunct[method](LOG_INFO);
-
-	return;
-}
-
-void _info_short(const char *fmt, ...) {
-	va_list args;
-
-	if (*quiet)
-		return;
-
-	if (*verbose < 3)
-		return;
-
-	outputmethod_t method = *outputmethod;
-
+	outfunct[method](*debug ? "Info (thread %p): %s(): " : "Info: ", thread, function_name);
 	va_start(args, fmt);
 	voutfunct[method](fmt, args);
 	va_end(args);
@@ -260,7 +241,7 @@ void _warning(const char *const function_name, const char *fmt, ...) {
 	pthread_t thread = pthread_self();
 	outputmethod_t method = *outputmethod;
 
-	outfunct[method]("Warning (thread %p): %s(): ", thread, function_name);
+	outfunct[method](*debug ? "Warning (thread %p): %s(): " : "Warning: ", thread, function_name);
 	va_start(args, fmt);
 	voutfunct[method](fmt, args);
 	va_end(args);
