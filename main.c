@@ -217,6 +217,11 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 		case THREADING: {
 			char *value, *arg_orig = arg;
 
+			if (!*arg) {
+				ctx_p->flags_set[param_id] = 0;
+				return 0;
+			}
+
 			threadingmode_t threadingmode = getsubopt(&arg, threading_modes, &value);
 			if(threadingmode == -1) {
 				errno = EINVAL;
@@ -224,9 +229,16 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 				return EINVAL;
 			}
 			ctx_p->flags[THREADING] = threadingmode;
+
+			break;
 		}
 		case OUTPUT_METHOD: {
 			char *value, *arg_orig = arg;
+
+			if (!*arg) {
+				ctx_p->flags_set[param_id] = 0;
+				return 0;
+			}
 
 			outputmethod_t outputmethod = getsubopt(&arg, output_methods, &value);
 			if(outputmethod == -1) {
@@ -235,6 +247,8 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 				return EINVAL;
 			}
 			ctx_p->flags[OUTPUT_METHOD] = outputmethod;
+
+			break;
 		}
 #ifdef CLUSTER_SUPPORT
 		case CLUSTERIFACE:
@@ -958,15 +972,16 @@ int main(int argc, char *argv[]) {
 	ctx.bfilethreshold			 = DEFAULT_BFILETHRESHOLD;
 	ctx.label				 = DEFAULT_LABEL;
 	ctx.rsyncinclimit			 = DEFAULT_RSYNCINCLUDELINESLIMIT;
-	ctx.synctimeout			 = DEFAULT_SYNCTIMEOUT;
+	ctx.synctimeout				 = DEFAULT_SYNCTIMEOUT;
 #ifdef CLUSTER_SUPPORT
-	ctx.cluster_hash_dl_min		 = DEFAULT_CLUSTERHDLMIN;
-	ctx.cluster_hash_dl_max		 = DEFAULT_CLUSTERHDLMAX;
-	ctx.cluster_scan_dl_max		 = DEFAULT_CLUSTERSDLMAX;
+	ctx.cluster_hash_dl_min			 = DEFAULT_CLUSTERHDLMIN;
+	ctx.cluster_hash_dl_max			 = DEFAULT_CLUSTERHDLMAX;
+	ctx.cluster_scan_dl_max			 = DEFAULT_CLUSTERSDLMAX;
 #endif
 	ctx.config_block			 = DEFAULT_CONFIG_BLOCK;
 	ctx.retries				 = DEFAULT_RETRIES;
 	ctx.flags[VERBOSE]			 = DEFAULT_VERBOSE;
+	ctx.flags[INOTIFY]			 = 1;
 
 	error_init(&ctx.flags[OUTPUT_METHOD], &ctx.flags[QUIET], &ctx.flags[VERBOSE], &ctx.flags[DEBUG]);
 

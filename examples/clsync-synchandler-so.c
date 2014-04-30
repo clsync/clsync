@@ -7,29 +7,31 @@
 
 // Optional headers:
 #include <clsync/configuration.h>
-#include <clsync/output.h>
-#include <clsync/options.h>
+#include <clsync/error.h>
+#include <clsync/ctx.h>
 
-struct options *options_p = NULL;
+struct ctx *ctx_p = NULL;
 struct indexes *indexes_p = NULL;
 
 char **argv      = NULL;
 size_t argv_size = 0;
 
 // Optional function, you can erase it.
-int clsyncapi_init(struct options *_options_p, struct indexes *_indexes_p) {
-	printf_d("clsyncapi_init(): Hello world! API version is %i\n", clsyncapi_getapiversion());
+int clsyncapi_init(struct ctx *_ctx_p, struct indexes *_indexes_p) {
+	debug(1, "Hello world! API version is %i", clsyncapi_getapiversion());
 
-	options_p = _options_p;
+	ctx_p = _ctx_p;
 	indexes_p = _indexes_p;
 
-	if(options_p->destdir == NULL) {
-		printf_e("Error: clsyncapi_init(): dest-dir is not set.\n");
+	if(ctx_p->destdir == NULL) {
+		errno = EINVAL;
+		error("dest-dir is not set.");
 		return EINVAL;
 	}
 
-	if(options_p->flags[PTHREAD]) {
-		printf_e("Error: clsyncapi_init(): this handler is not pthread-safe.\n");
+	if(ctx_p->flags[THREADING]) {
+		errno = EINVAL;
+		error("this handler is not pthread-safe.");
 		return EINVAL;
 	}
 
@@ -43,9 +45,9 @@ int clsyncapi_init(struct options *_options_p, struct indexes *_indexes_p) {
 }
 
 int clsyncapi_sync(int n, api_eventinfo_t *ei) {
-	printf_d("clsyncapi_sync(): n == %i\n", n, ei->path);
+	debug(1, "clsyncapi_sync(): n == %i", n, ei->path);
 
-	if(n+4 > argv_size) {	// "/bin/cp" + "-pf" + n paths + options_p->destdir + NULL  -->  n+4
+	if(n+4 > argv_size) {	// "/bin/cp" + "-pf" + n paths + ctx_p->destdir + NULL  -->  n+4
 		argv_size = n+4 + ALLOC_PORTION;
 		argv      = realloc(argv, argv_size * sizeof(char *));
 	}
@@ -54,7 +56,7 @@ int clsyncapi_sync(int n, api_eventinfo_t *ei) {
 	int ei_i=0;
 	while(ei_i < n) {
 		if(ei[ei_i].path_len > 0) {
-			printf_d("clsyncapi_sync(): ei[%i].path == \"%s\" (len == %i, type_o == %i, type_n == %i)\n",
+			debug(1, "ei[%i].path == \"%s\" (len == %i, type_o == %i, type_n == %i)",
 				ei_i, ei[ei_i].path, ei[ei_i].path_len, ei[ei_i].objtype_old, ei[ei_i].objtype_new);
 			argv[argv_i++] = (char *)ei[ei_i].path;
 		}
@@ -62,41 +64,41 @@ int clsyncapi_sync(int n, api_eventinfo_t *ei) {
 	}
 
 	if(argv_i == 2) {
-		printf_d("clsyncapi_sync(): Nothing to sync.\n");
+		debug(1, "Nothing to sync.");
 		return 0;
 	}
 
-	argv[argv_i++] = options_p->destdir;
+	argv[argv_i++] = ctx_p->destdir;
 	argv[argv_i++] = NULL;
 
 	// Forking
-	int pid = clsyncapi_fork(options_p);
+	int pid = clsyncapi_fork(ctx_p);
 	switch(pid) {
 		case -1: 
-			printf_e("Error: Cannot fork(): %s (errno: %i).\n", strerror(errno), errno);
+			error("Cannot fork().");
 			return errno;
 		case  0:
-			chdir(options_p->watchdir);
+			chdir(ctx_p->watchdir);
 			execvp(argv[0], (char *const *)argv);
 			return errno;
 	}
 
 	int status;
 	if(waitpid(pid, &status, 0) != pid) {
-		printf_e("Error: Cannot waitid(): %s (errno: %i).\n", strerror(errno), errno);
+		error("Cannot waitid().");
 		return errno;
 	}
 
 	// Return
 	int exitcode = WEXITSTATUS(status);
-	printf_d("clsyncapi_sync(): Execution completed with exitcode %i.\n", exitcode);
+	debug(1, "Execution completed with exitcode %i.", exitcode);
 
 	return exitcode;
 }
 
 // Optional function, you can erase it.
 int clsyncapi_deinit() {
-	printf_d("clsyncapi_deinit(): Goodbye cruel world!\n");
+	debug(1, "Goodbye cruel world!");
 
 	if(argv != NULL)
 		free(argv);

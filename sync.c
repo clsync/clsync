@@ -823,6 +823,10 @@ static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_ev
 
 static inline int so_call_rsync_finished(ctx_t *ctx_p, const char *inclistfile, const char *exclistfile) {
 	int ret0, ret1;
+	debug(5, "");
+	if(ctx_p->flags[DONTUNLINK]) 
+		return 0;
+
 	if(inclistfile == NULL) {
 		error("inclistfile == NULL.");
 		return EINVAL;
@@ -1129,9 +1133,6 @@ static inline int sync_exec(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackf
 int __sync_exec_thread(threadinfo_t *threadinfo_p) {
 	char **argv			= threadinfo_p->argv;
 	ctx_t *ctx_p		= threadinfo_p->ctx_p;
-#ifdef _DEBUG
-	int _rand=rand();
-#endif
 
 	debug(3, "thread_num == %i; threadinfo_p == %p; i_p->pthread %p; thread %p""", 
 			threadinfo_p->thread_num, threadinfo_p, threadinfo_p->pthread, pthread_self() );
@@ -1728,17 +1729,20 @@ static int sync_dosync(const char *fpath, uint32_t evmask, ctx_t *ctx_p, indexes
 
 static inline uint8_t monsystems_unifyevmask(ctx_t *ctx_p, uint32_t event_mask) {
 	int is_dir=0, is_created=0, is_deleted=0;
+	debug(4, "ctx_p->flags[INOTIFY] == %u", ctx_p->flags[INOTIFY]);
 
 	if (ctx_p->flags[INOTIFY]) {
 		is_dir     = event_mask &  IN_ISDIR;
 		is_created = event_mask & (IN_CREATE|IN_MOVED_TO);
 		is_deleted = event_mask & (IN_DELETE_SELF|IN_DELETE|IN_MOVED_FROM);
-	}
+	} else
+		critical("Unsupported FS monitor subsystem");
 
 	is_dir     = is_dir     != 0;
 	is_created = is_created != 0;
 	is_deleted = is_deleted != 0;
 
+	debug(4, "is_dir == %x; is_created == %x; is_deleted == %x", is_dir, is_created, is_deleted);
 	return
 			(is_dir     * UEM_DIR		) |
 			(is_created * UEM_CREATED	) |
@@ -1774,8 +1778,8 @@ int sync_prequeue_loadmark
 	}
 #endif
 #ifdef VERYPARANOID
-	if (path_full_p == NULL && path_rel_p == NULL) {
-		error("path_full == NULL && path_rel == NULL")
+	if (path_full == NULL && path_rel == NULL) {
+		error("path_full == NULL && path_rel == NULL");
 		return EINVAL;
 	}
 #endif
@@ -1803,6 +1807,8 @@ int sync_prequeue_loadmark
 	int is_dir	= event_mask_unified & UEM_DIR;
 	int is_created	= event_mask_unified & UEM_CREATED;
 	int is_deleted	= event_mask_unified & UEM_DELETED;
+
+	debug(4, "is_dir == %x; is_created == %x; is_deleted == %x", is_dir, is_created, is_deleted);
 
 	if (is_dir) {
 		if (is_created) {
@@ -2290,14 +2296,14 @@ l_rsync_escape_loop0_end:
 static inline int rsync_outline(FILE *outf, char *outline, eventinfo_flags_t flags) {
 	if(flags & EVIF_RECURSIVELY) {
 		debug(3, "Recursively \"%s\": Writing to rsynclist: \"%s/***\".", outline, outline);
-		fprintf(outf, "%s/***", outline);
+		fprintf(outf, "%s/***\n", outline);
 	} else
 	if(flags & EVIF_CONTENTRECURSIVELY) {
 		debug(3, "Content-recursively \"%s\": Writing to rsynclist: \"%s/**\".", outline, outline);
-		fprintf(outf, "%s/**", outline);
+		fprintf(outf, "%s/**\n", outline);
 	} else {
 		debug(3, "Non-recursively \"%s\": Writing to rsynclist: \"%s\".", outline, outline);
-		fprintf(outf, "%s", outline);
+		fprintf(outf, "%s\n", outline);
 	}
 
 	return 0;
@@ -2502,9 +2508,9 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 	)) {
 		// non-RSYNC case
 		if(ctx_p->flags[SYNCLISTSIMPLIFY])
-			fprintf(outf, "%s", fpath);
+			fprintf(outf, "%s\n", fpath);
 		else 
-			fprintf(outf, "sync %s %i %s", ctx_p->label, evinfo->evmask, fpath);
+			fprintf(outf, "sync %s %i %s\n", ctx_p->label, evinfo->evmask, fpath);
 		return;
 	}
 
@@ -2975,6 +2981,7 @@ l_sync_inotify_handle_end:
 
 #define SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK {\
 	pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);\
+	debug(4, "pthread_mutex_unlock()");\
 	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);\
 	continue;\
 }
@@ -2988,6 +2995,7 @@ int sync_inotify_loop(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 		int events;
 
 		threadsinfo_t *threadsinfo_p = thread_getinfo();
+		debug(4, "pthread_mutex_lock()");
 		pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 		debug(3, "current state is %i (iteration: %u/%u)",
 			state, ctx_p->iteration_num, ctx_p->flags[MAXITERATIONS]);
@@ -3095,12 +3103,12 @@ int sync_notify_loop(int notify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 }
 
 void sync_sig_int(int signal) {
-	debug(2, "sync_sig_int(%i): Thread %p", signal, pthread_self());
+	debug(2, "%i: Thread %p", signal, pthread_self());
 	return;
 }
 
 int sync_switch_state(pthread_t pthread_parent, int newstate) {
-	if(state_p == NULL) {
+	if (state_p == NULL) {
 		debug(3, "sync_switch_state(%p, %i), but state_p == NULL", pthread_parent, newstate);
 		return 0;
 	}
@@ -3109,11 +3117,11 @@ int sync_switch_state(pthread_t pthread_parent, int newstate) {
 
 	// Getting mutexes
 	threadsinfo_t *threadsinfo_p = thread_getinfo();
-	if(threadsinfo_p == NULL) {
+	if (threadsinfo_p == NULL) {
 		// If no mutexes, just change the state
 		goto l_sync_parent_interrupt_end;
 	}
-	if(!threadsinfo_p->mutex_init) {
+	if (!threadsinfo_p->mutex_init) {
 		// If no mutexes, just change the state
 		goto l_sync_parent_interrupt_end;
 	}
@@ -3121,26 +3129,29 @@ int sync_switch_state(pthread_t pthread_parent, int newstate) {
 	pthread_cond_t  *pthread_cond_state  = &threadsinfo_p->cond [PTHREAD_MUTEX_STATE];
 
 	// Locking all necessary mutexes
-	if(pthread_mutex_trylock(pthread_mutex_state) == EBUSY) {
-		while(1) {
-			struct timespec time_timeout;
-			clock_gettime(CLOCK_REALTIME, &time_timeout);
-			time_timeout.tv_sec++;
-	//		time_timeout.tv_sec  = now.tv_sec;
-
-			debug(3, "pthread_cond_timedwait() until %li.%li", time_timeout.tv_sec, time_timeout.tv_nsec);
-			if(pthread_cond_timedwait(pthread_cond_state, pthread_mutex_state, &time_timeout) != ETIMEDOUT)
-				break;
-			debug(3, "sending signal to interrupt blocking operations like select()-s and so on");
-			pthread_kill(pthread_parent, SIGUSR_BLOPINT);
+	debug(4, "while(pthread_mutex_trylock())");
+	while (pthread_mutex_trylock(pthread_mutex_state) == EBUSY) {
+		debug(3, "sending signal to interrupt blocking operations like select()-s and so on");
+		pthread_kill(pthread_parent, SIGUSR_BLOPINT);
 #ifdef VERYPARANOID
-			int i=0;
-			if(++i > KILL_TIMEOUT) {
-				error("Seems we got a deadlock.");
-				return EDEADLK;
-			}
-#endif
+		int i=0;
+		if (++i > KILL_TIMEOUT) {
+			error("Seems we got a deadlock.");
+			return EDEADLK;
 		}
+#endif
+
+#ifdef SYNC_SWITCHSTATE_COND_TIMEDWAIT // Hangs
+		struct timespec time_timeout;
+		clock_gettime(CLOCK_REALTIME, &time_timeout);
+		time_timeout.tv_sec++;
+//		time_timeout.tv_sec  = now.tv_sec;
+		debug(3, "pthread_cond_timedwait() until %li.%li", time_timeout.tv_sec, time_timeout.tv_nsec);
+		if (pthread_cond_timedwait(pthread_cond_state, pthread_mutex_state, &time_timeout) != ETIMEDOUT)
+			break;
+#else
+		sleep(1);	// TODO: replace this with pthread_cond_timedwait()
+#endif
 	}
 	// Changing the state
 
@@ -3151,10 +3162,12 @@ int sync_switch_state(pthread_t pthread_parent, int newstate) {
 #endif
 
 	// Unlocking mutexes
-	debug(3, "pthread_mutex_unlock(). New state is %i.", *state_p);
 
+	debug(4, "pthread_cond_broadcast(). New state is %i.", *state_p);
 	pthread_cond_broadcast(pthread_cond_state);
+	debug(4, "pthread_mutex_unlock()");
 	pthread_mutex_unlock(pthread_mutex_state);
+
 	return 0;
 
 l_sync_parent_interrupt_end:

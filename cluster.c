@@ -747,7 +747,7 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 
  int cluster_recv_proc(unsigned int _timeout) {
 	debug(3, "cluster_recv_proc(%i)", _timeout);
-	clustercmd_t *clustercmd_p;
+	clustercmd_t *clustercmd_p = NULL;
 	int ret;
 	unsigned int timeout = _timeout;
 	while((ret=cluster_recv(&clustercmd_p, &timeout))) {

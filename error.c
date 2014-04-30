@@ -176,6 +176,7 @@ void _critical(const char *const function_name, const char *fmt, ...) {
 			outfunct[method]("_critical(): Got error, but cannot print the backtrace. Current errno: %u: %s\n",
 				errno, strerror(errno));
 			flushfunct[method](LOG_CRIT);
+			pthread_mutex_unlock(&error_mutex);
 			exit(EXIT_FAILURE);
 		}
 
@@ -185,9 +186,9 @@ void _critical(const char *const function_name, const char *fmt, ...) {
 		}
 	}
 
+	pthread_mutex_unlock(&error_mutex);
 	exit(errno);
 
-	pthread_mutex_unlock(&error_mutex);
 	return;
 }
 

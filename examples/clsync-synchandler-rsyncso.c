@@ -7,66 +7,67 @@
 
 // Optional headers:
 #include <clsync/configuration.h>
-#include <clsync/output.h>
-#include <clsync/options.h>
+#include <clsync/error.h>
+#include <clsync/ctx.h>
 
-struct options *options_p = NULL;
+struct ctx *ctx_p         = NULL;
 struct indexes *indexes_p = NULL;
 
-char   *argv[10]   = {NULL};
+char   *argv[11]   = {NULL};
 
 // Optional function, you can erase it.
-int clsyncapi_init(struct options *_options_p, struct indexes *_indexes_p) {
-	printf_d("clsyncapi_init(): Hello world!\n");
+int clsyncapi_init(struct ctx *_ctx_p, struct indexes *_indexes_p) {
+	debug(1, "Hello world!");
 
-	options_p = _options_p;
+	ctx_p = _ctx_p;
 	indexes_p = _indexes_p;
 
-	if(options_p->destdir == NULL) {
-		printf_e("Error: clsyncapi_init(): dest-dir is not set.\n");
+	if(ctx_p->destdir == NULL) {
+		error("dest-dir is not set.");
 		return EINVAL;
 	}
 
-	if(options_p->flags[RSYNCPREFERINCLUDE]) {
-		printf_e("Error: clsync-synchandler-rsyncso.so cannot be used in conjunction with \"--rsync-prefer-include\" option.\n");
+	if(ctx_p->flags[RSYNCPREFERINCLUDE]) {
+		error("clsync-synchandler-rsyncso.so cannot be used in conjunction with \"--rsync-prefer-include\" option.");
 		return EINVAL;
 	}
 
-	if(options_p->flags[PTHREAD]) {
-		printf_e("Error: clsyncapi_init(): this handler is not pthread-safe.\n");
+	if(ctx_p->flags[THREADING]) {
+		error("this handler is not pthread-safe.");
 		return EINVAL;
 	}
 
 	argv[0] = "/usr/bin/rsync";
-	argv[1] = options_p->flags[DEBUG] >= 4 ? "-avvvvvvH" : "-aH";
+	argv[1] = ctx_p->flags[DEBUG] >= 4 ? "-avvvvvvH" : "-aH";
 	argv[2] = "--exclude-from";
 	argv[4] = "--include-from";
 	argv[6] = "--exclude=*";
-	argv[7] = options_p->watchdirwslash;
-	argv[8] = options_p->destdirwslash;
+	argv[7] = "--delete-before";
+	argv[8] = ctx_p->watchdirwslash;
+	argv[9] = ctx_p->destdirwslash;
 
 	return 0;
 }
 
 int clsyncapi_rsync(const char *inclistfile, const char *exclistfile) {
-	printf_d("clsyncapi_rsync(): inclistfile == \"%s\"; exclistfile == \"%s\"\n", inclistfile, exclistfile);
+	debug(1, "inclistfile == \"%s\"; exclistfile == \"%s\"", inclistfile, exclistfile);
 
 	argv[3] = (char *)exclistfile;
 	argv[5] = (char *)inclistfile;
 
-	if(options_p->flags[DEBUG] >= 3) {
+	if(ctx_p->flags[DEBUG] >= 3) {
 		int i=0;
 		while(argv[i] != NULL) {
-			printf_ddd("Debug3: clsyncapi_rsync(): argv[%i] == \"%s\"\n", i, argv[i]);
+			debug(3, "argv[%i] == \"%s\"", i, argv[i]);
 			i++;
 		}
 	}
 
 	// Forking
-	int pid = clsyncapi_fork(options_p);
+	int pid = clsyncapi_fork(ctx_p);
 	switch(pid) {
 		case -1: 
-			printf_e("Error: Cannot fork(): %s (errno: %i).\n", strerror(errno), errno);
+			error("Cannot fork().");
 			return errno;
 		case  0:
 			execvp(argv[0], (char *const *)argv);
@@ -75,20 +76,20 @@ int clsyncapi_rsync(const char *inclistfile, const char *exclistfile) {
 
 	int status;
 	if(waitpid(pid, &status, 0) != pid) {
-		printf_e("Error: Cannot waitid(): %s (errno: %i).\n", strerror(errno), errno);
+		error("Cannot waitid().");
 		return errno;
 	}
 
 	// Return
 	int exitcode = WEXITSTATUS(status);
-	printf_d("clsyncapi_rsync(): Execution completed with exitcode %i.\n", exitcode);
+	debug(1, "Execution completed with exitcode %i.", exitcode);
 
 	return exitcode;
 }
 
 // Optional function, you can erase it.
 int clsyncapi_deinit() {
-	printf_d("clsyncapi_deinit(): Goodbye cruel world!\n");
+	debug(1, "Goodbye cruel world!");
 
 	return 0;
 }
