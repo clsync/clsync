@@ -26,6 +26,7 @@
 #define OPTION_FLAGS		(1<<10)
 #define OPTION_LONGOPTONLY	(1<<9)
 #define OPTION_CONFIGONLY	(1<<8)
+#define NOTOPTION		(3<<8)
 enum flags_enum {
 	WATCHDIR	= 'W',
 	SYNCHANDLER	= 'S',
@@ -95,6 +96,9 @@ enum flags_enum {
 	MAXITERATIONS		= 15|OPTION_LONGOPTONLY,
 
 	IGNOREFAILURES		= 16|OPTION_LONGOPTONLY,
+
+// Not an options:
+	THREADINGLOCKED		=  0|NOTOPTION,
 };
 typedef enum flags_enum flags_t;
 

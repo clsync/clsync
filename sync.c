@@ -768,7 +768,7 @@ int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_eventinfo_t *ei) {
 	debug(2, "n == %i", n);
 
-	if (!ctx_p->flags[THREADING]) {
+	if (!ctx_p->flags[THREADING] || ctx_p->flags[THREADINGLOCKED]) {
 		int rc=0, ret=0, err=0;
 		int try_n=0, try_again;
 		do {
@@ -897,7 +897,7 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *inclistfile, const char *exclistfile) {
 	debug(2, "inclistfile == \"%s\"; exclistfile == \"%s\"", inclistfile, exclistfile);
 
-	if(!ctx_p->flags[THREADING]) {
+	if (!ctx_p->flags[THREADING] || ctx_p->flags[THREADINGLOCKED]) {
 		debug(3, "ctx_p->handler_funct.rsync == %p", ctx_p->handler_funct.rsync);
 
 		int rc=0, err=0;
@@ -959,7 +959,7 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 
 // === SYNC_EXEC() === {
 
-#define SYNC_EXEC(...) (ctx_p->flags[THREADING]?sync_exec_thread:sync_exec)(__VA_ARGS__)
+#define SYNC_EXEC(...) (ctx_p->flags[THREADING]&&!ctx_p->flags[THREADINGLOCKED]?sync_exec_thread:sync_exec)(__VA_ARGS__)
 
 
 #define _sync_exec_getargv(argv, firstarg, COPYARG) {\
@@ -1079,8 +1079,8 @@ pid_t clsyncapi_fork(ctx_t *ctx_p) {
 	return pid;
 }
 
-static inline int sync_exec(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callback, ...) {
-	debug(2, "sync_exec()");
+int sync_exec(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callback, ...) {
+	debug(2, "");
 
 	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
 	memset(argv, 0, sizeof(char *)*MAXARGUMENTS);
@@ -1102,7 +1102,7 @@ static inline int sync_exec(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackf
 
 		if ((err=exitcode_process(ctx_p, exitcode))) {
 			try_again = ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
-			warning("sync_exec(): Bad exitcode %i (errcode %i). %s.", exitcode, err, try_again?"Retrying":"Give up");
+			warning("Bad exitcode %i (errcode %i). %s.", exitcode, err, try_again?"Retrying":"Give up");
 			if (try_again) {
 				debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
 				sleep(ctx_p->syncdelay);
@@ -1403,7 +1403,15 @@ l_sync_initialsync_walk_end:
 	return ret;
 }
 
+static inline int sync_initialsync_cleanup(ctx_t *ctx_p, initsync_t initsync, int ret) {
+	if (initsync == INITSYNC_FULL)
+		ctx_p->flags[THREADINGLOCKED]--;
+	return ret;
+}
+
 int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, initsync_t initsync) {
+	int ret;
+	queue_id_t queue_id;
 	debug(3, "sync_initialsync(\"%s\", ctx_p, indexes_p, %i)", path, initsync);
 
 #ifdef CLUSTER_SUPPORT
@@ -1413,7 +1421,11 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 	}
 #endif
 
-	queue_id_t queue_id = (initsync==INITSYNC_FULL) ? QUEUE_INSTANT : QUEUE_NORMAL;
+	if (initsync == INITSYNC_FULL) {
+		ctx_p->flags[THREADINGLOCKED]++;
+		queue_id = QUEUE_INSTANT;
+	} else
+		queue_id = QUEUE_NORMAL;
 
 	// non-RSYNC case:
 	if(
@@ -1439,9 +1451,10 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 				ei->objtype_old = EOT_DOESNTEXIST;
 				ei->objtype_new = EOT_DIR;
 
-				return so_call_sync(ctx_p, indexes_p, 1, ei);
+				ret = so_call_sync(ctx_p, indexes_p, 1, ei);
+				return sync_initialsync_cleanup(ctx_p, initsync, ret);
 			} else {
-				return SYNC_EXEC(
+				ret = SYNC_EXEC(
 						ctx_p,
 						indexes_p,
 						NULL,
@@ -1451,17 +1464,18 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 						path,
 						NULL
 					);
+				return sync_initialsync_cleanup(ctx_p, initsync, ret);
 			}
 		}
 #ifdef DOXYGEN
 		sync_exec(NULL, NULL); sync_exec_thread(NULL, NULL);
 #endif
 
-		int ret = sync_initialsync_walk(ctx_p, path, indexes_p, queue_id, initsync);
+		ret = sync_initialsync_walk(ctx_p, path, indexes_p, queue_id, initsync);
 		if(ret)
 			error("Cannot get synclist");
 
-		return ret;
+		return sync_initialsync_cleanup(ctx_p, initsync, ret);
 	}
 
 	// RSYNC case:
@@ -1482,21 +1496,23 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 		evinfo->objtype_new  = EOT_DIR;
 
 		// Searching for excludes
-		int ret = sync_initialsync_walk(ctx_p, path, indexes_p, queue_id, initsync);
+		ret = sync_initialsync_walk(ctx_p, path, indexes_p, queue_id, initsync);
 		if(ret) {
 			error("Cannot get exclude what to exclude");
-			return ret;
+			return sync_initialsync_cleanup(ctx_p, initsync, ret);
 		}
 
 		debug(3, "queueing \"%s\" with int-flags %p", path, (void *)(unsigned long)evinfo->flags);
 
 		char *path_rel = sync_path_abs2rel(ctx_p, path, -1, NULL, NULL);
 
-		return indexes_queueevent(indexes_p, path_rel, evinfo, queue_id);
+		ret = indexes_queueevent(indexes_p, path_rel, evinfo, queue_id);
+		return sync_initialsync_cleanup(ctx_p, initsync, ret);
 	}
 
 	// Searching for includes
-	return sync_initialsync_walk(ctx_p, path, indexes_p, queue_id, initsync);
+	ret = sync_initialsync_walk(ctx_p, path, indexes_p, queue_id, initsync);
+	return sync_initialsync_cleanup(ctx_p, initsync, ret);
 }
 
 int sync_notify_mark(int notify_d, ctx_t *ctx_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p) {
