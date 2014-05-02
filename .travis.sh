@@ -25,7 +25,7 @@ run_example_cleanup_success() {
 	pkill -F "$CLSYNC_PIDFILE"
 }
 run_example_cleanup_failure() {
-	pkill -F "$CLSYNC_PIDFILE"
+	pkill -F "$CLSYNC_PIDFILE" 2>/dev/null
 	echo "$@" >&2
 	exit 1
 }
@@ -118,7 +118,7 @@ if true; then
 	build_test --enable-cluster --enable-debug --enable-paranoid=2 --with-capabilities --without-mhash
 	run_example rsyncdirect
 	run_example rsyncshell
-	run_example rsyncso
+#	run_example rsyncso
 	#run_example so
 	#run_example cluster
 
