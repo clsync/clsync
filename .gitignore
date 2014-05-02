@@ -15,6 +15,13 @@
 /debian/files
 /debian/*.ex
 /debian/*.debhelper
+/.pc/
+/debian/*.substvars
+/debian/clsync-dev/
+/debian/clsync-doc/
+/debian/libclsync-dev/
+/debian/libclsync/
+/debian/patches/
 
 # other:
 test.c
