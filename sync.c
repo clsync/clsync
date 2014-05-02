@@ -588,7 +588,7 @@ int thread_cleanup(ctx_t *ctx_p) {
 /*
 		if(threadinfo_p->callback)
 			if((err=threadinfo_p->callback(ctx_p, threadinfo_p->argv)))
-				error("Warning: Got error from callback function.", strerror(err), err);
+				warning("Got error from callback function.", strerror(err), err);
 */
 		char **ptr = threadinfo_p->argv;
 		while(*ptr)
@@ -676,14 +676,14 @@ static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode ) {
 	threadinfo_p->exitcode = exitcode;
 
 #if _DEBUG | VERYPARANOID
-	if(threadinfo_p->pthread != pthread_self()) {
+	if (threadinfo_p->pthread != pthread_self()) {
 		error("pthread id mismatch! (i_p->p) %p != (p) %p""", threadinfo_p->pthread, pthread_self() );
 		return EINVAL;
 	}
 #endif
 
-	if(threadinfo_p->callback) {
-		if(threadinfo_p->ctx_p->flags[DEBUG]>2) {
+	if (threadinfo_p->callback) {
+		if (threadinfo_p->ctx_p->flags[DEBUG]>2) {
 			debug(3, "thread %p, argv: ", threadinfo_p->pthread);
 			char **argv = threadinfo_p->argv;
 			while(*argv) {
@@ -691,7 +691,7 @@ static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode ) {
 				argv++;
 			}
 		}
-		if((err=threadinfo_p->callback(threadinfo_p->ctx_p, threadinfo_p->argv))) {
+		if ((err=threadinfo_p->callback(threadinfo_p->ctx_p, threadinfo_p->argv))) {
 			error("Got error from callback function.", strerror(err), err);
 			threadinfo_p->errcode = err;
 		}
@@ -706,10 +706,10 @@ static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode ) {
 static inline void so_call_sync_finished(int n, api_eventinfo_t *ei) {
 	int i = 0;
 	api_eventinfo_t *ei_i = ei;
-	while(i < n) {
+	while (i < n) {
 #ifdef PARANOID
-		if(ei_i->path == NULL) {
-			error("Warning: so_call_sync_finished(): ei_i->path == NULL");
+		if (ei_i->path == NULL) {
+			warning("ei_i->path == NULL");
 			i++;
 			continue;
 		}
@@ -718,7 +718,7 @@ static inline void so_call_sync_finished(int n, api_eventinfo_t *ei) {
 		ei_i++;
 		i++;
 	}
-	if(ei != NULL)
+	if (ei != NULL)
 		free(ei);
 
 	return;
@@ -739,25 +739,25 @@ int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 
 		rc = ctx_p->handler_funct.sync(n, ei);
 
-		if((err=exitcode_process(threadinfo_p->ctx_p, rc))) {
+		if ((err=exitcode_process(threadinfo_p->ctx_p, rc))) {
 			try_again = ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
-			error("Warning: so_call_sync_thread(): Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
-			if(try_again) {
+			warning("Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
+			if (try_again) {
 				debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
 				sleep(ctx_p->syncdelay);
 			}
 		}
 
-	} while(err && ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
+	} while (err && ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
 
-	if(err) {
+	if (err && !ctx_p->flags[IGNOREFAILURES]) {
 		error("Bad exitcode %i (errcode %i)", rc, err);
 		threadinfo_p->errcode = err;
 	}
 
 	so_call_sync_finished(n, ei);
 
-	if((err=thread_exit(threadinfo_p, rc ))) {
+	if ((err=thread_exit(threadinfo_p, rc))) {
 		exitcode = err;	// This's global variable "exitcode"
 		pthread_kill(pthread_sighandler, SIGTERM);
 	}
@@ -768,7 +768,7 @@ int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_eventinfo_t *ei) {
 	debug(2, "n == %i", n);
 
-	if(!ctx_p->flags[THREADING]) {
+	if (!ctx_p->flags[THREADING]) {
 		int rc=0, ret=0, err=0;
 		int try_n=0, try_again;
 		do {
@@ -779,16 +779,16 @@ static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_ev
 			rc = ctx_p->handler_funct.sync(n, ei);
 			alarm(0);
 
-			if((err=exitcode_process(ctx_p, rc))) {
+			if ((err=exitcode_process(ctx_p, rc))) {
 				try_again = ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
-				error("Warning: so_call_sync(): Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
-				if(try_again) {
+				warning("Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
+				if (try_again) {
 					debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
 					sleep(ctx_p->syncdelay);
 				}
 			}
-		} while(err && ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
-		if(err) {
+		} while (err && ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
+		if (err && !ctx_p->flags[IGNOREFAILURES]) {
 			error("Bad exitcode %i (errcode %i)", rc, err);
 			ret = err;
 		}
@@ -797,7 +797,7 @@ static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_ev
 	}
 
 	threadinfo_t *threadinfo_p = thread_new();
-	if(threadinfo_p == NULL)
+	if (threadinfo_p == NULL)
 		return errno;
 
 	threadinfo_p->try_n       = 0;
@@ -809,10 +809,10 @@ static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_ev
 	threadinfo_p->n           = n;
 	threadinfo_p->ei          = ei;
 
-	if(ctx_p->synctimeout)
+	if (ctx_p->synctimeout)
 		threadinfo_p->expiretime = threadinfo_p->starttime + ctx_p->synctimeout;
 
-	if(pthread_create(&threadinfo_p->pthread, NULL, (void *(*)(void *))so_call_sync_thread, threadinfo_p)) {
+	if (pthread_create(&threadinfo_p->pthread, NULL, (void *(*)(void *))so_call_sync_thread, threadinfo_p)) {
 		error("Cannot pthread_create().");
 		return errno;
 	}
@@ -824,10 +824,10 @@ static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_ev
 static inline int so_call_rsync_finished(ctx_t *ctx_p, const char *inclistfile, const char *exclistfile) {
 	int ret0, ret1;
 	debug(5, "");
-	if(ctx_p->flags[DONTUNLINK]) 
+	if (ctx_p->flags[DONTUNLINK]) 
 		return 0;
 
-	if(inclistfile == NULL) {
+	if (inclistfile == NULL) {
 		error("inclistfile == NULL.");
 		return EINVAL;
 	}
@@ -835,10 +835,10 @@ static inline int so_call_rsync_finished(ctx_t *ctx_p, const char *inclistfile, 
 	debug(3, "unlink()-ing \"%s\"", inclistfile);
 	ret0 = unlink(inclistfile);
 
-	if(ctx_p->flags[RSYNCPREFERINCLUDE])
+	if (ctx_p->flags[RSYNCPREFERINCLUDE])
 		return ret0;
 
-	if(exclistfile == NULL) {
+	if (exclistfile == NULL) {
 		error("exclistfile == NULL.");
 		return EINVAL;
 	}
@@ -862,22 +862,22 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 		threadinfo_p->try_n++;
 
 		rc = ctx_p->handler_funct.rsync(argv[0], argv[1]);
-		if((err=exitcode_process(threadinfo_p->ctx_p, rc))) {
+		if ((err=exitcode_process(threadinfo_p->ctx_p, rc))) {
 			try_again = ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
-			error("Warning: so_call_rsync_thread(): Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
-			if(try_again) {
+			warning("Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
+			if (try_again) {
 				debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
 				sleep(ctx_p->syncdelay);
 			}
 		}
-	} while(try_again);
+	} while (try_again);
 
-	if(err) {
+	if (err && !ctx_p->flags[IGNOREFAILURES]) {
 		error("Bad exitcode %i (errcode %i)", rc, err);
 		threadinfo_p->errcode = err;
 	}
 
-	if((err=so_call_rsync_finished(ctx_p, argv[0], argv[1]))) {
+	if ((err=so_call_rsync_finished(ctx_p, argv[0], argv[1]))) {
 		exitcode = err;	// This's global variable "exitcode"
 		pthread_kill(pthread_sighandler, SIGTERM);
 	}
@@ -886,7 +886,7 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 	free(argv[1]);
 	free(argv);
 
-	if((err=thread_exit(threadinfo_p, rc))) {
+	if ((err=thread_exit(threadinfo_p, rc))) {
 		exitcode = err;	// This's global variable "exitcode"
 		pthread_kill(pthread_sighandler, SIGTERM);
 	}
@@ -910,22 +910,22 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 			rc = ctx_p->handler_funct.rsync(inclistfile, exclistfile);
 			alarm(0);
 
-			if((err=exitcode_process(ctx_p, rc))) {
+			if ((err=exitcode_process(ctx_p, rc))) {
 				try_again = ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
-				error("Warning: so_call_rsync(): Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
-				if(try_again) {
+				warning("Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
+				if (try_again) {
 					debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
 					sleep(ctx_p->syncdelay);
 				}
 			}
-		} while(try_again);
-		if(err) {
+		} while (try_again);
+		if (err && !ctx_p->flags[IGNOREFAILURES]) {
 			error("Bad exitcode %i (errcode %i)", rc, err);
 			rc = err;
 		}
 
 		int ret_cleanup;
-		if((ret_cleanup=so_call_rsync_finished(ctx_p, inclistfile, exclistfile)))
+		if ((ret_cleanup=so_call_rsync_finished(ctx_p, inclistfile, exclistfile)))
 			return rc ? rc : ret_cleanup;
 		return rc;
 	}
@@ -1100,32 +1100,29 @@ static inline int sync_exec(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackf
 		ctx_p->children = 0;
 		alarm(0);
 
-		if((err=exitcode_process(ctx_p, exitcode))) {
+		if ((err=exitcode_process(ctx_p, exitcode))) {
 			try_again = ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
-			error("Warning: sync_exec(): Bad exitcode %i (errcode %i). %s.", exitcode, err, try_again?"Retrying":"Give up");
-			if(try_again) {
+			warning("sync_exec(): Bad exitcode %i (errcode %i). %s.", exitcode, err, try_again?"Retrying":"Give up");
+			if (try_again) {
 				debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
 				sleep(ctx_p->syncdelay);
 			}
 		}
 	} while(try_again);
 
-	if(err) {
+	if (err && !ctx_p->flags[IGNOREFAILURES]) {
 		error("Bad exitcode %i (errcode %i)", exitcode, err);
 		ret = err;
-//		goto l_sync_exec_end;
 	}
 
-	if(callback != NULL) {
+	if (callback != NULL) {
 		int nret = callback(ctx_p, argv);
-		if(nret) {
+		if (nret) {
 			error("Got error while callback().");
-			if(!ret) ret=nret;
-//			goto l_sync_exec_end;
+			if (!ret) ret=nret;
 		}
 	}
 
-//l_sync_exec_end:
 	free(argv);
 	return ret;
 }
@@ -1144,25 +1141,25 @@ int __sync_exec_thread(threadinfo_t *threadinfo_p) {
 
 		exec_exitcode = exec_argv(argv, &threadinfo_p->child_pid );
 
-		if((err=exitcode_process(threadinfo_p->ctx_p, exec_exitcode))) {
+		if ((err=exitcode_process(threadinfo_p->ctx_p, exec_exitcode))) {
 			try_again = ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
-			error("Warning: __sync_exec_thread(): Bad exitcode %i (errcode %i). %s.", exec_exitcode, err, try_again?"Retrying":"Give up");
-			if(try_again) {
+			warning("__sync_exec_thread(): Bad exitcode %i (errcode %i). %s.", exec_exitcode, err, try_again?"Retrying":"Give up");
+			if (try_again) {
 				debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
 				sleep(ctx_p->syncdelay);
 			}
 		}
 
-	} while(try_again);
+	} while (try_again);
 
-	if(err) {
+	if (err && !ctx_p->flags[IGNOREFAILURES]) {
 		error("Bad exitcode %i (errcode %i)", exec_exitcode, err);
 		threadinfo_p->errcode = err;
 	}
 
 	g_hash_table_destroy(threadinfo_p->fpath2ei_ht);
 
-	if((err=thread_exit(threadinfo_p, exec_exitcode ))) {
+	if ((err=thread_exit(threadinfo_p, exec_exitcode ))) {
 		exitcode = err;	// This's global variable "exitcode"
 		pthread_kill(pthread_sighandler, SIGTERM);
 	}
@@ -1181,7 +1178,7 @@ static inline int sync_exec_thread(ctx_t *ctx_p, indexes_t *indexes_p, thread_ca
 	_sync_exec_getargv(argv, callback, strdup(arg));
 
 	threadinfo_t *threadinfo_p = thread_new();
-	if(threadinfo_p == NULL)
+	if (threadinfo_p == NULL)
 		return errno;
 
 	threadinfo_p->try_n       = 0;
@@ -1191,10 +1188,10 @@ static inline int sync_exec_thread(ctx_t *ctx_p, indexes_t *indexes_p, thread_ca
 	threadinfo_p->starttime	  = time(NULL);
 	threadinfo_p->fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
 
-	if(ctx_p->synctimeout)
+	if (ctx_p->synctimeout)
 		threadinfo_p->expiretime = threadinfo_p->starttime + ctx_p->synctimeout;
 
-	if(pthread_create(&threadinfo_p->pthread, NULL, (void *(*)(void *))__sync_exec_thread, threadinfo_p)) {
+	if (pthread_create(&threadinfo_p->pthread, NULL, (void *(*)(void *))__sync_exec_thread, threadinfo_p)) {
 		error("Cannot pthread_create().");
 		return errno;
 	}
@@ -3205,7 +3202,7 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 					exit(*exitcode_p);
 					break;
 				default:
-					error("Warning: Got signal %i, but the main loop is not started, yet. Ignoring the signal.", signal);
+					warning("Got signal %i, but the main loop is not started, yet. Ignoring the signal.", signal);
 					break;
 			}
 			continue;

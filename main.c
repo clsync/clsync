@@ -56,6 +56,7 @@ static const struct option long_options[] =
 #endif
 	{"threading",		required_argument,	NULL,	THREADING},
 	{"retries",		optional_argument,	NULL,	RETRIES},
+	{"ignore-failures",	optional_argument,	NULL,	IGNOREFAILURES},
 	{"output",		required_argument,	NULL,	OUTPUT_METHOD},
 	{"one-file-system",	optional_argument,	NULL,	ONEFILESYSTEM},
 	{"exclude-mount-points",optional_argument,	NULL,	EXCLUDEMOUNTPOINTS},

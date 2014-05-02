@@ -93,6 +93,8 @@ enum flags_enum {
 	SOCKETOWN		= 14|OPTION_LONGOPTONLY,
 
 	MAXITERATIONS		= 15|OPTION_LONGOPTONLY,
+
+	IGNOREFAILURES		= 16|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
