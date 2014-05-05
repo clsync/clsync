@@ -367,7 +367,6 @@ int control_run(ctx_t *ctx_p) {
 				ret = errno;
 			} else {
 				s = clsyncsock->sock;
-				clsyncsock->sock = -1;
 				socket_cleanup(clsyncsock);
 			}
 		}

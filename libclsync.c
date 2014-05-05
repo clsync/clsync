@@ -91,7 +91,7 @@ static inline clsyncproc_t *_clsync_x_unix(
 
 	socket_sockthreaddata_t *threaddata_p = socket_thread_attach(proc_p->sock_p);
 	if (threaddata_p == NULL) {
-		socket_cleanup(proc_p->sock_p);
+		socket_close(proc_p->sock_p);
 		free(proc_p);
 		return NULL;
 	}

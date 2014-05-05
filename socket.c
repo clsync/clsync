@@ -131,10 +131,15 @@ int socket_cleanup(clsyncsock_t *clsyncsock_p) {
 	recv_ptrs[clsyncsock_sock] = NULL;
 	recv_stps[clsyncsock_sock] = NULL;
 
-	close(clsyncsock_sock);
 
 	free(clsyncsock_p);
 	return 0;
+}
+
+int socket_close(clsyncsock_t *clsyncsock_p) {
+	close(clsyncsock_p->sock);
+
+	return socket_cleanup(clsyncsock_p);
 }
 
 int socket_thread_delete(socket_sockthreaddata_t *threaddata_p) {
@@ -144,7 +149,7 @@ int socket_thread_delete(socket_sockthreaddata_t *threaddata_p) {
 
 	thread_id = threaddata_p->id;
 
-	socket_cleanup(threaddata_p->clsyncsock_p);
+	socket_close(threaddata_p->clsyncsock_p);
 
 	clsyncsockthreads_count--;
 

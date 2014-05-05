@@ -314,7 +314,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 
 		if (ctx_p->flags_values_raw[param_id] != NULL)
 			free(ctx_p->flags_values_raw[param_id]);
-		ctx_p->flags_values_raw[param_id] = strdup(arg);
+		ctx_p->flags_values_raw[param_id] = arg;
 	}
 
 	switch(param_id) {

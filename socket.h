@@ -194,6 +194,7 @@ extern int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd);
 extern int socket_check_bysock(int sock);
 extern clsyncsock_t *socket_accept(int sock);
 extern int socket_cleanup(clsyncsock_t *clsyncsock_p);
+extern int socket_close(clsyncsock_t *clsyncsock_p);
 extern int socket_init();
 extern int socket_deinit();
 extern int socket_procclsyncsock(socket_sockthreaddata_t *arg);
