@@ -212,7 +212,7 @@ char *parameter_get(ctx_t *ctx_p, char *variable_name) {
  * @retval	NULL		On error
  * 
  */
-char *parameter_expand(ctx_t *ctx_p, char *arg) {
+char *parameter_expand(ctx_t *ctx_p, char *arg, int ignorewarnings) {
 	char *ret = NULL;
 	size_t ret_size = 0, ret_len = 0;
 
@@ -247,7 +247,8 @@ char *parameter_expand(ctx_t *ctx_p, char *arg) {
 					switch (*ptr_nest) {
 						case 0:
 							ret[ret_len] = 0;
-							warning("Unexpected end of macro-substitution \"%%%s\" in value \"%s\"; result value is \"%s\"", ptr_nest, arg, ret);
+							if (!(ignorewarnings&1))
+								warning("Unexpected end of macro-substitution \"%%%s\" in value \"%s\"; result value is \"%s\"", ptr_nest, arg, ret);
 							free(arg);
 							return ret;
 						case '%': {
@@ -255,12 +256,14 @@ char *parameter_expand(ctx_t *ctx_p, char *arg) {
 							*ptr_nest = 0;
 							char *variable_name  = &ptr[1];
 							char *variable_value = parameter_get(ctx_p, variable_name);
-							*ptr_nest = '%';
 							if (variable_value == NULL) {
-								warning("Variable \"%s\" is not set (err: %s)", variable_name, strerror(errno));
+								if (!(ignorewarnings&2))
+									warning("Variable \"%s\" is not set (%s)", variable_name, strerror(errno));
+								*ptr_nest = '%';
 								errno = 0;
 								break;
 							}
+							*ptr_nest = '%';
 							size_t variable_value_len = strlen(variable_value);
 							if (ret_len+variable_value_len+1 >= ret_size) {
 								ret_size = ret_len+variable_value_len+1 + ALLOC_PORTION;
@@ -311,7 +314,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 	}
 
 	if (arg != NULL) {
-		arg = parameter_expand(ctx_p, arg);
+		arg = parameter_expand(ctx_p, arg, 0);
 
 		if (ctx_p->flags_values_raw[param_id] != NULL)
 			free(ctx_p->flags_values_raw[param_id]);
@@ -1116,6 +1119,11 @@ int main(int argc, char *argv[]) {
 	if(!ret) {
 		nret = configs_parse(&ctx);
 		if(nret) ret = nret;
+	}
+
+	if (ctx.dump_path == NULL) {
+		ctx.dump_path = parameter_expand(&ctx, strdup(DEFAULT_DUMPDIR), 2);
+		ctx.flags_values_raw[DUMPDIR] = ctx.dump_path;
 	}
 
 	debug(4, "debugging flags: %u %u %u %u", ctx.flags[OUTPUT_METHOD], ctx.flags[QUIET], ctx.flags[VERBOSE], ctx.flags[DEBUG]);
