@@ -215,6 +215,13 @@ char *parameter_expand(ctx_t *ctx_p, char *arg) {
 	char *ret = NULL;
 	size_t ret_size = 0, ret_len = 0;
 
+#ifdef PARANOID
+	if (arg == NULL) {
+		errno = EINVAL;
+		return NULL;
+	}
+#endif
+
 	char *ptr = &arg[-1];
 	while (1) {
 		ptr++;
@@ -301,11 +308,14 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			error("Warning: Unknown parameter #%i source (value \"%s\").", param_id, arg!=NULL ? arg : "");
 			break;
 	}
-	arg = parameter_expand(ctx_p, arg);
 
-	if (ctx_p->flags_values_raw[param_id] != NULL)
-		free(ctx_p->flags_values_raw[param_id]);
-	ctx_p->flags_values_raw[param_id] = strdup(arg);
+	if (arg != NULL) {
+		arg = parameter_expand(ctx_p, arg);
+
+		if (ctx_p->flags_values_raw[param_id] != NULL)
+			free(ctx_p->flags_values_raw[param_id]);
+		ctx_p->flags_values_raw[param_id] = strdup(arg);
+	}
 
 	switch(param_id) {
 		case '?':
@@ -620,7 +630,7 @@ int arguments_parse(int argc, char *argv[], struct ctx *ctx_p) {
 		c = getopt_long(argc, argv, optstring, long_options, &option_index);
 	
 		if (c == -1) break;
-		int ret = parse_parameter(ctx_p, c, strdup(optarg), PS_ARGUMENT);
+		int ret = parse_parameter(ctx_p, c, optarg == NULL ? NULL : strdup(optarg), PS_ARGUMENT);
 		if(ret) return ret;
 	}
 	if(optind+1 < argc)
