@@ -178,6 +178,7 @@ struct ctx {
 	rule_t rules[MAXRULES];
 	dev_t st_dev;
 #endif
+	char *flags_values_raw[OPTION_FLAGS];
 	int flags[OPTION_FLAGS];
 	int flags_set[OPTION_FLAGS];
 #ifndef LIBCLSYNC

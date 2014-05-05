@@ -170,6 +170,117 @@ int clsyncapi_getapiversion() {
 	return CLSYNC_API_VERSION;
 }
 
+/**
+ * @brief 			Gets raw (string) an option value by an option name
+ * 
+ * @param[in]	ctx_p		Context
+ @ @param[in]	variable_name	The name of the option
+ * 
+ * @retval	char *		Pointer to newly allocated string, if successful
+ * @retval	NULL		On error
+ * 
+ */
+char *parameter_get(ctx_t *ctx_p, char *variable_name) {
+	const struct option *long_option_p = long_options;
+	int param_id = -1;
+
+	while (long_option_p->name != NULL) {
+		if (!strcmp(long_option_p->name, variable_name)) {
+			param_id = long_option_p->val;
+			break;
+		}
+
+		long_option_p++;
+	}
+
+	if (param_id == -1) {
+		errno = ENOENT;
+		return NULL;
+	}
+
+	return ctx_p->flags_values_raw[param_id];
+}
+
+/**
+ * @brief 			Expands option values, e. g. "/var/log/clsync-%label%.pid" -> "/var/log/clsync-clone.pid"
+ * 
+ * @param[in]	ctx_p		Context
+ @ @param[in]	arg		Allocated string with unexpanded value. Will be free'd
+ * 
+ * @retval	char *		Pointer to newly allocated string, if successful
+ * @retval	NULL		On error
+ * 
+ */
+char *parameter_expand(ctx_t *ctx_p, char *arg) {
+	char *ret = NULL;
+	size_t ret_size = 0, ret_len = 0;
+
+	char *ptr = &arg[-1];
+	while (1) {
+		ptr++;
+
+		switch (*ptr) {
+			case 0:
+				ret[ret_len] = 0;
+				debug(2, "Expanding value \"%s\" to \"%s\"", arg, ret);
+				free(arg);
+				return ret;
+			case '%': {
+				if (ptr[1] == '%') {
+					ret[ret_len++] = *(ptr++);
+					break;
+				}
+
+				char nest_searching = 1;
+				char *ptr_nest = ptr;
+				while (nest_searching) {
+					ptr_nest++;
+
+					switch (*ptr_nest) {
+						case 0:
+							ret[ret_len] = 0;
+							warning("Unexpected end of macro-substitution \"%%%s\" in value \"%s\"; result value is \"%s\"", ptr_nest, arg, ret);
+							free(arg);
+							return ret;
+						case '%': {
+							nest_searching = 0;
+							*ptr_nest = 0;
+							char *variable_name  = &ptr[1];
+							char *variable_value = parameter_get(ctx_p, variable_name);
+							*ptr_nest = '%';
+							if (variable_value == NULL) {
+								warning("Variable \"%s\" is not set (err: %s)", variable_name, strerror(errno));
+								errno = 0;
+								break;
+							}
+							size_t variable_value_len = strlen(variable_value);
+							if (ret_len+variable_value_len+1 >= ret_size) {
+								ret_size = ret_len+variable_value_len+1 + ALLOC_PORTION;
+								ret      = realloc(ret, ret_size);
+							}
+							memcpy(&ret[ret_len], variable_value, variable_value_len);
+							ret_len += variable_value_len;
+							break;
+						}
+					}
+				}
+				ptr = ptr_nest;
+				break;
+			}
+			default: {
+				if (ret_len+2 >= ret_size) {
+					ret_size = ret_len+2 + ALLOC_PORTION;
+					ret      = realloc(ret, ret_size);
+				}
+				ret[ret_len++] = *ptr;
+				break;
+			}
+		}
+	}
+	error("Unknown internal error");
+	return arg;
+}
+
 int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t paramsource) {
 #ifdef _DEBUG
 	fprintf(stderr, "Force-Debug: parse_parameter(): %i: %i = \"%s\"\n", paramsource, param_id, arg);
@@ -190,6 +301,12 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			error("Warning: Unknown parameter #%i source (value \"%s\").", param_id, arg!=NULL ? arg : "");
 			break;
 	}
+	arg = parameter_expand(ctx_p, arg);
+
+	if (ctx_p->flags_values_raw[param_id] != NULL)
+		free(ctx_p->flags_values_raw[param_id]);
+	ctx_p->flags_values_raw[param_id] = strdup(arg);
+
 	switch(param_id) {
 		case '?':
 		case HELP:
@@ -503,7 +620,7 @@ int arguments_parse(int argc, char *argv[], struct ctx *ctx_p) {
 		c = getopt_long(argc, argv, optstring, long_options, &option_index);
 	
 		if (c == -1) break;
-		int ret = parse_parameter(ctx_p, c, optarg, PS_ARGUMENT);
+		int ret = parse_parameter(ctx_p, c, strdup(optarg), PS_ARGUMENT);
 		if(ret) return ret;
 	}
 	if(optind+1 < argc)
@@ -512,19 +629,11 @@ int arguments_parse(int argc, char *argv[], struct ctx *ctx_p) {
 	return 0;
 }
 
-char *configs_parse_str[1<<10] = {0};
-
 void gkf_parse(ctx_t *ctx_p, GKeyFile *gkf) {
 	const struct option *lo_ptr = long_options;
 	while(lo_ptr->name != NULL) {
 		gchar *value = g_key_file_get_value(gkf, ctx_p->config_block, lo_ptr->name, NULL);
 		if(value != NULL) {
-			unsigned char val_char = lo_ptr->val&0xff;
-
-			if(configs_parse_str[val_char])
-				free(configs_parse_str[val_char]);
-
-			configs_parse_str[val_char] = value;
 			int ret = parse_parameter(ctx_p, lo_ptr->val, value, PS_CONFIG);
 			if(ret) exit(ret);
 		}
@@ -597,18 +706,18 @@ int configs_parse(ctx_t *ctx_p) {
 	return 0;
 }
 
-int configs_cleanup() {
+void options_cleanup(ctx_t *ctx_p) {
 	int i=0;
 
-	while(i < (1<<10)) {
-		if(configs_parse_str[i] != NULL) {
-			free(configs_parse_str[i]);
-			configs_parse_str[i] = NULL;
+	while (i < OPTION_FLAGS) {
+		if (ctx_p->flags_values_raw[i] != NULL) {
+			free(ctx_p->flags_values_raw[i]);
+			ctx_p->flags_values_raw[i] = NULL;
 		}
 		i++;
 	}
 
-	return 0;
+	return;
 }
 
 int rule_complete(rule_t *rule_p, const char *expr) {
@@ -1150,7 +1259,7 @@ int main(int argc, char *argv[]) {
 	}
 #endif // CLUSTER_SUPPORT
 
-	{
+	if (ctx.watchdir != NULL) {
 		char *rwatchdir = realpath(ctx.watchdir, NULL);
 		if(rwatchdir == NULL) {
 			error("Got error while realpath() on \"%s\" [#0].", ctx.watchdir);
@@ -1394,11 +1503,12 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	if(access(ctx.handlerfpath, X_OK) == -1) {
-		error("\"%s\" is not executable.", ctx.handlerfpath);
-		if(!ret)
-			ret = errno;
-	}
+	if (ctx.handlerfpath != NULL)
+		if (access(ctx.handlerfpath, X_OK) == -1) {
+			error("\"%s\" is not executable.", ctx.handlerfpath);
+			if (!ret)
+				ret = errno;
+		}
 
 	nret=main_rehash(&ctx);
 	if(nret)
@@ -1526,7 +1636,7 @@ preserve_fileaccess_end:
 	if(ctx.destdirwslashsize)
 		free(ctx.destdirwslash);
 
-	configs_cleanup();
+	options_cleanup(&ctx);
 	debug(1, "finished, exitcode: %i: %s.", ret, strerror(ret));
 	return ret;
 }

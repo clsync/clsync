@@ -37,6 +37,12 @@ To disable string option (for example path to file) set to empty string:
 	=
 .RE
 
+Also you can use previously set values while setting new options. Substring
+.IR %option_name%
+will be substituted with previously set value of option
+.IR option_name .
+(see 
+.BR "CONFIGURATION FILE" )
 
 .B \-W, \-\-watch\-dir
 .I watch\-dir
@@ -1409,7 +1415,9 @@ debug=0
 .br
 syslog=1
 .br
-pid-file=/var/run/clsync.pid
+label=default
+.br
+pid-file=/var/run/clsync-%label%.pid
 .br
 
 .br
