@@ -151,7 +151,7 @@ int control_mkdir_open(clsyncsock_t *clsyncsock_p, const char *const dir_path) {
 int control_dump(ctx_t *ctx_p, clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p) {
 	indexes_t	*indexes_p	= ctx_p->indexes_p;
 	sockcmd_dat_dump_t *dat		= sockcmd_p->data;
-	int rootfd;
+	int rootfd, fd_out;
 	struct control_dump_arg arg;
 	enum dump_dirfd_obj dirfd_obj;
 
@@ -163,6 +163,14 @@ int control_dump(ctx_t *ctx_p, clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p)
 	rootfd = control_mkdir_open(clsyncsock_p, dat->dir_path);
 	if (rootfd == -1)
 		goto l_control_dump_end;
+
+	fd_out = openat(rootfd, "instance", O_WRONLY);
+	if (fd_out == -1)
+		goto l_control_dump_end;
+
+	dprintf(fd_out, "status == %s\n", getenv("CLSYNC_STATUS"));
+
+	close(fd_out);
 
 	arg.dirfd[DUMP_DIRFD_ROOT] = rootfd;
 
