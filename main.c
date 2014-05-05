@@ -148,7 +148,7 @@ static char *const status_descr[] = {
 };
 
 int syntax() {
-	info("possible ctx:");
+	info("possible options:");
 	int i=0;
 	while(long_options[i].name != NULL) {
 		if(!(long_options[i].val & OPTION_CONFIGONLY))
