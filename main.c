@@ -1034,9 +1034,10 @@ int main_rehash(ctx_t *ctx_p) {
 
 int main_status_update(ctx_t *ctx_p, state_t state) {
 	static state_t state_old = STATE_UNKNOWN;
+	debug(4, "%u", state);
 
 	if(state == state_old) {
-		debug(3, "main_status_update: State unchanged: %u == %u", state, state_old);
+		debug(3, "State unchanged: %u == %u", state, state_old);
 		return 0;
 	}
 

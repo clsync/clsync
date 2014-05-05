@@ -3383,6 +3383,8 @@ int sync_dump(ctx_t *ctx_p, const char *const dir_path) {
 		[DUMP_DIRFD_THREAD]	= "threads"
 	};
 
+	errno = 0;
+
 	rootfd = mkdirat_open(dir_path, AT_FDCWD, DUMP_DIRMODE);
 	if (rootfd == -1)
 		goto l_sync_dump_end;
