@@ -1172,7 +1172,7 @@ int __sync_exec_thread(threadinfo_t *threadinfo_p) {
 }
 
 static inline int sync_exec_thread(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callback, ...) {
-	debug(2, "sync_exec_thread()");
+	debug(2, "");
 
 	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
 	memset(argv, 0, sizeof(char *)*MAXARGUMENTS);
@@ -1247,7 +1247,7 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 	eventinfo_t evinfo;
 	FTS *tree;
 	rule_t *rules_p = ctx_p->rules;
-	debug(2, "sync_initialsync_walk(ctx_p, \"%s\", indexes_p, %i, %i).", dirpath, queue_id, initsync);
+	debug(2, "(ctx_p, \"%s\", indexes_p, %i, %i).", dirpath, queue_id, initsync);
 
 	char skip_rules = (initsync==INITSYNC_FULL) && ctx_p->flags[INITFULL];
 
@@ -1268,7 +1268,7 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 			(fts_no_stat				? FTS_NOSTAT	: 0) | 
 			(ctx_p->flags[ONEFILESYSTEM] 	? FTS_XDEV	: 0); 
 
-        debug(3, "sync_initialsync_walk() fts_opts == %p", (void *)(long)fts_opts);
+        debug(3, "fts_opts == %p", (void *)(long)fts_opts);
 
 	tree = fts_open((char *const *)&rootpaths, fts_opts, NULL);
 
@@ -1415,7 +1415,7 @@ static inline int sync_initialsync_cleanup(ctx_t *ctx_p, initsync_t initsync, in
 int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, initsync_t initsync) {
 	int ret;
 	queue_id_t queue_id;
-	debug(3, "sync_initialsync(\"%s\", ctx_p, indexes_p, %i)", path, initsync);
+	debug(3, "(\"%s\", ctx_p, indexes_p, %i)", path, initsync);
 
 #ifdef CLUSTER_SUPPORT
 	if(initsync == INITSYNC_FULL) {
@@ -1519,7 +1519,7 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 }
 
 int sync_notify_mark(int notify_d, ctx_t *ctx_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p) {
-	debug(3, "sync_notify_mark(..., \"%s\", %i,...)", path, pathlen);
+	debug(3, "(..., \"%s\", %i,...)", path, pathlen);
 	int wd = indexes_fpath2wd(indexes_p, path);
 	if(wd != -1) {
 		debug(1, "\"%s\" is already marked (wd: %i). Skipping.", path, wd);
@@ -1572,7 +1572,7 @@ int sync_notify_mark(int notify_d, ctx_t *ctx_p, const char *accpath, const char
 static inline int sync_mark_walk_cluster_modtime_update(ctx_t *ctx_p, const char *path, short int dirlevel, mode_t st_mode) {
 	if(ctx_p->cluster_iface) {
 		int ret=cluster_modtime_update(path, dirlevel, st_mode);
-		if(ret) error("sync_mark_walk() cannot cluster_modtime_update()");
+		if(ret) error("cannot cluster_modtime_update()");
 		return ret;
 	}
 	return 0;
@@ -1584,7 +1584,7 @@ int sync_mark_walk(int notify_d, ctx_t *ctx_p, const char *dirpath, indexes_t *i
 	const char *rootpaths[] = {dirpath, NULL};
 	FTS *tree;
 	rule_t *rules_p = ctx_p->rules;
-	debug(2, "sync_mark_walk(%i, ctx_p, \"%s\", indexes_p).", notify_d, dirpath);
+	debug(2, "(%i, ctx_p, \"%s\", indexes_p).", notify_d, dirpath);
 
 	int fts_opts = FTS_NOCHDIR|FTS_PHYSICAL|FTS_NOSTAT|(ctx_p->flags[ONEFILESYSTEM]?FTS_XDEV:0);
 

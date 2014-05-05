@@ -1011,7 +1011,7 @@ int main_cleanup(ctx_t *ctx_p) {
 }
 
 int main_rehash(ctx_t *ctx_p) {
-	debug(3, "main_rehash()");
+	debug(3, "");
 	int ret=0;
 
 	main_cleanup(ctx_p);
