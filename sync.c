@@ -807,6 +807,9 @@ static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_ev
 	if (!SHOULD_THREAD(ctx_p)) {
 		int rc=0, ret=0, err=0;
 		int try_n=0, try_again;
+
+		indexes_p->nonthreaded_syncing_fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
+
 		do {
 			try_again = 0;
 			try_n++;
@@ -828,6 +831,9 @@ static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_ev
 			error("Bad exitcode %i (errcode %i)", rc, err);
 			ret = err;
 		}
+
+		g_hash_table_destroy(indexes_p->nonthreaded_syncing_fpath2ei_ht);
+
 		so_call_sync_finished(n, ei);
 		return ret;
 	}
@@ -937,6 +943,8 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 	if (!SHOULD_THREAD(ctx_p)) {
 		debug(3, "ctx_p->handler_funct.rsync == %p", ctx_p->handler_funct.rsync);
 
+		indexes_p->nonthreaded_syncing_fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
+
 		int rc=0, err=0;
 		int try_n=0, try_again;
 		do {
@@ -960,6 +968,8 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 			error("Bad exitcode %i (errcode %i)", rc, err);
 			rc = err;
 		}
+
+		g_hash_table_destroy(indexes_p->nonthreaded_syncing_fpath2ei_ht);
 
 		int ret_cleanup;
 		if ((ret_cleanup=so_call_rsync_finished(ctx_p, inclistfile, exclistfile)))
@@ -1121,6 +1131,8 @@ int sync_exec(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callbac
 	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
 	memset(argv, 0, sizeof(char *)*MAXARGUMENTS);
 
+	indexes_p->nonthreaded_syncing_fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
+
 	_sync_exec_getargv(argv, callback, arg);
 
 	int exitcode=0, ret=0, err=0;
@@ -1159,6 +1171,7 @@ int sync_exec(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callbac
 		}
 	}
 
+	g_hash_table_destroy(indexes_p->nonthreaded_syncing_fpath2ei_ht);
 	free(argv);
 	return ret;
 }
@@ -1641,6 +1654,7 @@ int sync_mark_walk(int notify_d, ctx_t *ctx_p, const char *dirpath, indexes_t *i
 			// Duplicates:
 			case FTS_DP:
 				continue;
+			// Files:
 			case FTS_DEFAULT:
 			case FTS_SL:
 			case FTS_SLNONE:
@@ -1651,7 +1665,7 @@ int sync_mark_walk(int notify_d, ctx_t *ctx_p, const char *dirpath, indexes_t *i
 					goto l_sync_mark_walk_end;
 #endif
 				continue;
-			// To mark:
+			// Directories (to mark):
 			case FTS_D:
 			case FTS_DC:    // TODO: think about case of FTS_DC
 			case FTS_DOT:
@@ -2550,8 +2564,8 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 	}
 
 	if(!(
-		(ctx_p->flags[MODE] == MODE_RSYNCSHELL)	|| 
-		(ctx_p->flags[MODE] == MODE_RSYNCDIRECT)	||
+		(ctx_p->flags[MODE] == MODE_RSYNCSHELL)	 || 
+		(ctx_p->flags[MODE] == MODE_RSYNCDIRECT) ||
 		(ctx_p->flags[MODE] == MODE_RSYNCSO)
 	)) {
 		// non-RSYNC case
@@ -2620,8 +2634,8 @@ int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 	char isrsyncpreferexclude = 
 		(
-			(ctx_p->flags[MODE] == MODE_RSYNCDIRECT)	||
-			(ctx_p->flags[MODE] == MODE_RSYNCSHELL)	||
+			(ctx_p->flags[MODE] == MODE_RSYNCDIRECT) ||
+			(ctx_p->flags[MODE] == MODE_RSYNCSHELL)	 ||
 			(ctx_p->flags[MODE] == MODE_RSYNCSO)
 		) && (!ctx_p->flags[RSYNCPREFERINCLUDE]);
 
@@ -3357,6 +3371,8 @@ int sync_dump(ctx_t *ctx_p, const char *const dir_path) {
 	struct sync_dump_arg arg;
 	enum dump_dirfd_obj dirfd_obj;
 
+	arg.ctx_p	 = ctx_p;
+
 	debug(3, "%s", dir_path);
 
 	if (dir_path == NULL)
@@ -3376,6 +3392,9 @@ int sync_dump(ctx_t *ctx_p, const char *const dir_path) {
 		goto l_sync_dump_end;
 
 	dprintf(fd_out, "status == %s\n", getenv("CLSYNC_STATUS"));	// TODO: remove getenv() from here
+	arg.fd_out = fd_out;
+	arg.data   = DUMP_LTYPE_EVINFO;
+	g_hash_table_foreach(indexes_p->nonthreaded_syncing_fpath2ei_ht, sync_dump_liststep, &arg);
 
 	close(fd_out);
 
@@ -3391,8 +3410,6 @@ int sync_dump(ctx_t *ctx_p, const char *const dir_path) {
 
 		dirfd_obj++;
 	}
-
-	arg.ctx_p	 = ctx_p;
 
 	int queue_id = 0;
 	while (queue_id < QUEUE_MAX) {

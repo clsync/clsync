@@ -30,6 +30,7 @@ struct indexes {
 	GHashTable *exc_fpath_coll_ht[QUEUE_MAX];	// excluded file path aggregation hashtable for every queue
 	GHashTable *fpath2ei_coll_ht[QUEUE_MAX];	// "file path -> event information" aggregation hashtable for every queue
 	GHashTable *out_lines_aggr_ht;			// output lines aggregation hashtable
+	GHashTable *nonthreaded_syncing_fpath2ei_ht;	// events that are synchronized in signle-mode (non threaded)
 };
 typedef struct indexes indexes_t;
 
