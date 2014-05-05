@@ -3258,11 +3258,183 @@ l_sync_parent_interrupt_end:
 	return thread_info_unlock(0);
 }
 
+/* === DUMP === */
+
+enum dump_dirfd_obj {
+	DUMP_DIRFD_ROOT = 0,
+	DUMP_DIRFD_QUEUE,
+	DUMP_DIRFD_THREAD,
+
+	DUMP_DIRFD_MAX
+};
+
+enum dump_ltype {
+	DUMP_LTYPE_INCLUDE,
+	DUMP_LTYPE_EXCLUDE,
+	DUMP_LTYPE_EVINFO,
+};
+
+struct sync_dump_arg {
+	ctx_t 		*ctx_p;
+	int 		 dirfd[DUMP_DIRFD_MAX];
+	int		 fd_out;
+	int		 data;
+};
+
+void sync_dump_liststep(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
+	char *fpath			=         (char *)fpath_gp;
+	eventinfo_t *evinfo		=  (eventinfo_t *)evinfo_gp;
+	struct sync_dump_arg *arg 	= 		  arg_gp;
+	char act, num;
+
+	switch (arg->data) {
+		case DUMP_LTYPE_INCLUDE:
+			act = '+';
+			num = '1';
+			break;
+		case DUMP_LTYPE_EXCLUDE:
+			act = '-';
+			num = '1';
+			break;
+		case DUMP_LTYPE_EVINFO:
+			act = '+';
+			num = 	 evinfo->flags&EVIF_RECURSIVELY        ? '*' : 
+				(evinfo->flags&EVIF_CONTENTRECURSIVELY ? '/' : '1');
+			break;
+		default:
+			act = '?';
+			num = '?';
+	}
+
+	dprintf(arg->fd_out, "%c%c\t%s\n", act, num, fpath);
+
+	return;
+}
+
+int sync_dump_thread(threadinfo_t *threadinfo_p, void *_arg) {
+	struct sync_dump_arg *arg = _arg;
+	char buf[BUFSIZ];
+
+	snprintf(buf, BUFSIZ, "%u-%u-%lx", threadinfo_p->iteration, threadinfo_p->thread_num, (long)threadinfo_p->pthread);
+
+	arg->fd_out = openat(arg->dirfd[DUMP_DIRFD_THREAD], buf, O_WRONLY|O_CREAT, DUMP_FILEMODE);
+	if (arg->fd_out == -1)
+		return errno;
+
+	{
+		char **argv;
+
+		dprintf(arg->fd_out, 
+			"thread:\n\titeration == %u\n\tnum == %u\n\tpthread == %lx\n\tstarttime == %lu\n\texpiretime == %lu\n\tchild_pid == %u\n\ttry_n == %u\nCommand:",
+				threadinfo_p->iteration,
+				threadinfo_p->thread_num,
+				(long)threadinfo_p->pthread,
+				threadinfo_p->starttime,
+				threadinfo_p->expiretime,
+				threadinfo_p->child_pid,
+				threadinfo_p->try_n
+			);
+
+		argv = threadinfo_p->argv;
+		while (*argv != NULL)
+			dprintf(arg->fd_out, " \"%s\"", *(argv++));
+
+		dprintf(arg->fd_out, "\n");
+	}
+
+	arg->data = DUMP_LTYPE_EVINFO;
+	g_hash_table_foreach(threadinfo_p->fpath2ei_ht, sync_dump_liststep, arg);
+
+	close(arg->fd_out);
+
+	return 0;
+}
+
+int sync_dump(ctx_t *ctx_p, const char *const dir_path) {
+	indexes_t	*indexes_p	= ctx_p->indexes_p;
+
+	int rootfd, fd_out;
+	struct sync_dump_arg arg;
+	enum dump_dirfd_obj dirfd_obj;
+
+	debug(3, "%s", dir_path);
+
+	if (dir_path == NULL)
+		return EINVAL;
+
+	static const char *const subdirs[] = {
+		[DUMP_DIRFD_QUEUE]	= "queue",
+		[DUMP_DIRFD_THREAD]	= "threads"
+	};
+
+	rootfd = mkdirat_open(dir_path, AT_FDCWD, DUMP_DIRMODE);
+	if (rootfd == -1)
+		goto l_sync_dump_end;
+
+	fd_out = openat(rootfd, "instance", O_WRONLY|O_CREAT, DUMP_FILEMODE);
+	if (fd_out == -1)
+		goto l_sync_dump_end;
+
+	dprintf(fd_out, "status == %s\n", getenv("CLSYNC_STATUS"));	// TODO: remove getenv() from here
+
+	close(fd_out);
+
+	arg.dirfd[DUMP_DIRFD_ROOT] = rootfd;
+
+	dirfd_obj = DUMP_DIRFD_ROOT+1;
+	while (dirfd_obj < DUMP_DIRFD_MAX) {
+		const char *const subdir = subdirs[dirfd_obj];
+
+		arg.dirfd[dirfd_obj] = mkdirat_open(subdir, rootfd, DUMP_DIRMODE);
+		if (arg.dirfd[dirfd_obj] == -1)
+			goto l_sync_dump_end;
+
+		dirfd_obj++;
+	}
+
+	arg.ctx_p	 = ctx_p;
+
+	int queue_id = 0;
+	while (queue_id < QUEUE_MAX) {
+		char buf[BUFSIZ];
+		snprintf(buf, BUFSIZ, "%u", queue_id);
+
+		arg.fd_out = openat(arg.dirfd[DUMP_DIRFD_QUEUE], buf, O_WRONLY|O_CREAT, DUMP_FILEMODE);
+
+		arg.data = DUMP_LTYPE_EVINFO;
+		g_hash_table_foreach(indexes_p->fpath2ei_coll_ht[queue_id],  sync_dump_liststep, &arg);
+		if (indexes_p->exc_fpath_coll_ht[queue_id] != NULL) {
+			arg.data = DUMP_LTYPE_EXCLUDE;
+			g_hash_table_foreach(indexes_p->exc_fpath_coll_ht[queue_id], sync_dump_liststep, &arg);
+		}
+
+		close(arg.fd_out);
+		queue_id++;
+	}
+
+	threads_foreach(sync_dump_thread, STATE_RUNNING, &arg);
+
+l_sync_dump_end:
+	dirfd_obj = DUMP_DIRFD_ROOT;
+	while (dirfd_obj < DUMP_DIRFD_MAX) {
+		if (arg.dirfd[dirfd_obj] != -1)
+			close(arg.dirfd[dirfd_obj]);
+		dirfd_obj++;
+	}
+
+	if (errno)
+		error("Cannot create the dump to \"%s\"", dir_path);
+
+	return errno;
+}
+
+/* === /DUMP === */
+
 int *sync_sighandler_exitcode_p = NULL;
 int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 	int signal, ret;
-	ctx_t *ctx_p     = sighandler_arg_p->ctx_p;
-//	indexes_t *indexes_p     = sighandler_arg_p->indexes_p;
+	ctx_t *ctx_p		 = sighandler_arg_p->ctx_p;
+//	indexes_t *indexes_p	 = sighandler_arg_p->indexes_p;
 	pthread_t pthread_parent = sighandler_arg_p->pthread_parent;
 	sigset_t *sigset_p	 = sighandler_arg_p->sigset_p;
 	int *exitcode_p		 = sighandler_arg_p->exitcode_p;
@@ -3335,6 +3507,9 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 			case SIGUSR_INITSYNC:
 				sync_switch_state(pthread_parent, STATE_INITSYNC);
 				break;
+			case SIGUSR_DUMP:
+				sync_dump(ctx_p, ctx_p->dump_path);
+				break;
 			default:
 				error("Unknown signal: %i. Exit.", signal);
 				sync_switch_state(pthread_parent, STATE_TERM);
@@ -3368,6 +3543,7 @@ int sync_run(ctx_t *ctx_p) {
 	sigaddset(&sigset_sighandler, SIGINT);
 	sigaddset(&sigset_sighandler, SIGUSR_THREAD_GC);
 	sigaddset(&sigset_sighandler, SIGUSR_INITSYNC);
+	sigaddset(&sigset_sighandler, SIGUSR_DUMP);
 
 	ret = pthread_sigmask(SIG_BLOCK, &sigset_sighandler, NULL);
 	if (ret) return ret;

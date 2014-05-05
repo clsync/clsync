@@ -152,4 +152,29 @@ short int fileutils_calcdirlevel(const char *path) {
 	return dirlevel;
 }
 
+/**
+ * @brief 			Combination of mkdirat() and openat()
+ * 
+ * @param[in]	dir_path	Path to directory to create and open
+ @ @param[in]	dirfd_parent	File descriptor of directory for relative paths
+ @ @param[in]	dir_mode	Modes for newly created directory (e.g. 750)
+ * 
+ * @retval	dirfd		File descriptor to newly created directory
+ * @retval	NULL		On error
+ * 
+ */
+int mkdirat_open(const char *const dir_path, int dirfd_parent, mode_t dir_mode) {
+	int dirfd;
+
+	debug(5, "mkdirat(%u, \"%s\", %o)", dirfd_parent, dir_path, dir_mode);
+	if (mkdirat(dirfd_parent, dir_path, dir_mode))
+		return -1;
+
+	debug(5, "openat(%u, \"%s\", %x)", dirfd_parent, dir_path, O_RDWR|O_DIRECTORY|O_PATH);
+	dirfd = openat(dirfd_parent, dir_path, O_RDWR|O_DIRECTORY|O_PATH);
+	if (dirfd == -1)
+		return -1;
+
+	return dirfd;
+}
 

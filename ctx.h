@@ -96,6 +96,8 @@ enum flags_enum {
 	MAXITERATIONS		= 15|OPTION_LONGOPTONLY,
 
 	IGNOREFAILURES		= 16|OPTION_LONGOPTONLY,
+
+	DUMPDIR			= 17|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -139,7 +141,8 @@ typedef enum ruleaction_enum ruleaction_t;
 enum sigusr_enum {
 	SIGUSR_THREAD_GC	= 10,
 	SIGUSR_INITSYNC  	= 12,
-	SIGUSR_BLOPINT		= 16
+	SIGUSR_BLOPINT		= 16,
+	SIGUSR_DUMP		= 29,
 };
 
 struct rule {
@@ -191,6 +194,7 @@ struct ctx {
 	char *destdirwslash;
 	char *statusfile;
 	char *socketpath;
+	char *dump_path;
 	int socket;
 	mode_t socketmod;
 	uid_t  socketuid;

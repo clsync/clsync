@@ -806,6 +806,16 @@ Is not set by default.
 .RE
 
 .PP
+.B \-\-dump\-dir
+.RS 8
+Directory to write clsync's instance information by signal 29 (see 
+.BR SIGNALS ")."
+The directory shouldn't exists before dumping.
+
+Is set to "/tmp/clsync-dump-%label%" by default.
+.RE
+
+.PP
 .B \-q, \-\-quiet
 .RS 8
 Suppresses error messages.
@@ -1300,6 +1310,9 @@ Syncing /srv/lxc tree (rsync case):
 
 16 \- interrupts sleep()/select() and wait() [for debugging and internal uses]
 
+29 \- dump information to
+.IR dump-dir
+[for debugging]
 
 .SH DIAGNOSTICS
 

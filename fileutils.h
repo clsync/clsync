@@ -21,4 +21,5 @@ extern char *fd2fpath_malloc(int fd);
 
 extern int fileutils_copy(const char *path_from, const char *path_to);
 extern short int fileutils_calcdirlevel(const char *path);
+extern int mkdirat_open(const char *const dir_path, int dirfd_parent, mode_t dir_mode);
 

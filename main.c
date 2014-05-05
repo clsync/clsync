@@ -92,6 +92,7 @@ static const struct option long_options[] =
 	{"exit-hook",		required_argument,	NULL,	EXITHOOK},
 	{"verbose",		optional_argument,	NULL,	VERBOSE},
 	{"debug",		optional_argument,	NULL,	DEBUG},
+	{"dump-dir",		required_argument,	NULL,	DUMPDIR},
 	{"quiet",		optional_argument,	NULL,	QUIET},
 #ifdef FANOTIFY_SUPPORT
 	{"fanotify",		optional_argument,	NULL,	FANOTIFY},
@@ -573,6 +574,9 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 		}
 		case STATUSFILE:
 			ctx_p->statusfile	= arg;
+			break;
+		case DUMPDIR:
+			ctx_p->dump_path	= arg;
 			break;
 		case MODE: {
 			char *value;
