@@ -58,6 +58,7 @@ static char *recv_ptrs[SOCKET_MAX];
 
 const char *const textmessage_args[SOCKCMD_MAXID] = {
 	[SOCKCMD_REQUEST_NEGOTIATION] 	= "%u",
+	[SOCKCMD_REQUEST_DUMP]	 	= "%s",
 	[SOCKCMD_REPLY_NEGOTIATION] 	= "%u",
 	[SOCKCMD_REPLY_ACK]		= "%03u %lu",
 	[SOCKCMD_REPLY_EINVAL]		= "%03u %lu",
@@ -65,6 +66,9 @@ const char *const textmessage_args[SOCKCMD_MAXID] = {
 	[SOCKCMD_REPLY_INFO]		= "%s\003/ %s\003/ %x %x",
 	[SOCKCMD_REPLY_UNKNOWNCMD]	= "%03u %lu",
 	[SOCKCMD_REPLY_INVALIDCMDID]	= "%lu",
+	[SOCKCMD_REPLY_EEXIST]		= "%s\003/",
+	[SOCKCMD_REPLY_EPERM]		= "%s\003/",
+	[SOCKCMD_REPLY_ECUSTOM]		= "%s\003/ %s\003/ %u %s\003/",
 };
 
 const char *const textmessage_descr[SOCKCMD_MAXID] = {
@@ -78,8 +82,12 @@ const char *const textmessage_descr[SOCKCMD_MAXID] = {
 	[SOCKCMD_REPLY_BYE]		= "Bye.",
 	[SOCKCMD_REPLY_VERSION]		= "clsync v%u.%u%s",
 	[SOCKCMD_REPLY_INFO]		= "config_block == \"%s\"; label == \"%s\"; flags == %x; flags_set == %x.",
+	[SOCKCMD_REPLY_DUMP]		= "Ready",
 	[SOCKCMD_REPLY_UNKNOWNCMD]	= "Unknown command.",
 	[SOCKCMD_REPLY_INVALIDCMDID]	= "Invalid command id. Required: 0 <= cmd_id < 1000.",
+	[SOCKCMD_REPLY_EEXIST]		= "File exists: \"%s\".",
+	[SOCKCMD_REPLY_EPERM]		= "Permission denied: \"%s\".",
+	[SOCKCMD_REPLY_ECUSTOM]		= "%s(%s): Error #%u: \"%s\".",
 };
 
 int socket_check_bysock(int sock) {
@@ -346,6 +354,9 @@ static inline int parse_text_data(sockcmd_t *sockcmd_p, char *args, size_t args_
 		case SOCKCMD_REPLY_NEGOTIATION:
 			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_negotiation_t, &d->prot, &d->subprot);
 			break;
+		case SOCKCMD_REQUEST_DUMP:
+			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_dump_t, &d->dir_path);
+			break;
 		case SOCKCMD_REPLY_ACK:
 			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_ack_t, &d->cmd_id, &d->cmd_num);
 			break;
@@ -368,10 +379,16 @@ static inline int parse_text_data(sockcmd_t *sockcmd_p, char *args, size_t args_
 		case SOCKCMD_REPLY_INVALIDCMDID:
 			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_invalidcmd_t, &d->cmd_num);
 			break;
+		case SOCKCMD_REPLY_EEXIST:
+			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_eexist_t, &d->file_path);
+			break;
+		case SOCKCMD_REPLY_EPERM:
+			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_eperm_t,  &d->descr);
+			break;
 		default:
 			sockcmd_p->data = xmalloc(args_len+1);
 			memcpy(sockcmd_p->data, args, args_len);
-			sockcmd_p->data[args_len] = 0;
+			((char *)sockcmd_p->data)[args_len] = 0;
 			break;
 	}
 

@@ -182,6 +182,7 @@ typedef struct eventinfo eventinfo_t;
 typedef int (*thread_callbackfunct_t)(ctx_t *ctx_p, char **argv);
 struct threadinfo {
 	int			  thread_num;
+	uint32_t		  iteration;
 	thread_callbackfunct_t 	  callback;
 	char 			**argv;
 	pthread_t		  pthread;

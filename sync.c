@@ -803,11 +803,12 @@ static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_ev
 	threadinfo_p->try_n       = 0;
 	threadinfo_p->callback    = NULL;
 	threadinfo_p->argv        = NULL;
-	threadinfo_p->ctx_p   = ctx_p;
+	threadinfo_p->ctx_p       = ctx_p;
 	threadinfo_p->starttime	  = time(NULL);
 	threadinfo_p->fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
 	threadinfo_p->n           = n;
 	threadinfo_p->ei          = ei;
+	threadinfo_p->iteration   = ctx_p->iteration_num;
 
 	if (ctx_p->synctimeout)
 		threadinfo_p->expiretime = threadinfo_p->starttime + ctx_p->synctimeout;
@@ -937,9 +938,10 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 	threadinfo_p->try_n       = 0;
 	threadinfo_p->callback    = NULL;
 	threadinfo_p->argv        = xmalloc(sizeof(char *) * 3);
-	threadinfo_p->ctx_p   = ctx_p;
+	threadinfo_p->ctx_p       = ctx_p;
 	threadinfo_p->starttime	  = time(NULL);
 	threadinfo_p->fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
+	threadinfo_p->iteration   = ctx_p->iteration_num;
 
 	threadinfo_p->argv[0]	  = strdup(inclistfile);
 	threadinfo_p->argv[1]	  = strdup(exclistfile);
@@ -1184,9 +1186,10 @@ static inline int sync_exec_thread(ctx_t *ctx_p, indexes_t *indexes_p, thread_ca
 	threadinfo_p->try_n       = 0;
 	threadinfo_p->callback    = callback;
 	threadinfo_p->argv        = argv;
-	threadinfo_p->ctx_p   = ctx_p;
+	threadinfo_p->ctx_p       = ctx_p;
 	threadinfo_p->starttime	  = time(NULL);
 	threadinfo_p->fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
+	threadinfo_p->iteration   = ctx_p->iteration_num;
 
 	if (ctx_p->synctimeout)
 		threadinfo_p->expiretime = threadinfo_p->starttime + ctx_p->synctimeout;
@@ -2678,14 +2681,14 @@ int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
 		g_hash_table_remove_all(indexes_p->fpath2ei_ht);
 	}
 
-	if (!ctx_p->flags[THREADING]) {
-		if(ctx_p->iteration_num < ~0) // ~0 is the max value for unsigned variables
-			ctx_p->iteration_num++;
+	if(ctx_p->iteration_num < ~0) // ~0 is the max value for unsigned variables
+		ctx_p->iteration_num++;
+
+	if (!ctx_p->flags[THREADING])
 		setenv_iteration(ctx_p->iteration_num); 
 
-		debug(3, "next iteration: %u/%u", 
-			ctx_p->iteration_num, ctx_p->flags[MAXITERATIONS]);
-	}
+	debug(3, "next iteration: %u/%u", 
+		ctx_p->iteration_num, ctx_p->flags[MAXITERATIONS]);
 
 	return 0;
 }
@@ -3306,9 +3309,9 @@ int sync_run(ctx_t *ctx_p) {
 	ret = pthread_sigmask(SIG_BLOCK, &sigset_sighandler, NULL);
 	if (ret) return ret;
 
-	sighandler_arg.ctx_p        =  ctx_p;
-//	sighandler_arg.indexes_p        = &indexes;
-	sighandler_arg.pthread_parent   =  pthread_self();
+	sighandler_arg.ctx_p		=  ctx_p;
+//	sighandler_arg.indexes_p	= &indexes;
+	sighandler_arg.pthread_parent	=  pthread_self();
 	sighandler_arg.exitcode_p	= &ret;
 	sighandler_arg.sigset_p		= &sigset_sighandler;
 	ret = pthread_create(&pthread_sighandler, NULL, (void *(*)(void *))sync_sighandler, &sighandler_arg);
@@ -3325,12 +3328,14 @@ int sync_run(ctx_t *ctx_p) {
 
 	// Creating hash tables
 
-	indexes_t indexes         = {NULL};
-	indexes.wd2fpath_ht       = g_hash_table_new_full(g_direct_hash, g_direct_equal, 0,    0);
-	indexes.fpath2wd_ht       = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
-	indexes.fpath2ei_ht       = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, free);
-	indexes.exc_fpath_ht      = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
-	indexes.out_lines_aggr_ht = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
+	indexes_t indexes         =  {NULL};
+	ctx_p->indexes_p	  = &indexes;
+
+	indexes.wd2fpath_ht	  =  g_hash_table_new_full(g_direct_hash, g_direct_equal, 0,    0);
+	indexes.fpath2wd_ht	  =  g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
+	indexes.fpath2ei_ht	  =  g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, free);
+	indexes.exc_fpath_ht	  =  g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
+	indexes.out_lines_aggr_ht =  g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
 	i=0;
 	while (i<QUEUE_MAX) {
 		switch (i) {

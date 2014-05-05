@@ -17,6 +17,9 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef __CLSYNC_INDEXES_H
+#define __CLSYNC_INDEXES_H
+
 #include <glib.h>
 
 struct indexes {
@@ -29,4 +32,6 @@ struct indexes {
 	GHashTable *out_lines_aggr_ht;			// output lines aggregation hashtable
 };
 typedef struct indexes indexes_t;
+
+#endif
 

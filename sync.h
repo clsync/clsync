@@ -19,4 +19,5 @@
 
 extern int sync_run(struct ctx *ctx);
 extern int sync_term(int exitcode);
+extern int threads_foreach(int (*funct)(threadinfo_t *, void *), state_t state, void *arg);
 

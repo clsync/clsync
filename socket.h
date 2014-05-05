@@ -78,18 +78,22 @@ enum sockcmd_id {
 	SOCKCMD_REPLY_UNKNOWNCMD	= 160,
 	SOCKCMD_REPLY_INVALIDCMDID	= 161,
 	SOCKCMD_REPLY_EINVAL		= 162,
+	SOCKCMD_REPLY_EEXIST		= 163,
+	SOCKCMD_REPLY_EPERM		= 164,
+	SOCKCMD_REPLY_ECUSTOM		= 199,
 	SOCKCMD_REQUEST_LOGIN		= 200,
 	SOCKCMD_REQUEST_VERSION		= 201,
 	SOCKCMD_REQUEST_INFO		= 202,
+	SOCKCMD_REQUEST_DUMP		= 203,
 	SOCKCMD_REQUEST_DIE		= 210,
 	SOCKCMD_REQUEST_QUIT		= 250,
 	SOCKCMD_REPLY_LOGIN		= 300,
 	SOCKCMD_REPLY_VERSION		= 301,
 	SOCKCMD_REPLY_INFO		= 302,
+	SOCKCMD_REPLY_DUMP		= 303,
 	SOCKCMD_REPLY_DIE		= 310,
-	SOCKCMD_REPLY_UNEXPECTEDEND	= 300,
-	SOCKCMD_REPLY_QUIT		= 301,
 	SOCKCMD_REPLY_BYE		= 350,
+	SOCKCMD_REPLY_UNEXPECTEDEND	= 351,
 	SOCKCMD_MAXID
 };
 typedef enum sockcmd_id sockcmd_id_t;
@@ -132,11 +136,26 @@ struct sockcmd_dat_info {
 typedef struct sockcmd_dat_info sockcmd_dat_info_t;
 #endif
 
+struct sockcmd_dat_dump {
+	char		dir_path[PATH_MAX];
+};
+typedef struct sockcmd_dat_dump sockcmd_dat_dump_t;
+
+struct sockcmd_dat_eexist {
+	char		file_path[PATH_MAX];
+};
+typedef struct sockcmd_dat_eexist sockcmd_dat_eexist_t;
+
+struct sockcmd_dat_eperm {
+	char		descr[BUFSIZ];
+};
+typedef struct sockcmd_dat_eperm sockcmd_dat_eperm_t;
+
 struct sockcmd {
 	uint64_t	 cmd_num;
 	uint16_t	 cmd_id;
 	size_t		 data_len;
-	char		*data;
+	void		*data;
 };
 typedef struct sockcmd sockcmd_t;
 

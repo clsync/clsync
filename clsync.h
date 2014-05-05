@@ -17,6 +17,9 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef __CLSYNC_CLSYNC_H
+#define __CLSYNC_CLSYNC_H
+
 #include <stdio.h>
 #include <stdint.h>
 #include <sys/types.h>
@@ -88,4 +91,6 @@ extern int clsyncapi_getapiversion();
  * 
  */
 extern pid_t clsyncapi_fork(struct ctx *ctx_p);
+
+#endif
 

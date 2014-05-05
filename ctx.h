@@ -232,6 +232,7 @@ struct ctx {
 	sigset_t *sigset;
 	char isignoredexitcode[(1<<8)];
 #endif
+	void *indexes_p;
 };
 typedef struct ctx ctx_t;
 
