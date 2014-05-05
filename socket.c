@@ -41,7 +41,7 @@ int socket_gc() {
 		i--;
 		switch(sockthreaddata[i].state) {
 			case CLSTATE_DIED:
-				debug(3, "Forgeting clsyncsock #%u\n", i);
+				debug(3, "Forgeting clsyncsock #%u", i);
 				pthread_join(sockthreaddata[i].thread, NULL);
 				sockthreaddata[i].state = CLSTATE_NONE;
 				break;
@@ -169,7 +169,7 @@ clsyncsock_t *socket_accept(int sock) {
 	// Getting new connection
 	int clsyncsock_sock = accept(sock, NULL, NULL);
 	if(clsyncsock_sock == -1) {
-		error("socket_accept(%i): Cannot accept()\n", sock);
+		error("socket_accept(%i): Cannot accept()", sock);
 		return NULL;
 	}
 
@@ -185,7 +185,7 @@ clsyncsock_t *socket_listen_unix(const char *const socket_path) {
 	// already exists? - unlink
 	if(!access(socket_path, F_OK))
 		if(unlink(socket_path)) {
-			error("Cannot unlink() \"%s\".\n", 
+			error("Cannot unlink() \"%s\".", 
 				socket_path);
 			close(s);
 			return NULL;
@@ -198,7 +198,7 @@ clsyncsock_t *socket_listen_unix(const char *const socket_path) {
 		addr.sun_family = AF_UNIX;
 		strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path)-1);
 		if(bind(s, (struct sockaddr *)&addr, sizeof(addr))) {
-			error("Cannot bind() on address \"%s\".\n",
+			error("Cannot bind() on address \"%s\".",
 				socket_path);
 			close(s);
 			return NULL;
@@ -207,7 +207,7 @@ clsyncsock_t *socket_listen_unix(const char *const socket_path) {
 
 	// starting to listening
 	if(listen(s, SOCKET_BACKLOG)) {
-		error("Cannot listen() on address \"%s\".\n",
+		error("Cannot listen() on address \"%s\".",
 			socket_path);
 		close(s);
 		return NULL;
@@ -227,7 +227,7 @@ clsyncsock_t *socket_connect_unix(const char *const socket_path) {
 
 	// checking the path
 	if(access(socket_path, F_OK)) {
-		error("Cannot access() to \"%s\".\n", 
+		error("Cannot access() to \"%s\".", 
 			socket_path);
 		close(s);
 		return NULL;
@@ -240,7 +240,7 @@ clsyncsock_t *socket_connect_unix(const char *const socket_path) {
 		addr.sun_family = AF_UNIX;
 		strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path)-1);
 		if(connect(s, (struct sockaddr *)&addr, sizeof(addr))) {
-			error("Cannot connect() to address \"%s\".\n",
+			error("Cannot connect() to address \"%s\".",
 				socket_path);
 			close(s);
 			return NULL;
@@ -266,7 +266,7 @@ int socket_send(clsyncsock_t *clsyncsock, sockcmd_id_t cmd_id, ...) {
 				case SUBPROT0_TEXT: {
 					va_list ap_copy;
 
-					debug(3, "%p %p %p\n", prebuf0, textmessage_args[cmd_id], ap_copy);
+					debug(3, "%p %p %p", prebuf0, textmessage_args[cmd_id], ap_copy);
 
 					if(textmessage_args[cmd_id]) {
 						va_copy(ap_copy, ap);
@@ -285,13 +285,13 @@ int socket_send(clsyncsock_t *clsyncsock, sockcmd_id_t cmd_id, ...) {
 /*				case SUBPROT0_BINARY:
 					break;*/
 				default:
-					error("Unknown subprotocol with id %u.\n", clsyncsock->subprot);
+					error("Unknown subprotocol with id %u.", clsyncsock->subprot);
 					ret = EINVAL;
 					goto l_socket_send_end;
 			}
 			break;
 		default:
-			error("Unknown protocol with id %u.\n", clsyncsock->prot);
+			error("Unknown protocol with id %u.", clsyncsock->prot);
 			ret = EINVAL;
 			goto l_socket_send_end;
 	}
@@ -302,7 +302,7 @@ l_socket_send_end:
 }
 
 static inline int socket_overflow_fix(char *buf, char **data_start_p, char **data_end_p) {
-	debug(3, "buf==%p; data_start==%p; data_end==%p\n", buf, *data_start_p, *data_end_p);
+	debug(3, "buf==%p; data_start==%p; data_end==%p", buf, *data_start_p, *data_end_p);
 	if(buf == *data_start_p)
 		return 0;
 
@@ -411,7 +411,7 @@ int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p) {
 	ptr   =  recv_ptrs[clsyncsock_sock];
 	ptr   = (ptr==NULL   ? buf : ptr);
 
-	debug(3, "buf==%p; start==%p; ptr==%p\n", buf, start, ptr);
+	debug(3, "buf==%p; start==%p; ptr==%p", buf, start, ptr);
 
 	while(1) {
 		filled_length = ptr-buf;
@@ -419,7 +419,7 @@ int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p) {
 
 		if(rest_length <= 0) {
 			if(!socket_overflow_fix(buf, &start, &ptr)) {
-				debug(1, "Got too big message. Ignoring.\n");
+				debug(1, "Got too big message. Ignoring.");
 				ptr = buf;
 			}
 			continue;
@@ -492,7 +492,7 @@ l_socket_recv_end:
 	recv_stps[clsyncsock_sock] = start;
 	recv_ptrs[clsyncsock_sock] = ptr;
 
-	debug(3, "sockcmd_p->cmd_id == %i; buf==%p; ptr==%p; end==%p, filled=%p, buf_end==%p\n",
+	debug(3, "sockcmd_p->cmd_id == %i; buf==%p; ptr==%p; end==%p, filled=%p, buf_end==%p",
 		sockcmd_p->cmd_id, buf, ptr, end, &buf[filled_length_new], &buf[SOCKET_BUFSIZ]);
 
 	sockcmd_p->cmd_num++;
@@ -523,18 +523,18 @@ int socket_procclsyncsock(socket_sockthreaddata_t *arg) {
 	typedef enum auth_flags auth_flags_t;
 	auth_flags_t	 auth_flags = 0;
 
-	debug(3, "Started new thread for new connection.\n");
+	debug(3, "Started new thread for new connection.");
 
 	arg->state = (arg->authtype == SOCKAUTH_NULL) ? CLSTATE_MAIN : CLSTATE_AUTH;
 	socket_send(clsyncsock_p, SOCKCMD_REQUEST_NEGOTIATION, clsyncsock_p->prot, clsyncsock_p->subprot);
 
 	while((arg->running && *arg->running) && (arg->state==CLSTATE_AUTH || arg->state==CLSTATE_MAIN)) {
-		debug(3, "Iteration.\n");
+		debug(3, "Iteration.");
 
 		// Receiving message
 		int ret;
 		if((ret = socket_recv(clsyncsock_p, sockcmd_p))) {
-			error("Got error while receiving a message from clsyncsock with sock %u: %s (errno: %u)\n", 
+			error("Got error while receiving a message from clsyncsock with sock %u: %s (errno: %u)", 
 				arg->clsyncsock_p->sock);
 			break;
 		}
@@ -555,7 +555,7 @@ int socket_procclsyncsock(socket_sockthreaddata_t *arg) {
 										socket_send(clsyncsock_p, SOCKCMD_REPLY_NEGOTIATION, data->prot, data->subprot);
 									else {
 										socket_send(clsyncsock_p, SOCKCMD_REPLY_ACK,    sockcmd_p->cmd_id, sockcmd_p->cmd_num);
-										debug(1, "Negotiated proto: %u %u\n", data->prot, data->subprot);
+										debug(1, "Negotiated proto: %u %u", data->prot, data->subprot);
 									}
 									break;
 								default:
@@ -588,7 +588,7 @@ int socket_procclsyncsock(socket_sockthreaddata_t *arg) {
 
 		// Check if the socket is still alive
 		if(socket_check(clsyncsock_p)) {
-			debug(1, "clsyncsock socket error: %s\n", strerror(errno));
+			debug(1, "clsyncsock socket error: %s", strerror(errno));
 			break;
 		}
 
@@ -603,7 +603,7 @@ int socket_procclsyncsock(socket_sockthreaddata_t *arg) {
 		}
 	}
 
-	debug(3, "Ending a connection thread.\n");
+	debug(3, "Ending a connection thread.");
 
 	socket_thread_delete(arg);
 
@@ -615,7 +615,7 @@ socket_sockthreaddata_t *socket_thread_new() {
 	socket_sockthreaddata_t *threaddata_p = &sockthreaddata[clsyncsockthreads_num];
 
 	if(clsyncsockthreads_num >= SOCKET_MAX) {
-		error("Warning: socket_thread_new(): Too many connection threads.\n");
+		error("Warning: socket_thread_new(): Too many connection threads.");
 		errno = EUSERS;
 		pthread_mutex_unlock(&socket_thread_mutex);
 		return NULL;
@@ -632,7 +632,7 @@ socket_sockthreaddata_t *socket_thread_new() {
 
 	if(threaddata_p->state != CLSTATE_NONE) {
 		// This's not supposed to be
-		error("Internal-Error: socket_newconnarg(): connproc_arg->state != CLSTATE_NONE\n");
+		error("Internal-Error: socket_newconnarg(): connproc_arg->state != CLSTATE_NONE");
 		pthread_mutex_unlock(&socket_thread_mutex);
 		errno = EILSEQ;
 		return NULL;
@@ -641,7 +641,7 @@ socket_sockthreaddata_t *socket_thread_new() {
 
 	// Processing the events: creating a thread for new connection
 
-	debug(3, "clsyncsockthreads_count == %u;\tclsyncsockthreads_last == %u;\tclsyncsockthreads_num == %u\n", 
+	debug(3, "clsyncsockthreads_count == %u;\tclsyncsockthreads_last == %u;\tclsyncsockthreads_num == %u", 
 		clsyncsockthreads_count, clsyncsockthreads_last, clsyncsockthreads_num);
 
 	clsyncsockthreads_last = MAX(clsyncsockthreads_last, clsyncsockthreads_num);
@@ -665,7 +665,7 @@ socket_sockthreaddata_t *socket_thread_attach(clsyncsock_t *clsyncsock_p) {
 
 int socket_thread_start(socket_sockthreaddata_t *threaddata_p) {
 	if(pthread_create(&threaddata_p->thread, NULL, (void *(*)(void *))socket_procclsyncsock, threaddata_p)) {
-		error("Cannot create a thread for connection\n");
+		error("Cannot create a thread for connection");
 		return errno;
 	}
 
