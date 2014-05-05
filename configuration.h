@@ -73,3 +73,4 @@
 #define API_PREFIX			"clsyncapi_"
 
 #define DUMP_DIRMODE			0700
+#define DUMP_FILEMODE			0644

@@ -37,6 +37,7 @@ static pthread_t pthread_control;
 
 
 static inline int control_error(clsyncsock_t *clsyncsock_p, const char *const funct, const char *const args) {
+	debug(3, "%s(%s): %u: %s", funct, args, errno, strerror(errno));
 	return socket_send(clsyncsock_p, SOCKCMD_REPLY_ECUSTOM, funct, args, errno, strerror(errno));
 }
 
@@ -87,7 +88,7 @@ void control_dump_liststep(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_g
 			num = '?';
 	}
 
-	dprintf(arg->fd_out, "%c%c %s\n", act, num, fpath);
+	dprintf(arg->fd_out, "%c%c\t%s\n", act, num, fpath);
 
 	return;
 }
@@ -98,15 +99,17 @@ int control_dump_thread(threadinfo_t *threadinfo_p, void *_arg) {
 
 	snprintf(buf, BUFSIZ, "%u-%u-%lx", threadinfo_p->iteration, threadinfo_p->thread_num, (long)threadinfo_p->pthread);
 
-	arg->fd_out = openat(arg->dirfd[DUMP_DIRFD_THREAD], buf, O_WRONLY);
-	if (arg->fd_out == -1)
+	arg->fd_out = openat(arg->dirfd[DUMP_DIRFD_THREAD], buf, O_WRONLY|O_CREAT, DUMP_FILEMODE);
+	if (arg->fd_out == -1) {
+		control_error(arg->clsyncsock_p, "openat", "buf");
 		return errno;
+	}
 
 	{
 		char **argv;
 
 		dprintf(arg->fd_out, 
-			"thread:\n\titeration == %u;\n\tnum == %u;\n\tpthread == %lx;\n\tstarttime == %lu\n\texpiretime == %lu\n\tchild_pid == %u\n\ttry_n == %u\nCommand:",
+			"thread:\n\titeration == %u\n\tnum == %u\n\tpthread == %lx\n\tstarttime == %lu\n\texpiretime == %lu\n\tchild_pid == %u\n\ttry_n == %u\nCommand:",
 				threadinfo_p->iteration,
 				threadinfo_p->thread_num,
 				(long)threadinfo_p->pthread,
@@ -117,7 +120,7 @@ int control_dump_thread(threadinfo_t *threadinfo_p, void *_arg) {
 			);
 
 		argv = threadinfo_p->argv;
-		while (argv != NULL)
+		while (*argv != NULL)
 			dprintf(arg->fd_out, " \"%s\"", *(argv++));
 
 		dprintf(arg->fd_out, "\n");
@@ -131,17 +134,19 @@ int control_dump_thread(threadinfo_t *threadinfo_p, void *_arg) {
 	return 0;
 }
 
-int control_mkdir_open(clsyncsock_t *clsyncsock_p, const char *const dir_path) {
+int control_mkdir_open(clsyncsock_t *clsyncsock_p, const char *const dir_path, int dirfd_parent) {
 	int dirfd;
 
-	if (mkdir(dir_path, DUMP_DIRMODE)) {
+	debug(4, "mkdirat(%u, \"%s\", %o)", dirfd_parent, dir_path, DUMP_DIRMODE);
+	if (mkdirat(dirfd_parent, dir_path, DUMP_DIRMODE)) {
 		control_error(clsyncsock_p, "mkdir", dir_path);
 		return -1;
 	}
 
-	dirfd = open(dir_path, O_RDWR);
+	debug(4, "openat(%u, \"%s\", %x)", dirfd_parent, dir_path, O_RDWR|O_DIRECTORY|O_PATH);
+	dirfd = openat(dirfd_parent, dir_path, O_RDWR|O_DIRECTORY|O_PATH);
 	if (dirfd == -1) {
-		control_error(clsyncsock_p, "open",  dir_path);
+		control_error(clsyncsock_p, "openat",  dir_path);
 		return -1;
 	}
 
@@ -154,19 +159,22 @@ int control_dump(ctx_t *ctx_p, clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p)
 	int rootfd, fd_out;
 	struct control_dump_arg arg;
 	enum dump_dirfd_obj dirfd_obj;
+	debug(3, "%s", dat->dir_path);
 
 	static const char *const subdirs[] = {
 		[DUMP_DIRFD_QUEUE]	= "queue",
 		[DUMP_DIRFD_THREAD]	= "threads"
 	};
 
-	rootfd = control_mkdir_open(clsyncsock_p, dat->dir_path);
+	rootfd = control_mkdir_open(clsyncsock_p, dat->dir_path, AT_FDCWD);
 	if (rootfd == -1)
 		goto l_control_dump_end;
 
-	fd_out = openat(rootfd, "instance", O_WRONLY);
-	if (fd_out == -1)
+	fd_out = openat(rootfd, "instance", O_WRONLY|O_CREAT, DUMP_FILEMODE);
+	if (fd_out == -1) {
+		control_error(clsyncsock_p, "openat", "instance");
 		goto l_control_dump_end;
+	}
 
 	dprintf(fd_out, "status == %s\n", getenv("CLSYNC_STATUS"));
 
@@ -178,7 +186,7 @@ int control_dump(ctx_t *ctx_p, clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p)
 	while (dirfd_obj < DUMP_DIRFD_MAX) {
 		const char *const subdir = subdirs[dirfd_obj];
 
-		arg.dirfd[dirfd_obj] = control_mkdir_open(clsyncsock_p, subdir);
+		arg.dirfd[dirfd_obj] = control_mkdir_open(clsyncsock_p, subdir, rootfd);
 		if (arg.dirfd[dirfd_obj] == -1)
 			goto l_control_dump_end;
 
@@ -193,12 +201,14 @@ int control_dump(ctx_t *ctx_p, clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p)
 		char buf[BUFSIZ];
 		snprintf(buf, BUFSIZ, "%u", queue_id);
 
-		arg.fd_out = openat(arg.dirfd[DUMP_DIRFD_QUEUE], buf, O_WRONLY);
+		arg.fd_out = openat(arg.dirfd[DUMP_DIRFD_QUEUE], buf, O_WRONLY|O_CREAT, DUMP_FILEMODE);
 
 		arg.data = DUMP_LTYPE_EVINFO;
 		g_hash_table_foreach(indexes_p->fpath2ei_coll_ht[queue_id],  control_dump_liststep, &arg);
-		arg.data = DUMP_LTYPE_EXCLUDE;
-		g_hash_table_foreach(indexes_p->exc_fpath_coll_ht[queue_id], control_dump_liststep, &arg);
+		if (indexes_p->exc_fpath_coll_ht[queue_id] != NULL) {
+			arg.data = DUMP_LTYPE_EXCLUDE;
+			g_hash_table_foreach(indexes_p->exc_fpath_coll_ht[queue_id], control_dump_liststep, &arg);
+		}
 
 		close(arg.fd_out);
 		queue_id++;
@@ -219,24 +229,26 @@ l_control_dump_end:
 
 
 int control_procclsyncsock(socket_sockthreaddata_t *arg, sockcmd_t *sockcmd_p) {
+	int rc;
 	clsyncsock_t	*clsyncsock_p =          arg->clsyncsock_p;
 	ctx_t		*ctx_p        = (ctx_t *)arg->arg;
 
 	switch(sockcmd_p->cmd_id) {
 		case SOCKCMD_REQUEST_DUMP:
-			control_dump(ctx_p, clsyncsock_p, sockcmd_p);
+			rc = control_dump(ctx_p, clsyncsock_p, sockcmd_p);
 			break;
 		case SOCKCMD_REQUEST_INFO:
-			socket_send(clsyncsock_p, SOCKCMD_REPLY_INFO, ctx_p->config_block, ctx_p->label, ctx_p->flags, ctx_p->flags_set);
+			rc = socket_send(clsyncsock_p, SOCKCMD_REPLY_INFO, ctx_p->config_block, ctx_p->label, ctx_p->flags, ctx_p->flags_set);
 			break;
 		case SOCKCMD_REQUEST_DIE:
-			sync_term(SIGTERM);
+			rc = sync_term(SIGTERM);
 			break;
 		default:
 			return EINVAL;
 	}
 
-	return 0;
+	debug(3, "rc == %u", rc);
+	return rc;
 }
 
 static inline void closecontrol(ctx_t *ctx_p) {

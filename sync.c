@@ -337,7 +337,7 @@ static inline int indexes_outaggr_add(indexes_t *indexes_p, char *outline, event
 	return 0;
 }
 
-static threadsinfo_t *thread_getinfo() {	// TODO: optimize this
+static threadsinfo_t *thread_info() {	// TODO: optimize this
 	static threadsinfo_t threadsinfo={{{{0}}},{{{0}}},0};
 	if(!threadsinfo.mutex_init) {
 		int i=0;
@@ -354,15 +354,37 @@ static threadsinfo_t *thread_getinfo() {	// TODO: optimize this
 		}
 		threadsinfo.mutex_init++;
 	}
-//	pthread_mutex_lock(&threadsinfo._mutex);
 
 	return &threadsinfo;
 }
 
+#define thread_info_lock() _thread_info_lock(__FUNCTION__)
+static inline threadsinfo_t *_thread_info_lock(const char *const function_name) {
+	threadsinfo_t *threadsinfo_p = thread_info();
+
+	debug(4, "used by %s()", function_name);
+	pthread_mutex_lock  (&threadsinfo_p->mutex[PTHREAD_MUTEX_THREADSINFO]);
+
+	return threadsinfo_p;
+}
+
+#define thread_info_unlock(...) _thread_info_unlock(__FUNCTION__, __VA_ARGS__)
+static inline int _thread_info_unlock(const char *const function_name, int rc) {
+	threadsinfo_t *threadsinfo_p = thread_info();
+
+	debug(4, "used by %s()", function_name);
+	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_THREADSINFO]);
+
+	return rc;
+}
+
 int threads_foreach(int (*funct)(threadinfo_t *, void *), state_t state, void *arg) {
 	int i, rc;
-	threadsinfo_t *threadsinfo_p = thread_getinfo();
-	pthread_mutex_lock  (&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
+	threadsinfo_t *threadsinfo_p = thread_info_lock();
+#ifdef PARANOID
+	if(threadsinfo_p == NULL)
+		return 0;
+#endif
 
 	rc = 0;
 	i  = 0;
@@ -374,16 +396,16 @@ int threads_foreach(int (*funct)(threadinfo_t *, void *), state_t state, void *a
 		}
 	}
 
-	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
-
-	return rc;
+	return thread_info_unlock(rc);
 }
 
 time_t thread_nextexpiretime() {
 	time_t nextexpiretime = 0;
-	threadsinfo_t *threadsinfo_p = thread_getinfo();
+	threadsinfo_t *threadsinfo_p = thread_info_lock();
+#ifdef PARANOID
 	if(threadsinfo_p == NULL)
 		return 0;
+#endif
 
 	int thread_num = threadsinfo_p->used;
 
@@ -403,14 +425,17 @@ time_t thread_nextexpiretime() {
 		}
 	}
 
+	thread_info_unlock(0);
 	debug(3, "nextexpiretime == %i", nextexpiretime);
 	return nextexpiretime;
 }
 
 threadinfo_t *thread_new() {
-	threadsinfo_t *threadsinfo_p = thread_getinfo();
+	threadsinfo_t *threadsinfo_p = thread_info_lock();
+#ifdef PARANOID
 	if(threadsinfo_p == NULL)
 		return NULL;
+#endif
 
 	int thread_num;
 	threadinfo_t *threadinfo_p;
@@ -444,17 +469,20 @@ threadinfo_t *thread_new() {
 
 
 	debug(2, "thread_new -> thread_num: %i; used: %i", thread_num, threadsinfo_p->used);
+	thread_info_unlock(0);
 	return threadinfo_p;
 }
 
 int thread_del_bynum(int thread_num) {
 	debug(2, "thread_del_bynum(%i)", thread_num);
-	threadsinfo_t *threadsinfo_p = thread_getinfo();
+	threadsinfo_t *threadsinfo_p = thread_info_lock();
+#ifdef PARANOID
 	if(threadsinfo_p == NULL)
 		return errno;
+#endif
 
 	if(thread_num >= threadsinfo_p->used)
-		return EINVAL;
+		return thread_info_unlock(EINVAL);
 
 	threadinfo_t *threadinfo_p = &threadsinfo_p->threads[thread_num];
 	threadinfo_p->state = STATE_EXIT;
@@ -469,7 +497,7 @@ int thread_del_bynum(int thread_num) {
 	if(thread_num == (threadsinfo_p->used-1)) {
 		threadsinfo_p->used--;
 		debug(3, "thread_del_bynum(%i): there're %i threads left (#0).", thread_num, threadsinfo_p->used - threadsinfo_p->stacklen);
-		return 0;
+		return thread_info_unlock(0);
 	}
 	
 	threadinfo_t *t = &threadsinfo_p->threads[threadsinfo_p->used-1];
@@ -482,14 +510,14 @@ int thread_del_bynum(int thread_num) {
 #ifdef PARANOID
 		if(threadsinfo_p->stacklen >= threadsinfo_p->allocated) {
 			error("Threads metadata structures pointers stack overflowed!");
-			return EINVAL;
+			return thread_info_unlock(EINVAL);
 		}
 #endif
 		threadsinfo_p->threadsstack[threadsinfo_p->stacklen++] = threadinfo_p;
 	}
 
 	debug(3, "thread_del_bynum(%i): there're %i threads left (#1).", thread_num, threadsinfo_p->used - threadsinfo_p->stacklen);
-	return 0;
+	return thread_info_unlock(0);
 }
 
 int thread_gc(ctx_t *ctx_p) {
@@ -499,9 +527,11 @@ int thread_gc(ctx_t *ctx_p) {
 	if(!ctx_p->flags[THREADING])
 		return 0;
 
-	threadsinfo_t *threadsinfo_p = thread_getinfo();
+	threadsinfo_t *threadsinfo_p = thread_info_lock();
+#ifdef PARANOID
 	if(threadsinfo_p == NULL)
 		return errno;
+#endif
 
 	debug(2, "There're %i threads.", threadsinfo_p->used);
 	thread_num=-1;
@@ -519,7 +549,7 @@ int thread_gc(ctx_t *ctx_p) {
 		if(threadinfo_p->expiretime && (threadinfo_p->expiretime <= tm)) {
 			if(pthread_tryjoin_np(threadinfo_p->pthread, NULL)) {	// TODO: check this pthread_tryjoin_np() on error returnings
 				error("Debug3: thread_gc(): Thread #%i is alive too long: %lu <= %lu (started at %lu)", thread_num, threadinfo_p->expiretime, tm, threadinfo_p->starttime);
-				return ETIME;
+				return thread_info_unlock(ETIME);
 			}
 		}
 
@@ -549,29 +579,34 @@ int thread_gc(ctx_t *ctx_p) {
 				break;
 			default:
 				error("Got error while pthread_join() or pthread_tryjoin_np().", strerror(err), err);
-				return errno;
+				return thread_info_unlock(errno);
 
 		}
 
 		if(threadinfo_p->errcode) {
 			error("Got error from thread #%i: errcode %i.", thread_num, threadinfo_p->errcode);
 			thread_del_bynum(thread_num);
-			return threadinfo_p->errcode;
+			return thread_info_unlock(threadinfo_p->errcode);
 		}
 
+		thread_info_unlock(0);
 		if(thread_del_bynum(thread_num))
 			return errno;
+		thread_info_lock();
 	}
 
 	debug(3, "There're %i threads left.", threadsinfo_p->used - threadsinfo_p->stacklen);
-	return 0;
+	return thread_info_unlock(0);
 }
 
 int thread_cleanup(ctx_t *ctx_p) {
 	debug(3, "");
-	threadsinfo_t *threadsinfo_p = thread_getinfo();
+	threadsinfo_t *threadsinfo_p = thread_info_lock();
+
+#ifdef PARANOID
 	if(threadsinfo_p == NULL)
 		return errno;
+#endif
 
 	// Waiting for threads:
 	debug(1, "There're %i opened threads. Waiting.", threadsinfo_p->used);
@@ -618,11 +653,12 @@ int thread_cleanup(ctx_t *ctx_p) {
 #endif
 
 	debug(3, "done.");
-	return 0;
+	return thread_info_unlock(0);
 }
 
 int *state_p = NULL;
 int exitcode = 0;
+#define SHOULD_THREAD(ctx_p) ((ctx_p->flags[THREADING] != PM_OFF) && (ctx_p->flags[THREADING] != PM_SAFE || ctx_p->iteration_num))
 
 int exec_argv(char **argv, int *child_pid) {
 	debug(3, "Thread %p.", pthread_self());
@@ -768,7 +804,7 @@ int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_eventinfo_t *ei) {
 	debug(2, "n == %i", n);
 
-	if (!ctx_p->flags[THREADING] || ctx_p->flags[THREADINGLOCKED]) {
+	if (!SHOULD_THREAD(ctx_p)) {
 		int rc=0, ret=0, err=0;
 		int try_n=0, try_again;
 		do {
@@ -898,7 +934,7 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *inclistfile, const char *exclistfile) {
 	debug(2, "inclistfile == \"%s\"; exclistfile == \"%s\"", inclistfile, exclistfile);
 
-	if (!ctx_p->flags[THREADING] || ctx_p->flags[THREADINGLOCKED]) {
+	if (!SHOULD_THREAD(ctx_p)) {
 		debug(3, "ctx_p->handler_funct.rsync == %p", ctx_p->handler_funct.rsync);
 
 		int rc=0, err=0;
@@ -958,11 +994,9 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 
 }
 
-
 // === SYNC_EXEC() === {
 
-#define SYNC_EXEC(...) (ctx_p->flags[THREADING]&&!ctx_p->flags[THREADINGLOCKED]?sync_exec_thread:sync_exec)(__VA_ARGS__)
-
+#define SYNC_EXEC(...) (SHOULD_THREAD(ctx_p) ? sync_exec_thread : sync_exec)(__VA_ARGS__)
 
 #define _sync_exec_getargv(argv, firstarg, COPYARG) {\
 	va_list arglist;\
@@ -1407,8 +1441,6 @@ l_sync_initialsync_walk_end:
 }
 
 static inline int sync_initialsync_cleanup(ctx_t *ctx_p, initsync_t initsync, int ret) {
-	if (initsync == INITSYNC_FULL)
-		ctx_p->flags[THREADINGLOCKED]--;
 	return ret;
 }
 
@@ -1424,10 +1456,9 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 	}
 #endif
 
-	if (initsync == INITSYNC_FULL) {
-		ctx_p->flags[THREADINGLOCKED]++;
+	if (initsync == INITSYNC_FULL)
 		queue_id = QUEUE_INSTANT;
-	} else
+	else
 		queue_id = QUEUE_NORMAL;
 
 	// non-RSYNC case:
@@ -2795,12 +2826,12 @@ int sync_inotify_wait(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 	time_t tm = time(NULL);
 	long delay = ((unsigned long)~0 >> 1);
 
-	threadsinfo_t *threadsinfo_p = thread_getinfo();
+	threadsinfo_t *threadsinfo_p = thread_info();
 
+	debug(4, "pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
 	pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
 	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
-	debug(3, "");
 
 	fd_set rfds;
 	FD_ZERO(&rfds);
@@ -2860,18 +2891,29 @@ int sync_inotify_wait(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 		tv.tv_usec = 0;
 	}
 
+	debug(4, "pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
 	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
 	if(*state_p != STATE_RUNNING)
 		return 0;
 
+	debug(4, "pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
+	pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
+	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
+	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
+
 	debug(3, "select with timeout %li secs.", tv.tv_sec);
 	int ret = select(inotify_d+1, &rfds, NULL, NULL, &tv);
+
+	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
 
 	if((ret == -1) && (errno == EINTR)) {
 		errno = 0;
 		ret   = 0;
 	}
+
+	debug(4, "pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
+	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
 	if((ctx_p->flags[EXITONNOEVENTS]) && (ret == 0)) // if not events and "--exit-on-no-events" is set
 		*state_p = STATE_EXIT;
@@ -3011,7 +3053,7 @@ int sync_inotify_loop(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 	while(state != STATE_EXIT) {
 		int events;
 
-		threadsinfo_t *threadsinfo_p = thread_getinfo();
+		threadsinfo_t *threadsinfo_p = thread_info();
 		debug(4, "pthread_mutex_lock()");
 		pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 		debug(3, "current state is %i (iteration: %u/%u)",
@@ -3124,6 +3166,32 @@ void sync_sig_int(int signal) {
 	return;
 }
 
+int sync_tryforcecycle(pthread_t pthread_parent) {
+	debug(3, "sending signal to interrupt blocking operations like select()-s and so on");
+	pthread_kill(pthread_parent, SIGUSR_BLOPINT);
+#ifdef VERYPARANOID
+	int i=0;
+	if (++i > KILL_TIMEOUT) {
+		error("Seems we got a deadlock.");
+		return EDEADLK;
+	}
+#endif
+
+#ifdef SYNC_SWITCHSTATE_COND_TIMEDWAIT // Hangs
+	struct timespec time_timeout;
+	clock_gettime(CLOCK_REALTIME, &time_timeout);
+	time_timeout.tv_sec++;
+//		time_timeout.tv_sec  = now.tv_sec;
+	debug(3, "pthread_cond_timedwait() until %li.%li", time_timeout.tv_sec, time_timeout.tv_nsec);
+	if (pthread_cond_timedwait(pthread_cond_state, pthread_mutex_state, &time_timeout) != ETIMEDOUT)
+		return 0;
+#else
+	sleep(1);	// TODO: replace this with pthread_cond_timedwait()
+#endif
+
+	return EINPROGRESS;
+}
+
 int sync_switch_state(pthread_t pthread_parent, int newstate) {
 	if (state_p == NULL) {
 		debug(3, "sync_switch_state(%p, %i), but state_p == NULL", pthread_parent, newstate);
@@ -3133,7 +3201,7 @@ int sync_switch_state(pthread_t pthread_parent, int newstate) {
 	debug(3, "sync_switch_state(%p, %i)", pthread_parent, newstate);
 
 	// Getting mutexes
-	threadsinfo_t *threadsinfo_p = thread_getinfo();
+	threadsinfo_t *threadsinfo_p = thread_info();
 	if (threadsinfo_p == NULL) {
 		// If no mutexes, just change the state
 		goto l_sync_parent_interrupt_end;
@@ -3142,33 +3210,26 @@ int sync_switch_state(pthread_t pthread_parent, int newstate) {
 		// If no mutexes, just change the state
 		goto l_sync_parent_interrupt_end;
 	}
-	pthread_mutex_t *pthread_mutex_state = &threadsinfo_p->mutex[PTHREAD_MUTEX_STATE];
-	pthread_cond_t  *pthread_cond_state  = &threadsinfo_p->cond [PTHREAD_MUTEX_STATE];
+	pthread_mutex_t *pthread_mutex_state  = &threadsinfo_p->mutex[PTHREAD_MUTEX_STATE];
+	pthread_mutex_t *pthread_mutex_select = &threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT];
+	pthread_cond_t  *pthread_cond_state   = &threadsinfo_p->cond [PTHREAD_MUTEX_STATE];
 
 	// Locking all necessary mutexes
-	debug(4, "while(pthread_mutex_trylock())");
+	debug(4, "while(pthread_mutex_trylock( pthread_mutex_state ))");
 	while (pthread_mutex_trylock(pthread_mutex_state) == EBUSY) {
-		debug(3, "sending signal to interrupt blocking operations like select()-s and so on");
-		pthread_kill(pthread_parent, SIGUSR_BLOPINT);
-#ifdef VERYPARANOID
-		int i=0;
-		if (++i > KILL_TIMEOUT) {
-			error("Seems we got a deadlock.");
-			return EDEADLK;
-		}
-#endif
-
-#ifdef SYNC_SWITCHSTATE_COND_TIMEDWAIT // Hangs
-		struct timespec time_timeout;
-		clock_gettime(CLOCK_REALTIME, &time_timeout);
-		time_timeout.tv_sec++;
-//		time_timeout.tv_sec  = now.tv_sec;
-		debug(3, "pthread_cond_timedwait() until %li.%li", time_timeout.tv_sec, time_timeout.tv_nsec);
-		if (pthread_cond_timedwait(pthread_cond_state, pthread_mutex_state, &time_timeout) != ETIMEDOUT)
+		int rc = sync_tryforcecycle(pthread_parent);
+		if (rc && rc != EINPROGRESS)
+			return rc;
+		if (!rc)
 			break;
-#else
-		sleep(1);	// TODO: replace this with pthread_cond_timedwait()
-#endif
+	}
+	debug(4, "while(pthread_mutex_trylock( pthread_mutex_select ))");
+	while (pthread_mutex_trylock(pthread_mutex_select) == EBUSY) {
+		int rc = sync_tryforcecycle(pthread_parent);
+		if (rc && rc != EINPROGRESS)
+			return rc;
+		if (!rc)
+			break;
 	}
 	// Changing the state
 
@@ -3182,18 +3243,19 @@ int sync_switch_state(pthread_t pthread_parent, int newstate) {
 
 	debug(4, "pthread_cond_broadcast(). New state is %i.", *state_p);
 	pthread_cond_broadcast(pthread_cond_state);
-	debug(4, "pthread_mutex_unlock()");
+	debug(4, "pthread_mutex_unlock( pthread_mutex_state )");
 	pthread_mutex_unlock(pthread_mutex_state);
+	debug(4, "pthread_mutex_unlock( pthread_mutex_select )");
+	pthread_mutex_unlock(pthread_mutex_select);
 
-	return 0;
+	return thread_info_unlock(0);
 
 l_sync_parent_interrupt_end:
 
 	*state_p = newstate;
 	pthread_kill(pthread_parent, SIGUSR_BLOPINT);
 
-	return 0;
-
+	return thread_info_unlock(0);
 }
 
 int *sync_sighandler_exitcode_p = NULL;

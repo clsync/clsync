@@ -206,6 +206,8 @@ typedef struct threadinfo threadinfo_t;
 
 enum pthread_mutex_id {
 	PTHREAD_MUTEX_STATE,
+	PTHREAD_MUTEX_SELECT,
+	PTHREAD_MUTEX_THREADSINFO,
 	PTHREAD_MUTEX_MAX
 };
 

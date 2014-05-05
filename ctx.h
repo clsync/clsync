@@ -96,9 +96,6 @@ enum flags_enum {
 	MAXITERATIONS		= 15|OPTION_LONGOPTONLY,
 
 	IGNOREFAILURES		= 16|OPTION_LONGOPTONLY,
-
-// Not an options:
-	THREADINGLOCKED		=  0|NOTOPTION,
 };
 typedef enum flags_enum flags_t;
 
