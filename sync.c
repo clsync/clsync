@@ -1683,7 +1683,7 @@ l_sync_mark_walk_end:
 }
 
 int sync_notify_init(ctx_t *ctx_p) {
-	switch(ctx_p->notifyengine) {
+	switch (ctx_p->notifyengine) {
 #ifdef FANOTIFY_SUPPORT
 		case NE_FANOTIFY: {
 			int fanotify_d = fanotify_init(FANOTIFY_FLAGS, FANOTIFY_EVFLAGS);
@@ -1701,11 +1701,12 @@ int sync_notify_init(ctx_t *ctx_p) {
 #else
 			int inotify_d = inotify_init1(INOTIFY_FLAGS);
 #endif
-			if(inotify_d == -1) {
+			if (inotify_d == -1) {
 				error("cannot inotify_init(%i).", INOTIFY_FLAGS);
 				return -1;
 			}
 
+			debug(3, "inotify_d == %u", inotify_d);
 			return inotify_d;
 		}
 	}
@@ -2799,7 +2800,7 @@ int sync_inotify_wait(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 	pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
 	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
-	debug(3, "sync_inotify_wait()");
+	debug(3, "");
 
 	fd_set rfds;
 	FD_ZERO(&rfds);
@@ -3079,7 +3080,7 @@ int sync_inotify_loop(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 			continue;	// Timeout
 		}
 		if(events  < 0) {
-			error("Got error while waiting for event from inotify with select().");
+			error("Got error while waiting for event from inotify with select(). inotify_d == %u.", inotify_d);
 			return errno;
 		}
 

@@ -257,7 +257,7 @@ int control_loop(ctx_t *ctx_p) {
 
 		// Check if the socket is still alive
 		if(socket_check_bysock(s)) {
-			debug(1, "Control socket closed [case 0]: %s", strerror(errno));
+			error("Control socket closed [case 0]");
 			closecontrol(ctx_p);
 			continue;
 		}
@@ -355,6 +355,7 @@ int control_run(ctx_t *ctx_p) {
 				ret = errno;
 			} else {
 				s = clsyncsock->sock;
+				clsyncsock->sock = -1;
 				socket_cleanup(clsyncsock);
 			}
 		}

@@ -113,7 +113,7 @@ static inline int socket_check(clsyncsock_t *clsyncsock_p) {
 clsyncsock_t *socket_new(int clsyncsock_sock) {
 	clsyncsock_t *clsyncsock_p = xmalloc(sizeof(*clsyncsock_p));
 	
-	debug(2, "sock == %i.\n", clsyncsock_sock);
+	debug(2, "sock == %i.", clsyncsock_sock);
 
 	clsyncsock_p->sock    = clsyncsock_sock;
 	
@@ -126,7 +126,7 @@ clsyncsock_t *socket_new(int clsyncsock_sock) {
 int socket_cleanup(clsyncsock_t *clsyncsock_p) {
 	int clsyncsock_sock = clsyncsock_p->sock;
 
-	debug(2, "sock == %i.\n", clsyncsock_sock);
+	debug(2, "sock == %i.", clsyncsock_sock);
 
 	recv_ptrs[clsyncsock_sock] = NULL;
 	recv_stps[clsyncsock_sock] = NULL;
