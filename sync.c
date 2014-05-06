@@ -1975,9 +1975,12 @@ eventinfo_t *ht_fpath_isincluded(GHashTable *ht, const char *const fpath) {
 		return NULL;
 
 	evinfo = g_hash_table_lookup(ht, "");
-	debug(5, "recursive looking up for \"\": %p (%x: recusively: %x)", evinfo, evinfo->flags, evinfo->flags & EVIF_RECURSIVELY);
-	if (evinfo->flags & EVIF_RECURSIVELY)
-		return evinfo;
+
+	if (evinfo != NULL) {
+		debug(5, "recursive looking up for \"\": %p (%x: recusively: %x)", evinfo, evinfo->flags, evinfo->flags & EVIF_RECURSIVELY);
+		if (evinfo->flags & EVIF_RECURSIVELY)
+			return evinfo;
+	}
 
 	size_t fpath_len = strlen(fpath);
 	memcpy(buf, fpath, fpath_len+1);
@@ -1988,10 +1991,13 @@ eventinfo_t *ht_fpath_isincluded(GHashTable *ht, const char *const fpath) {
 		if (*ptr == '/') {
 			*ptr = 0;
 			evinfo = g_hash_table_lookup(ht, buf);
-			debug(5, "recursive looking up for \"%s\": %p (%x: recusively: %x)", buf, evinfo, evinfo->flags, evinfo->flags & EVIF_RECURSIVELY);
-			*ptr = '/';
-			if (evinfo->flags & EVIF_RECURSIVELY)
-				return evinfo;
+
+			if (evinfo != NULL) {
+				debug(5, "recursive looking up for \"%s\": %p (%x: recusively: %x)", buf, evinfo, evinfo->flags, evinfo->flags & EVIF_RECURSIVELY);
+				*ptr = '/';
+				if (evinfo->flags & EVIF_RECURSIVELY)
+					return evinfo;
+			}
 		}
 
 		ptr++;
