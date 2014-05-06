@@ -655,7 +655,10 @@ void gkf_parse(ctx_t *ctx_p, GKeyFile *gkf) {
 	do {
 		const struct option *lo_ptr = long_options;
 
-		ctx_p->flags_values_raw[CONFIGBLOCKINHERITS] = NULL;
+		if (config_block != ctx_p->config_block) {
+			ctx_p->flags_values_raw[CONFIGBLOCKINHERITS] = NULL;
+			ctx_p->flags_set[CONFIGBLOCKINHERITS] = 0;
+		}
 		while(lo_ptr->name != NULL) {
 			gchar *value = g_key_file_get_value(gkf, config_block, lo_ptr->name, NULL);
 			if(value != NULL) {
