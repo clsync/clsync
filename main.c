@@ -308,6 +308,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 		case PS_CONFIG:
 			if(ctx_p->flags_set[param_id])
 				return 0;
+			ctx_p->flags_set[param_id] = 1;
 			break;
 		default:
 			error("Warning: Unknown parameter #%i source (value \"%s\").", param_id, arg!=NULL ? arg : "");
