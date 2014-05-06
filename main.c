@@ -881,7 +881,7 @@ int parse_rules_fromfile(ctx_t *ctx_p) {
 
 			// Parsing the rest part of the line
 
-			debug(1, "Rule #%i <%c> <%c> pattern <%s> (length: %i).", rule->num, line[-2], line[-1], line, linelen);
+			debug(1, "Rule #%i <%c>[0x%02x 0x%02x] <%c>[0x%04x] pattern <%s> (length: %i).", rule->num, line[-2], rule->perm, rule->mask, line[-1], rule->objtype, line, linelen);
 			if((ret=rule_complete(rule, line)))
 				goto l_parse_rules_fromfile_end;
 
