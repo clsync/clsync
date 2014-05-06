@@ -48,6 +48,7 @@ static const struct option long_options[] =
 	{"background",		optional_argument,	NULL,	BACKGROUND},
 	{"config-file",		required_argument,	NULL,	CONFIGFILE},
 	{"config-block",	required_argument,	NULL,	CONFIGBLOCK},
+	{"config-block-inherits",required_argument,	NULL,	CONFIGBLOCKINHERITS},
 	{"pid-file",		required_argument,	NULL,	PIDFILE},
 	{"uid",			required_argument,	NULL,	UID},
 	{"gid",			required_argument,	NULL,	GID},
@@ -230,7 +231,7 @@ char *parameter_expand(ctx_t *ctx_p, char *arg, int ignorewarnings) {
 		switch (*ptr) {
 			case 0:
 				ret[ret_len] = 0;
-				debug(2, "Expanding value \"%s\" to \"%s\"", arg, ret);
+				debug(3, "Expanding value \"%s\" to \"%s\"", arg, ret);
 				free(arg);
 				return ret;
 			case '%': {
@@ -327,10 +328,12 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			syntax();
 			break;
 		case CONFIGFILE:
-			ctx_p->config_path  = *arg ? arg : NULL;
+			ctx_p->config_path    = *arg ? arg : NULL;
 			break;
 		case CONFIGBLOCK:
-			ctx_p->config_block = *arg ? arg : NULL;
+			ctx_p->config_block   = *arg ? arg : NULL;
+			break;
+		case CONFIGBLOCKINHERITS:
 			break;
 		case GID:
 			ctx_p->gid = (unsigned int)atol(arg);
@@ -647,15 +650,28 @@ int arguments_parse(int argc, char *argv[], struct ctx *ctx_p) {
 }
 
 void gkf_parse(ctx_t *ctx_p, GKeyFile *gkf) {
-	const struct option *lo_ptr = long_options;
-	while(lo_ptr->name != NULL) {
-		gchar *value = g_key_file_get_value(gkf, ctx_p->config_block, lo_ptr->name, NULL);
-		if(value != NULL) {
-			int ret = parse_parameter(ctx_p, lo_ptr->val, value, PS_CONFIG);
-			if(ret) exit(ret);
+	char *config_block = ctx_p->config_block;
+	do {
+		const struct option *lo_ptr = long_options;
+
+		ctx_p->flags_values_raw[CONFIGBLOCKINHERITS] = NULL;
+		while(lo_ptr->name != NULL) {
+			gchar *value = g_key_file_get_value(gkf, config_block, lo_ptr->name, NULL);
+			if(value != NULL) {
+				int ret = parse_parameter(ctx_p, lo_ptr->val, value, PS_CONFIG);
+				if(ret) exit(ret);
+			}
+			lo_ptr++;
 		}
-		lo_ptr++;
-	}
+
+		if (config_block != ctx_p->config_block)
+			free(config_block);
+
+		config_block = ctx_p->flags_values_raw[CONFIGBLOCKINHERITS];
+
+		if (config_block != NULL)
+			debug(2, "Next block is: %s", config_block);
+	} while (config_block != NULL);
 
 	return;
 }

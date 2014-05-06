@@ -98,6 +98,8 @@ enum flags_enum {
 	IGNOREFAILURES		= 16|OPTION_LONGOPTONLY,
 
 	DUMPDIR			= 17|OPTION_LONGOPTONLY,
+
+	CONFIGBLOCKINHERITS	= 18|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 

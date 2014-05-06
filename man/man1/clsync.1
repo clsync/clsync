@@ -148,9 +148,9 @@ Is not set by default.
 .I config\-file\-path
 .RS 8
 Use configuration from file
-.IR config\-file\-path .
+.IR config\-file\-path
 (see 
-.BR "CONFIGURATION FILE" )
+.BR "CONFIGURATION FILE" ).
 
 Set to "/NULL/" if no config files should be read.
 
@@ -162,9 +162,27 @@ Is not set by default.
 .I config\-block\-name
 .RS 8
 Use configuration block with name
-.IR config\-block\-name .
+.IR config\-block\-name
 (see 
-.BR "CONFIGURATION FILE" )
+.BR "CONFIGURATION FILE" ).
+
+Default value is "default".
+.PP
+.RE
+
+.B \-\-config\-block\-inherits
+.I config\-parent\-block\-name
+.RS 8
+Use configuration block with name
+.IR config\-parent\-block\-name
+as parent for
+.IR config\-block\-name
+(see 
+.BR "CONFIGURATION FILE" ).
+Options from
+.IR config\-parent\-block\-name
+will be inherited to
+.IR config\-block\-name .
 
 Default value is "default".
 .PP
@@ -799,8 +817,8 @@ Is not set by default.
 .B \-d, \-\-debug
 .RS 8
 Increases debugging output. This may be supplied multiple times for more
-debugging information, up to a maximum of three "d" flags (more will do 
-nothing), for example "\-d \-d \-d" or "\-d3" (equivalent cases)
+debugging information, up to a maximum of five "d" flags (more will do 
+nothing), for example "\-d \-d \-d \-d \-d" or "\-d5" (equivalent cases)
 
 Is not set by default.
 .RE
@@ -1420,20 +1438,30 @@ example:
 .RS
 [default]
 .br
-background=1
+background = 1
 .br
-mode=rsyncshell
+mode = rsyncshell
 .br
-debug=0
+debug = 0
 .br
-syslog=1
+output = syslog
 .br
-label=default
+label = default
 .br
-pid-file=/var/run/clsync-%label%.pid
-.br
+pid\-file = /var/run/clsync\-%label%.pid
 
+
+[debug]
 .br
+config\-block\-inherits = default
+.br
+debug = 5
+.br
+background = 0
+.br
+output = stderr
+
+
 [test]
 .br
 mode=rsyncdirect
@@ -1447,7 +1475,9 @@ API doesn't support multiple assignments. If you need to list some values
 (e.g. exitcodes) just list them with commas in single assignment
 (e.g. "ignore\-exitcode=23,24").
 
-In this example there's 2 blocks are set - "default" and "test".
+In this example there're 3 blocks are set - "default", "debug" and "test".
+And block "debug" inherited setup of block "default" except options "debug",
+"background" and "output".
 
 By default
 .B clsync
