@@ -383,7 +383,7 @@ int threads_foreach(int (*funct)(threadinfo_t *, void *), state_t state, void *a
 	threadsinfo_t *threadsinfo_p = thread_info_lock();
 #ifdef PARANOID
 	if(threadsinfo_p == NULL)
-		return 0;
+		return thread_info_unlock(EINVAL);
 #endif
 
 	rc = 0;
@@ -404,7 +404,7 @@ time_t thread_nextexpiretime() {
 	threadsinfo_t *threadsinfo_p = thread_info_lock();
 #ifdef PARANOID
 	if(threadsinfo_p == NULL)
-		return 0;
+		return thread_info_unlock(0);
 #endif
 
 	int thread_num = threadsinfo_p->used;
@@ -433,8 +433,10 @@ time_t thread_nextexpiretime() {
 threadinfo_t *thread_new() {
 	threadsinfo_t *threadsinfo_p = thread_info_lock();
 #ifdef PARANOID
-	if(threadsinfo_p == NULL)
+	if(threadsinfo_p == NULL) {
+		thread_info_unlock(0);
 		return NULL;
+	}
 #endif
 
 	int thread_num;
@@ -478,7 +480,7 @@ int thread_del_bynum(int thread_num) {
 	threadsinfo_t *threadsinfo_p = thread_info_lock();
 #ifdef PARANOID
 	if(threadsinfo_p == NULL)
-		return errno;
+		return thread_info_unlock(errno);
 #endif
 
 	if(thread_num >= threadsinfo_p->used)
@@ -530,7 +532,7 @@ int thread_gc(ctx_t *ctx_p) {
 	threadsinfo_t *threadsinfo_p = thread_info_lock();
 #ifdef PARANOID
 	if(threadsinfo_p == NULL)
-		return errno;
+		return thread_info_unlock(errno);
 #endif
 
 	debug(2, "There're %i threads.", threadsinfo_p->used);
@@ -605,7 +607,7 @@ int thread_cleanup(ctx_t *ctx_p) {
 
 #ifdef PARANOID
 	if(threadsinfo_p == NULL)
-		return errno;
+		return thread_info_unlock(errno);
 #endif
 
 	// Waiting for threads:
