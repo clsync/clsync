@@ -1681,10 +1681,10 @@ int sync_mark_walk(int notify_d, ctx_t *ctx_p, const char *dirpath, indexes_t *i
 			case FTS_NS:
 			case FTS_DNR:
 				if(errno == ENOENT) {
-					debug(1, "Got error while fts_read(): %s (errno: %i; fts_info: %i).", node->fts_info);
+					debug(1, "Got error while fts_read(); fts_info: %i.", node->fts_info);
 					continue;
 				} else {
-					error_or_debug(STATE_STARTING(state_p)?-1:2, "Got error while fts_read(): %s (errno: %i; fts_info: %i).", node->fts_info);
+					error_or_debug(STATE_STARTING(state_p)?-1:2, "Got error while fts_read(); fts_info: %i.", node->fts_info);
 					ret = errno;
 					goto l_sync_mark_walk_end;
 				}
