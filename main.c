@@ -1078,7 +1078,7 @@ int main_status_update(ctx_t *ctx_p, state_t state) {
 
 	FILE *f = fopen(ctx_p->statusfile, "w");
 	if(f == NULL) {
-		error("Cannot open file \"%s\" for writing: %s (errno: %u).", 
+		error("Cannot open file \"%s\" for writing.", 
 			ctx_p->statusfile);
 		return errno;
 	}
@@ -1089,13 +1089,13 @@ int main_status_update(ctx_t *ctx_p, state_t state) {
 	int ret = 0;
 
 	if(fprintf(f, "%s", status_descr[state]) <= 0) {	// TODO: check output length
-		error("Cannot write to file \"%s\": %s (errno: %u).",
+		error("Cannot write to file \"%s\".",
 			ctx_p->statusfile);
 		ret = errno;
 	}
 
 	if(fclose(f)) {
-		error("Cannot close file \"%s\": %s (errno: %u).", 
+		error("Cannot close file \"%s\".", 
 			ctx_p->statusfile);
 		ret = errno;
 	}
