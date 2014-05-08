@@ -3309,6 +3309,9 @@ void sync_dump_liststep(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) 
 	struct sync_dump_arg *arg 	= 		  arg_gp;
 	char act, num;
 
+	if (fpath == NULL || evinfo == NULL)
+		return;
+
 	switch (arg->data) {
 		case DUMP_LTYPE_INCLUDE:
 			act = '+';
