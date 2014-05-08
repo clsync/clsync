@@ -26,7 +26,7 @@ REVISION=$(shell [ -d .git ] &&\
 		'\".'$$(($$(git log 2>/dev/null \
 			| grep -c ^commit \
 			| tr -d "\n" \
-			)-605 \
+			)-606 \
 		))'\"' \
 	) || echo -n '"-release"' )
 
