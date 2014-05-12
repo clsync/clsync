@@ -5,7 +5,7 @@ clsync_CFLAGS = $(AM_CFLAGS)
 if SOCKET
 lib_LTLIBRARIES = libclsync.la
 libclsync_la_SOURCES = malloc.c libclsync.c socket.c
-libclsync_la_LDFLAGS = -version-info 3:0:0
+libclsync_la_LDFLAGS = -version-info 0:0:0
 clsync_SOURCES += socket.c control.c
 endif
 
