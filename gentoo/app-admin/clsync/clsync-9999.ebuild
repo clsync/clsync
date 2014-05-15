@@ -1,11 +1,11 @@
-# Copyright 1999-2013 Gentoo Foundation
+# Copyright 1999-2014 Gentoo Foundation
 # Distributed under the terms of the GNU General Public License v2
 # $Header: $
 
 EAPI=5
 
 if [[ ${PV} == "9999" ]] ; then
-	_GIT=git-2
+	inherit git-r3
 	EGIT_REPO_URI="https://github.com/xaionaro/${PN}.git"
 	SRC_URI=""
 	KEYWORDS=""
@@ -14,13 +14,13 @@ else
 	KEYWORDS="~x86 ~amd64"
 fi
 
-inherit autotools $_GIT
+inherit autotools
 
 DESCRIPTION="Live sync tool based on inotify, written in GNU C"
 HOMEPAGE="http://ut.mephi.ru/oss"
 LICENSE="GPL-3+"
 SLOT="0"
-IUSE="-caps -cluster debug doc +examples extra-hardened hardened mhash"
+IUSE="caps cluster control-socket debug doc +examples extra-hardened hardened mhash"
 REQUIRED_USE="
 	extra-hardened? ( hardened )
 	mhash? ( cluster )"
@@ -48,6 +48,7 @@ src_configure() {
 		--docdir="${EPREFIX}/usr/share/doc/${PF}" \
 		--enable-paranoid=${harden_level} \
 		$(use_enable cluster) \
+		$(use_enable control-socket socket) \
 		$(use_enable debug) \
 		$(use_with caps capabilities) \
 		$(use_with mhash)
@@ -66,13 +67,13 @@ src_install() {
 	rm "${ED}/usr/share/doc/${PF}"/{LICENSE,TODO} || die
 	use examples || rm -r "${ED}/usr/share/doc/${PF}/examples" || die
 
-	newinitd "${FILESDIR}/${PN}.initd" "${PN}"
+	newinitd "${FILESDIR}/${PN}.initd-2" "${PN}"
 	newconfd "${FILESDIR}/${PN}.confd" "${PN}"
 
 	# filter rules and sync scripts are supposed to be here
 	keepdir "${EPREFIX}/etc/${PN}"
 	insinto "/etc/${PN}"
-	doins "${FILESDIR}/${PN}.conf"
+	newins "${FILESDIR}/${PN}.conf-2" "${PN}.conf"
 }
 
 pkg_postinst() {

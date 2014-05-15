@@ -16,6 +16,7 @@
 <use>
 	<flag name="caps">Capabilities support. Under development, may not work properly now.</flag>
 	<flag name="cluster">Enable clustering support (allows master-master clsync on multiple hosts). Not fully implemented yet.</flag>
+	<flag name="control-socket">Enable AF_UNIX control socket support.</flag>
 	<flag name="extra-hardened">Enable extra security checks. This may hurt performance.</flag>
 </use>
 </pkgmetadata>
