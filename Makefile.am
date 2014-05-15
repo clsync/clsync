@@ -28,7 +28,7 @@ REVISION=$(shell [ -d .git ] &&\
 			| tr -d "\n" \
 			)-606 \
 		))'\"' \
-	) || echo -n '"-release"' )
+	) || echo -n '\"-release\"' )
 
 AM_CFLAGS := -DREVISION=$(REVISION)
 
