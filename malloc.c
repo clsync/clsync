@@ -17,7 +17,9 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "common.h"
+#include <stdlib.h>
+#include <string.h>
+
 #include "malloc.h"
 #include "error.h"
 
