@@ -51,7 +51,6 @@
 #include <sys/time.h>
 #include <dirent.h>
 #include <sys/utsname.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
