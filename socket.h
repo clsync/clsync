@@ -20,8 +20,9 @@
 #ifndef __CLSYNC_SOCKET_H
 #define __CLSYNC_SOCKET_H
 
-#include <stdint.h>
+#include <linux/limits.h>
 #include <pthread.h>
+#include <stdint.h>
 
 #define SOCKET_DEFAULT_PROT	0
 #define SOCKET_DEFAULT_SUBPROT	SUBPROT0_TEXT
@@ -126,7 +127,6 @@ struct sockcmd_dat_version {
 };
 typedef struct sockcmd_dat_version sockcmd_dat_version_t;
 
-#ifdef __CLSYNC_CTX_H
 struct sockcmd_dat_info {
 	char		config_block[1<<8];
 	char		label[1<<8];
@@ -134,7 +134,6 @@ struct sockcmd_dat_info {
 	char		flags_set[OPTION_FLAGS];
 };
 typedef struct sockcmd_dat_info sockcmd_dat_info_t;
-#endif
 
 struct sockcmd_dat_dump {
 	char		dir_path[PATH_MAX];

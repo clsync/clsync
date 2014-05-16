@@ -17,10 +17,15 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "common.h"
-
+#include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/errno.h>
+#include <sys/socket.h>
 #include <sys/un.h>	// for "struct sockaddr_un"
+#include <unistd.h>
 
+#include "configuration.h"
 #include "error.h"
 #include "malloc.h"
 #include "socket.h"
