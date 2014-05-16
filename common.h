@@ -21,11 +21,6 @@
 #define _XOPEN_SOURCE 700
 #define _LARGEFILE64_SOURCE
 
-#define PROGRAM "clsync"
-#define VERSION_MAJ	0
-#define VERSION_MIN	3
-#define AUTHOR "Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -70,14 +65,9 @@
 #include "clsync.h"
 #include "ctx.h"
 #include "indexes.h"
+#include "program.h"
 
-#ifndef MIN
-#define MIN(a,b) ((a)>(b)?(b):(a))
-#endif
-
-#ifndef MAX
-#define MAX(a,b) ((a)>(b)?(a):(b))
-#endif
+#include <sys/param.h>
 
 #ifndef IN_CREATE_SELF
 #define IN_CREATE_SELF IN_CREATE

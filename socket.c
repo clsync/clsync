@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/errno.h>
+#include <sys/param.h>
 #include <sys/socket.h>
 #include <sys/un.h>	// for "struct sockaddr_un"
 #include <unistd.h>
@@ -28,6 +29,7 @@
 #include "configuration.h"
 #include "error.h"
 #include "malloc.h"
+#include "program.h"
 #include "socket.h"
 
 pthread_mutex_t socket_thread_mutex = PTHREAD_MUTEX_INITIALIZER;

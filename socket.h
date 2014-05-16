@@ -24,6 +24,9 @@
 #include <pthread.h>
 #include <stdint.h>
 
+#include "clsync.h"
+#include "ctx.h"
+
 #define SOCKET_DEFAULT_PROT	0
 #define SOCKET_DEFAULT_SUBPROT	SUBPROT0_TEXT
 

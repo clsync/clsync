@@ -18,14 +18,16 @@
  */
 
 #define LIBCLSYNC
-#include "common.h"
 
+#include <errno.h>
+#include <stdlib.h>
 #include <sys/un.h>	// for "struct sockaddr_un"
 
-#include "socket.h"
+#include "configuration.h"
+#include "error.h"
 #include "libclsync.h"
 #include "malloc.h"
-#include "error.h"
+#include "socket.h"
 
 int libproc_procclsyncsock(socket_sockthreaddata_t *arg, sockcmd_t *sockcmd_p) {
 	clsyncproc_t		*proc_p     = arg->arg;
