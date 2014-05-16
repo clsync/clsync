@@ -7,6 +7,7 @@ AC_CONFIG_SRCDIR([sync.c])
 AM_INIT_AUTOMAKE([1.11 foreign -Wall -Wno-portability])
 AC_CONFIG_HEADERS([config.h])
 AM_PROG_CC_C_O
+AC_CONFIG_MACRO_DIR([m4])
 
 LT_INIT
 
