@@ -52,10 +52,10 @@ AS_IF([test "x$enable_socket" = "xyes"],
 AM_CONDITIONAL([SOCKET], [test "x$enable_socket" = "xyes"])
 
 dnl --enable-libclsync
-AC_ARG_ENABLE(libclsync,
-AS_HELP_STRING(--enable-libclsync,
+AC_ARG_ENABLE(socket-library,
+AS_HELP_STRING(--enable-socket-library,
 [build libclsync socket library, default: no]))
-AM_CONDITIONAL([LIBCLSYNC], [test "x$enable_libclsync" = "xyes"])
+AM_CONDITIONAL([LIBCLSYNC], [test "x$enable_socket_library" = "xyes"])
 
 dnl --enable-debug
 AC_ARG_ENABLE(debug,
