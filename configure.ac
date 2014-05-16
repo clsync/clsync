@@ -65,7 +65,7 @@ AS_HELP_STRING(--enable-debug,
 AS_IF([test "x$enable_debug" = "xyes"],
 [CFLAGS+=" -pipe -Wall -ggdb3" CPPFLAGS+=" -D_DEBUG"])
 
-dnl --paranoid-level
+dnl --paranoid
 AC_ARG_ENABLE(paranoid,
 AS_HELP_STRING([--enable-paranoid],
 [set paranoid level of code security, default: 1, values: 0, 1, 2]),
@@ -73,7 +73,7 @@ AS_HELP_STRING([--enable-paranoid],
 	(0|"no")    paranoid=0 ;;
 	(1|"yes")   paranoid=1 ;;
 	(2)         paranoid=2 ;;
-	(*)         AC_MSG_ERROR([bad value ${enableval} for --paranoid-level]) ;;
+	(*)         AC_MSG_ERROR([bad value ${enableval} for --paranoid]) ;;
 esac],
 [paranoid=1])
 
