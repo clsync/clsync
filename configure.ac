@@ -17,6 +17,11 @@ AS_HELP_STRING(--disable-clsync,
 [do not build clsync binary, default: build clsync]))
 AM_CONDITIONAL([CLSYNC], [test "x$enable_clsync" != "xno"])
 
+dnl check for glibc only if clsync is being build
+AS_IF([test "x$enable_clsync" != "xno"], [
+    PKG_CHECK_MODULES(GLIB,  [glib-2.0])
+])
+
 dnl --enable-cluster
 AC_ARG_ENABLE(cluster,
 AS_HELP_STRING(--enable-cluster,
@@ -94,7 +99,6 @@ dnl pthread
 AC_CHECK_LIB([pthread], [pthread_create],
     [CPPFLAGS+=" -pthread" LDFLAGS+=" -pthread"],
     [AC_MSG_ERROR("Pthread support is mandatory")])
-PKG_CHECK_MODULES(GLIB,  [glib-2.0])
 
 dnl -lrt is needed on < glibc-2.17
 AC_SEARCH_LIBS([clock_getres], [rt], [],
