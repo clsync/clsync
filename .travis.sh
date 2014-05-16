@@ -90,7 +90,7 @@ if true; then
 
 	build_test ${arg[@]}
 
-	for a0 in "--enable-cluster" "--disable-cluster"; do
+	for a0 in "--enable-cluster --with-mhash" "--enable-cluster --without-mhash" "--disable-cluster"; do
 		arg[0]="$a0"
 	for a1 in "--enable-debug" "--disable-debug"; do
 		arg[1]="$a1"
@@ -98,7 +98,7 @@ if true; then
 		arg[2]="$a2"
 	for a3 in "--with-capabilities" "--without-capabilities"; do
 		arg[3]="$a3"
-	for a4 in "--with-mhash" "--without-mhash"; do
+	for a4 in "--enable-socket" "--disable-socket"; do
 		arg[4]="$a4"
 		build_test ${arg[@]}
 	done
