@@ -40,9 +40,12 @@ clsync_include_HEADERS = \
 	malloc.h \
 	indexes.h \
 	ctx.h \
-	error.h \
+	error.h
+if SOCKET
+clsync_include_HEADERS += \
 	socket.h \
 	libclsync.h
+endif
 
 doc:
 	doxygen .doxygen
