@@ -90,22 +90,42 @@ if true; then
 
 	build_test ${arg[@]}
 
-	for a0 in "--enable-cluster --with-mhash" "--enable-cluster --without-mhash" "--disable-cluster"; do
-		arg[0]="$a0"
-	for a1 in "--enable-debug" "--disable-debug"; do
+	# clsync enabled
+	arg[0]="--enable-clsync"
+	for a1 in "--enable-cluster --with-mhash" "--enable-cluster --without-mhash" "--disable-cluster"; do
 		arg[1]="$a1"
-	for a2 in "--enable-paranoid=0" "--enable-paranoid=1" "--enable-paranoid=2" ; do
+	for a2 in "--enable-debug" "--disable-debug"; do
 		arg[2]="$a2"
-	for a3 in "--with-capabilities" "--without-capabilities"; do
+	for a3 in "--enable-paranoid=0" "--enable-paranoid=1" "--enable-paranoid=2" ; do
 		arg[3]="$a3"
-	for a4 in "--enable-socket" "--disable-socket"; do
+	for a4 in "--with-capabilities" "--without-capabilities"; do
 		arg[4]="$a4"
+	for a5 in "--enable-socket" "--disable-socket"; do
+		arg[5]="$a5"
+	for a6 in "--enable-libclsync" "--disable-libclsync"; do
+		arg[6]="$a6"
 		build_test ${arg[@]}
 	done
 	done
 	done
 	done
 	done
+	done
+
+	unset $arg
+
+	# clsync disabled, libclsync enabled
+	arg[0]="--disable-clsync --enable-libclsync"
+	for a2 in "--enable-debug" "--disable-debug"; do
+		arg[1]="$a2"
+	for a3 in "--enable-paranoid=0" "--enable-paranoid=1" "--enable-paranoid=2" ; do
+		arg[2]="$a3"
+		build_test ${arg[@]}
+	done
+	done
+
+	# clsync disabled, libclsync disabled
+	build_test "--disable-clsync --enable-libclsync"
 
 fi
 
