@@ -11,6 +11,12 @@ AC_CONFIG_MACRO_DIR([m4])
 
 LT_INIT
 
+dnl --enable-clsync
+AC_ARG_ENABLE(clsync,
+AS_HELP_STRING(--disable-clsync,
+[do not build clsync binary, default: build clsync]))
+AM_CONDITIONAL([CLSYNC], [test "x$enable_clsync" != "xno"])
+
 dnl --enable-cluster
 AC_ARG_ENABLE(cluster,
 AS_HELP_STRING(--enable-cluster,
@@ -39,6 +45,12 @@ AS_IF([test "x$enable_socket" = "xyes"],
 [CPPFLAGS+=" -DENABLE_SOCKET"])
 
 AM_CONDITIONAL([SOCKET], [test "x$enable_socket" = "xyes"])
+
+dnl --enable-libclsync
+AC_ARG_ENABLE(libclsync,
+AS_HELP_STRING(--enable-libclsync,
+[build libclsync socket library, default: no]))
+AM_CONDITIONAL([LIBCLSYNC], [test "x$enable_libclsync" = "xyes"])
 
 dnl --enable-debug
 AC_ARG_ENABLE(debug,
