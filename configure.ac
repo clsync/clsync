@@ -124,5 +124,5 @@ AM_CPPFLAGS="${GLIB_CFLAGS}"
 AC_SUBST(AM_CPPFLAGS)
 
 
-AC_CONFIG_FILES([Makefile pkgconfig/clsync.pc])
+AC_CONFIG_FILES([Makefile pkgconfig/libclsync.pc])
 AC_OUTPUT
