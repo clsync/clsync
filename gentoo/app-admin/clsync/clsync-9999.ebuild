@@ -46,6 +46,8 @@ src_configure() {
 
 	econf \
 		--docdir="${EPREFIX}/usr/share/doc/${PF}" \
+		--enable-clsync \
+		--disable-socket-library \
 		--enable-paranoid=${harden_level} \
 		$(use_enable cluster) \
 		$(use_enable control-socket socket) \
@@ -64,8 +66,8 @@ src_install() {
 	use doc && dohtml -r doc/html/*
 
 	# remove unwanted docs
-	rm "${ED}/usr/share/doc/${PF}"/{LICENSE,TODO} || die
-	use examples || rm -r "${ED}/usr/share/doc/${PF}/examples" || die
+	rm "${ED}/usr/share/doc/${PF}"/{LICENSE,TODO} || die "failed to cleanup docs"
+	use examples || rm -r "${ED}/usr/share/doc/${PF}/examples" || die "failed to remove examples"
 
 	newinitd "${FILESDIR}/${PN}.initd-2" "${PN}"
 	newconfd "${FILESDIR}/${PN}.confd" "${PN}"
