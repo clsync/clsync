@@ -268,7 +268,7 @@ char *parameter_expand(ctx_t *ctx_p, char *arg, int ignorewarnings) {
 							size_t variable_value_len = strlen(variable_value);
 							if (ret_len+variable_value_len+1 >= ret_size) {
 								ret_size = ret_len+variable_value_len+1 + ALLOC_PORTION;
-								ret      = realloc(ret, ret_size);
+								ret      = xrealloc(ret, ret_size);
 							}
 							memcpy(&ret[ret_len], variable_value, variable_value_len);
 							ret_len += variable_value_len;
@@ -282,7 +282,7 @@ char *parameter_expand(ctx_t *ctx_p, char *arg, int ignorewarnings) {
 			default: {
 				if (ret_len+2 >= ret_size) {
 					ret_size = ret_len+2 + ALLOC_PORTION;
-					ret      = realloc(ret, ret_size);
+					ret      = xrealloc(ret, ret_size);
 				}
 				ret[ret_len++] = *ptr;
 				break;

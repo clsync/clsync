@@ -2340,7 +2340,7 @@ l_rsync_escape_loop0_end:
 	size_t required_size = i+sc_count+1;
 	if(required_size >= rsync_escape_result_size) {
 		rsync_escape_result_size = required_size + ALLOC_PORTION;
-		rsync_escape_result	 = realloc(rsync_escape_result, rsync_escape_result_size);
+		rsync_escape_result	 = xrealloc(rsync_escape_result, rsync_escape_result_size);
 	}
 
 	// TODO: Optimize this. Second "switch" is a bad way.
