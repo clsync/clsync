@@ -40,24 +40,28 @@ REVISION=$(shell [ -d .git ] &&\
 AM_CFLAGS := -DREVISION=$(REVISION)
 
 clsync_includedir = $(includedir)/clsync
+libclsync_includedir = $(includedir)/libclsync
 
+if CLSYNC
 clsync_include_HEADERS = \
 	error.h \
 	malloc.h
-if CLSYNC
 clsync_include_HEADERS += \
 	clsync.h \
 	configuration.h \
-	ctx.h \
 	indexes.h
 if SOCKET
 clsync_include_HEADERS += \
-	socket.h
+	socket.h \
+	ctx.h
 endif
 endif
 if LIBCLSYNC
-clsync_include_HEADERS += \
+libclsync_include_HEADERS = \
+	clsync.h \
+	ctx.h \
 	libclsync.h \
+	malloc.h \
 	socket.h
 endif
 

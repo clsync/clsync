@@ -60,7 +60,7 @@ tmp
 /libtool
 /ltmain.sh
 /missing
-/pkgconfig/clsync.pc
+/pkgconfig/libclsync.pc
 /stamp-h1
 
 /debian/autoreconf.after
