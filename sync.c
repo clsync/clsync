@@ -2560,7 +2560,7 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 		);
 
 	// so-module case:
-	if(ctx_p->flags[MODE] == MODE_SO) {
+	if (ctx_p->flags[MODE] == MODE_SO) {
 		api_eventinfo_t *ei = &(*api_ei_p)[(*api_ei_count_p)++];
 		ei->evmask      = evinfo->evmask;
 		ei->flags       = evinfo->flags;
@@ -2571,13 +2571,13 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 		return;
 	}
 
-	if(!(
+	if (!(
 		(ctx_p->flags[MODE] == MODE_RSYNCSHELL)	 || 
 		(ctx_p->flags[MODE] == MODE_RSYNCDIRECT) ||
 		(ctx_p->flags[MODE] == MODE_RSYNCSO)
 	)) {
 		// non-RSYNC case
-		if(ctx_p->flags[SYNCLISTSIMPLIFY])
+		if (ctx_p->flags[SYNCLISTSIMPLIFY])
 			fprintf(outf, "%s\n", fpath);
 		else 
 			fprintf(outf, "sync %s %i %s\n", ctx_p->label, evinfo->evmask, fpath);
@@ -2585,16 +2585,16 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 	}
 
 	// RSYNC case
-	if(ctx_p->rsyncinclimit && (*linescount_p >= ctx_p->rsyncinclimit)) {
+	if (ctx_p->rsyncinclimit && (*linescount_p >= ctx_p->rsyncinclimit)) {
 		int ret;
 
 		// TODO: optimize this out {
 		char newexc_path[PATH_MAX+1];
-		if((ret=sync_idle_dosync_collectedevents_uniqfname(ctx_p, newexc_path, "exclist"))) {
+		if ((ret=sync_idle_dosync_collectedevents_uniqfname(ctx_p, newexc_path, "exclist"))) {
 			error("Cannot get unique file name.");
 			exit(ret);
 		}
-		if((ret=fileutils_copy(dosync_arg_p->excf_path, newexc_path))) {
+		if ((ret=fileutils_copy(dosync_arg_p->excf_path, newexc_path))) {
 			error("Cannot copy file \"%s\" to \"%s\".", dosync_arg_p->excf_path, newexc_path);
 			exit(ret);
 		}
@@ -2603,14 +2603,17 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 		// The problem appears do to unlink()-ing the excludes' list file on callback function 
 		// "sync_idle_dosync_collectedevents_cleanup()" of every execution.
 
-		if((ret=sync_idle_dosync_collectedevents_commitpart(dosync_arg_p))) {
+		if ((ret=sync_idle_dosync_collectedevents_commitpart(dosync_arg_p))) {
 			error("Cannot commit list-file \"%s\"", dosync_arg_p->outf_path);
 			exit(ret);	// TODO: replace with kill(0, ...);
 		}
 
+#ifdef VERYPARANOID
+		require_strlen_le(newexc_path, PATH_MAX);
+#endif
 		strcpy(dosync_arg_p->excf_path, newexc_path);		// TODO: optimize this out
 
-		if((ret=sync_idle_dosync_collectedevents_listcreate(dosync_arg_p, "list"))) {
+		if ((ret=sync_idle_dosync_collectedevents_listcreate(dosync_arg_p, "list"))) {
 			error("Cannot create new list-file");
 			exit(ret);	// TODO: replace with kill(0, ...);
 		}
@@ -2618,7 +2621,7 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 	}
 
 	int ret;
-	if((ret=rsync_listpush(indexes_p, fpath, strlen(fpath), evinfo->flags, linescount_p))) {
+	if ((ret=rsync_listpush(indexes_p, fpath, strlen(fpath), evinfo->flags, linescount_p))) {
 		error("Got error from rsync_listpush(). Exit.");
 		exit(ret);
 	}
@@ -2710,6 +2713,9 @@ int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
 				g_hash_table_foreach_remove(indexes_p->exc_fpath_ht, sync_idle_dosync_collectedevents_rsync_exclistpush, &dosync_arg);
 				g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, rsync_aggrout, &dosync_arg);
 				fclose(dosync_arg.outf);
+#ifdef VERYPARANOID
+				require_strlen_le(dosync_arg.outf_path, PATH_MAX);
+#endif
 				strcpy(dosync_arg.excf_path, dosync_arg.outf_path);	// TODO: remove this strcpy()
 			}
 

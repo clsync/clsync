@@ -107,6 +107,9 @@
 
 #define COLLECTDELAY_INSTANT ((unsigned int)~0)
 
+#define require_strlen_le(str, limit) \
+	if (strlen(str) >= limit)\
+		critical("length of "TOSTR(str)" (\"%s\") >= "TOSTR(limit));\
 
 enum paramsource_enum {
 	PS_UNKNOWN	 = 0,
