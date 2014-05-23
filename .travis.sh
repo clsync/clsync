@@ -1,8 +1,17 @@
-#!/bin/bash -x
+#!/bin/sh -x
 
 # configuration
 
 TIMEOUT_SYNC=15
+
+case $(uname -s) in
+	Linux)
+		MAKE='make'
+		;;
+	*)
+		MAKE='gmake'
+		;;
+esac
 
 # test aggressive optimizations
 export CFLAGS="-O3 -march=native"
@@ -10,10 +19,10 @@ autoreconf -if
 
 # Build unit test
 build_test() {
-	make clean
+	$MAKE clean
 	echo ">>> Testing with \"$@\""
 	# make sure we test paralled build as they tend to fail when single works
-	./configure $@ && make -j5 || {
+	./configure $@ && $MAKE -j5 || {
 		echo "!!! test with \"$@\" configure options failed"
 		exit 1
 	}
@@ -88,7 +97,7 @@ if true; then
 	# Test all possible package-specific configure options.
 	# Do not test empty cases save as no options at all.
 
-	build_test ${arg[@]}
+	build_test $arg
 
 	# clsync enabled
 	arg[0]="--enable-clsync"
@@ -104,7 +113,7 @@ if true; then
 		arg[5]="$a5"
 	for a6 in "--enable-libclsync" "--disable-libclsync"; do
 		arg[6]="$a6"
-		build_test ${arg[@]}
+		build_test $arg
 	done
 	done
 	done

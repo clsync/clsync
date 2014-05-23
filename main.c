@@ -361,7 +361,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			}
 
 			threadingmode_t threadingmode = getsubopt(&arg, threading_modes, &value);
-			if(threadingmode == -1) {
+			if((int)threadingmode == -1) {
 				errno = EINVAL;
 				error("Invalid threading mode entered: \"%s\"", arg_orig);
 				return EINVAL;
@@ -379,7 +379,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			}
 
 			outputmethod_t outputmethod = getsubopt(&arg, output_methods, &value);
-			if(outputmethod == -1) {
+			if((int)outputmethod == -1) {
 				errno = EINVAL;
 				error("Invalid log writing destination entered: \"%s\"", arg_orig);
 				return EINVAL;
