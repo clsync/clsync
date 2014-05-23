@@ -1,5 +1,5 @@
 /*
-    clsync - file tree sync utility based on fanotify and inotify
+    clsync - file tree sync utility based on inotify
 
     Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 
@@ -19,6 +19,8 @@
 
 
 #include "common.h"
+
+#include "port-hacks.h"
 
 #include <pwd.h>	// For getpwnam()
 #include <grp.h>	// For getgrnam()
@@ -519,7 +521,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			}
 		}
 		case SOCKETMOD:
-			if(!sscanf(arg, "%o", &ctx_p->socketmod)) {
+			if(!sscanf(arg, "%o", (unsigned int *)&ctx_p->socketmod)) {
 				error("Non octal value passed to --socket-mod: \"%s\"", arg);
 				return EINVAL;
 			}
@@ -1309,7 +1311,7 @@ int main(int argc, char *argv[]) {
 			ret = errno;
 		}
 
-		struct stat64 stat64={0};
+		stat64_t stat64={0};
 		if(lstat64(ctx.watchdir, &stat64)) {
 			error("Cannot lstat64() on \"%s\"", ctx.watchdir);
 			if(!ret)

@@ -1,5 +1,5 @@
 /*
-    clsync - file tree sync utility based on fanotify and inotify
+    clsync - file tree sync utility based on inotify
     
     Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
     
@@ -20,7 +20,10 @@
 #ifndef __CLSYNC_SOCKET_H
 #define __CLSYNC_SOCKET_H
 
+#ifdef __linux__
 #include <linux/limits.h>
+#endif
+
 #include <pthread.h>
 #include <stdint.h>
 

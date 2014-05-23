@@ -1,5 +1,5 @@
 /*
-    clsync - file tree sync utility based on fanotify and inotify
+    clsync - file tree sync utility based on inotify
     
     Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
     
@@ -18,12 +18,15 @@
  */
 
 #include "common.h"
+
+#include "port-hacks.h"
+
 #include "error.h"
 #include "malloc.h"
 
 
 char *fd2fpath_malloc(int fd) {
-	struct stat64 lstat;
+	stat64_t st64;
 
 	if(fd <= 0) {
 		error("Invalid file descriptor supplied: fd2fpath_malloc(%i).", fd);
@@ -35,12 +38,12 @@ char *fd2fpath_malloc(int fd) {
 	char *fpath = xmalloc((1<<8) + 2);
 	sprintf(fpath, "/proc/self/fd/%i", fd);
 
-	if(lstat64(fpath, &lstat)) {
-		error("Cannot lstat(\"%s\", lstat).", fpath);
+	if(lstat64(fpath, &st64)) {
+		error("Cannot lstat64(\"%s\", st64).", fpath);
 		return NULL;
 	}
 
-	ssize_t fpathlen = lstat.st_size;
+	ssize_t fpathlen = st64.st_size;
 
 	if(fpathlen > (1<<8))
 		fpath = xrealloc(fpath, fpathlen+2);

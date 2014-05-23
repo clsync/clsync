@@ -1,5 +1,5 @@
 /*
-    clsync - file tree sync utility based on fanotify and inotify
+    clsync - file tree sync utility based on inotify
 
     Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 
@@ -17,8 +17,9 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+
 #define _GNU_SOURCE
-#define _XOPEN_SOURCE 700
+//#define _XOPEN_SOURCE 700
 #define _LARGEFILE64_SOURCE
 
 #include <stdio.h>
@@ -37,12 +38,14 @@
 #include <errno.h>
 #include <ctype.h>
 #include <signal.h>
-#include <wait.h>
-#include <fts.h>
-#ifdef FANOTIFY_SUPPORT
-#include <sys/fanotify.h>
-#endif
 #include <sys/inotify.h>
+#ifndef __FreeBSD__
+#	ifdef FANOTIFY_SUPPORT
+#		include <sys/fanotify.h>
+#	endif
+#endif
+#include <sys/wait.h>
+#include <fts.h>
 #include <sys/time.h>
 #include <dirent.h>
 #include <sys/utsname.h>
@@ -53,13 +56,13 @@
 #include <pthread.h>
 
 #ifdef HAVE_CAPABILITIES
-#include <sys/capability.h>	// for capset()/capget() for --preserve-file-access
-#include <sys/prctl.h>		// for prctl() for --preserve-fil-access
+#	include <sys/capability.h>	// for capset()/capget() for --preserve-file-access
+#	include <sys/prctl.h>		// for prctl() for --preserve-fil-access
 #endif
 
 #include "configuration.h"
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#	include "config.h"
 #endif
 
 #include "clsync.h"
@@ -70,19 +73,19 @@
 #include <sys/param.h>
 
 #ifndef IN_CREATE_SELF
-#define IN_CREATE_SELF IN_CREATE
+#	define IN_CREATE_SELF IN_CREATE
 #endif
 
 #ifdef _DEBUG
-#define DEBUGV(...) __VA_ARGS__
+#	define DEBUGV(...) __VA_ARGS__
 #else
-#define DEBUGV(...)
+#	define DEBUGV(...)
 #endif
 
 #ifdef PARANOID
-#define PARANOIDV(...) __VA_ARGS__
+#	define PARANOIDV(...) __VA_ARGS__
 #else
-#define PARANOIDV(...)
+#	define PARANOIDV(...)
 #endif
 
 #ifdef _GNU_SOURCE

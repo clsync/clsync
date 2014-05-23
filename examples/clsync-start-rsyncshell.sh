@@ -1,6 +1,6 @@
-#!/bin/bash
+#!/bin/sh
 
-mkdir -m 700 -p testdir/{from,to,listdir}
+mkdir -m 700 -p testdir/from testdir/to testdir/listdir
 
 cat > rules <<EOF
 -d^[Dd]ont[Ss]ync\$

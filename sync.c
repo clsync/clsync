@@ -1,5 +1,5 @@
 /*
-    clsync - file tree sync utility based on fanotify and inotify
+    clsync - file tree sync utility based on inotify
     
     Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
     
@@ -19,6 +19,9 @@
 
 
 #include "common.h"
+
+#include "port-hacks.h"
+
 #include "main.h"
 #include "error.h"
 #include "fileutils.h"
@@ -338,7 +341,7 @@ static inline int indexes_outaggr_add(indexes_t *indexes_p, char *outline, event
 }
 
 static threadsinfo_t *thread_info() {	// TODO: optimize this
-	static threadsinfo_t threadsinfo={{{{0}}},{{{0}}},0};
+	static threadsinfo_t threadsinfo={{0},{0},0};
 	if(!threadsinfo.mutex_init) {
 		int i=0;
 		while(i < PTHREAD_MUTEX_MAX) {
@@ -1593,6 +1596,7 @@ int sync_notify_mark(int notify_d, ctx_t *ctx_p, const char *accpath, const char
 		case NE_INOTIFY: {
 			int inotify_d = notify_d;
 
+			debug(5, "inotify_add_watch(%i, \"%s\", 0x%x)", inotify_d, accpath, INOTIFY_MARKMASK);
 			if((wd = inotify_add_watch(inotify_d, accpath, INOTIFY_MARKMASK)) == -1) {
 				if(errno == ENOENT)
 					return -2;
@@ -1601,6 +1605,7 @@ int sync_notify_mark(int notify_d, ctx_t *ctx_p, const char *accpath, const char
 					path);
 				return -1;
 			}
+			debug(6, "endof inotify_add_watch(%i, \"%s\", %x)", inotify_d, accpath, INOTIFY_MARKMASK);
 			break;
 		}
 		default: {
@@ -1743,7 +1748,7 @@ int sync_notify_init(ctx_t *ctx_p) {
 		}
 #endif
 		case NE_INOTIFY: {
-#ifdef OLDSYSTEM
+#if OLDSYSTEM || __FreeBSD__
 			int inotify_d = inotify_init();
 #else
 			int inotify_d = inotify_init1(INOTIFY_FLAGS);
@@ -2265,7 +2270,7 @@ int sync_idle_dosync_collectedevents_aggrqueue(queue_id_t queue_id, ctx_t *ctx_p
 int sync_idle_dosync_collectedevents_uniqfname(ctx_t *ctx_p, char *fpath, char *name) {
 	pid_t pid = getpid();
 	time_t tm = time(NULL);
-	struct stat64 stat64;
+	stat64_t stat64;
 
 	int counter = 0;
 	do {
@@ -3020,7 +3025,7 @@ int sync_inotify_handle(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 
 			// Getting infomation about file/dir/etc
 
-			struct stat64 lstat;
+			stat64_t lstat;
 			mode_t st_mode;
 			size_t st_size;
 			if (lstat64(path_full, &lstat)) {

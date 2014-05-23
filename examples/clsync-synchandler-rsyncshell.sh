@@ -1,4 +1,4 @@
-#!/bin/bash -x
+#!/bin/sh -x
 
 FROM="./testdir/from"
 TO="./testdir/to"
@@ -8,7 +8,7 @@ LABEL="$2"
 ARG0="$3"
 ARG1="$4"
 
-function rsynclist() {
+rsynclist() {
 	LISTFILE="$1"
 	EXCLISTFILE="$2"
 

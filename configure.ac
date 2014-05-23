@@ -7,9 +7,20 @@ AC_CONFIG_SRCDIR([sync.c])
 AM_INIT_AUTOMAKE([1.11 foreign -Wall -Wno-portability])
 AC_CONFIG_HEADERS([config.h])
 AM_PROG_CC_C_O
+AC_PROG_CC_STDC
 AC_CONFIG_MACRO_DIR([m4])
 
 LT_INIT
+
+AC_CANONICAL_HOST
+case $host_os in
+	*bsd*)
+		AC_SEARCH_LIBS([inotify_init], [inotify], [],
+			[AC_MSG_ERROR("Unable to find libinotify")])
+		AC_SEARCH_LIBS([backtrace], [execinfo], [],
+			[AC_MSG_ERROR("Unable to find libexecinfo")])
+		;;
+esac
 
 dnl --enable-clsync
 AC_ARG_ENABLE(clsync,
@@ -27,7 +38,7 @@ AC_ARG_ENABLE(cluster,
 AS_HELP_STRING(--enable-cluster,
 [enable clustering support (not yet implemented), default: no]))
 
-AS_IF([test "x$enable_cluster" = "xyes"], [CPPFLAGS+=" -DCLUSTER_SUPPORT"
+AS_IF([test "x$enable_cluster" = "xyes"], [CPPFLAGS="${CPPFLAGS} -DCLUSTER_SUPPORT"
 
 	dnl mhash check
 	AC_ARG_WITH(mhash,
@@ -36,7 +47,7 @@ AS_IF([test "x$enable_cluster" = "xyes"], [CPPFLAGS+=" -DCLUSTER_SUPPORT"
 
 	AS_IF([test "x$with_mhash" = "xno"], [], [
 	AC_CHECK_HEADER([mhash.h], [], [AC_MSG_ERROR("Unable to find mhash.h")])
-	AC_SEARCH_LIBS([mhash_init], [mhash], [CPPFLAGS+=" -DHAVE_MHASH"],
+	AC_SEARCH_LIBS([mhash_init], [mhash], [CPPFLAGS="${CPPFLAGS} -DHAVE_MHASH"],
 		[AC_MSG_ERROR("Unable to find libmhash")])
 	])
 ])
@@ -47,7 +58,7 @@ AS_HELP_STRING(--enable-socket,
 [enable control socket support, default: no]))
 
 AS_IF([test "x$enable_socket" = "xyes"],
-[CPPFLAGS+=" -DENABLE_SOCKET"])
+[CPPFLAGS="${CPPFLAGS} -DENABLE_SOCKET"])
 
 AM_CONDITIONAL([SOCKET], [test "x$enable_socket" = "xyes"])
 
@@ -63,7 +74,7 @@ AS_HELP_STRING(--enable-debug,
 [enable debugging, default: no]))
 
 AS_IF([test "x$enable_debug" = "xyes"],
-[CFLAGS+=" -pipe -Wall -ggdb3" CPPFLAGS+=" -D_DEBUG"])
+[CFLAGS="${CFLAGS} -pipe -Wall -ggdb3" CPPFLAGS="${CPPFLAGS} -D_DEBUG"])
 
 dnl --paranoid
 AC_ARG_ENABLE(paranoid,
@@ -78,11 +89,11 @@ esac],
 [paranoid=1])
 
 AS_IF([test $paranoid -ge 1],[
-CPPFLAGS+=" -D_FORTIFY_SOURCE=2 -DPARANOID"
-CFLAGS+=" -fstack-protector-all -Wall --param ssp-buffer-size=4 -fstack-check"
-LDFLAGS+=" -Xlinker -zrelro"
+CPPFLAGS="${CPPFLAGS} -D_FORTIFY_SOURCE=2 -DPARANOID"
+CFLAGS="${CFLAGS} -fstack-protector-all -Wall --param ssp-buffer-size=4 -fstack-check"
+LDFLAGS="${LDFLAGS} -Xlinker -zrelro"
 ])
-AS_IF([test $paranoid -eq 2], [CPPFLAGS+=" -DVERYPARANOID"])
+AS_IF([test $paranoid -eq 2], [CPPFLAGS="${CPPFLAGS} -DVERYPARANOID"])
 
 # Checks for programs.
 AC_PROG_CC_C99
@@ -92,17 +103,17 @@ PKG_PROG_PKG_CONFIG([0.20])
 # Checks for libraries.
 dnl libdl
 AC_CHECK_HEADER([dlfcn.h], [], [AC_MSG_ERROR("Unable to find dlfcn.h")])
-AC_SEARCH_LIBS([dlopen], [dl], [LDFLAGS+=' -rdynamic'],
+AC_SEARCH_LIBS([dlopen], [dl], [LDFLAGS="${LDFLAGS} -rdynamic"],
 [AC_MSG_ERROR("Unable to find libdl")])
 
 dnl pthread
-AC_CHECK_LIB([pthread], [pthread_create],
-    [CPPFLAGS+=" -pthread" LDFLAGS+=" -pthread"],
-    [AC_MSG_ERROR("Pthread support is mandatory")])
+#AC_CHECK_LIB(pthread, pthread_create)
+PTHREAD_LIBS=-pthread
+AC_SUBST(PTHREAD_LIBS)
 
 dnl -lrt is needed on < glibc-2.17
-AC_SEARCH_LIBS([clock_getres], [rt], [],
-    [AC_MSG_ERROR("Unable to find librt; clock_getres() is needed")])
+#AC_SEARCH_LIBS([clock_getres], [rt], [],
+#    [AC_MSG_ERROR("Unable to find librt; clock_getres() is needed")])
 
 dnl capabilities check
 AC_ARG_WITH(capabilities,
@@ -113,7 +124,7 @@ AS_IF(
     [test "x$with_capabilities" = "xyes"], [
         AC_CHECK_HEADER(
             [sys/capability.h],
-            [CPPFLAGS+=" -DHAVE_CAPABILITIES"],
+            [CPPFLAGS="${CPPFLAGS} -DHAVE_CAPABILITIES"],
             [AC_MSG_ERROR("Unable to find sys/capability.h")])
 ])
 

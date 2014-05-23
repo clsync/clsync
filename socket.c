@@ -1,5 +1,5 @@
 /*
-    clsync - file tree sync utility based on fanotify and inotify
+    clsync - file tree sync utility based on inotify
     
     Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
     
@@ -20,11 +20,13 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/errno.h>
 #include <sys/param.h>
 #include <sys/socket.h>
 #include <sys/un.h>	// for "struct sockaddr_un"
 #include <unistd.h>
+
 
 #include "configuration.h"
 #include "error.h"
@@ -458,7 +460,7 @@ int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p) {
 					case SUBPROT0_TEXT:
 						if((end=strchr(ptr, '\n'))!=NULL) {
 							if(sscanf(start, "%03u", (unsigned int *)&sockcmd_p->cmd_id) != 1)
-								return EBADRQC;
+								return ENOMSG;
 
 							char *str_args = &start[3+1];
 							parse_text_data(sockcmd_p, str_args, end-str_args);
