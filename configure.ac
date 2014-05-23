@@ -19,6 +19,18 @@ case $host_os in
 			[AC_MSG_ERROR("Unable to find libinotify")])
 		AC_SEARCH_LIBS([backtrace], [execinfo], [],
 			[AC_MSG_ERROR("Unable to find libexecinfo")])
+
+		dnl pthread
+		AC_CHECK_LIB(pthread, pthread_create)
+		PTHREAD_LIBS=-pthread
+		AC_SUBST(PTHREAD_LIBS)
+		;;
+
+	linux*)
+		dnl pthread
+		AC_CHECK_LIB([pthread], [pthread_create],
+			[CPPFLAGS+=" -pthread" LDFLAGS+=" -pthread"],
+			[AC_MSG_ERROR("Pthread support is mandatory")])
 		;;
 esac
 
@@ -105,11 +117,6 @@ dnl libdl
 AC_CHECK_HEADER([dlfcn.h], [], [AC_MSG_ERROR("Unable to find dlfcn.h")])
 AC_SEARCH_LIBS([dlopen], [dl], [LDFLAGS="${LDFLAGS} -rdynamic"],
 [AC_MSG_ERROR("Unable to find libdl")])
-
-dnl pthread
-#AC_CHECK_LIB(pthread, pthread_create)
-PTHREAD_LIBS=-pthread
-AC_SUBST(PTHREAD_LIBS)
 
 dnl -lrt is needed on < glibc-2.17
 #AC_SEARCH_LIBS([clock_getres], [rt], [],

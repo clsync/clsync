@@ -341,7 +341,7 @@ static inline int indexes_outaggr_add(indexes_t *indexes_p, char *outline, event
 }
 
 static threadsinfo_t *thread_info() {	// TODO: optimize this
-	static threadsinfo_t threadsinfo={{0},{0},0};
+	static threadsinfo_t threadsinfo={{{{0}}},{{{0}}},0};
 	if(!threadsinfo.mutex_init) {
 		int i=0;
 		while(i < PTHREAD_MUTEX_MAX) {
