@@ -18,6 +18,9 @@
  */
 
 
+#ifndef __CLSYNC_COMMON_H
+#define __CLSYNC_COMMON_H
+
 #define _GNU_SOURCE
 //#define _XOPEN_SOURCE 700
 #define _LARGEFILE64_SOURCE
@@ -38,11 +41,14 @@
 #include <errno.h>
 #include <ctype.h>
 #include <signal.h>
-#include <sys/inotify.h>
-#ifndef __FreeBSD__
-#	ifdef FANOTIFY_SUPPORT
-#		include <sys/fanotify.h>
-#	endif
+#ifdef KQUEUE_SUPPORT
+#	include <sys/event.h>
+#endif
+#ifdef INOTIFY_SUPPORT
+#	include <sys/inotify.h>
+#endif
+#ifdef FANOTIFY_SUPPORT
+#	include <sys/fanotify.h>
 #endif
 #include <sys/wait.h>
 #include <fts.h>
@@ -54,6 +60,7 @@
 #include <netinet/in.h>
 #include <libgen.h>
 #include <pthread.h>
+#include <glib.h>
 
 #ifdef HAVE_CAPABILITIES
 #	include <sys/capability.h>	// for capset()/capget() for --preserve-file-access
@@ -67,7 +74,6 @@
 
 #include "clsync.h"
 #include "ctx.h"
-#include "indexes.h"
 #include "program.h"
 
 #include <sys/param.h>
@@ -127,7 +133,12 @@ enum notifyengine_enum {
 #ifdef FANOTIFY_SUPPORT
 	NE_FANOTIFY,
 #endif
-	NE_INOTIFY
+#ifdef INOTIFY_SUPPORT
+	NE_INOTIFY,
+#endif
+#ifdef KQUEUE_SUPPORT
+	NE_KQUEUE,
+#endif
 };
 typedef enum notifyengine_enum notifyenfine_t;
 
@@ -225,7 +236,7 @@ struct dosync_arg {
 	char outf_path[PATH_MAX+1];
 	FILE *outf;
 	ctx_t *ctx_p;
-	indexes_t *indexes_p;
+	struct indexes *indexes_p;
 	void *data;
 	int linescount;
 	api_eventinfo_t *api_ei;
@@ -283,4 +294,6 @@ enum unified_evetnmask {
 	UEM_CREATED	= 0x02,
 	UEM_DELETED	= 0x04,
 };
+
+#endif
 

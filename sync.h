@@ -21,4 +21,28 @@ extern int sync_run(struct ctx *ctx);
 extern int sync_dump(struct ctx *ctx, const char *const dest_dir);
 extern int sync_term(int exitcode);
 extern int threads_foreach(int (*funct)(threadinfo_t *, void *), state_t state, void *arg);
+extern threadsinfo_t *thread_info();
+extern time_t thread_nextexpiretime();
+extern int sync_prequeue_loadmark
+	(
+		int fsmon_d,
+
+		struct ctx     *ctx_p,
+		struct indexes *indexes_p,
+
+		const char *path_full,
+		const char *path_rel,
+
+		uint32_t event_mask,
+		int      event_wd,
+		mode_t st_mode,
+		off_t  st_size,
+
+		char  **path_buf_p,
+		size_t *path_buf_len_p,
+
+		struct eventinfo *evinfo
+	);
+extern int sync_prequeue_unload(struct ctx *ctx_p, struct indexes *indexes_p);
+extern int *state_p;
 

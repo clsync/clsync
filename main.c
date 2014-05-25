@@ -99,7 +99,12 @@ static const struct option long_options[] =
 	{"quiet",		optional_argument,	NULL,	QUIET},
 #ifdef FANOTIFY_SUPPORT
 	{"fanotify",		optional_argument,	NULL,	FANOTIFY},
+#endif
+#ifdef INOTIFY_SUPPORT
 	{"inotify",		optional_argument,	NULL,	INOTIFY},
+#endif
+#ifdef KQUEUE_SUPPORT
+	{"kqueue",		optional_argument,	NULL,	KQUEUE},
 #endif
 	{"label",		required_argument,	NULL,	LABEL},
 	{"help",		optional_argument,	NULL,	HELP},
@@ -446,9 +451,16 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			ctx_p->notifyengine = NE_FANOTIFY;
 			break;
 #endif
+#ifdef INOTIFY_SUPPORT
 		case INOTIFY:
 			ctx_p->notifyengine = NE_INOTIFY;
 			break;
+#endif
+#ifdef KQUEUE_SUPPORT
+		case KQUEUE:
+			ctx_p->notifyengine = NE_KQUEUE;
+			break;
+#endif
 		case RSYNCINCLIMIT:
 			ctx_p->rsyncinclimit = (unsigned int)atol(arg);
 			break;
@@ -1131,7 +1143,6 @@ int main(int argc, char *argv[]) {
 	ctx.config_block			 = DEFAULT_CONFIG_BLOCK;
 	ctx.retries				 = DEFAULT_RETRIES;
 	ctx.flags[VERBOSE]			 = DEFAULT_VERBOSE;
-	ctx.flags[INOTIFY]			 = 1;
 
 	error_init(&ctx.flags[OUTPUT_METHOD], &ctx.flags[QUIET], &ctx.flags[VERBOSE], &ctx.flags[DEBUG]);
 
@@ -1527,10 +1538,21 @@ int main(int argc, char *argv[]) {
 	}
 
 #ifdef FANOTIFY_SUPPORT
-	if(ctx.notifyengine != NE_INOTIFY) {
-		warning("fanotify is not supported, now!");
-	}
+	if(ctx.notifyengine == NE_FANOTIFY)
+		critical("fanotify is not supported, now!");
+	else
 #endif
+	if(ctx.notifyengine == NE_UNDEFINED) {
+		ret = errno = EINVAL;
+		error("Required one of next options:"
+#ifdef INOTIFY_SUPPORT
+			" \"--inotify\""
+#endif
+#ifdef KQUEUE_SUPPORT
+			" \"--kqueue\""
+#endif
+		);
+	}
 
 	if(ctx.flags[EXITHOOK]) {
 #ifdef VERYPARANOID

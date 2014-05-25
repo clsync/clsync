@@ -70,10 +70,6 @@ enum flags_enum {
 	DONTUNLINK	= 'U',
 	INITFULL	= 'F',
 	SYNCTIMEOUT	= 'k',
-#ifdef FANOTIFY_SUPPORT
-	FANOTIFY	= 'f',
-#endif
-	INOTIFY		= 'i',
 	LABEL		= 'l',
 	SHOW_VERSION	= 'V',
 
@@ -100,6 +96,16 @@ enum flags_enum {
 	DUMPDIR			= 17|OPTION_LONGOPTONLY,
 
 	CONFIGBLOCKINHERITS	= 18|OPTION_LONGOPTONLY,
+
+#ifdef FANOTIFY_SUPPORT
+	FANOTIFY		= 19|OPTION_LONGOPTONLY,
+#endif
+#ifdef INOTIFY_SUPPORT
+	INOTIFY			= 20|OPTION_LONGOPTONLY,
+#endif
+#ifdef KQUEUE_SUPPORT
+	KQUEUE			= 21|OPTION_LONGOPTONLY,
+#endif
 };
 typedef enum flags_enum flags_t;
 
@@ -170,6 +176,11 @@ struct api_functs {
 };
 typedef struct api_functs api_functs_t;
 
+struct notifyenginefuncts {
+	int (*wait)(int notify_d, struct ctx *ctx_p, struct indexes *indexes_p);
+	int (*handle)(int notify_d, struct ctx *ctx_p, struct indexes *indexes_p);
+};
+
 struct ctx {
 #ifndef LIBCLSYNC
 	uid_t uid;
@@ -225,6 +236,7 @@ struct ctx {
 	char *rulfpath;
 	char *listoutdir;
 	int notifyengine;
+	struct notifyenginefuncts notifyenginefunct;
 	int retries;
 	size_t bfilethreshold;
 	unsigned int syncdelay;

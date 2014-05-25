@@ -842,7 +842,7 @@ Is not set by default.
 .RE
 
 .PP
-.B \-f, \-\-fanotify
+.B \-\-fanotify
 .RS 8
 .B Don't use this option!
 
@@ -853,11 +853,19 @@ Is not set by default.
 .RE
 
 .PP
-.B \-i, \-\-inotify
+.B \-\-inotify
 .RS 8
 Switches monitor subsystem to "inotify".
 
-Is set by default.
+Is set by default on Linux.
+.RE
+
+.PP
+.B \-\-kqueue
+.RS 8
+Switches monitor subsystem to "kqueue/kevent".
+
+Is set by default on FreeBSD.
 .RE
 
 .PP

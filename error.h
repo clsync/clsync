@@ -17,6 +17,9 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifndef __CLSYNC_ERROR_H
+#define __CLSYNC_ERROR_H
+
 #define BACKTRACE_LENGTH	256
 
 extern void _critical( const char *const function_name, const char *fmt, ...);
@@ -46,4 +49,6 @@ enum outputmethod {
 	OM_MAX
 };
 typedef enum outputmethod outputmethod_t;
+
+#endif
 

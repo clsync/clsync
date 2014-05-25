@@ -1,7 +1,7 @@
 /*
-    clsync - file tree sync utility based on inotify
+    clsync - file tree sync utility based on inotify/kqueue
     
-    Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
+    Copyright (C) 2013-2014 Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
     
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -17,10 +17,19 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 #include "common.h"
 
 #include "port-hacks.h"
+
+#if KQUEUE_SUPPORT
+#	include "kqueue.h"
+#endif
+#if INOTIFY_SUPPORT
+#	include "inotify.h"
+#endif
+#if FANOTIFY_SUPPORT
+#	include "fanotify.h"
+#endif
 
 #include "main.h"
 #include "error.h"
@@ -30,6 +39,7 @@
 #include "sync.h"
 #include "glibex.h"
 #include "control.h"
+#include "indexes.h"
 
 #include <stdio.h>
 #include <dlfcn.h>
@@ -216,131 +226,7 @@ static inline ruleaction_t rules_getperm(const char *fpath, mode_t st_mode, rule
 	return resultperm;
 }
 
-// Removes necessary rows from hash_tables if some watching descriptor closed
-// Return: 0 on success, non-zero on fail
-
-static inline int indexes_remove_bywd(indexes_t *indexes_p, int wd) {
-	int ret=0;
-
-	char *fpath = g_hash_table_lookup(indexes_p->wd2fpath_ht, GINT_TO_POINTER(wd));
-
-	ret |= g_hash_table_remove(indexes_p->wd2fpath_ht, GINT_TO_POINTER(wd));
-	if(fpath == NULL) {
-		error("Cannot remove from index \"fpath2wd\" by wd %i.", wd);
-		return -1;
-	}
-	ret |= g_hash_table_remove(indexes_p->fpath2wd_ht, fpath);
-
-	return ret;
-}
-
-// Adds necessary rows to hash_tables if some watching descriptor opened
-// Return: 0 on success, non-zero on fail
-
-static inline int indexes_add_wd(indexes_t *indexes_p, int wd, const char *fpath_const, size_t fpathlen) {
-	debug(3, "indexes_add_wd(indexes_p, %i, \"%s\", %i)", wd, fpath_const, fpathlen);
-
-	char *fpath = xmalloc(fpathlen+1);
-	memcpy(fpath, fpath_const, fpathlen+1);
-	g_hash_table_insert(indexes_p->wd2fpath_ht, GINT_TO_POINTER(wd), fpath);
-	g_hash_table_insert(indexes_p->fpath2wd_ht, fpath, GINT_TO_POINTER(wd));
-
-	return 0;
-}
-
-// Lookups file path by watching descriptor from hash_tables
-// Return: file path on success, NULL on fail
-
-static inline char *indexes_wd2fpath(indexes_t *indexes_p, int wd) {
-	return g_hash_table_lookup(indexes_p->wd2fpath_ht, GINT_TO_POINTER(wd));
-}
-
-//
-
-static inline int indexes_fpath2wd(indexes_t *indexes_p, const char *fpath) {
-	gpointer gint_p = g_hash_table_lookup(indexes_p->fpath2wd_ht, fpath);
-	if(gint_p == NULL)
-		return -1;
-
-	return GPOINTER_TO_INT(gint_p);
-}
-
-static inline eventinfo_t *indexes_fpath2ei(indexes_t *indexes_p, const char *fpath) {
-	return (eventinfo_t *)g_hash_table_lookup(indexes_p->fpath2ei_ht, fpath);
-}
-
-static inline int indexes_fpath2ei_add(indexes_t *indexes_p, char *fpath, eventinfo_t *evinfo) {
-	debug(5, "\"%s\"", fpath);
-	g_hash_table_replace(indexes_p->fpath2ei_ht, fpath, evinfo);
-
-	return 0;
-}
-
-static inline int indexes_queueevent(indexes_t *indexes_p, char *fpath, eventinfo_t *evinfo, queue_id_t queue_id) {
-
-	g_hash_table_replace(indexes_p->fpath2ei_coll_ht[queue_id], fpath, evinfo);
-
-	debug(3, "indexes_queueevent(indexes_p, \"%s\", evinfo, %i). It's now %i events collected in queue %i.", fpath, queue_id, g_hash_table_size(indexes_p->fpath2ei_coll_ht[queue_id]), queue_id);
-	return 0;
-}
-
-static inline eventinfo_t *indexes_lookupinqueue(indexes_t *indexes_p, const char *fpath, queue_id_t queue_id) {
-	return (eventinfo_t *)g_hash_table_lookup(indexes_p->fpath2ei_coll_ht[queue_id], fpath);
-}
-
-static inline int indexes_queuelen(indexes_t *indexes_p, queue_id_t queue_id) {
-	return g_hash_table_size(indexes_p->fpath2ei_coll_ht[queue_id]);
-}
-
-static inline int indexes_removefromqueue(indexes_t *indexes_p, char *fpath, queue_id_t queue_id) {
-//	debug(3, "indexes_removefromqueue(indexes_p, \"%s\", %i).", fpath, queue_id);
-
-	g_hash_table_remove(indexes_p->fpath2ei_coll_ht[queue_id], fpath);
-
-	debug(3, "indexes_removefromqueue(indexes_p, \"%s\", %i). It's now %i events collected in queue %i.", fpath, queue_id, g_hash_table_size(indexes_p->fpath2ei_coll_ht[queue_id]), queue_id);
-	return 0;
-}
-
-static inline int indexes_addexclude(indexes_t *indexes_p, char *fpath, eventinfo_flags_t flags, queue_id_t queue_id) {
-	g_hash_table_replace(indexes_p->exc_fpath_coll_ht[queue_id], fpath, GINT_TO_POINTER(flags));
-
-	debug(3, "indexes_addexclude(indexes_p, \"%s\", %i). It's now %i events collected in queue %i.", fpath, queue_id, g_hash_table_size(indexes_p->exc_fpath_coll_ht[queue_id]), queue_id);
-	return 0;
-}
-
-static inline int indexes_addexclude_aggr(indexes_t *indexes_p, char *fpath, eventinfo_flags_t flags) {
-	debug(3, "indexes_addexclude_aggr(indexes_p, \"%s\", %u).", fpath, flags);
-
-	gpointer flags_gp = g_hash_table_lookup(indexes_p->exc_fpath_ht, fpath);
-	if(flags_gp != NULL)
-		flags |= GPOINTER_TO_INT(flags_gp);
-
-	// Removing extra flags
-	if((flags&(EVIF_RECURSIVELY | EVIF_CONTENTRECURSIVELY)) == (EVIF_RECURSIVELY | EVIF_CONTENTRECURSIVELY))
-		flags &= ~EVIF_CONTENTRECURSIVELY;
-
-	g_hash_table_replace(indexes_p->exc_fpath_ht, fpath, GINT_TO_POINTER(flags));
-
-	debug(3, "indexes_addexclude_aggr(indexes_p, \"%s\", flags): %u.", fpath, flags);
-	return 0;
-}
-
-static inline int indexes_outaggr_add(indexes_t *indexes_p, char *outline, eventinfo_flags_t flags) {
-	gpointer flags_gp = g_hash_table_lookup(indexes_p->out_lines_aggr_ht, outline);
-	if(flags_gp != NULL)
-		flags |= GPOINTER_TO_INT(flags_gp);
-
-	// Removing extra flags
-	if((flags&(EVIF_RECURSIVELY | EVIF_CONTENTRECURSIVELY)) == (EVIF_RECURSIVELY | EVIF_CONTENTRECURSIVELY))
-		flags &= ~EVIF_CONTENTRECURSIVELY;
-
-	g_hash_table_replace(indexes_p->out_lines_aggr_ht, outline, GINT_TO_POINTER(flags));
-
-	debug(3, "indexes_outaggr_aggr(indexes_p, \"%s\").", outline);
-	return 0;
-}
-
-static threadsinfo_t *thread_info() {	// TODO: optimize this
+threadsinfo_t *thread_info() {	// TODO: optimize this
 	static threadsinfo_t threadsinfo={{{{0}}},{{{0}}},0};
 	if(!threadsinfo.mutex_init) {
 		int i=0;
@@ -1422,6 +1308,7 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 				break;
 #endif
 			case NE_INOTIFY:
+			case NE_KQUEUE:
 				evinfo.evmask = IN_CREATE_SELF;
 				if(node->fts_info==FTS_D) {
 					evinfo.evmask |= IN_ISDIR;
@@ -1593,6 +1480,7 @@ int sync_notify_mark(int notify_d, ctx_t *ctx_p, const char *accpath, const char
 			break;
 		}
 #endif
+#ifdef INOTIFY_SUPPORT
 		case NE_INOTIFY: {
 			int inotify_d = notify_d;
 
@@ -1608,6 +1496,23 @@ int sync_notify_mark(int notify_d, ctx_t *ctx_p, const char *accpath, const char
 			debug(6, "endof inotify_add_watch(%i, \"%s\", %x)", inotify_d, accpath, INOTIFY_MARKMASK);
 			break;
 		}
+#endif
+#ifdef KQUEUE_SUPPORT
+		case NE_KQUEUE: {
+			int kqueue_d = notify_d;
+
+			debug(5, "kqueue_add_watch(%i, \"%s\")", kqueue_d, accpath);
+			if((wd = kqueue_add_watch(kqueue_d, accpath)) == -1) {
+				if(errno == ENOENT)
+					return -2;
+
+				error("Cannot kqueue_add_watch() on \"%s\".", 
+					path);
+				return -1;
+			}
+			debug(6, "endof kqueue_add_watch(%i, \"%s\")", kqueue_d, accpath);
+		}
+#endif
 		default: {
 			error("unknown notify-engine: %i", ctx_p->notifyengine);
 			errno = EINVAL;
@@ -1747,8 +1652,9 @@ int sync_notify_init(ctx_t *ctx_p) {
 			return fanotify_d;
 		}
 #endif
+#ifdef INOTIFY_SUPPORT
 		case NE_INOTIFY: {
-#if OLDSYSTEM || __FreeBSD__
+#if INOTIFY_OLD
 			int inotify_d = inotify_init();
 #else
 			int inotify_d = inotify_init1(INOTIFY_FLAGS);
@@ -1761,6 +1667,18 @@ int sync_notify_init(ctx_t *ctx_p) {
 			debug(3, "inotify_d == %u", inotify_d);
 			return inotify_d;
 		}
+#endif
+#ifdef KQUEUE_SUPPORT
+		case NE_KQUEUE: {
+			int kqueue_d = kqueue();
+			if(kqueue_d == -1) {
+				error("cannot kqueue().");
+				return -1;
+			}
+
+			return kqueue_d;
+		}
+#endif
 	}
 	error("unknown notify-engine: %i", ctx_p->notifyengine);
 	errno = EINVAL;
@@ -1798,14 +1716,18 @@ static int sync_dosync(const char *fpath, uint32_t evmask, ctx_t *ctx_p, indexes
 
 static inline uint8_t monsystems_unifyevmask(ctx_t *ctx_p, uint32_t event_mask) {
 	int is_dir=0, is_created=0, is_deleted=0;
-	debug(4, "ctx_p->flags[INOTIFY] == %u", ctx_p->flags[INOTIFY]);
+	debug(4, "ctx_p->notifyengine == %u", ctx_p->notifyengine);
 
-	if (ctx_p->flags[INOTIFY]) {
-		is_dir     = event_mask &  IN_ISDIR;
-		is_created = event_mask & (IN_CREATE|IN_MOVED_TO);
-		is_deleted = event_mask & (IN_DELETE_SELF|IN_DELETE|IN_MOVED_FROM);
-	} else
-		critical("Unsupported FS monitor subsystem");
+	switch (ctx_p->notifyengine) {
+		case NE_INOTIFY:
+		case NE_KQUEUE:
+			is_dir     = event_mask &  IN_ISDIR;
+			is_created = event_mask & (IN_CREATE|IN_MOVED_TO);
+			is_deleted = event_mask & (IN_DELETE_SELF|IN_DELETE|IN_MOVED_FROM);
+			break;
+		default:
+			critical("Unsupported FS monitor subsystem");
+	}
 
 	is_dir     = is_dir     != 0;
 	is_created = is_created != 0;
@@ -1839,6 +1761,7 @@ int sync_prequeue_loadmark
 
 		eventinfo_t *evinfo
 ) {
+	debug(5, "");
 #ifdef PARANOID
 	// &path_buf and &path_buf_len are passed to do not reallocate memory for path_rel/path_full each time
 	if ((path_buf_p == NULL || path_buf_len_p == NULL) && (path_full == NULL || path_rel == NULL)) {
@@ -2817,268 +2740,22 @@ int sync_idle(int notify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 	return 0;
 }
 
-#ifdef FANOTIFY_SUPPORT
-int sync_fanotify_loop(int fanotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
-	struct fanotify_event_metadata buf[BUFSIZ/sizeof(struct fanotify_event_metadata) + 1];
-	int state = STATE_RUNNING;
-	state_p = &state;
-
-	while(state != STATE_EXIT) {
-		struct fanotify_event_metadata *metadata;
-		size_t len = read(fanotify_d, (void *)buf, sizeof(buf)-sizeof(*buf));
-		metadata=buf;
-		if(len == -1) {
-			error("cannot read(%i, &metadata, sizeof(metadata)).", fanotify_d);
-			return errno;
-		}
-		while(FAN_EVENT_OK(metadata, len)) {
-			debug(2, "metadata->pid: %i; metadata->fd: %i", metadata->pid, metadata->fd);
-			if (metadata->fd != FAN_NOFD) {
-				if (metadata->fd >= 0) {
-					char *fpath = fd2fpath_malloc(metadata->fd);
-					sync_queuesync(fpath_rel, 0, ctx_p, indexes_p, QUEUE_AUTO);
-					debug(2, "Event %i on \"%s\".", metadata->mask, fpath);
-					free(fpath);
-				}
-			}
-			close(metadata->fd);
-			metadata = FAN_EVENT_NEXT(metadata, len);
-		}
-		int ret;
-		if((ret=sync_idle(fanotify_d, ctx_p, indexes_p))) {
-			error("got error while sync_idle().");
-			return ret;
-		}
-	}
-	return 0;
-}
-#endif
-
-int sync_inotify_wait(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
-	static struct timeval tv;
-	time_t tm = time(NULL);
-	long delay = ((unsigned long)~0 >> 1);
-
-	threadsinfo_t *threadsinfo_p = thread_info();
-
-	debug(4, "pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
-	pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
-	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
-
-
-	fd_set rfds;
-	FD_ZERO(&rfds);
-	FD_SET(inotify_d, &rfds);
-
-	long queue_id = 0;
-	while(queue_id < QUEUE_MAX) {
-		queueinfo_t *queueinfo = &ctx_p->_queues[queue_id++];
-
-		if(!queueinfo->stime)
-			continue;
-
-		if(queueinfo->collectdelay == COLLECTDELAY_INSTANT) {
-			debug(3, "There're events in instant queue (#%i), don't waiting.", queue_id-1);
-			return 0;
-		}
-
-		int qdelay = queueinfo->stime + queueinfo->collectdelay - tm;
-		debug(3, "queue #%i: %i %i %i -> %i", queue_id-1, queueinfo->stime, queueinfo->collectdelay, tm, qdelay);
-		if(qdelay < -(long)ctx_p->syncdelay)
-			qdelay = -(long)ctx_p->syncdelay;
-
-		delay = MIN(delay, qdelay);
-	}
-
-	long synctime_delay = ((long)ctx_p->synctime) - ((long)tm);
-	synctime_delay = synctime_delay > 0 ? synctime_delay : 0;
-
-	debug(3, "delay = MAX(%li, %li)", delay, synctime_delay);
-	delay = MAX(delay, synctime_delay);
-	delay = delay > 0 ? delay : 0;
-
-	if(ctx_p->flags[THREADING]) {
-		time_t _thread_nextexpiretime = thread_nextexpiretime();
-		debug(3, "thread_nextexpiretime == %i", _thread_nextexpiretime);
-		if(_thread_nextexpiretime) {
-			long thread_expiredelay = (long)thread_nextexpiretime() - (long)tm + 1; // +1 is to make "tm>threadinfo_p->expiretime" after select() definitely TRUE
-			debug(3, "thread_expiredelay == %i", thread_expiredelay);
-			thread_expiredelay = thread_expiredelay > 0 ? thread_expiredelay : 0;
-			debug(3, "delay = MIN(%li, %li)", delay, thread_expiredelay);
-			delay = MIN(delay, thread_expiredelay);
-		}
-	}
-
-	if((!delay) || (*state_p != STATE_RUNNING))
-		return 0;
-
-	if(ctx_p->flags[EXITONNOEVENTS]) { // zero delay if "--exit-on-no-events" is set
-		tv.tv_sec  = 0;
-		tv.tv_usec = 0;
-	} else {
-		debug(3, "sleeping for %li second(s).", SLEEP_SECONDS);
-		sleep(SLEEP_SECONDS);
-		delay = ((long)delay)>SLEEP_SECONDS ? delay-SLEEP_SECONDS : 0;
-
-		tv.tv_sec  = delay;
-		tv.tv_usec = 0;
-	}
-
-	debug(4, "pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
-	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
-
-	if(*state_p != STATE_RUNNING)
-		return 0;
-
-	debug(4, "pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
-	pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
-	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
-	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
-
-	debug(3, "select with timeout %li secs.", tv.tv_sec);
-	int ret = select(inotify_d+1, &rfds, NULL, NULL, &tv);
-
-	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
-
-	if((ret == -1) && (errno == EINTR)) {
-		errno = 0;
-		ret   = 0;
-	}
-
-	debug(4, "pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
-	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
-
-	if((ctx_p->flags[EXITONNOEVENTS]) && (ret == 0)) // if not events and "--exit-on-no-events" is set
-		*state_p = STATE_EXIT;
-
-	return ret;
-}
-
-#define SYNC_INOTIFY_HANDLE_CONTINUE {\
-	ptr += sizeof(struct inotify_event) + event->len;\
-	count++;\
-	continue;\
-}
-
-int sync_inotify_handle(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
-	static struct timeval tv={0};
-
-	int count = 0;
-
-	fd_set rfds;
-	FD_ZERO(&rfds);
-	FD_SET(inotify_d, &rfds);
-
-	char   *path_rel	= NULL;
-	size_t  path_rel_len	= 0;
-	char   *path_full	= NULL;
-	size_t  path_full_size	= 0;
-	while (select(FD_SETSIZE, &rfds, NULL, NULL, &tv)) {
-
-		char buf[BUFSIZ + 1];
-		size_t r = read(inotify_d, buf, BUFSIZ);
-		if (r <= 0) {
-			error("Got error while reading events from inotify with read().");
-			count = -1;
-			goto l_sync_inotify_handle_end;
-		}
-
-#ifdef PARANOID
-		g_hash_table_remove_all(indexes_p->fpath2ei_ht);
-#endif
-
-		char *ptr =  buf;
-		char *end = &buf[r];
-		while (ptr < end) {
-			struct inotify_event *event = (struct inotify_event *)ptr;
-
-			// Removing stale wd-s
-
-			if(event->mask & IN_IGNORED) {
-				debug(2, "Cleaning up info about watch descriptor %i.", event->wd);
-				indexes_remove_bywd(indexes_p, event->wd);
-				SYNC_INOTIFY_HANDLE_CONTINUE;
-			}
-
-			// Getting path
-
-			char *fpath = indexes_wd2fpath(indexes_p, event->wd);
-
-			if(fpath == NULL) {
-				debug(2, "Event %p on stale watch (wd: %i).", (void *)(long)event->mask, event->wd);
-				SYNC_INOTIFY_HANDLE_CONTINUE;
-			}
-			debug(2, "Event %p on \"%s\" (wd: %i; fpath: \"%s\").", (void *)(long)event->mask, event->len>0?event->name:"", event->wd, fpath);
-
-			// Getting full path
-
-			size_t path_full_memreq = strlen(fpath) + event->len + 2;
-			if (path_full_size < path_full_memreq) {
-				path_full      = xrealloc(path_full, path_full_memreq);
-				path_full_size = path_full_memreq;
-			}
-
-			if (event->len>0)
-				sprintf(path_full, "%s/%s", fpath, event->name);
-			else
-				sprintf(path_full, "%s", fpath);
-
-			// Getting infomation about file/dir/etc
-
-			stat64_t lstat;
-			mode_t st_mode;
-			size_t st_size;
-			if (lstat64(path_full, &lstat)) {
-				debug(2, "Cannot lstat(\"%s\", lstat). Seems, that the object disappeared.", path_full);
-				if(event->mask & IN_ISDIR)
-					st_mode = S_IFDIR;
-				else
-					st_mode = S_IFREG;
-				st_size = 0;
-			} else {
-				st_mode = lstat.st_mode;
-				st_size = lstat.st_size;
-			}
-
-			if (sync_prequeue_loadmark(inotify_d, ctx_p, indexes_p, path_full, NULL, event->mask, event->wd, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
-				count = -1;
-				goto l_sync_inotify_handle_end;
-			}
-
-			SYNC_INOTIFY_HANDLE_CONTINUE;
-		}
-
-		// Globally queueing captured events:
-		// Moving events from local queue to global ones
-		sync_prequeue_unload(ctx_p, indexes_p);
-	}
-
-l_sync_inotify_handle_end:
-	if(path_full != NULL)
-		free(path_full);
-
-	if(path_rel != NULL)
-		free(path_rel);
-
-	return count;
-}
-
-#define SYNC_INOTIFY_LOOP_IDLE {\
+#define SYNC_LOOP_IDLE {\
 	int ret;\
-	if((ret=sync_idle(inotify_d, ctx_p, indexes_p))) {\
+	if((ret=sync_idle(notify_d, ctx_p, indexes_p))) {\
 		error("got error while sync_idle().");\
 		return ret;\
 	}\
 }
 
-#define SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK {\
+#define SYNC_LOOP_CONTINUE_UNLOCK {\
 	pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);\
 	debug(4, "pthread_mutex_unlock()");\
 	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);\
 	continue;\
 }
 
-int sync_inotify_loop(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
+int sync_loop(int notify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 	int state = ctx_p->flags[SKIPINITSYNC] ? STATE_RUNNING : STATE_INITSYNC;
 	int ret;
 	state_p = &state;
@@ -3100,7 +2777,7 @@ int sync_inotify_loop(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 					break;
 				}
 				state = STATE_RUNNING;
-				SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
+				SYNC_LOOP_CONTINUE_UNLOCK;
 			case STATE_INITSYNC:
 				if(!ctx_p->flags[THREADING]) {
 					ctx_p->iteration_num = 0;
@@ -3114,7 +2791,7 @@ int sync_inotify_loop(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 				if(ret) return ret;
 
 				if(ctx_p->flags[ONLYINITSYNC]) {
-					SYNC_INOTIFY_LOOP_IDLE;
+					SYNC_LOOP_IDLE;
 					state = STATE_EXIT;
 					return ret;
 				}
@@ -3128,49 +2805,49 @@ int sync_inotify_loop(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 							state = STATE_EXIT;
 
 				if(state == STATE_RUNNING)
-					events = sync_inotify_wait(inotify_d, ctx_p, indexes_p);
+					events = ctx_p->notifyenginefunct.wait(notify_d, ctx_p, indexes_p);
 
 				if(state != STATE_RUNNING)
-					SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
+					SYNC_LOOP_CONTINUE_UNLOCK;
 				break;
 			case STATE_REHASH:
 				main_status_update(ctx_p, state);
 				debug(1, "rehashing.");
 				main_rehash(ctx_p);
 				state = STATE_RUNNING;
-				SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
+				SYNC_LOOP_CONTINUE_UNLOCK;
 			case STATE_TERM:
 				main_status_update(ctx_p, state);
 				state = STATE_EXIT;
 			case STATE_EXIT:
 				main_status_update(ctx_p, state);
-				SYNC_INOTIFY_LOOP_CONTINUE_UNLOCK;
+				SYNC_LOOP_CONTINUE_UNLOCK;
 		}
 		pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
 		pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
 		if(events == 0) {
-			debug(2, "sync_inotify_wait(%i, ctx_p, indexes_p) timed-out.", inotify_d);
-			SYNC_INOTIFY_LOOP_IDLE;
+			debug(2, "sync_x_wait(%i, ctx_p, indexes_p) timed-out.", notify_d);
+			SYNC_LOOP_IDLE;
 			continue;	// Timeout
 		}
 		if(events  < 0) {
-			error("Got error while waiting for event from inotify with select(). inotify_d == %u.", inotify_d);
+			error("Got error while waiting for event from notify subsystem with select(). notify_d == %u.", notify_d);
 			return errno;
 		}
 
-		int count=sync_inotify_handle(inotify_d, ctx_p, indexes_p);
+		int count = ctx_p->notifyenginefunct.handle(notify_d, ctx_p, indexes_p);
 		if(count  <= 0) {
-			error("Cannot handle with inotify events.");
+			error("Cannot handle with notify events.");
 			return errno;
 		}
 		main_status_update(ctx_p, state);
 
 		if(ctx_p->flags[EXITONNOEVENTS]) // clsync exits on no events, so sync_idle() is never called. We have to force the calling of it.
-			SYNC_INOTIFY_LOOP_IDLE;
+			SYNC_LOOP_IDLE;
 	}
 
-	SYNC_INOTIFY_LOOP_IDLE;
+	SYNC_LOOP_IDLE;
 
 	debug(1, "end");
 	return exitcode;
@@ -3178,20 +2855,6 @@ int sync_inotify_loop(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 #ifdef DOXYGEN
 	sync_idle(0, NULL, NULL);
 #endif
-}
-
-int sync_notify_loop(int notify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
-	switch(ctx_p->notifyengine) {
-#ifdef FANOTIFY_SUPPORT
-		case NE_FANOTIFY:
-			return sync_fanotify_loop(notify_d, ctx_p, indexes_p);
-#endif
-		case NE_INOTIFY:
-			return sync_inotify_loop (notify_d, ctx_p, indexes_p);
-	}
-	error("unknown notify-engine: %i", ctx_p->notifyengine);
-	errno = EINVAL;
-	return -1;
 }
 
 void sync_sig_int(int signal) {
@@ -3743,10 +3406,26 @@ int sync_run(ctx_t *ctx_p) {
 
 	}
 
+	{
+		// Preparing monitor subsystem context function pointers
+		switch (ctx_p->notifyengine) {
+			case NE_INOTIFY:
+				ctx_p->notifyenginefunct.wait   = inotify_wait;
+				ctx_p->notifyenginefunct.handle = inotify_handle;
+				break;
+			case NE_KQUEUE:
+				ctx_p->notifyenginefunct.wait   = kqueue_wait;
+				ctx_p->notifyenginefunct.handle = kqueue_handle;
+				break;
+			default:
+				critical("Unknown FS monitor subsystem: %i", ctx_p->notifyengine);
+		}
+	}
+
 	// "Infinite" loop of processling the events
-	ret = sync_notify_loop(notify_d, ctx_p, &indexes);
+	ret = sync_loop(notify_d, ctx_p, &indexes);
 	if(ret) return ret;
-	debug(1, "sync_notify_loop() ended");
+	debug(1, "sync_loop() ended");
 
 #ifdef ENABLE_SOCKET
 	// Removing control socket

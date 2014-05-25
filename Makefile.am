@@ -2,8 +2,24 @@ ACLOCAL_AMFLAGS = -I m4
 
 if CLSYNC
 bin_PROGRAMS = clsync
-clsync_SOURCES = sync.c cluster.c main.c error.c fileutils.c malloc.c glibex.c
+clsync_SOURCES = sync.c cluster.c main.c error.c fileutils.c malloc.c glibex.c indexes.c
 clsync_CFLAGS = $(AM_CFLAGS)
+
+if HAVE_KQUEUE
+clsync_CFLAGS += -DKQUEUE_SUPPORT
+clsync_SOURCES += kqueue.c
+endif
+if HAVE_INOTIFY
+clsync_CFLAGS += -DINOTIFY_SUPPORT
+clsync_SOURCES += inotify.c
+if INOTIFY_OLD
+clsync_CFLAGS += -DINOTIFY_OLD
+endif
+endif
+if HAVE_FANOTIFY
+clsync_CFLAGS += -DFANOTIFY_SUPPORT
+clsync_SOURCES += fanotify.c
+endif
 
 if SOCKET
 clsync_SOURCES += socket.c control.c

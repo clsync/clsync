@@ -15,22 +15,19 @@ LT_INIT
 AC_CANONICAL_HOST
 case $host_os in
 	*bsd*)
-		AC_SEARCH_LIBS([inotify_init], [inotify], [],
-			[AC_MSG_ERROR("Unable to find libinotify")])
 		AC_SEARCH_LIBS([backtrace], [execinfo], [],
 			[AC_MSG_ERROR("Unable to find libexecinfo")])
 
-		dnl pthread
 		AC_CHECK_LIB(pthread, pthread_create)
 		PTHREAD_LIBS=-pthread
 		AC_SUBST(PTHREAD_LIBS)
 		;;
 
 	linux*)
-		dnl pthread
 		AC_CHECK_LIB([pthread], [pthread_create],
 			[CPPFLAGS+=" -pthread" LDFLAGS+=" -pthread"],
 			[AC_MSG_ERROR("Pthread support is mandatory")])
+
 		;;
 esac
 
@@ -128,14 +125,115 @@ AS_HELP_STRING(--with-capabilities,
 [enable linux capabilities support, default: disabled]))
 
 AS_IF(
-    [test "x$with_capabilities" = "xyes"], [
-        AC_CHECK_HEADER(
-            [sys/capability.h],
-            [CPPFLAGS="${CPPFLAGS} -DHAVE_CAPABILITIES"],
-            [AC_MSG_ERROR("Unable to find sys/capability.h")])
-])
+	[test "x$with_capabilities" = "xyes"],
+		[AC_CHECK_HEADER(
+			[sys/capability.h],
+			[CPPFLAGS="${CPPFLAGS} -DHAVE_CAPABILITIES"],
+			[AC_MSG_ERROR("Unable to find sys/capability.h")]
+		)]
+)
 
+AC_ARG_WITH(kqueue,
+	AS_HELP_STRING(--with-kqueue,
+		[Enable kqueue support; values: no, native, lib, check; default: check]),
+	[],
+	[with_kqueue=check]
+)
 
+AC_ARG_WITH(inotify,
+	AS_HELP_STRING(--with-inotify,
+		[Enable inotify support; values: no, native, lib, check; default: check]),
+	[],
+	[with_inotify=check]
+)
+
+case "$with_kqueue" in
+	check)
+		AC_CHECK_FUNC([kqueue],
+			[
+				HAVE_KQUEUE=1
+			],
+			AC_CHECK_LIB([kqueue], [kqueue],
+				[
+					LDFLAGS="${LDFLAGS} -lkqueue"
+					HAVE_KQUEUE=1
+				],
+			)
+		)
+		;;
+	native)
+		AC_CHECK_FUNC([kqueue],
+			[
+				HAVE_KQUEUE=1
+			],
+			[
+				AC_MSG_FAILURE(
+					[There is no kqueue native support on this system])
+			]
+		)
+		;;
+	lib)
+		AC_CHECK_LIB([kqueue], [kqueue],
+			[
+				LDFLAGS="${LDFLAGS} -lkqueue"
+				HAVE_KQUEUE=1
+			],
+			[
+				AC_MSG_FAILURE(
+					[Cannot find libkqueue])
+			]
+		)
+		;;
+esac
+
+INOTIFY_LIBS=-linotify
+case "$with_inotify" in
+	check)
+		AC_CHECK_FUNC([inotify_init],
+			[
+				HAVE_INOTIFY=1
+			],
+			AC_CHECK_LIB([inotify], [inotify_init],
+				[
+					LDFLAGS="${LDFLAGS} -linotify"
+					HAVE_INOTIFY=1
+				],
+			)
+		)
+		;;
+	native)
+		AC_CHECK_FUNC([inotify_init],
+			[
+				HAVE_INOTIFY=1
+			],
+			[
+				AC_MSG_FAILURE(
+					[There is no inotify native support on this system])
+			]
+		)
+		;;
+	lib)
+		AC_CHECK_LIB([inotify], [inotify_init],
+			[
+				LDFLAGS="${LDFLAGS} -linotify"
+				HAVE_INOTIFY=1
+			],
+			[
+				AC_MSG_FAILURE(
+					[Cannot find libinotify])
+			]
+		)
+		;;
+esac
+
+AS_IF([test "$HAVE_INOTIFY" != ""], [AC_CHECK_FUNC([inotify_init1], [], [INOTIFY_OLD=1])])
+
+AM_CONDITIONAL([HAVE_KQUEUE],   [test "$HAVE_KQUEUE"   != ""])
+AM_CONDITIONAL([HAVE_INOTIFY],  [test "$HAVE_INOTIFY"  != ""])
+AM_CONDITIONAL([INOTIFY_OLD],   [test "$INOTIFY_OLD"   != ""])
+AM_CONDITIONAL([HAVE_FANOTIFY], [test "$HAVE_FANOTIFY" != ""])
+
+AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = ''], [AC_MSG_FAILURE([kqueue and inotify are not supported on this system])])
 
 LIBS="${GLIB_LIBS} ${LIBS}"
 AM_CPPFLAGS="${GLIB_CFLAGS}"
