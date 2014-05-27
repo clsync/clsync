@@ -851,7 +851,7 @@ Possible values:
 .RS 8
 .IR inotify 
 .RS
-.BR inotify (7)
+.BR inotify "(7) [Linux]"
 
 Native, fast, reliable and well tested Linux FS monitor subsystem.
 
@@ -862,7 +862,7 @@ well tested and may be useful even via "libinotify".
 .RE
 .IR kqueue
 .RS
-.BR kqueue (2)
+.BR kqueue "(2) [FreeBSD]"
 
 A *BSD kernel event notification mechanism (inc. timer, sockets, files etc).
 
@@ -883,7 +883,42 @@ CPU/HDD expensive way.
 .B Warning! May be problems with hard links.
 
 FreeBSD users: notify me about found bugs, please. And before the bugfix
-you can switch to "inotify" through libinotify.
+you can switch to "inotify" through libinotify or to "bsm".
+.RE
+.IR bsm
+.RS
+.BR bsm "(3) [FreeBSD]"
+
+Basic Security Module (BSM) Audit API.
+
+This is not a FS monitor subsystem, actually. It's just an API to access to 
+audit information (inc. logs).
+.B clsync
+can setup audit to watch FS events and report it into log. After that
+.B clsync
+will just parse the log via
+.BR auditpipe "(4) [FreeBSD]."
+
+Fast (relative to
+.BR kqueue ),
+reliable, but hacky way. It requires global audit reconfiguration that
+may hopple audit analysis.
+
+.B Use with caution!
+File /etc/security/audit_control will be overwritten with:
+.RS
+dir:/var/audit
+.br
+flags:fc,fd,fw,fm
+.br
+minfree:0
+.br
+naflags:fc,fd,fw,fm
+.br
+policy:cnt
+.br
+filesz:1M
+.RE
 .RE
 .RE
 

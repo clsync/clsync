@@ -22,13 +22,16 @@
 #include "port-hacks.h"
 
 #if KQUEUE_SUPPORT
-#	include "kqueue.h"
+#	include "mon_kqueue.h"
 #endif
 #if INOTIFY_SUPPORT
-#	include "inotify.h"
+#	include "mon_inotify.h"
 #endif
 #if FANOTIFY_SUPPORT
-#	include "fanotify.h"
+#	include "mon_fanotify.h"
+#endif
+#if BSM_SUPPORT
+#	include "mon_bsm.h"
 #endif
 
 #include "main.h"
@@ -1313,6 +1316,9 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 #ifdef KQUEUE_SUPPORT
 			case NE_KQUEUE:
 #endif
+#ifdef BSM_SUPPORT
+			case NE_KQUEUE:
+#endif
 				evinfo.evmask = IN_CREATE_SELF;
 				if(node->fts_info==FTS_D) {
 					evinfo.evmask |= IN_ISDIR;
@@ -1632,7 +1638,18 @@ int sync_notify_init(ctx_t *ctx_p) {
 		case NE_KQUEUE: {
 			int kqueue_d = kqueue_init(ctx_p);
 			if(kqueue_d == -1) {
-				error("cannot kqueue().");
+				error("cannot kqueue_init(ctx_p).");
+				return -1;
+			}
+
+			return 0;
+		}
+#endif
+#ifdef BSM_SUPPORT
+		case NE_BSM: {
+			int bsm_d = bsm_init(ctx_p);
+			if(bsm_d == -1) {
+				error("cannot bsm_init(ctx_p).");
 				return -1;
 			}
 
@@ -1684,6 +1701,9 @@ static inline uint8_t monsystems_unifyevmask(ctx_t *ctx_p, uint32_t event_mask) 
 #endif
 #ifdef KQUEUE_SUPPORT
 		case NE_KQUEUE:
+#endif
+#ifdef BSM_SUPPORT
+		case NE_BSM:
 #endif
 			is_dir     = event_mask &  IN_ISDIR;
 			is_created = event_mask & (IN_CREATE|IN_MOVED_TO);
@@ -3481,6 +3501,13 @@ int sync_run(ctx_t *ctx_p) {
 				ctx_p->notifyenginefunct.handle        = kqueue_handle;
 				break;
 #endif
+#ifdef BSM_SUPPORT
+			case NE_KQUEUE:
+				ctx_p->notifyenginefunct.add_watch_dir = bsm_add_watch_dir;
+				ctx_p->notifyenginefunct.wait          = bsm_wait;
+				ctx_p->notifyenginefunct.handle        = bsm_handle;
+				break;
+#endif
 #ifdef VERYPARANOID
 			default:
 				critical("Unknown FS monitor subsystem: %i", ctx_p->flags[MONITOR]);
@@ -3519,6 +3546,11 @@ int sync_run(ctx_t *ctx_p) {
 #ifdef KQUEUE_SUPPORT
 		case NE_KQUEUE:
 			kqueue_deinit(ctx_p);
+			break;
+#endif
+#ifdef BSM_SUPPORT
+		case NE_BSM:
+			bsm_deinit(ctx_p);
 			break;
 #endif
 	}

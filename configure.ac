@@ -147,6 +147,13 @@ AC_ARG_WITH(inotify,
 	[with_inotify=check]
 )
 
+AC_ARG_WITH(bsm,
+	AS_HELP_STRING(--with-bsm,
+		[Enable BSM (Sun/*BSD audit) support as FS monitor subsystem; values: no, native, check; default: check]),
+	[],
+	[with_inotify=check]
+)
+
 case "$with_kqueue" in
 	check)
 		AC_CHECK_FUNC([kqueue],
@@ -226,14 +233,44 @@ case "$with_inotify" in
 		;;
 esac
 
+INOTIFY_LIBS=-lbsm
+case "$with_bsm" in
+	check)
+		AC_CHECK_FUNC([au_fetch_tok],
+			[
+				HAVE_BSM=1
+			],
+			AC_CHECK_LIB([bsm], [au_fetch_tok],
+				[
+					LDFLAGS="${LDFLAGS} -lbsm"
+					HAVE_BSM=1
+				],
+			)
+		)
+		;;
+	lib)
+		AC_CHECK_LIB([bsm], [au_fetch_tok],
+			[
+				LDFLAGS="${LDFLAGS} -lbsm"
+				HAVE_BSM=1
+			],
+			[
+				AC_MSG_FAILURE(
+					[Cannot find libbsm])
+			]
+		)
+		;;
+esac
+
 AS_IF([test "$HAVE_INOTIFY" != ""], [AC_CHECK_FUNC([inotify_init1], [], [INOTIFY_OLD=1])])
 
 AM_CONDITIONAL([HAVE_KQUEUE],   [test "$HAVE_KQUEUE"   != ""])
 AM_CONDITIONAL([HAVE_INOTIFY],  [test "$HAVE_INOTIFY"  != ""])
 AM_CONDITIONAL([INOTIFY_OLD],   [test "$INOTIFY_OLD"   != ""])
 AM_CONDITIONAL([HAVE_FANOTIFY], [test "$HAVE_FANOTIFY" != ""])
+AM_CONDITIONAL([HAVE_BSM],      [test "$HAVE_BSM"      != ""])
 
-AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = ''], [AC_MSG_FAILURE([kqueue and inotify are not supported on this system])])
+AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' ], [AC_MSG_FAILURE([kqueue, inotify and bsm are not supported on this system])])
 
 LIBS="${GLIB_LIBS} ${LIBS}"
 AM_CPPFLAGS="${GLIB_CFLAGS}"

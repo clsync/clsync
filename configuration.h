@@ -85,3 +85,14 @@
 // size of event chain size to be processes at a time
 #define KQUEUE_EVENTLISTSIZE		256
 
+#define AUDIT_CONTROL_PATH "/etc/security/audit_control"
+#define AUDIT_CONTROL_INITSCRIPT "/etc/rc.d/auditd"
+#define AUDIT_CONTROL_CONTENT "\n\
+dir:/var/audit\n\
+flags:fc,fd,fw,fm\n\
+minfree:0\n\
+naflags:fc,fd,fw,fm\n\
+policy:cnt\n\
+filesz:1M\n\
+"
+
