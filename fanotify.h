@@ -17,3 +17,5 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+extern int fanotify_add_watch_dir(struct ctx *ctx_p, const char *const accpath);
+

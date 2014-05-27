@@ -1,7 +1,7 @@
 /*
     clsync - file tree sync utility based on inotify/kqueue
     
-    Copyright (C) 2013-2014 Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
+    Copyright (C) 2014  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
     
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -17,8 +17,18 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-extern int inotify_wait(struct ctx *ctx_p, struct timeval *tv_p);
-extern int inotify_handle(struct ctx *ctx_p, struct indexes *indexes_p);
-extern int inotify_add_watch_dir(struct ctx *ctx_p, struct indexes *indexes_p, const char *const accpath);
-extern int inotify_deinit(ctx_t *ctx_p);
+#include <stdint.h>
 
+#ifdef HAVE_MHASH
+static inline adler32_calc(unsigned char *data, uint32_t len) {
+	uint32_t adler32;
+
+	MHASH td = mhash_init(MHASH_ADLER32);
+	mhash(td, data, len);
+	mhash_deinit(td, &adler32);
+
+	return adler32;
+}
+#else
+extern uint32_t adler32_calc(unsigned char *data, uint32_t len);
+#endif

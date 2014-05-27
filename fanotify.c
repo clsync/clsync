@@ -18,6 +18,12 @@
  */
 
 #if 0
+
+int fanotify_add_watch_dir(int fanotify_d, struct ctx *ctx_p, const char *const accpath) {
+	return fanotify_mark(fanotify_d, FAN_MARK_ADD | FAN_MARK_DONT_FOLLOW,
+		FANOTIFY_MARKMASK, AT_FDCWD, accpath);
+}
+
 int fanotify_loop(int fanotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 	struct fanotify_event_metadata buf[BUFSIZ/sizeof(struct fanotify_event_metadata) + 1];
 	int state = STATE_RUNNING;

@@ -1302,18 +1302,26 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 		evinfo.objtype_old  = EOT_DOESNTEXIST;
 		evinfo.objtype_new  = node->fts_info==FTS_D ? EOT_DIR : EOT_FILE;
 		evinfo.fsize        = fts_no_stat ? 0 : node->fts_statp->st_size;
-		switch(ctx_p->notifyengine) {
+		switch(ctx_p->flags[MONITOR]) {
 #ifdef FANOTIFY_SUPPORT
 			case NE_FANOTIFY:
 				break;
 #endif
+#ifdef INOTIFY_SUPPORT
 			case NE_INOTIFY:
+#endif
+#ifdef KQUEUE_SUPPORT
 			case NE_KQUEUE:
+#endif
 				evinfo.evmask = IN_CREATE_SELF;
 				if(node->fts_info==FTS_D) {
 					evinfo.evmask |= IN_ISDIR;
 				}
 				break;
+#ifdef VERYPARANOID
+			default:
+				critical("Unknown monitor subsystem: %u", ctx_p->flags[MONITOR]);
+#endif
 		}
 
 		if(!rsync_and_prefer_excludes) {
@@ -1454,7 +1462,7 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 	return sync_initialsync_cleanup(ctx_p, initsync, ret);
 }
 
-int sync_notify_mark(int notify_d, ctx_t *ctx_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p) {
+int sync_notify_mark(ctx_t *ctx_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p) {
 	debug(3, "(..., \"%s\", %i,...)", path, pathlen);
 	int wd = indexes_fpath2wd(indexes_p, path);
 	if(wd != -1) {
@@ -1462,63 +1470,16 @@ int sync_notify_mark(int notify_d, ctx_t *ctx_p, const char *accpath, const char
 		return wd;
 	}
 
-	switch(ctx_p->notifyengine) {
-#ifdef FANOTIFY_SUPPORT
-		case NE_FANOTIFY: {
-			int fanotify_d = notify_d;
+	debug(5, "ctx_p->notifyenginefunct.add_watch_dir(ctx_p, indexes_p, \"%s\")", accpath);
+	if((wd = ctx_p->notifyenginefunct.add_watch_dir(ctx_p, indexes_p, accpath)) == -1) {
+		if(errno == ENOENT)
+			return -2;
 
-			if((wd = fanotify_mark(fanotify_d, FAN_MARK_ADD | FAN_MARK_DONT_FOLLOW,
-				FANOTIFY_MARKMASK, AT_FDCWD, accpath)) == -1)
-			{
-				if(errno == ENOENT)
-					return -2;
-
-				error("Cannot fanotify_mark() on \"%s\".", 
-					path);
-				return -1;
-			}
-			break;
-		}
-#endif
-#ifdef INOTIFY_SUPPORT
-		case NE_INOTIFY: {
-			int inotify_d = notify_d;
-
-			debug(5, "inotify_add_watch(%i, \"%s\", 0x%x)", inotify_d, accpath, INOTIFY_MARKMASK);
-			if((wd = inotify_add_watch(inotify_d, accpath, INOTIFY_MARKMASK)) == -1) {
-				if(errno == ENOENT)
-					return -2;
-
-				error("Cannot inotify_add_watch() on \"%s\".", 
-					path);
-				return -1;
-			}
-			debug(6, "endof inotify_add_watch(%i, \"%s\", %x)", inotify_d, accpath, INOTIFY_MARKMASK);
-			break;
-		}
-#endif
-#ifdef KQUEUE_SUPPORT
-		case NE_KQUEUE: {
-			int kqueue_d = notify_d;
-
-			debug(5, "kqueue_add_watch(%i, \"%s\")", kqueue_d, accpath);
-			if((wd = kqueue_add_watch(kqueue_d, accpath)) == -1) {
-				if(errno == ENOENT)
-					return -2;
-
-				error("Cannot kqueue_add_watch() on \"%s\".", 
-					path);
-				return -1;
-			}
-			debug(6, "endof kqueue_add_watch(%i, \"%s\")", kqueue_d, accpath);
-		}
-#endif
-		default: {
-			error("unknown notify-engine: %i", ctx_p->notifyengine);
-			errno = EINVAL;
-			return -1;
-		}
+		error("Cannot ctx_p->notifyenginefunct.add_watch_dir() on \"%s\".", 
+			path);
+		return -1;
 	}
+	debug(6, "endof ctx_p->notifyenginefunct.add_watch_dir(ctx_p, indexes_p, \"%s\")", accpath);
 	indexes_add_wd(indexes_p, wd, path, pathlen);
 
 	return wd;
@@ -1535,12 +1496,12 @@ static inline int sync_mark_walk_cluster_modtime_update(ctx_t *ctx_p, const char
 }
 #endif
 
-int sync_mark_walk(int notify_d, ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
+int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 	int ret = 0;
 	const char *rootpaths[] = {dirpath, NULL};
 	FTS *tree;
 	rule_t *rules_p = ctx_p->rules;
-	debug(2, "(%i, ctx_p, \"%s\", indexes_p).", notify_d, dirpath);
+	debug(2, "(ctx_p, \"%s\", indexes_p).", dirpath);
 
 	int fts_opts = FTS_NOCHDIR|FTS_PHYSICAL|FTS_NOSTAT|(ctx_p->flags[ONEFILESYSTEM]?FTS_XDEV:0);
 
@@ -1613,7 +1574,7 @@ int sync_mark_walk(int notify_d, ctx_t *ctx_p, const char *dirpath, indexes_t *i
 		}
 
 		debug(2, "marking \"%s\" (depth %u)", node->fts_path, node->fts_level);
-		int wd = sync_notify_mark(notify_d, ctx_p, node->fts_accpath, node->fts_path, node->fts_pathlen, indexes_p);
+		int wd = sync_notify_mark(ctx_p, node->fts_accpath, node->fts_path, node->fts_pathlen, indexes_p);
 		if(wd == -1) {
 			error_or_debug(STATE_STARTING(state_p)?-1:2, "Got error while notify-marking \"%s\".", node->fts_path);
 			ret = errno;
@@ -1640,47 +1601,46 @@ l_sync_mark_walk_end:
 }
 
 int sync_notify_init(ctx_t *ctx_p) {
-	switch (ctx_p->notifyengine) {
+	switch (ctx_p->flags[MONITOR]) {
 #ifdef FANOTIFY_SUPPORT
 		case NE_FANOTIFY: {
-			int fanotify_d = fanotify_init(FANOTIFY_FLAGS, FANOTIFY_EVFLAGS);
-			if(fanotify_d == -1) {
+			ctx_p->fsmondata = (long)fanotify_init(FANOTIFY_FLAGS, FANOTIFY_EVFLAGS);
+			if((long)ctx_p->fsmondata == -1) {
 				error("cannot fanotify_init(%i, %i).", FANOTIFY_FLAGS, FANOTIFY_EVFLAGS);
 				return -1;
 			}
 
-			return fanotify_d;
+			return 0;
 		}
 #endif
 #ifdef INOTIFY_SUPPORT
 		case NE_INOTIFY: {
 #if INOTIFY_OLD
-			int inotify_d = inotify_init();
+			ctx_p->fsmondata = (void *)(long)inotify_init();
 #else
-			int inotify_d = inotify_init1(INOTIFY_FLAGS);
+			ctx_p->fsmondata = (void *)(long)inotify_init1(INOTIFY_FLAGS);
 #endif
-			if (inotify_d == -1) {
+			if ((long)ctx_p->fsmondata == -1) {
 				error("cannot inotify_init(%i).", INOTIFY_FLAGS);
 				return -1;
 			}
 
-			debug(3, "inotify_d == %u", inotify_d);
-			return inotify_d;
+			return 0;
 		}
 #endif
 #ifdef KQUEUE_SUPPORT
 		case NE_KQUEUE: {
-			int kqueue_d = kqueue();
+			int kqueue_d = kqueue_init(ctx_p);
 			if(kqueue_d == -1) {
 				error("cannot kqueue().");
 				return -1;
 			}
 
-			return kqueue_d;
+			return 0;
 		}
 #endif
 	}
-	error("unknown notify-engine: %i", ctx_p->notifyengine);
+	error("unknown notify-engine: %i", ctx_p->flags[MONITOR]);
 	errno = EINVAL;
 	return -1;
 }
@@ -1716,17 +1676,23 @@ static int sync_dosync(const char *fpath, uint32_t evmask, ctx_t *ctx_p, indexes
 
 static inline uint8_t monsystems_unifyevmask(ctx_t *ctx_p, uint32_t event_mask) {
 	int is_dir=0, is_created=0, is_deleted=0;
-	debug(4, "ctx_p->notifyengine == %u", ctx_p->notifyengine);
+	debug(4, "ctx_p->flags[MONITOR] == %u", ctx_p->flags[MONITOR]);
 
-	switch (ctx_p->notifyengine) {
+	switch (ctx_p->flags[MONITOR]) {
+#ifdef INOTIFY_SUPPORT
 		case NE_INOTIFY:
+#endif
+#ifdef KQUEUE_SUPPORT
 		case NE_KQUEUE:
+#endif
 			is_dir     = event_mask &  IN_ISDIR;
 			is_created = event_mask & (IN_CREATE|IN_MOVED_TO);
 			is_deleted = event_mask & (IN_DELETE_SELF|IN_DELETE|IN_MOVED_FROM);
 			break;
+#ifdef VERYPARANOID
 		default:
 			critical("Unsupported FS monitor subsystem");
+#endif
 	}
 
 	is_dir     = is_dir     != 0;
@@ -1743,7 +1709,7 @@ static inline uint8_t monsystems_unifyevmask(ctx_t *ctx_p, uint32_t event_mask) 
 
 int sync_prequeue_loadmark
 (
-		int fsmon_d,
+		int monitored,
 
 		ctx_t     *ctx_p,
 		indexes_t *indexes_p,
@@ -1812,8 +1778,8 @@ int sync_prequeue_loadmark
 					path_full    = *path_buf_p;
 				}
 
-				if (fsmon_d) {
-					ret = sync_mark_walk(fsmon_d, ctx_p, path_full, indexes_p);
+				if (monitored) {
+					ret = sync_mark_walk(ctx_p, path_full, indexes_p);
 					if(ret) {
 						debug(1, "Seems, that directory \"%s\" disappeared, while trying to mark it.", path_full);
 						return 0;
@@ -2702,7 +2668,7 @@ int apievinfo2rsynclist(indexes_t *indexes_p, FILE *listfile, int n, api_eventin
 	return 0;
 }
 
-int sync_idle(int notify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
+int sync_idle(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 	// Collecting garbage
 
@@ -2740,9 +2706,103 @@ int sync_idle(int notify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 	return 0;
 }
 
+int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
+	static struct timeval tv;
+	time_t tm = time(NULL);
+	long delay = ((unsigned long)~0 >> 1);
+
+	threadsinfo_t *threadsinfo_p = thread_info();
+
+	debug(4, "pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
+	pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
+	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
+
+	long queue_id = 0;
+	while(queue_id < QUEUE_MAX) {
+		queueinfo_t *queueinfo = &ctx_p->_queues[queue_id++];
+
+		if(!queueinfo->stime)
+			continue;
+
+		if(queueinfo->collectdelay == COLLECTDELAY_INSTANT) {
+			debug(3, "There're events in instant queue (#%i), don't waiting.", queue_id-1);
+			return 0;
+		}
+
+		int qdelay = queueinfo->stime + queueinfo->collectdelay - tm;
+		debug(3, "queue #%i: %i %i %i -> %i", queue_id-1, queueinfo->stime, queueinfo->collectdelay, tm, qdelay);
+		if(qdelay < -(long)ctx_p->syncdelay)
+			qdelay = -(long)ctx_p->syncdelay;
+
+		delay = MIN(delay, qdelay);
+	}
+
+	long synctime_delay = ((long)ctx_p->synctime) - ((long)tm);
+	synctime_delay = synctime_delay > 0 ? synctime_delay : 0;
+
+	debug(3, "delay = MAX(%li, %li)", delay, synctime_delay);
+	delay = MAX(delay, synctime_delay);
+	delay = delay > 0 ? delay : 0;
+
+	if(ctx_p->flags[THREADING]) {
+		time_t _thread_nextexpiretime = thread_nextexpiretime();
+		debug(3, "thread_nextexpiretime == %i", _thread_nextexpiretime);
+		if(_thread_nextexpiretime) {
+			long thread_expiredelay = (long)thread_nextexpiretime() - (long)tm + 1; // +1 is to make "tm>threadinfo_p->expiretime" after select() definitely TRUE
+			debug(3, "thread_expiredelay == %i", thread_expiredelay);
+			thread_expiredelay = thread_expiredelay > 0 ? thread_expiredelay : 0;
+			debug(3, "delay = MIN(%li, %li)", delay, thread_expiredelay);
+			delay = MIN(delay, thread_expiredelay);
+		}
+	}
+
+	if((!delay) || (*state_p != STATE_RUNNING))
+		return 0;
+
+	if(ctx_p->flags[EXITONNOEVENTS]) { // zero delay if "--exit-on-no-events" is set
+		tv.tv_sec  = 0;
+		tv.tv_usec = 0;
+	} else {
+		debug(3, "sleeping for %li second(s).", SLEEP_SECONDS);
+		sleep(SLEEP_SECONDS);
+		delay = ((long)delay)>SLEEP_SECONDS ? delay-SLEEP_SECONDS : 0;
+
+		tv.tv_sec  = delay;
+		tv.tv_usec = 0;
+	}
+
+	debug(4, "pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
+	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
+
+	if(*state_p != STATE_RUNNING)
+		return 0;
+
+	debug(4, "pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
+	pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
+	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
+	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
+
+	int ret = ctx_p->notifyenginefunct.wait(ctx_p, &tv);
+
+	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
+
+	if((ret == -1) && (errno == EINTR)) {
+		errno = 0;
+		ret   = 0;
+	}
+
+	debug(4, "pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
+	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
+
+	if((ctx_p->flags[EXITONNOEVENTS]) && (ret == 0)) // if not events and "--exit-on-no-events" is set
+		*state_p = STATE_EXIT;
+
+	return ret;
+}
+
 #define SYNC_LOOP_IDLE {\
 	int ret;\
-	if((ret=sync_idle(notify_d, ctx_p, indexes_p))) {\
+	if((ret=sync_idle(ctx_p, indexes_p))) {\
 		error("got error while sync_idle().");\
 		return ret;\
 	}\
@@ -2755,7 +2815,7 @@ int sync_idle(int notify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 	continue;\
 }
 
-int sync_loop(int notify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
+int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 	int state = ctx_p->flags[SKIPINITSYNC] ? STATE_RUNNING : STATE_INITSYNC;
 	int ret;
 	state_p = &state;
@@ -2805,7 +2865,7 @@ int sync_loop(int notify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 							state = STATE_EXIT;
 
 				if(state == STATE_RUNNING)
-					events = ctx_p->notifyenginefunct.wait(notify_d, ctx_p, indexes_p);
+					events = notify_wait(ctx_p, indexes_p);
 
 				if(state != STATE_RUNNING)
 					SYNC_LOOP_CONTINUE_UNLOCK;
@@ -2827,16 +2887,16 @@ int sync_loop(int notify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 		pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
 		if(events == 0) {
-			debug(2, "sync_x_wait(%i, ctx_p, indexes_p) timed-out.", notify_d);
+			debug(2, "sync_x_wait(ctx_p, indexes_p) timed-out.");
 			SYNC_LOOP_IDLE;
 			continue;	// Timeout
 		}
 		if(events  < 0) {
-			error("Got error while waiting for event from notify subsystem with select(). notify_d == %u.", notify_d);
+			error("Got error while waiting for event from notify subsystem.");
 			return errno;
 		}
 
-		int count = ctx_p->notifyenginefunct.handle(notify_d, ctx_p, indexes_p);
+		int count = ctx_p->notifyenginefunct.handle(ctx_p, indexes_p);
 		if(count  <= 0) {
 			error("Cannot handle with notify events.");
 			return errno;
@@ -3385,8 +3445,6 @@ int sync_run(ctx_t *ctx_p) {
 	if(ctx_p->listoutdir)
 		srand(time(NULL));
 
-	int notify_d=0;
-
 #ifdef ENABLE_SOCKET
 	// Creating control socket
 	if(ctx_p->socketpath != NULL)
@@ -3397,33 +3455,41 @@ int sync_run(ctx_t *ctx_p) {
 
 		// Initializing FS monitor kernel subsystem in this userspace application
 
-		notify_d = sync_notify_init(ctx_p);
-		if(notify_d == -1) return errno;
+		if(sync_notify_init(ctx_p))
+			return errno;
 
 		// Marking file tree for FS monitor
-		ret = sync_mark_walk(notify_d, ctx_p, ctx_p->watchdir, &indexes);
+		ret = sync_mark_walk(ctx_p, ctx_p->watchdir, &indexes);
 		if(ret) return ret;
 
 	}
 
 	{
 		// Preparing monitor subsystem context function pointers
-		switch (ctx_p->notifyengine) {
+		switch (ctx_p->flags[MONITOR]) {
+#ifdef INOTIFY_SUPPORT
 			case NE_INOTIFY:
-				ctx_p->notifyenginefunct.wait   = inotify_wait;
-				ctx_p->notifyenginefunct.handle = inotify_handle;
+				ctx_p->notifyenginefunct.add_watch_dir = inotify_add_watch_dir;
+				ctx_p->notifyenginefunct.wait          = inotify_wait;
+				ctx_p->notifyenginefunct.handle        = inotify_handle;
 				break;
+#endif
+#ifdef KQUEUE_SUPPORT
 			case NE_KQUEUE:
-				ctx_p->notifyenginefunct.wait   = kqueue_wait;
-				ctx_p->notifyenginefunct.handle = kqueue_handle;
+				ctx_p->notifyenginefunct.add_watch_dir = kqueue_add_watch_dir;
+				ctx_p->notifyenginefunct.wait          = kqueue_wait;
+				ctx_p->notifyenginefunct.handle        = kqueue_handle;
 				break;
+#endif
+#ifdef VERYPARANOID
 			default:
-				critical("Unknown FS monitor subsystem: %i", ctx_p->notifyengine);
+				critical("Unknown FS monitor subsystem: %i", ctx_p->flags[MONITOR]);
+#endif
 		}
 	}
 
 	// "Infinite" loop of processling the events
-	ret = sync_loop(notify_d, ctx_p, &indexes);
+	ret = sync_loop(ctx_p, &indexes);
 	if(ret) return ret;
 	debug(1, "sync_loop() ended");
 
@@ -3444,8 +3510,18 @@ int sync_run(ctx_t *ctx_p) {
 
 	// Closing rest sockets and files
 
-	debug(3, "Closing notify_d");
-	close(notify_d);
+	switch (ctx_p->flags[MONITOR]) {
+#ifdef INOTIFY_SUPPORT
+		case NE_INOTIFY:
+			inotify_deinit(ctx_p);
+			break;
+#endif
+#ifdef KQUEUE_SUPPORT
+		case NE_KQUEUE:
+			kqueue_deinit(ctx_p);
+			break;
+#endif
+	}
 
 	// Closing shared libraries
 	if(ctx_p->flags[MODE] == MODE_SO) {

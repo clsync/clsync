@@ -97,15 +97,7 @@ enum flags_enum {
 
 	CONFIGBLOCKINHERITS	= 18|OPTION_LONGOPTONLY,
 
-#ifdef FANOTIFY_SUPPORT
-	FANOTIFY		= 19|OPTION_LONGOPTONLY,
-#endif
-#ifdef INOTIFY_SUPPORT
-	INOTIFY			= 20|OPTION_LONGOPTONLY,
-#endif
-#ifdef KQUEUE_SUPPORT
-	KQUEUE			= 21|OPTION_LONGOPTONLY,
-#endif
+	MONITOR			= 19|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -177,8 +169,9 @@ struct api_functs {
 typedef struct api_functs api_functs_t;
 
 struct notifyenginefuncts {
-	int (*wait)(int notify_d, struct ctx *ctx_p, struct indexes *indexes_p);
-	int (*handle)(int notify_d, struct ctx *ctx_p, struct indexes *indexes_p);
+	int (*wait)(struct ctx *ctx_p, struct timeval *tv_p);
+	int (*handle)(struct ctx *ctx_p, struct indexes *indexes_p);
+	int (*add_watch_dir)(struct ctx *ctx_p, struct indexes *indexes_p, const char *const accpath);
 };
 
 struct ctx {
@@ -235,7 +228,6 @@ struct ctx {
 	api_functs_t handler_funct;
 	char *rulfpath;
 	char *listoutdir;
-	int notifyengine;
 	struct notifyenginefuncts notifyenginefunct;
 	int retries;
 	size_t bfilethreshold;
@@ -248,6 +240,7 @@ struct ctx {
 	char isignoredexitcode[(1<<8)];
 #endif
 	void *indexes_p;
+	void *fsmondata;
 };
 typedef struct ctx ctx_t;
 

@@ -29,14 +29,12 @@
 // children count limit
 #define MAXCHILDREN			(1<<8)
 
-#if __linux__
+#if INOTIFY_SUPPORT
 #	define DEFAULT_NOTIFYENGINE	NE_INOTIFY
+#elif KQUEUE_SUPPORT
+#	define DEFAULT_NOTIFYENGINE	NE_KQUEUE
 #else
-#	if __FreeBSD__
-#		define	DEFAULT_NOTIFYENGINE	NE_KQUEUE
-#	else
-#		define	DEFAULT_NOTIFYENGINE	NE_UNDEFINED
-#	endif
+#	error No inotify/kqueue support, cannot compile working clsync
 #endif
 #define DEFAULT_RULES_PERM		RA_ALL
 #define DEFAULT_COLLECTDELAY		30
@@ -83,3 +81,7 @@
 
 #define DUMP_DIRMODE			0750
 #define DUMP_FILEMODE			0644
+
+// size of event chain size to be processes at a time
+#define KQUEUE_EVENTLISTSIZE		256
+

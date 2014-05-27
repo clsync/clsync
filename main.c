@@ -97,15 +97,7 @@ static const struct option long_options[] =
 	{"debug",		optional_argument,	NULL,	DEBUG},
 	{"dump-dir",		required_argument,	NULL,	DUMPDIR},
 	{"quiet",		optional_argument,	NULL,	QUIET},
-#ifdef FANOTIFY_SUPPORT
-	{"fanotify",		optional_argument,	NULL,	FANOTIFY},
-#endif
-#ifdef INOTIFY_SUPPORT
-	{"inotify",		optional_argument,	NULL,	INOTIFY},
-#endif
-#ifdef KQUEUE_SUPPORT
-	{"kqueue",		optional_argument,	NULL,	KQUEUE},
-#endif
+	{"monitor",		required_argument,	NULL,	MONITOR},
 	{"label",		required_argument,	NULL,	LABEL},
 	{"help",		optional_argument,	NULL,	HELP},
 	{"version",		optional_argument,	NULL,	SHOW_VERSION},
@@ -125,6 +117,12 @@ static char *const threading_modes[] = {
 	[PM_SAFE]		= "safe",
 	[PM_FULL]		= "full",
 	NULL
+};
+
+static char *const notify_engines[] = {
+	[NE_INOTIFY]		= "inotify",
+	[NE_KQUEUE]		= "kqueue",
+	[NE_FANOTIFY]		= "fanotify",
 };
 
 static char *const output_methods[] = {
@@ -446,21 +444,44 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 		case BFILETHRESHOLD:
 			ctx_p->bfilethreshold = (unsigned long)atol(arg);
 			break;
-#ifdef FANOTIFY_SUPPORT
-		case FANOTIFY:
-			ctx_p->notifyengine = NE_FANOTIFY;
-			break;
+		case MONITOR: {
+			char *value, *arg_orig = arg;
+
+			if (!*arg) {
+				ctx_p->flags_set[param_id] = 0;
+				return 0;
+			}
+
+			notifyengine_t notifyengine = getsubopt(&arg, notify_engines, &value);
+			if((int)notifyengine == -1) {
+				errno = EINVAL;
+				error("Invalid FS monitor subsystem entered: \"%s\"", arg_orig);
+				return EINVAL;
+			}
+
+			switch (notifyengine) {
+#ifndef FANOTIFY_SUPPORT
+				case NE_FANOTIFY:
 #endif
-#ifdef INOTIFY_SUPPORT
-		case INOTIFY:
-			ctx_p->notifyengine = NE_INOTIFY;
-			break;
+#ifndef INOTIFY_SUPPORT
+				case NE_INOTIFY:
 #endif
 #ifdef KQUEUE_SUPPORT
-		case KQUEUE:
-			ctx_p->notifyengine = NE_KQUEUE;
-			break;
+				case NE_KQUEUE:
 #endif
+					error(PROGRAM" is compiled without %s subsystem support. Recompile with option \"--with-%s\" if you're planning to use it.", arg_orig, arg_orig);
+					return EINVAL;
+				default:
+#ifdef VERYPARANOID
+					critical("Internal error");
+#endif
+					break;
+			}
+
+			ctx_p->flags[MONITOR] = notifyengine;
+
+			break;
+		}
 		case RSYNCINCLIMIT:
 			ctx_p->rsyncinclimit = (unsigned int)atol(arg);
 			break;
@@ -1125,7 +1146,7 @@ int main(int argc, char *argv[]) {
 	memset(&ctx, 0, sizeof(ctx));
 
 	int ret = 0, nret;
-	ctx.notifyengine 			 = DEFAULT_NOTIFYENGINE;
+	ctx.flags[MONITOR]			 = DEFAULT_NOTIFYENGINE;
 	ctx.syncdelay 				 = DEFAULT_SYNCDELAY;
 	ctx._queues[QUEUE_NORMAL].collectdelay   = DEFAULT_COLLECTDELAY;
 	ctx._queues[QUEUE_BIGFILE].collectdelay  = DEFAULT_BFILECOLLECTDELAY;
@@ -1147,9 +1168,9 @@ int main(int argc, char *argv[]) {
 	error_init(&ctx.flags[OUTPUT_METHOD], &ctx.flags[QUIET], &ctx.flags[VERBOSE], &ctx.flags[DEBUG]);
 
 	nret = arguments_parse(argc, argv, &ctx);
-	if(nret) ret = nret;
+	if (nret) ret = nret;
 
-	if(!ret) {
+	if (!ret) {
 		nret = configs_parse(&ctx);
 		if(nret) ret = nret;
 	}
@@ -1538,11 +1559,11 @@ int main(int argc, char *argv[]) {
 	}
 
 #ifdef FANOTIFY_SUPPORT
-	if(ctx.notifyengine == NE_FANOTIFY)
+	if (ctx.flags[MONITOR] == NE_FANOTIFY)
 		critical("fanotify is not supported, now!");
 	else
 #endif
-	if(ctx.notifyengine == NE_UNDEFINED) {
+	if (ctx.flags[MONITOR] == NE_UNDEFINED) {
 		ret = errno = EINVAL;
 		error("Required one of next options:"
 #ifdef INOTIFY_SUPPORT
@@ -1554,7 +1575,7 @@ int main(int argc, char *argv[]) {
 		);
 	}
 
-	if(ctx.flags[EXITHOOK]) {
+	if (ctx.flags[EXITHOOK]) {
 #ifdef VERYPARANOID
 		if(ctx.exithookfile == NULL) {
 			ret = errno = EINVAL;

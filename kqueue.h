@@ -39,7 +39,9 @@
 #define IN_ISDIR         0x40000000
 #endif
 
-extern int kqueue_add_watch(int kqueue_d, const char *const accpath);
-extern int kqueue_wait(int kqueue_d, struct ctx *ctx_p, struct indexes *indexes_p);
-extern int kqueue_handle(int kqueue_d, struct ctx *ctx_p, struct indexes *indexes_p);
+extern int kqueue_init();
+extern int kqueue_add_watch_dir(struct ctx *ctx_p, struct indexes *indexes_p, const char *const accpath);
+extern int kqueue_wait(struct ctx *ctx_p, struct timeval *tv_p);
+extern int kqueue_handle(struct ctx *ctx_p, struct indexes *indexes_p);
+extern int kqueue_deinit(ctx_t *ctx_p);
 

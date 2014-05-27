@@ -130,17 +130,11 @@ typedef enum paramsource_enum paramsource_t;
 
 enum notifyengine_enum {
 	NE_UNDEFINED = 0,
-#ifdef FANOTIFY_SUPPORT
 	NE_FANOTIFY,
-#endif
-#ifdef INOTIFY_SUPPORT
 	NE_INOTIFY,
-#endif
-#ifdef KQUEUE_SUPPORT
 	NE_KQUEUE,
-#endif
 };
-typedef enum notifyengine_enum notifyenfine_t;
+typedef enum notifyengine_enum notifyengine_t;
 
 #define STATE_STARTING(state_p) (state_p == NULL)
 enum state_enum {
@@ -260,7 +254,7 @@ struct pushdoubleentry_arg {
 	struct doubleentry	*entry;
 };
 
-struct entry {
+struct myentry {
 	size_t  size;
 	size_t  alloc;
 	void   *dat;
@@ -270,7 +264,7 @@ struct pushentry_arg {
 	int		 allocated;
 	int		 total;
 	size_t		 size;
-	struct entry	*entry;
+	struct myentry	*entry;
 };
 
 enum initsync {

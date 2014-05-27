@@ -26,6 +26,7 @@
 
 
 char *fd2fpath_malloc(int fd) {
+#if __linux__
 	stat64_t st64;
 
 	if(fd <= 0) {
@@ -33,7 +34,6 @@ char *fd2fpath_malloc(int fd) {
 		errno = EINVAL;
 		return NULL;
 	}
-
 
 	char *fpath = xmalloc((1<<8) + 2);
 	sprintf(fpath, "/proc/self/fd/%i", fd);
@@ -57,6 +57,10 @@ char *fd2fpath_malloc(int fd) {
 
 	fpath[fpathlen] = 0;
 	return fpath;
+#else
+	critical("Function fd2fpath_malloc() is not supported in this OS");
+	return NULL;
+#endif
 }
 
 /**

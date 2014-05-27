@@ -842,30 +842,56 @@ Is not set by default.
 .RE
 
 .PP
-.B \-\-fanotify
+.B \-\-monitor
+.I monitor\-subsystem
 .RS 8
-.B Don't use this option!
+Switches FS monitor subsystem.
 
-Switches monitor subsystem to "fanotify" [it's described for
-future\-compatibility].
+Possible values:
+.RS 8
+.IR inotify 
+.RS
+.BR inotify (7)
 
-Is not set by default.
+Native, fast, reliable and well tested Linux FS monitor subsystem.
+
+There's no performance profit to use "inotify" instead of "kevent" on FreeBSD
+using "libinotify". It backends to "kevent" anyway. However inotify support is
+well tested and may be useful even via "libinotify".
+
+.RE
+.IR kqueue
+.RS
+.BR kqueue (2)
+
+A *BSD kernel event notification mechanism (inc. timer, sockets, files etc).
+
+This monitor subsystem that cannot determine file creation event, but it can
+determine a directory where something happened. So
+.B clsync
+is have to rescan whole dir every time on any content change.
+
+Also this API requires to open every monitored file and directory. So it may
+produce a huge amount of file descriptors. Be sure that
+.I kern.maxfiles
+is big enough (in FreeBSD).
+
+CPU/HDD expensive way.
+
+.B Not well tested. Use with caution!
+.br
+.B Warning! May be problems with hard links.
+
+FreeBSD users: notify me about found bugs, please. And before the bugfix
+you can switch to "inotify" through libinotify.
+.RE
 .RE
 
-.PP
-.B \-\-inotify
-.RS 8
-Switches monitor subsystem to "inotify".
-
-Is set by default on Linux.
-.RE
-
-.PP
-.B \-\-kqueue
-.RS 8
-Switches monitor subsystem to "kqueue/kevent".
-
-Is set by default on FreeBSD.
+If
+.B inotify
+is supported (even through libinotify) then it's used by default. If not then
+.B kqueue
+is used.
 .RE
 
 .PP
@@ -1517,4 +1543,5 @@ Don't be afraid to ask about clsync configuration, ;).
 .BR rsync (1),
 .BR pthreads (7),
 .BR inotify (7)
+.BR kqueue (2)
 

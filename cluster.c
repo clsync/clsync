@@ -36,11 +36,8 @@
 #include "error.h"
 #include "cluster.h"
 #include "sync.h"
+#include "calc.h"
 #include "malloc.h"
-
-#ifdef HAVE_MHASH
-#include <mhash.h>
-#endif
 
 // Global variables. They will be initialized in cluster_init()
 
@@ -221,36 +218,6 @@ static inline int clustercmd_window_del(window_t *window_p, clustercmdqueuedpack
 }
 
 
-#ifndef HAVE_MHASH
-/**
- * @brief 			Calculated Adler32 value for char array
- * 
- * @param[in]	date		Pointer to data
- * @param[in]	len		Length of the data
- * 
- * @retval	uint32_t	Adler32 value of data
- * 
- */
-
-// Copied from http://en.wikipedia.org/wiki/Adler-32
-uint32_t adler32_calc(unsigned char *data, int32_t len) { // where data is the location of the data in physical
-                                                          // memory and len is the length of the data in bytes
-	const int MOD_ADLER = 65521;
-	uint32_t a = 1, b = 0;
-	int32_t index;
-	
-	// Process each byte of the data in order
-	for (index = 0; index < len; ++index)
-	{
-		a = (a + data[index]) % MOD_ADLER;
-		b = (b + a) % MOD_ADLER;
-	}
-	
-	return (b << 16) | a;
-}
-#endif
-
-
 /**
  * @brief 			Calculates Adler32 for clustercmd
  * 
@@ -277,13 +244,7 @@ int clustercmd_adler32_calc(clustercmd_t *clustercmd_p, clustercmdadler32_t *clu
 		char    *ptr  = (char *)&clustercmd_p->h;
 
 		// Calculating
-#ifdef HAVE_MHASH
-		MHASH td = mhash_init(MHASH_ADLER32);
-		mhash(td, ptr, size);
-		mhash_deinit(td, &adler32);
-#else
 		adler32 = adler32_calc((unsigned char *)ptr, size);
-#endif
 
 		// Ending
 		memcpy(&clustercmd_p->h.adler32, &adler32_save, sizeof(clustercmdadler32_t));

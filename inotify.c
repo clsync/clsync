@@ -24,104 +24,19 @@
 #include "indexes.h"
 #include "inotify.h"
 
-int inotify_wait(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
-	static struct timeval tv;
-	time_t tm = time(NULL);
-	long delay = ((unsigned long)~0 >> 1);
+int inotify_add_watch_dir(ctx_t *ctx_p, indexes_t *indexes_p, const char *const accpath) {
+	int inotify_d = (int)(long)ctx_p->fsmondata;
+	return inotify_add_watch(inotify_d, accpath, INOTIFY_MARKMASK);
+}
 
-	threadsinfo_t *threadsinfo_p = thread_info();
+int inotify_wait(ctx_t *ctx_p, struct timeval *tv_p) {
+	int inotify_d = (int)(long)ctx_p->fsmondata;
 
-	debug(4, "pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
-	pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
-	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
-
-
+	debug(3, "select with timeout %li secs.", tv_p->tv_sec);
 	fd_set rfds;
 	FD_ZERO(&rfds);
 	FD_SET(inotify_d, &rfds);
-
-	long queue_id = 0;
-	while(queue_id < QUEUE_MAX) {
-		queueinfo_t *queueinfo = &ctx_p->_queues[queue_id++];
-
-		if(!queueinfo->stime)
-			continue;
-
-		if(queueinfo->collectdelay == COLLECTDELAY_INSTANT) {
-			debug(3, "There're events in instant queue (#%i), don't waiting.", queue_id-1);
-			return 0;
-		}
-
-		int qdelay = queueinfo->stime + queueinfo->collectdelay - tm;
-		debug(3, "queue #%i: %i %i %i -> %i", queue_id-1, queueinfo->stime, queueinfo->collectdelay, tm, qdelay);
-		if(qdelay < -(long)ctx_p->syncdelay)
-			qdelay = -(long)ctx_p->syncdelay;
-
-		delay = MIN(delay, qdelay);
-	}
-
-	long synctime_delay = ((long)ctx_p->synctime) - ((long)tm);
-	synctime_delay = synctime_delay > 0 ? synctime_delay : 0;
-
-	debug(3, "delay = MAX(%li, %li)", delay, synctime_delay);
-	delay = MAX(delay, synctime_delay);
-	delay = delay > 0 ? delay : 0;
-
-	if(ctx_p->flags[THREADING]) {
-		time_t _thread_nextexpiretime = thread_nextexpiretime();
-		debug(3, "thread_nextexpiretime == %i", _thread_nextexpiretime);
-		if(_thread_nextexpiretime) {
-			long thread_expiredelay = (long)thread_nextexpiretime() - (long)tm + 1; // +1 is to make "tm>threadinfo_p->expiretime" after select() definitely TRUE
-			debug(3, "thread_expiredelay == %i", thread_expiredelay);
-			thread_expiredelay = thread_expiredelay > 0 ? thread_expiredelay : 0;
-			debug(3, "delay = MIN(%li, %li)", delay, thread_expiredelay);
-			delay = MIN(delay, thread_expiredelay);
-		}
-	}
-
-	if((!delay) || (*state_p != STATE_RUNNING))
-		return 0;
-
-	if(ctx_p->flags[EXITONNOEVENTS]) { // zero delay if "--exit-on-no-events" is set
-		tv.tv_sec  = 0;
-		tv.tv_usec = 0;
-	} else {
-		debug(3, "sleeping for %li second(s).", SLEEP_SECONDS);
-		sleep(SLEEP_SECONDS);
-		delay = ((long)delay)>SLEEP_SECONDS ? delay-SLEEP_SECONDS : 0;
-
-		tv.tv_sec  = delay;
-		tv.tv_usec = 0;
-	}
-
-	debug(4, "pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
-	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
-
-	if(*state_p != STATE_RUNNING)
-		return 0;
-
-	debug(4, "pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
-	pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
-	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
-	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
-
-	debug(3, "select with timeout %li secs.", tv.tv_sec);
-	int ret = select(inotify_d+1, &rfds, NULL, NULL, &tv);
-
-	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
-
-	if((ret == -1) && (errno == EINTR)) {
-		errno = 0;
-		ret   = 0;
-	}
-
-	debug(4, "pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
-	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
-
-	if((ctx_p->flags[EXITONNOEVENTS]) && (ret == 0)) // if not events and "--exit-on-no-events" is set
-		*state_p = STATE_EXIT;
-
-	return ret;
+	return select(inotify_d+1, &rfds, NULL, NULL, tv_p);
 }
 
 #define INOTIFY_HANDLE_CONTINUE {\
@@ -130,8 +45,9 @@ int inotify_wait(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 	continue;\
 }
 
-int inotify_handle(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
+int inotify_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 	static struct timeval tv={0};
+	int inotify_d = (int)(long)ctx_p->fsmondata;
 
 	int count = 0;
 
@@ -199,7 +115,7 @@ int inotify_handle(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 			mode_t st_mode;
 			size_t st_size;
 			if (lstat64(path_full, &lstat)) {
-				debug(2, "Cannot lstat(\"%s\", lstat). Seems, that the object disappeared.", path_full);
+				debug(2, "Cannot lstat64(\"%s\", lstat). Seems, that the object disappeared.", path_full);
 				if(event->mask & IN_ISDIR)
 					st_mode = S_IFDIR;
 				else
@@ -210,7 +126,7 @@ int inotify_handle(int inotify_d, ctx_t *ctx_p, indexes_t *indexes_p) {
 				st_size = lstat.st_size;
 			}
 
-			if (sync_prequeue_loadmark(inotify_d, ctx_p, indexes_p, path_full, NULL, event->mask, event->wd, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
+			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, path_full, NULL, event->mask, event->wd, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
 				count = -1;
 				goto l_inotify_handle_end;
 			}
@@ -232,3 +148,10 @@ l_inotify_handle_end:
 
 	return count;
 }
+
+int inotify_deinit(ctx_t *ctx_p) {
+	int inotify_d = (int)(long)ctx_p->fsmondata;
+	debug(3, "Closing inotify_d");
+	return close(inotify_d);
+}
+
