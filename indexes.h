@@ -56,20 +56,6 @@ static inline int indexes_remove_bywd(indexes_t *indexes_p, int wd) {
 	return ret;
 }
 
-// Adds necessary rows to hash_tables if some watching descriptor opened
-// Return: 0 on success, non-zero on fail
-
-static inline int indexes_add_wd(indexes_t *indexes_p, int wd, const char *fpath_const, size_t fpathlen) {
-	debug(3, "indexes_add_wd(indexes_p, %i, \"%s\", %i)", wd, fpath_const, fpathlen);
-
-	char *fpath = xmalloc(fpathlen+1);
-	memcpy(fpath, fpath_const, fpathlen+1);
-	g_hash_table_insert(indexes_p->wd2fpath_ht, GINT_TO_POINTER(wd), fpath);
-	g_hash_table_insert(indexes_p->fpath2wd_ht, fpath, GINT_TO_POINTER(wd));
-
-	return 0;
-}
-
 // Lookups file path by watching descriptor from hash_tables
 // Return: file path on success, NULL on fail
 
@@ -77,7 +63,8 @@ static inline char *indexes_wd2fpath(indexes_t *indexes_p, int wd) {
 	return g_hash_table_lookup(indexes_p->wd2fpath_ht, GINT_TO_POINTER(wd));
 }
 
-//
+// Lookups watching descriptor by file path from hash_tables
+// Return: watching descriptor on success, -1 on fail
 
 static inline int indexes_fpath2wd(indexes_t *indexes_p, const char *fpath) {
 	gpointer gint_p = g_hash_table_lookup(indexes_p->fpath2wd_ht, fpath);
@@ -85,6 +72,21 @@ static inline int indexes_fpath2wd(indexes_t *indexes_p, const char *fpath) {
 		return -1;
 
 	return GPOINTER_TO_INT(gint_p);
+}
+
+// Adds necessary rows to hash_tables if some watching descriptor opened
+// Return: 0 on success, non-zero on fail
+
+static inline int indexes_add_wd(indexes_t *indexes_p, int wd, const char *fpath_const, size_t fpathlen) {
+	debug(4, "indexes_add_wd(indexes_p, %i, \"%s\", %i)", wd, fpath_const, fpathlen);
+
+	char *fpath = xmalloc(fpathlen+1);
+	memcpy(fpath, fpath_const, fpathlen+1);
+
+	g_hash_table_insert(indexes_p->wd2fpath_ht, GINT_TO_POINTER(wd), fpath);
+	g_hash_table_insert(indexes_p->fpath2wd_ht, fpath, GINT_TO_POINTER(wd));
+
+	return 0;
 }
 
 static inline eventinfo_t *indexes_fpath2ei(indexes_t *indexes_p, const char *fpath) {

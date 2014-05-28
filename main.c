@@ -472,6 +472,9 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 #ifdef KQUEUE_SUPPORT
 				case NE_KQUEUE:
 #endif
+#ifdef BSM_SUPPORT
+				case NE_BSM:
+#endif
 					break;
 				default:
 					error(PROGRAM" is compiled without %s subsystem support. Recompile with option \"--with-%s\" if you're planning to use it.", arg_orig, arg_orig);

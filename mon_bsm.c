@@ -145,10 +145,13 @@ int auditd_restart() {
 			error("Cannot fork().");
 			return -1;
 		case  0:
-			execl(AUDIT_CONTROL_INITSCRIPT, "restart");
+			debug(5, "fork: execl(\""AUDIT_CONTROL_INITSCRIPT"\", \""AUDIT_CONTROL_INITSCRIPT"\", \"restart\", NULL);", pid);
+			execl(AUDIT_CONTROL_INITSCRIPT, AUDIT_CONTROL_INITSCRIPT, "restart", NULL);
+			error("fork: Cannot execute \""AUDIT_CONTROL_INITSCRIPT" restart\"");
 			return -1;
 	}
 
+	debug(6, "Waiting for %u", pid);
 	int status;
 	if (waitpid(pid, &status, 0) != pid) {
 		error("Cannot waitid().");
@@ -159,6 +162,7 @@ int auditd_restart() {
 	if (exitcode)
 		error("Got error while running \""AUDIT_CONTROL_INITSCRIPT" restart\"");
 
+	debug(4, "exitcode == %u", exitcode);
 	return exitcode;
 }
 
@@ -166,15 +170,19 @@ int bsm_config_backup(mondata_t *mondata) {
 	char buf[sizeof(AUDIT_CONTROL_HEADER)];
 	int fd = open(AUDIT_CONTROL_PATH, O_RDONLY);
 
-	if (fd != -1)
-		return 0;
+	if (fd == -1) {
+		debug(4, "Cannot open "AUDIT_CONTROL_PATH". No need for backup.");
+		return 1;
+	}
 
 	int r = read(fd, buf, sizeof(AUDIT_CONTROL_HEADER)-1);
 	close(fd);
 
 	if (r == sizeof(AUDIT_CONTROL_HEADER)-1)
-		if (!memcmp(buf, AUDIT_CONTROL_HEADER, sizeof(AUDIT_CONTROL_HEADER)-1))
+		if (!memcmp(buf, AUDIT_CONTROL_HEADER, sizeof(AUDIT_CONTROL_HEADER)-1)) {
+			debug(4, "File "AUDIT_CONTROL_PATH" is already clsync-compatible.");
 			return 0;
+		}
 
 
 	if (!access(AUDIT_CONTROL_PATH"-clsync_backup", R_OK)) {
@@ -182,23 +190,34 @@ int bsm_config_backup(mondata_t *mondata) {
 		return -1;
 	}
 
+	debug(3, "mv: "AUDIT_CONTROL_PATH" -> "AUDIT_CONTROL_PATH"-clsync_backup");
 	rename(AUDIT_CONTROL_PATH, AUDIT_CONTROL_PATH"-clsync_backup");
 
 	close(fd);
 
-	return 0;
+	return 1;
 }
 
 int bsm_config_setup(mondata_t *mondata) {
-	if (bsm_config_backup(mondata) == -1)
-		return -1;
+	debug(3, "");
+	switch (bsm_config_backup(mondata)) {
+		case 0:
+			debug(4, "bsm_config_backup(): no reconfig required");
+			return 0;
+		case -1:
+			debug(4, "bsm_config_backup(): error");
+			return -1;
+	}
+	debug(3, "Writting a new audit_control file to \""AUDIT_CONTROL_PATH"\"");
 
 	mondata->config_fd = open(AUDIT_CONTROL_PATH, O_RDONLY);
 	flock(mondata->config_fd, LOCK_SH);
 
 	int fd_w = open(AUDIT_CONTROL_PATH, O_WRONLY|O_CREAT);
-	if (fd_w == -1)
+	if (fd_w == -1) {
+		error("Cannot open file \""AUDIT_CONTROL_PATH"\" for writing");
 		return -1;
+	}
 
 	int w;
 	if ((w=write(fd_w, AUDIT_CONTROL_HEADER AUDIT_CONTROL_CONTENT, sizeof(AUDIT_CONTROL_HEADER AUDIT_CONTROL_CONTENT)-1)) != sizeof(AUDIT_CONTROL_HEADER AUDIT_CONTROL_CONTENT)-1) {
@@ -208,14 +227,16 @@ int bsm_config_setup(mondata_t *mondata) {
 
 	close(fd_w);
 
-	if (auditd_restart())
+	if (auditd_restart()) {
+		error("Cannot restart auditd to apply a new "AUDIT_CONTROL_PATH);
 		return -1;
+	}
 
 	return 0;
 }
 
 int bsm_config_revert(mondata_t *mondata) {
-	int rc;
+	int rc = 0;
 	int fd = mondata->config_fd;
 
 	flock(fd, LOCK_UN);
@@ -223,9 +244,12 @@ int bsm_config_revert(mondata_t *mondata) {
 	if (flock(fd, LOCK_NB|LOCK_EX))
 		return 0;
 
-	debug(1, "I'm the last BSM clsync instance. Reverting the audit config file (\""AUDIT_CONTROL_PATH"-clsync_backup\" -> \""AUDIT_CONTROL_PATH"\").");
+	debug(1, "I'm the last BSM clsync instance.");
 
-	rc = rename(AUDIT_CONTROL_PATH"-clsync_backup", AUDIT_CONTROL_PATH);
+	if (!access(AUDIT_CONTROL_PATH"-clsync_backup", R_OK)) {
+		debug(1,"Reverting the audit config file (\""AUDIT_CONTROL_PATH"-clsync_backup\" -> \""AUDIT_CONTROL_PATH"\").");
+		rc = rename(AUDIT_CONTROL_PATH"-clsync_backup", AUDIT_CONTROL_PATH);
+	}
 	flock(fd, LOCK_UN);
 
 	if (rc) {
@@ -255,6 +279,11 @@ int bsm_init(ctx_t *ctx_p) {
 		error("Cannot open \""AUDITPIPE_PATH"\" for reading.");
 		BSM_INIT_ERROR;
 	}
+	
+	if (setvbuf(pipe, NULL, _IONBF, 0)) {
+		error("Cannot set unbuffered mode for auditpipe");
+		BSM_INIT_ERROR;
+	}
 
 	mondata->pipe = pipe;
 
@@ -282,17 +311,16 @@ int bsm_wait(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *timeo
 
 	while (42) {
 		int path_count;
-#ifdef PARANOID
+
 		// Checking if there already a recond in mondata
-		if (*event_p->path || *event_p->path_to) {
-			warning("There's already an event recorded in \"mondata\"");
+		if (*event_p->path) {
+			debug(2, "we have an event. return 1.");
 			return 1;
 		}
-#endif
 
 		// Getting a record
 		{
-			debug(3, "select() with timeout %li.%06li secs.", timeout_p->tv_sec, timeout_p->tv_usec);
+			debug(3, "select() with timeout %li.%06li secs (dontwait == %u).", timeout_p->tv_sec, timeout_p->tv_usec, dontwait);
 			fd_set rfds;
 			FD_ZERO(&rfds);
 			FD_SET(pipe_fd, &rfds);
@@ -308,16 +336,19 @@ int bsm_wait(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *timeo
 			}
 
 			if (!dontwait) {
+				debug(5, "old timeout_p->: tv_sec == %lu; tv_usec == %lu", timeout_p->tv_sec, timeout_p->tv_usec);
 				gettimeofday(&tv_abs, NULL);
 				if (timercmp(&timeout_abs, &tv_abs, <))
-					memset(timeout_p, 0, sizeof(*timeout_p));
-				else
 					timersub(&timeout_abs, &tv_abs, timeout_p);
+				else
+					memset(timeout_p, 0, sizeof(*timeout_p));
+				debug(5, "new timeout_p->: tv_sec == %lu; tv_usec == %lu", timeout_p->tv_sec, timeout_p->tv_usec);
 			}
 		}
 
-		path_count = 0;
 		// Parsing the record
+		path_count = 0;
+		debug(3, "parsing the event");
 		while (au_parsed < au_len) {
 
 			if (au_fetch_tok(&tok, &au_buf[au_parsed], au_len - au_parsed) == -1)
@@ -335,7 +366,7 @@ int bsm_wait(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *timeo
 				}
 				case AUT_PATH: {
 					char *ptr;
-					int dir_iswatched;
+					int dir_wd, dir_iswatched;
 
 					ptr = memrchr(tok.tt.path.path, '/', tok.tt.path.len);
 
@@ -346,11 +377,13 @@ int bsm_wait(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *timeo
 
 					debug(6, "Event on \"%s\".", tok.tt.path.path);
 					*ptr = 0;
-					dir_iswatched = indexes_fpath2wd(indexes_p, tok.tt.path.path) != -1;
+					dir_wd = indexes_fpath2wd(indexes_p, tok.tt.path.path);
+					dir_iswatched = (dir_wd != -1);
+					debug(7, "Directory is \"%s\". dir_wd == %i; dir_iswatched == %u", tok.tt.path.path, dir_wd, dir_iswatched);
 					*ptr = '/';
 
 					if (dir_iswatched) {
-						debug(5, "Event on \"%s\" is watched. Pushing.", tok.tt.path.path);
+						debug(5, "Event on \"%s\" is watched. Pushing. path_count == %u", tok.tt.path.path, path_count);
 						switch (path_count) {
 							case 0: 
 								memcpy(event_p->path,    tok.tt.path.path, tok.tt.path.len+1);
@@ -374,6 +407,7 @@ int bsm_wait(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *timeo
 		}
 
 		// Cleanup
+		debug(4, "clean up");
 		free(au_buf);
 		au_buf    = NULL;
 		au_len    = 0;
@@ -427,20 +461,24 @@ int bsm_handle(struct ctx *ctx_p, struct indexes *indexes_p) {
 
 		if (*event_p->path) {
 			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, event_p->path, NULL, r.u.v.f.objtype_old, r.u.v.f.objtype_new, event_p->type, event_p->w_id, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
+				error("Got error while load_mark-ing into pre-queue \"%s\"", event_p->path);
 				count = -1;
 				*event_p->path = 0;
 				break;
 			}
 			*event_p->path = 0;
+			count++;
 		}
 
 		if ((r.u.v.t.objtype_new != EOT_UNKNOWN) && *event_p->path_to) {
 			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, event_p->path_to, NULL, r.u.v.t.objtype_old, r.u.v.t.objtype_new, event_p->type, event_p->w_id, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
+				error("Got error while load_mark-ing into pre-queue \"%s\"", event_p->path_to);
 				count = -1;
 				*event_p->path_to = 0;
 				break;
 			}
 			*event_p->path_to = 0;
+			count++;
 		}
 	} while (bsm_wait(ctx_p, indexes_p, &tv) > 0);
 
@@ -454,14 +492,22 @@ int bsm_handle(struct ctx *ctx_p, struct indexes *indexes_p) {
 	// Moving events from local queue to global ones
 	sync_prequeue_unload(ctx_p, indexes_p);
 
+	debug(4, "Result count: %i", count);
 	if (count == -1)
 		return -1;
 
 	return count;
 }
 int bsm_add_watch_dir(struct ctx *ctx_p, struct indexes *indexes_p, const char *const accpath) {
-	static int id = 0;
-	return id++;	// TODO: fix: id will overflow here
+	static int id = 1;
+	if (id == -1)
+		id = (int)((unsigned int)~0 >> 2);
+
+	// TODO: optimize this line out:
+	while (indexes_wd2fpath(indexes_p, id) != NULL)
+		id++;
+
+	return id++;
 }
 int bsm_deinit(ctx_t *ctx_p) {
 	int rc = 0;

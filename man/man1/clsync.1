@@ -900,6 +900,9 @@ will just parse the log via
 Reliable, but hacky way. It requires global audit reconfiguration that
 may hopple audit analysis.
 
+This way should be the best for FreeBSD. It's not used by default just
+because it requires to modify "audit_control".
+
 .B Not well tested. Use with caution!
 Also file /etc/security/audit_control will be overwritten with:
 .RS
