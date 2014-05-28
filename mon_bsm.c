@@ -426,6 +426,10 @@ int bsm_handle(struct ctx *ctx_p, struct indexes *indexes_p) {
 
 	count = 0;
 
+#ifdef PARANOID
+	g_hash_table_remove_all(indexes_p->fpath2ei_ht);
+#endif
+
 	do {
 		struct  recognize_event_return r;
 		char *path_stat;

@@ -138,9 +138,16 @@ int kqueue_mark(ctx_t *ctx_p, monobj_t *obj_p) {
 		return 0;
 #endif
 
-	if ((obj_p->fd = openat(obj_p->dir_fd, obj_p->name, O_RDONLY)) == -1) {
-		error("Cannot open file \"%s\" (at %u)", obj_p->name, obj_p->dir_fd);
-		return -1;
+	debug(4, "obj_p->: dir_fd == %i; name == \"%s\"", obj_p->dir_fd, obj_p->name);
+
+	if (obj_p->dir_fd == -1)
+		obj_p->fd = open(ctx_p->watchdir, O_RDONLY);
+	else
+		obj_p->fd = openat(obj_p->dir_fd, obj_p->name, O_RDONLY);
+
+	if (obj_p->fd == -1) {
+		debug(2, "File/dir \"%s\" disappeared. Skipping", obj_p->name);
+		return 0;
 	}
 
 	if (dat->changelist_used >= dat->changelist_alloced) {
@@ -196,7 +203,10 @@ int kqueue_unmark(ctx_t *ctx_p, monobj_t *obj_p) {
 monobj_t *kqueue_start_watch(ctx_t *ctx_p, int dir_fd, const char *const fname, size_t name_len, unsigned char type) {
 	monobj_t *obj_p;
 	struct kqueue_data *dat = ctx_p->fsmondata;
+	debug(3, "(ctx_p, %i, \"%s\", %u, %u)", dir_fd, fname, name_len, type);
+
 	obj_p = xmalloc(sizeof(*obj_p));
+	obj_p->dir_fd	 = dir_fd;
 	obj_p->name_len	 = name_len;
 	obj_p->name	 = xmalloc(obj_p->name_len+1);
 	obj_p->type	 = type;
@@ -278,9 +288,11 @@ monobj_t *kqueue_add_watch_path(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 			dir_path[ptr - path] = 0;
 			dir_fd = indexes_fpath2wd(indexes_p, dir_path);
 			if (dir_fd == -1) {
-				errno = EINVAL;
-				error("Cannot find file descriptor of directory \"%s\"", dir_path);
-				return NULL;
+				if (strcmp(ctx_p->watchdir, path)) {
+					errno = ENOENT;
+					error("Cannot find file descriptor of directory \"%s\"", dir_path);
+					return NULL;
+				}
 			}
 			free(dir_path);
 			file_name = &ptr[1];
@@ -343,11 +355,16 @@ int kqueue_add_watch_dir(ctx_t *ctx_p, indexes_t *indexes_p, const char *const a
 	if (dir == NULL)
 		return -1;
 
-	while ((entry = readdir(dir)))
+	while ((entry = readdir(dir))) {
+		if (!memcmp(entry->d_name, ".",  2))
+			continue;
+		if (!memcmp(entry->d_name, "..", 3))
+			continue;
 		if (kqueue_add_watch_direntry(ctx_p, indexes_p, entry, dir_obj_p) == NULL) {
 			error("Got error while kqueue_add_watch_direntry(ctx_p, indexes_p, entry {->d_name == \"%s\"}, %u)", entry->d_name, dir_obj_p->fd);
 			return -1;
 		}
+	}
 
 	return dir_obj_p->fd;
 }
@@ -355,6 +372,7 @@ int kqueue_add_watch_dir(ctx_t *ctx_p, indexes_t *indexes_p, const char *const a
 int kqueue_wait(ctx_t *ctx_p, struct indexes *indexes_p, struct timeval *tv_p) {
 	struct kqueue_data *dat = ctx_p->fsmondata;
 	struct timespec ts;
+	debug(3, "tv_p->: tv_sec == %li; tv_usec == %li", tv_p->tv_sec, tv_p->tv_usec);
 
 #ifdef PARANOID
 	if (tv_p == NULL)
@@ -377,6 +395,12 @@ char *kqueue_getpath(ctx_t *ctx_p, indexes_t *indexes_p, monobj_t *obj_p) {
 	dirpath = indexes_wd2fpath(indexes_p, obj_p->fd);
 	if (dirpath != NULL)
 		return strdup(dirpath);
+
+	if (obj_p->dir_fd == -1) {
+		errno = ENOENT;
+		error("Cannot find fd of parent directory of \"%s\"", obj_p->name);
+		return NULL;
+	}
 
 	dirpath = indexes_wd2fpath(indexes_p, obj_p->dir_fd);
 	if (dirpath == NULL) {
@@ -509,6 +533,7 @@ int kqueue_handle_oneevent(ctx_t *ctx_p, indexes_t *indexes_p, struct kevent *ev
 int kqueue_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 	static struct timeval tv={0};
 	struct kqueue_data *dat = ctx_p->fsmondata;
+	debug(3, "dat->eventlist_count == %i", dat->eventlist_count);
 
 	if (dat->eventlist_count == 0)
 		return 0;
@@ -528,7 +553,7 @@ int kqueue_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 			obj.fd = ev_p->ident;
 			monobj_t *obj_p = tfind((void *)&obj, &dat->fd_btree, monobj_fdcmp);
 			if (obj_p == NULL) {
-				error("Internal error. Cannot find internat structure for fd == %u. Skipping the event.", ev_p->ident);
+				error("Internal error. Cannot find internal structure for fd == %u. Skipping the event.", ev_p->ident);
 				continue;
 			}
 
