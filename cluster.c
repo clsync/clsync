@@ -267,13 +267,7 @@ int clustercmd_adler32_calc(clustercmd_t *clustercmd_p, clustercmdadler32_t *clu
 #endif
 
 		// Calculating
-#ifdef HAVE_MHASH
-		MHASH td = mhash_init(MHASH_ADLER32);
-		mhash(td, ptr, size);
-		mhash_deinit(td, &adler32);
-#else
 		adler32 = adler32_calc((unsigned char *)ptr, size);
-#endif
 
 		// Ending
 		clustercmdadler32_p->dat = adler32 ^ 0xFFFFFFFF;

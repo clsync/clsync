@@ -20,7 +20,9 @@
 #include <stdint.h>
 
 #ifdef HAVE_MHASH
-static inline adler32_calc(const unsigned char *const data, uint32_t len) {
+#include <mhash.h>
+
+static inline uint32_t adler32_calc(const unsigned char *const data, uint32_t len) {
 	uint32_t adler32;
 
 	MHASH td = mhash_init(MHASH_ADLER32);
