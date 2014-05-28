@@ -3483,25 +3483,6 @@ int sync_run(ctx_t *ctx_p) {
 	if(ctx_p->listoutdir)
 		srand(time(NULL));
 
-#ifdef ENABLE_SOCKET
-	// Creating control socket
-	if(ctx_p->socketpath != NULL)
-		ret = control_run(ctx_p);
-#endif
-
-	if(!ctx_p->flags[ONLYINITSYNC]) {
-
-		// Initializing FS monitor kernel subsystem in this userspace application
-
-		if(sync_notify_init(ctx_p))
-			return errno;
-
-		// Marking file tree for FS monitor
-		ret = sync_mark_walk(ctx_p, ctx_p->watchdir, &indexes);
-		if(ret) return ret;
-
-	}
-
 	{
 		// Preparing monitor subsystem context function pointers
 		switch (ctx_p->flags[MONITOR]) {
@@ -3531,6 +3512,25 @@ int sync_run(ctx_t *ctx_p) {
 				critical("Unknown FS monitor subsystem: %i", ctx_p->flags[MONITOR]);
 #endif
 		}
+	}
+
+#ifdef ENABLE_SOCKET
+	// Creating control socket
+	if(ctx_p->socketpath != NULL)
+		ret = control_run(ctx_p);
+#endif
+
+	if(!ctx_p->flags[ONLYINITSYNC]) {
+
+		// Initializing FS monitor kernel subsystem in this userspace application
+
+		if(sync_notify_init(ctx_p))
+			return errno;
+
+		// Marking file tree for FS monitor
+		ret = sync_mark_walk(ctx_p, ctx_p->watchdir, &indexes);
+		if(ret) return ret;
+
 	}
 
 	// "Infinite" loop of processling the events

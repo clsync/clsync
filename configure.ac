@@ -158,12 +158,14 @@ case "$with_kqueue" in
 	check)
 		AC_CHECK_FUNC([kqueue],
 			[
-				HAVE_KQUEUE=1
+				HAVE_KQUEUE=2
 			],
 			AC_CHECK_LIB([kqueue], [kqueue],
 				[
-					LDFLAGS="${LDFLAGS} -lkqueue"
-					HAVE_KQUEUE=1
+					AC_CHECK_HEADER(sys/event.h, [
+						LDFLAGS="${LDFLAGS} -lkqueue"
+						HAVE_KQUEUE=1
+					])
 				],
 			)
 		)
@@ -171,7 +173,8 @@ case "$with_kqueue" in
 	native)
 		AC_CHECK_FUNC([kqueue],
 			[
-				HAVE_KQUEUE=1
+				AC_CHECK_HEADER(sys/event.h, [], [AC_MSG_FAILURE([Cannot find sys/event.h])])
+				HAVE_KQUEUE=2
 			],
 			[
 				AC_MSG_FAILURE(
@@ -182,6 +185,7 @@ case "$with_kqueue" in
 	lib)
 		AC_CHECK_LIB([kqueue], [kqueue],
 			[
+				AC_CHECK_HEADER(sys/event.h, [], [AC_MSG_FAILURE([Cannot find sys/event.h])])
 				LDFLAGS="${LDFLAGS} -lkqueue"
 				HAVE_KQUEUE=1
 			],
@@ -193,17 +197,18 @@ case "$with_kqueue" in
 		;;
 esac
 
-INOTIFY_LIBS=-linotify
 case "$with_inotify" in
 	check)
 		AC_CHECK_FUNC([inotify_init],
 			[
-				HAVE_INOTIFY=1
+				HAVE_INOTIFY=2
 			],
 			AC_CHECK_LIB([inotify], [inotify_init],
 				[
-					LDFLAGS="${LDFLAGS} -linotify"
-					HAVE_INOTIFY=1
+					AC_CHECK_HEADER(sys/inotify.h, [
+						LDFLAGS="${LDFLAGS} -linotify"
+						HAVE_INOTIFY=1
+					])
 				],
 			)
 		)
@@ -211,7 +216,8 @@ case "$with_inotify" in
 	native)
 		AC_CHECK_FUNC([inotify_init],
 			[
-				HAVE_INOTIFY=1
+				AC_CHECK_HEADER(sys/inotify.h, [], [AC_MSG_FAILURE([Cannot find sys/inotify.h])])
+				HAVE_INOTIFY=2
 			],
 			[
 				AC_MSG_FAILURE(
@@ -222,6 +228,7 @@ case "$with_inotify" in
 	lib)
 		AC_CHECK_LIB([inotify], [inotify_init],
 			[
+				AC_CHECK_HEADER(sys/inotify.h, [], [AC_MSG_FAILURE([Cannot find sys/inotify.h])])
 				LDFLAGS="${LDFLAGS} -linotify"
 				HAVE_INOTIFY=1
 			],
@@ -233,17 +240,18 @@ case "$with_inotify" in
 		;;
 esac
 
-INOTIFY_LIBS=-lbsm
 case "$with_bsm" in
 	check)
 		AC_CHECK_FUNC([au_fetch_tok],
 			[
-				HAVE_BSM=1
+				HAVE_BSM=2
 			],
 			AC_CHECK_LIB([bsm], [au_fetch_tok],
 				[
-					LDFLAGS="${LDFLAGS} -lbsm"
-					HAVE_BSM=1
+					AC_CHECK_HEADER(bsm/libbsm.h, [
+						LDFLAGS="${LDFLAGS} -lbsm"
+						HAVE_BSM=1
+					])
 				],
 			)
 		)
@@ -251,6 +259,7 @@ case "$with_bsm" in
 	lib)
 		AC_CHECK_LIB([bsm], [au_fetch_tok],
 			[
+				AC_CHECK_HEADER(bsm/libbsm.h, [], [AC_MSG_FAILURE([Cannot find bsm/libbsm.h])])
 				LDFLAGS="${LDFLAGS} -lbsm"
 				HAVE_BSM=1
 			],

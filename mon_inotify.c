@@ -41,7 +41,7 @@ struct recognize_event_return {
 };
 
 static inline uint32_t recognize_event(uint32_t event) {
-	struct recognize_event_return r = {0};
+	struct recognize_event_return r = {{{0}}};
 
 	eventobjtype_t type;
 	int is_created;

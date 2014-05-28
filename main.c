@@ -120,9 +120,12 @@ static char *const threading_modes[] = {
 };
 
 static char *const notify_engines[] = {
+	[NE_UNDEFINED]		= "",
 	[NE_INOTIFY]		= "inotify",
 	[NE_KQUEUE]		= "kqueue",
 	[NE_FANOTIFY]		= "fanotify",
+	[NE_BSM]		= "bsm",
+	NULL
 };
 
 static char *const output_methods[] = {
@@ -460,22 +463,19 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			}
 
 			switch (notifyengine) {
-#ifndef FANOTIFY_SUPPORT
+#ifdef FANOTIFY_SUPPORT
 				case NE_FANOTIFY:
 #endif
-#ifndef INOTIFY_SUPPORT
+#ifdef INOTIFY_SUPPORT
 				case NE_INOTIFY:
 #endif
 #ifdef KQUEUE_SUPPORT
 				case NE_KQUEUE:
 #endif
+					break;
+				default:
 					error(PROGRAM" is compiled without %s subsystem support. Recompile with option \"--with-%s\" if you're planning to use it.", arg_orig, arg_orig);
 					return EINVAL;
-				default:
-#ifdef VERYPARANOID
-					critical("Internal error");
-#endif
-					break;
 			}
 
 			ctx_p->flags[MONITOR] = notifyengine;

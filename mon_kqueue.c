@@ -175,7 +175,7 @@ int kqueue_unmark(ctx_t *ctx_p, monobj_t *obj_p) {
 #ifdef VERYPARANOID
 	if (obj_p == NULL) {
 		errno = EINVAL;
-		return NULL;
+		return -1;
 	}
 #endif
 
@@ -263,7 +263,7 @@ monobj_t *kqueue_add_watch_path(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 #ifdef VERYPARANOID
 	if (path == NULL) {
 		errno = EINVAL;
-		return -1;
+		return NULL;
 	}
 #endif
 	{
@@ -328,7 +328,7 @@ int kqueue_add_watch_dir(ctx_t *ctx_p, indexes_t *indexes_p, const char *const a
 	struct dirent *entry;
 
 #ifdef VERYPARANOID
-	if (path == NULL) {
+	if (accpath == NULL) {
 		errno = EINVAL;
 		return -1;
 	}
@@ -546,6 +546,15 @@ int kqueue_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 	return count;
 }
 
+void btree_free(void *node_p) {
+	monobj_t *obj_p = node_p;
+
+	free(obj_p->name);
+	free(obj_p);
+
+	return;
+}
+
 int kqueue_deinit(ctx_t *ctx_p) {
 	struct kqueue_data *dat = ctx_p->fsmondata;
 
@@ -559,8 +568,8 @@ int kqueue_deinit(ctx_t *ctx_p) {
 	twalk(dat->fd_btree, btree_close);
 #endif
 #if __USE_GNU
-	tdestroy(dat->file_btree);
-	tdestroy(dat->fd_btree);
+	tdestroy(dat->file_btree, btree_free);
+	tdestroy(dat->fd_btree, NULL);
 #else
 	free(dat->file_btree);
 	free(dat->fd_btree);

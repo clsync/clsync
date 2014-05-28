@@ -33,6 +33,7 @@
 #ifdef CLUSTER_SUPPORT
 
 #include "common.h"
+#include "indexes.h"
 #include "error.h"
 #include "cluster.h"
 #include "sync.h"
