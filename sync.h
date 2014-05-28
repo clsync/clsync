@@ -33,6 +33,9 @@ extern int sync_prequeue_loadmark
 		const char *path_full,
 		const char *path_rel,
 
+		eventobjtype_t objtype_old,
+		eventobjtype_t objtype_new,
+
 		uint32_t event_mask,
 		int      event_wd,
 		mode_t st_mode,

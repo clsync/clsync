@@ -17,7 +17,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-extern int inotify_wait(struct ctx *ctx_p, struct timeval *tv_p);
+extern int inotify_wait(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *tv_p);
 extern int inotify_handle(struct ctx *ctx_p, struct indexes *indexes_p);
 extern int inotify_add_watch_dir(struct ctx *ctx_p, struct indexes *indexes_p, const char *const accpath);
 extern int inotify_deinit(ctx_t *ctx_p);

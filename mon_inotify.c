@@ -22,14 +22,55 @@
 #include "error.h"
 #include "sync.h"
 #include "indexes.h"
-#include "inotify.h"
+#include "mon_inotify.h"
+
+enum event_bits {
+	UEM_DIR		= 0x01,
+	UEM_CREATED	= 0x02,
+	UEM_DELETED	= 0x04,
+};
+
+struct recognize_event_return {
+	union {
+		struct {
+			eventobjtype_t objtype_old:16;
+			eventobjtype_t objtype_new:16;
+		} v;
+		uint32_t i;
+	} u;
+};
+
+static inline uint32_t recognize_event(uint32_t event) {
+	struct recognize_event_return r = {0};
+
+	eventobjtype_t type;
+	int is_created;
+	int is_deleted;
+
+	type = (event & IN_ISDIR ? EOT_DIR : EOT_FILE);
+	is_created = event & (IN_CREATE|IN_MOVED_TO);
+	is_deleted = event & (IN_DELETE_SELF|IN_DELETE|IN_MOVED_FROM);
+
+	debug(4, "type == %x; is_created == %x; is_deleted == %x", type, is_created, is_deleted);
+
+	r.u.v.objtype_old = type;
+	r.u.v.objtype_new = type;
+
+	if (is_created)
+		r.u.v.objtype_old = EOT_DOESNTEXIST;
+
+	if (is_deleted)
+		r.u.v.objtype_new = EOT_DOESNTEXIST;
+
+	return r.u.i;
+}
 
 int inotify_add_watch_dir(ctx_t *ctx_p, indexes_t *indexes_p, const char *const accpath) {
 	int inotify_d = (int)(long)ctx_p->fsmondata;
 	return inotify_add_watch(inotify_d, accpath, INOTIFY_MARKMASK);
 }
 
-int inotify_wait(ctx_t *ctx_p, struct timeval *tv_p) {
+int inotify_wait(ctx_t *ctx_p, struct indexes *indexes_p, struct timeval *tv_p) {
 	int inotify_d = (int)(long)ctx_p->fsmondata;
 
 	debug(3, "select with timeout %li secs.", tv_p->tv_sec);
@@ -126,7 +167,10 @@ int inotify_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 				st_size = lstat.st_size;
 			}
 
-			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, path_full, NULL, event->mask, event->wd, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
+			struct  recognize_event_return r;
+			r.u.i = recognize_event(event->mask);
+
+			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, path_full, NULL, r.u.v.objtype_old, r.u.v.objtype_new, event->mask, event->wd, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
 				count = -1;
 				goto l_inotify_handle_end;
 			}

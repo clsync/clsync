@@ -41,7 +41,7 @@
 
 extern int kqueue_init();
 extern int kqueue_add_watch_dir(struct ctx *ctx_p, struct indexes *indexes_p, const char *const accpath);
-extern int kqueue_wait(struct ctx *ctx_p, struct timeval *tv_p);
+extern int kqueue_wait(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *tv_p);
 extern int kqueue_handle(struct ctx *ctx_p, struct indexes *indexes_p);
 extern int kqueue_deinit(ctx_t *ctx_p);
 

@@ -31,6 +31,8 @@ enum eventobjtype {
 	EOT_DOESNTEXIST	= 1,		// Doesn't exists (not created yet or already deleted)
 	EOT_FILE	= 2,		// File
 	EOT_DIR		= 3,		// Directory
+
+	// The value cannot be higher than "65535". It's due to recognize_event() function of mon_*.c
 };
 typedef enum eventobjtype eventobjtype_t;
 

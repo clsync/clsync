@@ -32,6 +32,7 @@
 #endif
 #if BSM_SUPPORT
 #	include "mon_bsm.h"
+#	include <bsm/audit_kevents.h>
 #endif
 
 #include "main.h"
@@ -74,14 +75,26 @@ gpointer eidup(gpointer ei_gp) {
 	return (gpointer)ei_dup;
 }
 
-static inline void evinfo_merge(eventinfo_t *evinfo_dst, eventinfo_t *evinfo_src) {
+static inline void evinfo_merge(ctx_t *ctx_p, eventinfo_t *evinfo_dst, eventinfo_t *evinfo_src) {
 	debug(3, "evinfo_dst: seqid_min == %u; seqid_max == %u; objtype_old == %i; objtype_new == %i; \t"
 			"evinfo_src: seqid_min == %u; seqid_max == %u; objtype_old == %i; objtype_new == %i",
 			evinfo_dst->seqid_min, evinfo_dst->seqid_max, evinfo_dst->objtype_old, evinfo_dst->objtype_new,
 			evinfo_src->seqid_min, evinfo_src->seqid_max, evinfo_src->objtype_old, evinfo_src->objtype_new
 		);
 
-	evinfo_dst->evmask |= evinfo_src->evmask;
+#if KQUEUE_SUPPORT | INOTIFY_SUPPORT
+	switch(ctx_p->flags[MONITOR]) {
+#ifdef KQUEUE_SUPPORT
+		case NE_KQUEUE:
+#endif
+#ifdef INOTIFY_SUPPORT
+		case NE_INOTIFY:
+#endif
+			evinfo_dst->evmask |= evinfo_src->evmask;
+			break;
+	}
+#endif
+
 	evinfo_dst->flags  |= evinfo_src->flags;
 
 	if(SEQID_LE(evinfo_src->seqid_min, evinfo_dst->seqid_min)) {
@@ -92,6 +105,13 @@ static inline void evinfo_merge(eventinfo_t *evinfo_dst, eventinfo_t *evinfo_src
 	if(SEQID_GE(evinfo_src->seqid_max,  evinfo_dst->seqid_max))  {
 		evinfo_dst->objtype_new = evinfo_src->objtype_new;
 		evinfo_dst->seqid_max   = evinfo_src->seqid_max;
+#ifdef BSM_SUPPORT
+		switch(ctx_p->flags[MONITOR]) {
+			case NE_BSM:
+				evinfo_dst->evmask = evinfo_src->evmask;
+				break;
+		}
+#endif
 	}
 
 	return;
@@ -1176,10 +1196,48 @@ static int sync_queuesync(const char *fpath_rel, eventinfo_t *evinfo, ctx_t *ctx
 		memcpy(evinfo_dup, evinfo, sizeof(*evinfo_dup));
 		return indexes_queueevent(indexes_p, strdup(fpath_rel), evinfo_dup, queue_id);
 	} else {
-		evinfo_merge(evinfo_q, evinfo);
+		evinfo_merge(ctx_p, evinfo_q, evinfo);
 	}
 
 	return 0;
+}
+
+static inline void evinfo_initialevmask(ctx_t *ctx_p, eventinfo_t *evinfo_p, int isdir) {
+	switch(ctx_p->flags[MONITOR]) {
+#ifdef FANOTIFY_SUPPORT
+		case NE_FANOTIFY:
+			break;
+#endif
+#if INOTIFY_SUPPORT | KQUEUE_SUPPORT
+#ifdef INOTIFY_SUPPORT
+		case NE_INOTIFY:
+#endif
+#ifdef KQUEUE_SUPPORT
+		case NE_KQUEUE:
+#endif
+			evinfo_p->evmask = IN_CREATE_SELF;
+			if (isdir)
+				evinfo_p->evmask |= IN_ISDIR;
+			break;
+#endif
+#ifdef BSM_SUPPORT
+		case NE_BSM:
+			evinfo_p->evmask = (isdir ? AUE_MKDIR : AUE_OPEN_RWC);
+			break;
+#endif
+#ifdef VERYPARANOID
+		default:
+			critical("Unknown monitor subsystem: %u", ctx_p->flags[MONITOR]);
+#endif
+	}
+	return;
+}
+
+static inline void api_evinfo_initialevmask(ctx_t *ctx_p, api_eventinfo_t *evinfo_p, int isdir) {
+	eventinfo_t evinfo;
+	evinfo_initialevmask(ctx_p, &evinfo, isdir);
+	evinfo_p->evmask = evinfo.evmask;
+	return;
 }
 
 int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p, queue_id_t queue_id, initsync_t initsync) {
@@ -1305,30 +1363,7 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 		evinfo.objtype_old  = EOT_DOESNTEXIST;
 		evinfo.objtype_new  = node->fts_info==FTS_D ? EOT_DIR : EOT_FILE;
 		evinfo.fsize        = fts_no_stat ? 0 : node->fts_statp->st_size;
-		switch(ctx_p->flags[MONITOR]) {
-#ifdef FANOTIFY_SUPPORT
-			case NE_FANOTIFY:
-				break;
-#endif
-#ifdef INOTIFY_SUPPORT
-			case NE_INOTIFY:
-#endif
-#ifdef KQUEUE_SUPPORT
-			case NE_KQUEUE:
-#endif
-#ifdef BSM_SUPPORT
-			case NE_KQUEUE:
-#endif
-				evinfo.evmask = IN_CREATE_SELF;
-				if(node->fts_info==FTS_D) {
-					evinfo.evmask |= IN_ISDIR;
-				}
-				break;
-#ifdef VERYPARANOID
-			default:
-				critical("Unknown monitor subsystem: %u", ctx_p->flags[MONITOR]);
-#endif
-		}
+		evinfo_initialevmask(ctx_p, &evinfo, node->fts_info==FTS_D);
 
 		if(!rsync_and_prefer_excludes) {
 			debug(3, "queueing \"%s\" (depth: %i) with int-flags %p", node->fts_path, node->fts_level, (void *)(unsigned long)evinfo.flags);
@@ -1397,7 +1432,7 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 				memset(ei, 0, sizeof(*ei));
 #endif
 
-				ei->evmask      = IN_CREATE|IN_ISDIR;
+				api_evinfo_initialevmask(ctx_p, ei, 1);
 				ei->flags       = EVIF_RECURSIVELY;
 				ei->path_len    = strlen(path);
 				ei->path        = strdup(path);
@@ -1691,42 +1726,6 @@ static int sync_dosync(const char *fpath, uint32_t evmask, ctx_t *ctx_p, indexes
 	return ret;
 }
 
-static inline uint8_t monsystems_unifyevmask(ctx_t *ctx_p, uint32_t event_mask) {
-	int is_dir=0, is_created=0, is_deleted=0;
-	debug(4, "ctx_p->flags[MONITOR] == %u", ctx_p->flags[MONITOR]);
-
-	switch (ctx_p->flags[MONITOR]) {
-#ifdef INOTIFY_SUPPORT
-		case NE_INOTIFY:
-#endif
-#ifdef KQUEUE_SUPPORT
-		case NE_KQUEUE:
-#endif
-#ifdef BSM_SUPPORT
-		case NE_BSM:
-#endif
-			is_dir     = event_mask &  IN_ISDIR;
-			is_created = event_mask & (IN_CREATE|IN_MOVED_TO);
-			is_deleted = event_mask & (IN_DELETE_SELF|IN_DELETE|IN_MOVED_FROM);
-			break;
-#ifdef VERYPARANOID
-		default:
-			critical("Unsupported FS monitor subsystem");
-#endif
-	}
-
-	is_dir     = is_dir     != 0;
-	is_created = is_created != 0;
-	is_deleted = is_deleted != 0;
-
-	debug(4, "is_dir == %x; is_created == %x; is_deleted == %x", is_dir, is_created, is_deleted);
-	return
-			(is_dir     * UEM_DIR		) |
-			(is_created * UEM_CREATED	) |
-			(is_deleted * UEM_DELETED	) |
-		0;
-}
-
 int sync_prequeue_loadmark
 (
 		int monitored,
@@ -1736,6 +1735,9 @@ int sync_prequeue_loadmark
 
 		const char *path_full,
 		const char *path_rel,
+
+		eventobjtype_t objtype_old,
+		eventobjtype_t objtype_new,
 
 		uint32_t event_mask,
 		int      event_wd,
@@ -1780,11 +1782,9 @@ int sync_prequeue_loadmark
 
 	// Handling different cases
 
-	uint8_t event_mask_unified = monsystems_unifyevmask(ctx_p, event_mask);
-
-	int is_dir	= event_mask_unified & UEM_DIR;
-	int is_created	= event_mask_unified & UEM_CREATED;
-	int is_deleted	= event_mask_unified & UEM_DELETED;
+	int is_dir	= objtype_old == EOT_DIR || objtype_new == EOT_DIR;
+	int is_created	= objtype_old == EOT_DOESNTEXIST;
+	int is_deleted	= objtype_new == EOT_DOESNTEXIST;
 
 	debug(4, "is_dir == %x; is_created == %x; is_deleted == %x", is_dir, is_created, is_deleted);
 
@@ -1841,17 +1841,32 @@ int sync_prequeue_loadmark
 		evinfo->wd           = event_wd;
 		evinfo->seqid_min    = sync_seqid();
 		evinfo->seqid_max    = evinfo->seqid_min;
-		evinfo->objtype_old  =   is_created 	? EOT_DOESNTEXIST	:
-					(is_dir 	? EOT_DIR 		:EOT_FILE);
+		evinfo->objtype_old  = objtype_old;
 		isnew++;
 		debug(3, "new event: fsize == %i; wd == %i", evinfo->fsize, evinfo->wd);
 	} else {
 		evinfo->seqid_max    = sync_seqid();
 	}
-	evinfo->evmask |= event_mask;
 
-	evinfo->objtype_new =	 is_deleted ? EOT_DOESNTEXIST :
-				(is_dir     ? EOT_DIR         : EOT_FILE);
+	switch(ctx_p->flags[MONITOR]) {
+#ifdef KQUEUE_SUPPORT
+		case NE_KQUEUE:
+#endif
+#ifdef INOTIFY_SUPPORT
+		case NE_INOTIFY:
+#endif
+#if KQUEUE_SUPPORT | INOTIFY_SUPPORT
+			evinfo->evmask |= event_mask;
+			break;
+#endif
+#ifdef BSM_SUPPORT
+		case NE_BSM:
+			evinfo->evmask  = event_mask;
+			break;
+#endif
+	}
+
+	evinfo->objtype_new = objtype_new;
 
 	debug(2, "path_rel == \"%s\"; evinfo->objtype_old == %i; evinfo->objtype_new == %i; "
 		 "evinfo->seqid_min == %u; evinfo->seqid_max == %u", 
@@ -1984,7 +1999,7 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 		evinfo_idx->seqid_min    = evinfo->seqid_min;
 		evinfo_idx->seqid_max    = evinfo->seqid_max;
 	} else
-		evinfo_merge(evinfo_idx, evinfo);
+		evinfo_merge(ctx_p, evinfo_idx, evinfo);
 
 
 	int _queue_id = 0;
@@ -1996,7 +2011,7 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 
 		eventinfo_t *evinfo_q = indexes_lookupinqueue(indexes_p, fpath, _queue_id);
 		if(evinfo_q != NULL) {
-			evinfo_merge(evinfo_idx, evinfo_q);
+			evinfo_merge(ctx_p, evinfo_idx, evinfo_q);
 
 			indexes_removefromqueue(indexes_p, fpath, _queue_id);
 			if(!indexes_queuelen(indexes_p, _queue_id))
@@ -2030,13 +2045,16 @@ gboolean sync_trylocked(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) 
 	struct trylocked_arg *data =  arg_p->data;
 
 	if (!sync_islocked(fpath)) {
-		if (sync_prequeue_loadmark(0, ctx_p, indexes_p, NULL, fpath, evinfo->evmask, 0, 0, 0, &data->path_full, &data->path_full_len, evinfo)) {
+		if (sync_prequeue_loadmark(0, ctx_p, indexes_p, NULL, fpath, 
+				evinfo->evmask,
+				evinfo->objtype_old,
+				evinfo->objtype_new,
+				0, 0, 0, &data->path_full, &data->path_full_len, evinfo)) {
 			critical("Cannot re-queue \"%s\" to be synced", fpath);
 			return FALSE;
 		}
 		return TRUE;
 	}
-
 	return FALSE;
 }
 
@@ -2802,7 +2820,7 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
 	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
-	int ret = ctx_p->notifyenginefunct.wait(ctx_p, &tv);
+	int ret = ctx_p->notifyenginefunct.wait(ctx_p, indexes_p, &tv);
 
 	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
 
@@ -3502,7 +3520,7 @@ int sync_run(ctx_t *ctx_p) {
 				break;
 #endif
 #ifdef BSM_SUPPORT
-			case NE_KQUEUE:
+			case NE_BSM:
 				ctx_p->notifyenginefunct.add_watch_dir = bsm_add_watch_dir;
 				ctx_p->notifyenginefunct.wait          = bsm_wait;
 				ctx_p->notifyenginefunct.handle        = bsm_handle;

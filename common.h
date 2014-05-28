@@ -133,6 +133,7 @@ enum notifyengine_enum {
 	NE_FANOTIFY,
 	NE_INOTIFY,
 	NE_KQUEUE,
+	NE_BSM,
 };
 typedef enum notifyengine_enum notifyengine_t;
 
@@ -282,12 +283,6 @@ struct sighandler_arg {
 	sigset_t  *sigset_p;
 };
 typedef struct sighandler_arg sighandler_arg_t;
-
-enum unified_evetnmask {
-	UEM_DIR		= 0x01,
-	UEM_CREATED	= 0x02,
-	UEM_DELETED	= 0x04,
-};
 
 #endif
 

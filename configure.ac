@@ -151,7 +151,7 @@ AC_ARG_WITH(bsm,
 	AS_HELP_STRING(--with-bsm,
 		[Enable BSM (Sun/*BSD audit) support as FS monitor subsystem; values: no, native, check; default: check]),
 	[],
-	[with_inotify=check]
+	[with_bsm=check]
 )
 
 case "$with_kqueue" in

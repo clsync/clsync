@@ -27,7 +27,7 @@
 #include "indexes.h"
 #include "fileutils.h"
 #include "calc.h"
-#include "kqueue.h"
+#include "mon_kqueue.h"
 
 struct monobj {
 	ino_t          inode;
@@ -53,6 +53,41 @@ struct kqueue_data {
 	void   *file_btree;
 	void      *fd_btree;
 };
+
+struct recognize_event_return {
+	union {
+		struct {
+			eventobjtype_t objtype_old:16;
+			eventobjtype_t objtype_new:16;
+		} v;
+		uint32_t i;
+	} u;
+};
+
+static inline uint32_t recognize_event(uint32_t event) {
+	struct recognize_event_return r = {{{0}}};
+
+	eventobjtype_t type;
+	int is_created;
+	int is_deleted;
+
+	type = (event & IN_ISDIR ? EOT_DIR : EOT_FILE);
+	is_created = event & (IN_CREATE|IN_MOVED_TO);
+	is_deleted = event & (IN_DELETE_SELF|IN_DELETE|IN_MOVED_FROM);
+
+	debug(4, "type == %x; is_created == %x; is_deleted == %x", type, is_created, is_deleted);
+
+	r.u.v.objtype_old = type;
+	r.u.v.objtype_new = type;
+
+	if (is_created)
+		r.u.v.objtype_old = EOT_DOESNTEXIST;
+
+	if (is_deleted)
+		r.u.v.objtype_new = EOT_DOESNTEXIST;
+
+	return r.u.i;
+}
 
 int kqueue_init(ctx_t *ctx_p) {
 	ctx_p->fsmondata = xcalloc(1, sizeof(struct kqueue_data));
@@ -317,7 +352,7 @@ int kqueue_add_watch_dir(ctx_t *ctx_p, indexes_t *indexes_p, const char *const a
 	return dir_obj_p->fd;
 }
 
-int kqueue_wait(ctx_t *ctx_p, struct timeval *tv_p) {
+int kqueue_wait(ctx_t *ctx_p, struct indexes *indexes_p, struct timeval *tv_p) {
 	struct kqueue_data *dat = ctx_p->fsmondata;
 	struct timespec ts;
 
@@ -396,7 +431,10 @@ int kqueue_sync(ctx_t *ctx_p, indexes_t *indexes_p, struct kevent *ev_p, monobj_
 	{
 		char   *path_rel	= NULL;
 		size_t  path_rel_len	= 0;
-		int ret = sync_prequeue_loadmark(1, ctx_p, indexes_p, path_full, NULL, ev_p->fflags, ev_p->ident, st_mode, st_size, &path_rel, &path_rel_len, NULL);
+		struct  recognize_event_return r;
+		r.u.i = recognize_event(ev_p->fflags);
+
+		int ret = sync_prequeue_loadmark(1, ctx_p, indexes_p, path_full, NULL, r.u.v.objtype_old, r.u.v.objtype_new, ev_p->fflags, ev_p->ident, st_mode, st_size, &path_rel, &path_rel_len, NULL);
 
 		if (path_rel != NULL)
 			free(path_rel);
@@ -503,7 +541,7 @@ int kqueue_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 		sync_prequeue_unload(ctx_p, indexes_p);
 
 		dat->eventlist_count = 0;
-	} while (kqueue_wait(ctx_p, &tv));
+	} while (kqueue_wait(ctx_p, indexes_p, &tv));
 
 	return count;
 }

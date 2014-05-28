@@ -169,7 +169,7 @@ struct api_functs {
 typedef struct api_functs api_functs_t;
 
 struct notifyenginefuncts {
-	int (*wait)(struct ctx *ctx_p, struct timeval *tv_p);
+	int (*wait)(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *tv_p);
 	int (*handle)(struct ctx *ctx_p, struct indexes *indexes_p);
 	int (*add_watch_dir)(struct ctx *ctx_p, struct indexes *indexes_p, const char *const accpath);
 };

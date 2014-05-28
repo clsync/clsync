@@ -879,11 +879,9 @@ is big enough (in FreeBSD).
 CPU/HDD expensive way.
 
 .B Not well tested. Use with caution!
-.br
-.B Warning! May be problems with hard links.
 
-FreeBSD users: notify me about found bugs, please. And before the bugfix
-you can switch to "inotify" through libinotify or to "bsm".
+FreeBSD users: notify me about found bugs or performance issues, please. And
+before the bugfix you can switch to "inotify" through libinotify or to "bsm".
 .RE
 .IR bsm
 .RS
@@ -899,21 +897,23 @@ can setup audit to watch FS events and report it into log. After that
 will just parse the log via
 .BR auditpipe "(4) [FreeBSD]."
 
-Fast (relative to
-.BR kqueue ),
-reliable, but hacky way. It requires global audit reconfiguration that
+Reliable, but hacky way. It requires global audit reconfiguration that
 may hopple audit analysis.
 
-.B Use with caution!
-File /etc/security/audit_control will be overwritten with:
+.B Not well tested. Use with caution!
+Also file /etc/security/audit_control will be overwritten with:
 .RS
+#clsync
+.br
+ 
+.br
 dir:/var/audit
 .br
-flags:fc,fd,fw,fm
+flags:fc,fd,fw,fm,cl
 .br
 minfree:0
 .br
-naflags:fc,fd,fw,fm
+naflags:fc,fd,fw,fm,cl
 .br
 policy:cnt
 .br
