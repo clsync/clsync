@@ -35,7 +35,7 @@
  */
 
 // Copied from http://en.wikipedia.org/wiki/Adler-32
-uint32_t adler32_calc(unsigned char *data, uint32_t len) { // where data is the location of the data in physical
+uint32_t adler32_calc(const unsigned char *const data, uint32_t len) { // where data is the location of the data in physical
                                                            // memory and len is the length of the data in bytes
 	const int MOD_ADLER = 65521;
 	uint32_t a = 1, b = 0;

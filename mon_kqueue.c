@@ -64,16 +64,16 @@ struct recognize_event_return {
 	} u;
 };
 
-static inline uint32_t recognize_event(uint32_t event) {
+static inline uint32_t recognize_event(uint32_t event, int is_dir) {
 	struct recognize_event_return r = {{{0}}};
 
 	eventobjtype_t type;
 	int is_created;
 	int is_deleted;
 
-	type = (event & IN_ISDIR ? EOT_DIR : EOT_FILE);
-	is_created = event & (IN_CREATE|IN_MOVED_TO);
-	is_deleted = event & (IN_DELETE_SELF|IN_DELETE|IN_MOVED_FROM);
+	type       = (is_dir ? EOT_DIR : EOT_FILE);
+	is_created =  event & (NOTE_LINK);
+	is_deleted =  event & (NOTE_DELETE);
 
 	debug(4, "type == %x; is_created == %x; is_deleted == %x", type, is_created, is_deleted);
 
@@ -105,21 +105,27 @@ static int monobj_filecmp(const void *_a, const void *_b) {
 	const monobj_t *a=_a, *b=_b;
 
 	int diff_inode  = a->inode  - b->inode;
+	debug(10, "diff_inode = %i", diff_inode);
 	if (diff_inode)
 		return diff_inode;
 
 	int diff_device = a->device - b->device;
+	debug(10, "diff_device = %i", diff_device);
 	if (diff_device)
 		return diff_device;
 
 	int diff_dir_fd = a->dir_fd - b->dir_fd;
+	debug(10, "diff_dir_fd = %i (%i - %i)", diff_dir_fd, a->dir_fd, b->dir_fd);
 	if (diff_dir_fd)
 		return diff_dir_fd;
 
 	int diff_name_hash = a->name_hash - b->name_hash;
+	debug(10, "diff_name_hash = %i", diff_name_hash);
 	if (diff_name_hash)
 		return diff_name_hash;
 
+	
+	debug(10, "strcmp(\"%s\", \"%s\") = %i", a->name, b->name, strcmp(a->name, b->name));
 	return strcmp(a->name, b->name);
 }
 
@@ -134,16 +140,19 @@ int kqueue_mark(ctx_t *ctx_p, monobj_t *obj_p) {
 		errno = EINVAL;
 		return -1;
 	}
-	if (tfind((void *)obj_p, &dat->file_btree, monobj_filecmp) != NULL)
+	if (tfind((void *)obj_p, &dat->file_btree, monobj_filecmp) != NULL) {
+		warning("\"%s\" is already marked", obj_p->name);
 		return 0;
+	}
 #endif
-
-	debug(4, "obj_p->: dir_fd == %i; name == \"%s\"", obj_p->dir_fd, obj_p->name);
+	debug(9, "");
 
 	if (obj_p->dir_fd == -1)
 		obj_p->fd = open(ctx_p->watchdir, O_RDONLY);
 	else
 		obj_p->fd = openat(obj_p->dir_fd, obj_p->name, O_RDONLY);
+
+	debug(4, "obj_p->: dir_fd == %i; name == \"%s\"; fd == %i; type == %i (isdir == %i)", obj_p->dir_fd, obj_p->name, obj_p->fd, obj_p->type, obj_p->type == DT_DIR);
 
 	if (obj_p->fd == -1) {
 		debug(2, "File/dir \"%s\" disappeared. Skipping", obj_p->name);
@@ -160,7 +169,7 @@ int kqueue_mark(ctx_t *ctx_p, monobj_t *obj_p) {
 			EV_SET(&dat->changelist[dat->changelist_used], obj_p->fd,
 				EVFILT_VNODE,
 				EV_ADD | EV_CLEAR,
-				NOTE_EXTEND | NOTE_ATTRIB | NOTE_DELETE,
+				NOTE_WRITE | NOTE_EXTEND | NOTE_ATTRIB | NOTE_DELETE,
 				0, 0);
 			break;
 		default:
@@ -195,22 +204,26 @@ int kqueue_unmark(ctx_t *ctx_p, monobj_t *obj_p) {
 
 	tdelete(obj_p, &dat->file_btree, monobj_filecmp);
 	tdelete(obj_p,    &dat->fd_btree, monobj_fdcmp);
+	free(obj_p->name);
 	free(obj_p);
 
 	return 0;
 }
 
-monobj_t *kqueue_start_watch(ctx_t *ctx_p, int dir_fd, const char *const fname, size_t name_len, unsigned char type) {
+monobj_t *kqueue_start_watch(ctx_t *ctx_p, ino_t inode, dev_t device, int dir_fd, const char *const fname, size_t name_len, unsigned char type) {
 	monobj_t *obj_p;
 	struct kqueue_data *dat = ctx_p->fsmondata;
 	debug(3, "(ctx_p, %i, \"%s\", %u, %u)", dir_fd, fname, name_len, type);
 
 	obj_p = xmalloc(sizeof(*obj_p));
+	obj_p->inode	 = inode;
+	obj_p->device	 = device;
 	obj_p->dir_fd	 = dir_fd;
 	obj_p->name_len	 = name_len;
 	obj_p->name	 = xmalloc(obj_p->name_len+1);
 	obj_p->type	 = type;
 	memcpy(obj_p->name, fname, obj_p->name_len+1);
+	obj_p->name_hash = adler32_calc((const unsigned char *)fname, name_len);
 
 	if (kqueue_mark(ctx_p, obj_p)) {
 		error("Got error while kqueue_mark()");
@@ -219,6 +232,7 @@ monobj_t *kqueue_start_watch(ctx_t *ctx_p, int dir_fd, const char *const fname, 
 		return NULL;
 	}
 
+	debug(8, "storing: inode == %u; device == %u; dir_fd == %i; fd == %i", obj_p->inode, obj_p->device, obj_p->dir_fd, obj_p->fd);
 	if (tsearch((void *)obj_p, &dat->file_btree, monobj_filecmp) == NULL)
 		critical("Not enough memory");
 	if (tsearch((void *)obj_p,   &dat->fd_btree, monobj_fdcmp) == NULL)
@@ -241,16 +255,16 @@ monobj_t *kqueue_add_watch_direntry(ctx_t *ctx_p, indexes_t *indexes_p, struct d
 
 	name_hash = adler32_calc((unsigned char *)entry->d_name, name_len);
 	{
-		monobj_t obj;
+		monobj_t obj, **obj_pp;
 		obj.inode     = entry->d_ino;
 		obj.device    = dir_obj_p->device;
 		obj.dir_fd    = dir_obj_p->fd;
 		obj.name_hash = name_hash;
-		if ((obj_p = tfind((void *)&obj, &dat->file_btree, monobj_filecmp)) != NULL)
-			return obj_p;
+		if ((obj_pp = tfind((void *)&obj, &dat->file_btree, monobj_filecmp)) != NULL)
+			return *obj_pp;
 	}
 
-	if ((obj_p = kqueue_start_watch(ctx_p, dir_obj_p->fd, entry->d_name, name_len, entry->d_type)) == NULL)
+	if ((obj_p = kqueue_start_watch(ctx_p, entry->d_ino, dir_obj_p->device, dir_obj_p->fd, entry->d_name, name_len, entry->d_type)) == NULL)
 		error("Got error while kqueue_start_watch()");
 
 	obj_p->inode     = entry->d_ino;
@@ -276,6 +290,8 @@ monobj_t *kqueue_add_watch_path(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 		return NULL;
 	}
 #endif
+	debug(6, "(ctx_p, indexes_p, \"%s\")", path);
+
 	{
 		char *dir_path, *ptr;
 
@@ -305,14 +321,17 @@ monobj_t *kqueue_add_watch_path(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 	lstat(path, &st);
 
 	{
-		monobj_t obj;
+		monobj_t obj, **obj_pp;
 		obj.inode     = st.st_ino;
 		obj.device    = st.st_dev;
 		obj.dir_fd    = dir_fd;
 		obj.name_hash = name_hash;
-		if ((obj_p = tfind((void *)&obj, &dat->file_btree, monobj_filecmp)) != NULL)
-			return obj_p;
+		obj.name      = (char *)file_name;
+		if ((obj_pp = tfind((void *)&obj, &dat->file_btree, monobj_filecmp)) != NULL)
+			return *obj_pp;
 	}
+
+	debug(9, "not monitored file/dir \"%s\", yet.", file_name);
 
 	{
 		const char *name_start;
@@ -323,7 +342,7 @@ monobj_t *kqueue_add_watch_path(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 		else
 			name_start++;
 
-		if ((obj_p = kqueue_start_watch(ctx_p, dir_fd, file_name, name_len, (st.st_mode&S_IFMT) == S_IFDIR ? DT_DIR : DT_REG)) == NULL)
+		if ((obj_p = kqueue_start_watch(ctx_p, st.st_ino, st.st_dev, dir_fd, file_name, name_len, (st.st_mode&S_IFMT) == S_IFDIR ? DT_DIR : DT_REG)) == NULL)
 			error("Got error while kqueue_start_watch()");
 	}
 
@@ -345,6 +364,8 @@ int kqueue_add_watch_dir(ctx_t *ctx_p, indexes_t *indexes_p, const char *const a
 		return -1;
 	}
 #endif
+
+	debug(5, "(ctx_p, indexes_p, \"%s\")", accpath);
 
 	if ((dir_obj_p = kqueue_add_watch_path(ctx_p, indexes_p, accpath)) == NULL) {
 		error("Got error while kqueue_add_watch_path(ctx_p, \"%s\")", accpath);
@@ -437,6 +458,7 @@ int kqueue_sync(ctx_t *ctx_p, indexes_t *indexes_p, struct kevent *ev_p, monobj_
 		return -1;
 	}
 #endif
+	debug(8, "path_full = \"%s\"", path_full);
 
 	mode_t st_mode;
 	size_t st_size;
@@ -456,7 +478,7 @@ int kqueue_sync(ctx_t *ctx_p, indexes_t *indexes_p, struct kevent *ev_p, monobj_
 		char   *path_rel	= NULL;
 		size_t  path_rel_len	= 0;
 		struct  recognize_event_return r;
-		r.u.i = recognize_event(ev_p->fflags);
+		r.u.i = recognize_event(ev_p->fflags, obj_p->type == DT_DIR);
 
 		int ret = sync_prequeue_loadmark(1, ctx_p, indexes_p, path_full, NULL, r.u.v.objtype_old, r.u.v.objtype_new, ev_p->fflags, ev_p->ident, st_mode, st_size, &path_rel, &path_rel_len, NULL);
 
@@ -470,10 +492,11 @@ int kqueue_sync(ctx_t *ctx_p, indexes_t *indexes_p, struct kevent *ev_p, monobj_
 }
 
 static inline int _kqueue_handle_oneevent_dircontent_item(struct kqueue_data *dat, ctx_t *ctx_p, indexes_t *indexes_p, monobj_t *dir_obj_p, struct dirent *entry) {
-	static monobj_t obj;
-	monobj_t *obj_p;
-	int ret = 0;
+	static monobj_t obj, *obj_p;
+	struct kevent ev = {0};
+	debug(9, "\"%s\"", entry->d_name);
 
+	obj.type      = entry->d_type;
 	obj.inode     = entry->d_ino;
 	obj.device    = dir_obj_p->device;
 	obj.dir_fd    = dir_obj_p->fd;
@@ -481,26 +504,48 @@ static inline int _kqueue_handle_oneevent_dircontent_item(struct kqueue_data *da
 	obj.name_len  = strlen(entry->d_name);
 	obj.name_hash = adler32_calc((unsigned char *)entry->d_name, obj.name_len);
 
-	if ((obj_p = tfind((void *)&obj, &dat->file_btree, monobj_filecmp)) != NULL)
+	if (tfind((void *)&obj, &dat->file_btree, monobj_filecmp) != NULL)
 		return 0;
 
-	ret |= kqueue_mark(ctx_p, obj_p);
+	if ((obj_p = kqueue_start_watch(ctx_p, entry->d_ino, dir_obj_p->device, dir_obj_p->fd, obj.name, obj.name_len, obj.type)) == NULL) {
+		error("Got error while kqueue_start_watch()");
+		return -1;
+	}
 
-	return ret;
+	ev.ident  = obj_p->fd;
+	ev.fflags = NOTE_LINK;
+	if (kqueue_sync(ctx_p, indexes_p, &ev, obj_p)) {
+		error("Got error while kqueue_sync()");
+		return -1;
+	}
+
+	return 0;
 }
 
 static inline int _kqueue_handle_oneevent_dircontent(ctx_t *ctx_p, indexes_t *indexes_p, monobj_t *obj_p) {
 	DIR *dir;
 	struct dirent *entry;
 	struct kqueue_data *dat = ctx_p->fsmondata;
+	debug(8, "obj_p->fd == %i", obj_p->fd);
 
+	int fd;
+
+	fd  = openat(obj_p->dir_fd, obj_p->name, O_RDONLY|O_PATH);
 	dir = fdopendir(obj_p->fd);
 
-	while ((entry = readdir(dir)))
+	while ((entry = readdir(dir))) {
+		debug(10, "file/dir: \"%s\"", entry->d_name);
+		if (!memcmp(entry->d_name, ".",  2))
+			continue;
+		if (!memcmp(entry->d_name, "..", 3))
+			continue;
 		if (_kqueue_handle_oneevent_dircontent_item(dat, ctx_p, indexes_p, obj_p, entry)) {
 			error("Got error while _kqueue_handle_oneevent_dircontent_item(ctx_p, obj_p, entry {->d_name == \"%s\"})", entry->d_name);
 			return -1;
 		}
+	}
+
+	closedir(dir);
 
 	return 0;
 }
@@ -516,12 +561,13 @@ int kqueue_handle_oneevent(ctx_t *ctx_p, indexes_t *indexes_p, struct kevent *ev
 		return -1;
 	}
 #endif
+	debug(9, "obj_p->: name == \"%s\"; dir_fd == %i; type == 0x%x (isdir == %i); fd = %i. ev_p->fflags == 0x%x", obj_p->name, obj_p->dir_fd, obj_p->type, obj_p->type == DT_DIR, obj_p->fd, ev_p->fflags);
 	int ret    = 0;
 
-	if (obj_p->type == DT_DIR && ev_p->fflags & NOTE_EXTEND)
+	if (obj_p->type == DT_DIR && (ev_p->fflags & (NOTE_EXTEND|NOTE_WRITE)))
 		ret |= _kqueue_handle_oneevent_dircontent(ctx_p, indexes_p, obj_p);
 
-	if (ev_p->fflags & (NOTE_WRITE|NOTE_ATTRIB|NOTE_DELETE|NOTE_RENAME))
+	if (ev_p->fflags & (NOTE_EXTEND|NOTE_WRITE|NOTE_ATTRIB|NOTE_DELETE|NOTE_RENAME))
 		ret |= kqueue_sync(ctx_p, indexes_p, ev_p, obj_p);
 
 	if (ev_p->fflags & NOTE_DELETE)
@@ -551,14 +597,18 @@ int kqueue_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 			monobj_t obj;
 			obj.fd = ev_p->ident;
-			monobj_t *obj_p = tfind((void *)&obj, &dat->fd_btree, monobj_fdcmp);
-			if (obj_p == NULL) {
+			monobj_t **obj_pp = tfind((void *)&obj, &dat->fd_btree, monobj_fdcmp);
+			if (obj_pp == NULL) {
 				error("Internal error. Cannot find internal structure for fd == %u. Skipping the event.", ev_p->ident);
 				continue;
 			}
+			monobj_t *obj_p = *obj_pp;
 
-			if (!kqueue_handle_oneevent(ctx_p, indexes_p, ev_p, obj_p))
-				count++;
+			if (kqueue_handle_oneevent(ctx_p, indexes_p, ev_p, obj_p)) {
+				error("Got error from kqueue_handle_oneevent()");
+				return -1;
+			}
+			count++;
 		}
 
 		// Globally queueing captured events:
