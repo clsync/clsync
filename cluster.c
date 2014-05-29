@@ -33,6 +33,7 @@
 #ifdef CLUSTER_SUPPORT
 
 #include "common.h"
+#include "port-hacks.h"
 #include "indexes.h"
 #include "error.h"
 #include "cluster.h"
@@ -1251,7 +1252,7 @@ int cluster_modtime_update(const char *path, short int dirlevel, mode_t st_mode)
 
 
 	// Getting directory/file-'s information (including "change time" aka "st_ctime")
-	struct stat64 stat64;
+	stat64_t stat64;
 	ret=lstat64(path, &stat64);
 	if(ret) {
 		error("Cannot lstat64()", path);

@@ -14,7 +14,7 @@ case $(uname -s) in
 esac
 
 # test aggressive optimizations
-export CFLAGS="-O3 -march=native"
+export CFLAGS="$CFLAGS -O3 -march=native"
 autoreconf -if
 
 # Build unit test

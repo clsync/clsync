@@ -21,6 +21,11 @@
 #ifndef __CLSYNC_COMMON_H
 #define __CLSYNC_COMMON_H
 
+#ifndef __linux__
+#undef HAVE_CAPABILITIES
+#warning Capabilities support can be built only on Linux
+#endif
+
 #define _GNU_SOURCE
 //#define _XOPEN_SOURCE 700
 #define _LARGEFILE64_SOURCE
