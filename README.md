@@ -18,6 +18,7 @@ Contents
 10. FreeBSD support
 11. Support
 12. Developing
+13. Articles
 
 
 1. Name
@@ -272,6 +273,14 @@ I started to write "DEVELOPING" and "PROTOCOL" files.
 You can look there if you wish. ;)
 
 I'll be glad to receive code contribution :)
+
+13. Articles
+------------
+
+Russian:
+- [HA clustering](https://gitlab.ut.mephi.ru/ut/articles/blob/master/clsync/ha)
+- [syncing to many nodes](https://gitlab.ut.mephi.ru/ut/articles/blob/master/clsync/inotify-to-many-nodes)
+- [atomic sync](https://gitlab.ut.mephi.ru/ut/articles/blob/master/clsync/atomicsync)
 
 
 
