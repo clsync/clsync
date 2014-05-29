@@ -12,22 +12,22 @@
 #include <clsync/clsync.h>
 #include <clsync/configuration.h>
 #include <clsync/malloc.h>
-#include <clsync/output.h>
-#include <clsync/options.h>
+#include <clsync/error.h>
+#include <clsync/ctx.h>
 
-struct options *options_p;
+struct ctx *ctx_p;
 
-int clsyncapi_init(struct options *_options_p, struct indexes *_indexes_p)
+int clsyncapi_init(struct ctx *_ctx_p, struct indexes *_indexes_p)
 {
     if (clsyncapi_getapiversion() != CLSYNC_API_VERSION) {
-        printf_e("handler: API version mistmatch: compiled for %i, but have %i",
+        error("handler: API version mistmatch: compiled for %i, but have %i",
             CLSYNC_API_VERSION, clsyncapi_getapiversion());
         return -1;
     }
 
-    options_p = _options_p;
+    ctx_p = _ctx_p;
 
-    printf_d("handler: Initialization OK\n");
+    debug(1, "handler: Initialization OK");
     return 0;
 }
 
@@ -37,7 +37,7 @@ int clsyncapi_sync(int n, api_eventinfo_t *ei)
     char **argv;
     int exitcode;
 
-    printf_d("handler: Sync requested for %i objects.\n", n);
+    debug(1, "handler: Sync requested for %i objects.", n);
 
     argv_size = n+4; // "pdsh" + "-a" + n + "todir" + NULL
     argv = xmalloc(argv_size * sizeof(char *));
@@ -51,34 +51,34 @@ int clsyncapi_sync(int n, api_eventinfo_t *ei)
     }
 
     if(i == 2) {
-        printf_d("handler: Nothing to sync.\n");
+        debug(1, "handler: Nothing to sync.");
         exitcode = 0;
         goto cleanup;
     }
 
-    argv[i++] = options_p->watchdir;
+    argv[i++] = ctx_p->watchdir;
     argv[i++] = NULL;
 
     // Forking
-    int pid = clsyncapi_fork(options_p);
+    int pid = clsyncapi_fork(ctx_p);
     switch(pid) {
         case -1:
-            printf_e("handler: Can't fork(): %s\n", strerror(errno));
+            error("handler: Can't fork()");
             exitcode = errno;
             goto cleanup;
         case  0:
-            if (chdir(options_p->watchdir) == -1) {
-                printf_e("handler: Can't chdir(): %s\n", strerror(errno));
+            if (chdir(ctx_p->watchdir) == -1) {
+                error("handler: Can't chdir()");
                 exit(errno);
             }
             execv(argv[0], argv);
-            printf_e("handler: Can't exec(): %s\n", strerror(errno));
+            error("handler: Can't exec()");
             exit(errno);
     }
 
     int status;
     if(waitpid(pid, &status, 0) != pid) {
-        printf_e("handler: Can't waitid(): %s\n", strerror(errno));
+        error("handler: Can't waitid()");
         exitcode = errno;
         goto cleanup;
     }

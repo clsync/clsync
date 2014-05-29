@@ -29,12 +29,14 @@
 // children count limit
 #define MAXCHILDREN			(1<<8)
 
-#if INOTIFY_SUPPORT
-#	define DEFAULT_NOTIFYENGINE	NE_INOTIFY
-#elif KQUEUE_SUPPORT
-#	define DEFAULT_NOTIFYENGINE	NE_KQUEUE
-#else
-#	error No inotify/kqueue support, cannot compile working clsync
+#ifdef __CLSYNC_COMMON_H
+#	if INOTIFY_SUPPORT
+#		define DEFAULT_NOTIFYENGINE	NE_INOTIFY
+#	elif KQUEUE_SUPPORT
+#		define DEFAULT_NOTIFYENGINE	NE_KQUEUE
+#	else
+#		error No inotify/kqueue support, cannot compile working clsync
+#	endif
 #endif
 #define DEFAULT_RULES_PERM		RA_ALL
 #define DEFAULT_COLLECTDELAY		30
