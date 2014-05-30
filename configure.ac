@@ -270,14 +270,16 @@ case "$with_bsm" in
 		)
 		;;
 esac
+AC_CHECK_PROG([HAVE_DTRACEPIPE], [dtrace], [found])
 
 AS_IF([test "$HAVE_INOTIFY" != ""], [AC_CHECK_FUNC([inotify_init1], [], [INOTIFY_OLD=1])])
 
-AM_CONDITIONAL([HAVE_KQUEUE],   [test "$HAVE_KQUEUE"   != ""])
-AM_CONDITIONAL([HAVE_INOTIFY],  [test "$HAVE_INOTIFY"  != ""])
-AM_CONDITIONAL([INOTIFY_OLD],   [test "$INOTIFY_OLD"   != ""])
-AM_CONDITIONAL([HAVE_FANOTIFY], [test "$HAVE_FANOTIFY" != ""])
-AM_CONDITIONAL([HAVE_BSM],      [test "$HAVE_BSM"      != ""])
+AM_CONDITIONAL([HAVE_KQUEUE],    [test "$HAVE_KQUEUE"    != ""])
+AM_CONDITIONAL([HAVE_INOTIFY],   [test "$HAVE_INOTIFY"   != ""])
+AM_CONDITIONAL([INOTIFY_OLD],    [test "$INOTIFY_OLD"    != ""])
+AM_CONDITIONAL([HAVE_FANOTIFY],  [test "$HAVE_FANOTIFY"  != ""])
+AM_CONDITIONAL([HAVE_BSM],       [test "$HAVE_BSM"       != ""])
+AM_CONDITIONAL([HAVE_DTRACEPIPE],[test "$HAVE_DTRACEPIPE"!= ""])
 
 AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' ], [AC_MSG_FAILURE([kqueue, inotify and bsm are not supported on this system])])
 

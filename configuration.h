@@ -100,3 +100,5 @@ policy:cnt\n\
 filesz:1M\n\
 "
 
+#define DTRACE_PATH			"dtrace"
+

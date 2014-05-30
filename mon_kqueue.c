@@ -531,7 +531,7 @@ static inline int _kqueue_handle_oneevent_dircontent(ctx_t *ctx_p, indexes_t *in
 	int fd;
 
 	fd  = openat(obj_p->dir_fd, obj_p->name, O_RDONLY|O_PATH);
-	dir = fdopendir(obj_p->fd);
+	dir = fdopendir(fd);
 
 	while ((entry = readdir(dir))) {
 		debug(10, "file/dir: \"%s\"", entry->d_name);

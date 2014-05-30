@@ -24,6 +24,10 @@ if HAVE_BSM
 clsync_CFLAGS += -DBSM_SUPPORT
 clsync_SOURCES += mon_bsm.c
 endif
+if HAVE_DTRACEPIPE
+clsync_CFLAGS += -DDTRACEPIPE_SUPPORT
+clsync_SOURCES += mon_dtracepipe.c
+endif
 
 if SOCKET
 clsync_SOURCES += socket.c control.c

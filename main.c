@@ -125,6 +125,7 @@ static char *const notify_engines[] = {
 	[NE_KQUEUE]		= "kqueue",
 	[NE_FANOTIFY]		= "fanotify",
 	[NE_BSM]		= "bsm",
+	[NE_DTRACEPIPE]		= "dtracepipe",
 	NULL
 };
 
@@ -474,6 +475,9 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 #endif
 #ifdef BSM_SUPPORT
 				case NE_BSM:
+#endif
+#ifdef DTRACEPIPE_SUPPORT
+				case NE_DTRACEPIPE:
 #endif
 					break;
 				default:

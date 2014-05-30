@@ -250,7 +250,7 @@ static inline ruleaction_t rules_getperm(const char *fpath, mode_t st_mode, rule
 }
 
 threadsinfo_t *thread_info() {	// TODO: optimize this
-	static threadsinfo_t threadsinfo={{{{0}}},{{{0}}},0};
+	static threadsinfo_t threadsinfo={{0},{0},0};
 	if(!threadsinfo.mutex_init) {
 		int i=0;
 		while(i < PTHREAD_MUTEX_MAX) {
@@ -1206,6 +1206,7 @@ static inline void evinfo_initialevmask(ctx_t *ctx_p, eventinfo_t *evinfo_p, int
 	switch(ctx_p->flags[MONITOR]) {
 #ifdef FANOTIFY_SUPPORT
 		case NE_FANOTIFY:
+			critical("fanotify is not supported");
 			break;
 #endif
 #if INOTIFY_SUPPORT | KQUEUE_SUPPORT
@@ -1234,7 +1235,7 @@ static inline void evinfo_initialevmask(ctx_t *ctx_p, eventinfo_t *evinfo_p, int
 }
 
 static inline void api_evinfo_initialevmask(ctx_t *ctx_p, api_eventinfo_t *evinfo_p, int isdir) {
-	eventinfo_t evinfo;
+	eventinfo_t evinfo = {0};
 	evinfo_initialevmask(ctx_p, &evinfo, isdir);
 	evinfo_p->evmask = evinfo.evmask;
 	return;
@@ -3507,6 +3508,13 @@ int sync_run(ctx_t *ctx_p) {
 				ctx_p->notifyenginefunct.handle        = bsm_handle;
 				break;
 #endif
+#ifdef DTRACEPIPE_SUPPORT
+			case NE_DTRACEPIPE:
+				ctx_p->notifyenginefunct.add_watch_dir = dtracepipe_add_watch_dir;
+				ctx_p->notifyenginefunct.wait          = dtracepipe_wait;
+				ctx_p->notifyenginefunct.handle        = dtracepipe_handle;
+				break;
+#endif
 #ifdef VERYPARANOID
 			default:
 				critical("Unknown FS monitor subsystem: %i", ctx_p->flags[MONITOR]);
@@ -3569,6 +3577,11 @@ int sync_run(ctx_t *ctx_p) {
 #ifdef BSM_SUPPORT
 		case NE_BSM:
 			bsm_deinit(ctx_p);
+			break;
+#endif
+#ifdef DTRACEPIPE_SUPPORT
+		case NE_DTRACEPIPE:
+			dtracepipe_deinit(ctx_p);
 			break;
 #endif
 	}

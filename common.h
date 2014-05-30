@@ -22,8 +22,10 @@
 #define __CLSYNC_COMMON_H
 
 #ifndef __linux__
-#undef HAVE_CAPABILITIES
-#warning Capabilities support can be built only on Linux
+#	ifdef HAVE_CAPABILITIES
+#		undef HAVE_CAPABILITIES
+#		warning Capabilities support can be built only on Linux
+#	endif
 #endif
 
 #define _GNU_SOURCE
@@ -139,6 +141,7 @@ enum notifyengine_enum {
 	NE_INOTIFY,
 	NE_KQUEUE,
 	NE_BSM,
+	NE_DTRACEPIPE,
 };
 typedef enum notifyengine_enum notifyengine_t;
 

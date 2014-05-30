@@ -60,7 +60,7 @@ struct recognize_event_return {
 				eventobjtype_t objtype_new:16;
 			} t;
 		} v;
-		uint32_t i;
+		uint64_t i;
 	} u;
 };
 
@@ -190,6 +190,7 @@ int bsm_config_backup(mondata_t *mondata) {
 		return -1;
 	}
 
+	flock(fd, LOCK_EX);
 	debug(3, "mv: "AUDIT_CONTROL_PATH" -> "AUDIT_CONTROL_PATH"-clsync_backup");
 	rename(AUDIT_CONTROL_PATH, AUDIT_CONTROL_PATH"-clsync_backup");
 

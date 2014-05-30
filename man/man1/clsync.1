@@ -900,9 +900,6 @@ will just parse the log via
 Reliable, but hacky way. It requires global audit reconfiguration that
 may hopple audit analysis.
 
-This way should be the best for FreeBSD. It's not used by default just
-because it requires to modify "audit_control".
-
 .B Not well tested. Use with caution!
 Also file /etc/security/audit_control will be overwritten with:
 .RS
@@ -923,13 +920,22 @@ policy:cnt
 filesz:1M
 .RE
 .RE
+.IR dtracepipe
+.RS
+.BR dtrace "(1) [FreeBSD]"
+
+.B clsync
+will run dtrace with special script (on "d") using
+.BR popen (3)
+and parse it's output.
+
+IMHO, this way is the best for FreeBSD.
+.RE
 .RE
 
-If
-.B inotify
-is supported (even through libinotify) then it's used by default. If not then
-.B kqueue
-is used.
+The default value on Linux is "inotify".
+.br
+The default value on FreeBSD is "dtracepipe"
 .RE
 
 .PP
