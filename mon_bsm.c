@@ -190,7 +190,6 @@ int bsm_config_backup(mondata_t *mondata) {
 		return -1;
 	}
 
-	flock(fd, LOCK_EX);
 	debug(3, "mv: "AUDIT_CONTROL_PATH" -> "AUDIT_CONTROL_PATH"-clsync_backup");
 	rename(AUDIT_CONTROL_PATH, AUDIT_CONTROL_PATH"-clsync_backup");
 
