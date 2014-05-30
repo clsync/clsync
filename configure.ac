@@ -270,7 +270,7 @@ case "$with_bsm" in
 		)
 		;;
 esac
-AC_CHECK_PROG([HAVE_DTRACEPIPE], [dtrace], [found])
+#AC_CHECK_PROG([HAVE_DTRACEPIPE], [dtrace], [found])
 
 AS_IF([test "$HAVE_INOTIFY" != ""], [AC_CHECK_FUNC([inotify_init1], [], [INOTIFY_OLD=1])])
 
