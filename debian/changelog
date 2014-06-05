@@ -1,8 +1,27 @@
-clsync (0.3-1) unstable; urgency=low
+clsync (0.3-1) unstable; urgency=medium
 
+  [ Dmitry Yu Okunev ]
   * Added support of control socket
 
- -- Dmitry Yu Okunev <dyokunev@ut.mephi.ru>  Thu, 9 Jan 2014 15:38:33 +0400
+  [ Barak A. Pearlmutter ]
+  * New upstream version
+  * Bump standards version
+  * Remove -*- makefile -*- in debian/rules: defaults to GNUmakefile-mode
+  * Must generate library: ./configure --enable-socket
+  * Fold clsync-dev into libclsync-dev
+  * Address lintian issues
+    - Add appropriate per-binary-package sections
+    - Remove extra LICENSE file
+    - Rename lib package w/ .so suffix "0"
+    - Expand and diversify package descriptions.
+  * Add dependency of lib-dev package upon lib package
+  * Print list of debian/tmp files not installed into any binary package
+  * Install some stray uninstalled files
+    - the actual clsync executable (!)
+    - its man page
+    - some *.h header files
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Fri, 06 Jun 2014 09:32:14 +0100
 
 clsync (0.2.1-1) unstable; urgency=low
 
