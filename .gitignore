@@ -57,6 +57,7 @@ tmp
 /configure
 /depcomp
 /install-sh
+/m4/
 /missing
 /stamp-h1
 Makefile

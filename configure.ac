@@ -4,11 +4,14 @@
 AC_PREREQ([2.59])
 AC_INIT([clsync],[0.3],[Dmitry Yu Okunev <dyokunev@ut.mephi.ru>],,[https://github.com/xaionaro/clsync])
 AC_CONFIG_SRCDIR([sync.c])
+AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([1.11 foreign -Wall -Wno-portability])
 AC_CONFIG_HEADERS([config.h])
 AM_PROG_CC_C_O
 
 LT_INIT
+
+PKG_INSTALLDIR
 
 dnl --enable-cluster
 AC_ARG_ENABLE(cluster,
@@ -107,5 +110,5 @@ AM_CPPFLAGS="${GLIB_CFLAGS}"
 AC_SUBST(AM_CPPFLAGS)
 
 
-AC_CONFIG_FILES([Makefile pkgconfig/clsync.pc])
+AC_CONFIG_FILES([Makefile examples/Makefile pkgconfig/clsync.pc])
 AC_OUTPUT

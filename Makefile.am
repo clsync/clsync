@@ -1,3 +1,6 @@
+ACLOCAL_AMFLAGS = -I m4
+SUBDIRS = examples
+
 bin_PROGRAMS = clsync
 clsync_SOURCES = sync.c cluster.c main.c error.c fileutils.c malloc.c glibex.c
 clsync_CFLAGS = $(AM_CFLAGS)
@@ -14,12 +17,6 @@ main.o: revision.h
 man_MANS = man/man1/clsync.1
 
 doc_DATA = CONTRIB DEVELOPING LICENSE PROTOCOL README.md TODO
-
-exampledir=$(docdir)/examples
-
-example_DATA = \
- $(wildcard $(srcdir)/examples/*.c) \
- $(wildcard $(srcdir)/examples/*.sh)
 
 REVISION=$(shell [ -d .git ] &&\
 	(echo -n \
@@ -47,16 +44,9 @@ clsync_include_HEADERS = \
 doc:
 	doxygen .doxygen
 
-install-data-local:
 if SOCKET
-	mkdir -p $(DESTDIR)/$(libdir)/pkgconfig
-	cp pkgconfig/*.pc $(DESTDIR)/$(libdir)/pkgconfig/
+pkgconfig_DATA = pkgconfig/clsync.pc
 endif
-	mkdir -p $(DESTDIR)/$(exampledir)
-	cp -R examples/production $(DESTDIR)/$(exampledir)/
-
-uninstall-local:
-	rm -rf $(DESTDIR)/$(exampledir)/production
 
 CLEANFILES = revision.h
 CLEANFILES += examples/rules
