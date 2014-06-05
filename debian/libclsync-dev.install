@@ -1,5 +1,11 @@
 usr/include/clsync/socket.h
 usr/include/clsync/libclsync.h
+
+usr/include/clsync/configuration.h
+usr/include/clsync/clsync.h
+usr/include/clsync/malloc.h
+usr/include/clsync/indexes.h
+
 usr/lib/*/libclsync*.a
 usr/lib/*/libclsync*.so
 usr/lib/*/pkgconfig/*.pc
