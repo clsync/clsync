@@ -44,8 +44,8 @@ tmp
 
 # autotools build debris
 /.deps/
-/Makefile
-/Makefile.in
+Makefile
+Makefile.in
 /aclocal.m4
 /autom4te.cache/
 /compile
@@ -59,6 +59,7 @@ tmp
 /install-sh
 /libtool
 /ltmain.sh
+/m4/
 /missing
 /pkgconfig/libclsync.pc
 /stamp-h1

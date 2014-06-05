@@ -1,8 +1,13 @@
 ACLOCAL_AMFLAGS = -I m4
+SUBDIRS = examples
 
 if CLSYNC
 bin_PROGRAMS = clsync
-clsync_SOURCES = sync.c cluster.c main.c error.c fileutils.c malloc.c glibex.c indexes.c calc.c
+
+clsync_SOURCES = calc.c cluster.c error.c fileutils.c glibex.c	\
+	indexes.c main.c malloc.c sync.c cluster.h fileutils.h	\
+	glibex.h main.h sync.h common.h control.h
+
 clsync_CFLAGS = $(AM_CFLAGS)
 
 if HAVE_KQUEUE
@@ -35,16 +40,12 @@ endif
 
 main.o: revision.h
 
-man_MANS = man/man1/clsync.1
-
-exampledir=$(docdir)/examples
-
-example_DATA = \
- $(wildcard $(srcdir)/examples/*.c) \
- $(wildcard $(srcdir)/examples/*.sh)
+dist_man_MANS = man/man1/clsync.1
 endif
 
-doc_DATA = CONTRIB DEVELOPING LICENSE PROTOCOL README.md TODO
+dist_doc_DATA = CONTRIB DEVELOPING LICENSE PROTOCOL README.md TODO
+
+EXTRA_DIST = .doxygen .travis.sh .travis.yml NOTES SHORTHANDS debian gentoo
 
 if LIBCLSYNC
 lib_LTLIBRARIES = libclsync.la
@@ -92,18 +93,9 @@ endif
 doc:
 	doxygen .doxygen
 
-install-data-local:
-if LIBCLSYNC
-	mkdir -p $(DESTDIR)/$(libdir)/pkgconfig
-	cp pkgconfig/*.pc $(DESTDIR)/$(libdir)/pkgconfig/
+if SOCKET
+pkgconfig_DATA = pkgconfig/libclsync.pc
 endif
-if CLSYNC
-	mkdir -p $(DESTDIR)/$(exampledir)
-	cp -R examples/production $(DESTDIR)/$(exampledir)/
-endif
-
-uninstall-local:
-	rm -rf $(DESTDIR)/$(exampledir)/production
 
 CLEANFILES = revision.h
 if CLSYNC
