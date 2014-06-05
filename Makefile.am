@@ -2,7 +2,11 @@ ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = examples
 
 bin_PROGRAMS = clsync
-clsync_SOURCES = sync.c cluster.c main.c error.c fileutils.c malloc.c glibex.c
+
+clsync_SOURCES = cluster.c error.c fileutils.c glibex.c main.c		\
+	malloc.c sync.c cluster.h fileutils.h glibex.h main.h sync.h	\
+	common.h control.h
+
 clsync_CFLAGS = $(AM_CFLAGS)
 
 if SOCKET
@@ -14,9 +18,11 @@ endif
 
 main.o: revision.h
 
-man_MANS = man/man1/clsync.1
+dist_man_MANS = man/man1/clsync.1
 
-doc_DATA = CONTRIB DEVELOPING LICENSE PROTOCOL README.md TODO
+dist_doc_DATA = CONTRIB DEVELOPING LICENSE PROTOCOL README.md TODO
+
+EXTRA_DIST = .doxygen .travis.sh .travis.yml NOTES SHORTHANDS debian gentoo
 
 REVISION=$(shell [ -d .git ] &&\
 	(echo -n \
