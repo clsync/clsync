@@ -12,3 +12,6 @@ override_dh_auto_configure:
 override_dh_auto_install:
 	dh_auto_install
 	-rm --verbose debian/tmp/usr/share/doc/clsync/LICENSE
+
+override_dh_install:
+	dh_install --list-missing
