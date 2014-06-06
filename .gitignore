@@ -44,8 +44,8 @@ tmp
 
 # autotools build debris
 /.deps/
-Makefile
-Makefile.in
+/Makefile
+/Makefile.in
 /aclocal.m4
 /autom4te.cache/
 /compile
@@ -56,6 +56,8 @@ Makefile.in
 /config.sub
 /configure
 /depcomp
+/examples/Makefile
+/examples/Makefile.in
 /install-sh
 /libtool
 /ltmain.sh
