@@ -1,50 +1,51 @@
 ACLOCAL_AMFLAGS = -I m4
+SUBDIRS = examples
 
 if CLSYNC
 bin_PROGRAMS = clsync
-clsync_SOURCES = sync.c cluster.c main.c error.c fileutils.c malloc.c glibex.c indexes.c calc.c
+
+clsync_SOURCES = calc.c cluster.c error.c fileutils.c glibex.c		\
+	indexes.c main.c malloc.c sync.c calc.h cluster.h fileutils.h	\
+	glibex.h main.h port-hacks.h sync.h common.h control.h
+
 clsync_CFLAGS = $(AM_CFLAGS)
 
 if HAVE_KQUEUE
 clsync_CFLAGS += -DKQUEUE_SUPPORT
-clsync_SOURCES += mon_kqueue.c
+clsync_SOURCES += mon_kqueue.c mon_kqueue.h
 endif
 if HAVE_INOTIFY
 clsync_CFLAGS += -DINOTIFY_SUPPORT
-clsync_SOURCES += mon_inotify.c
+clsync_SOURCES += mon_inotify.c mon_inotify.h
 if INOTIFY_OLD
 clsync_CFLAGS += -DINOTIFY_OLD
 endif
 endif
 if HAVE_FANOTIFY
 clsync_CFLAGS += -DFANOTIFY_SUPPORT
-clsync_SOURCES += mon_fanotify.c
+clsync_SOURCES += mon_fanotify.c mon_fanotify.h
 endif
 if HAVE_BSM
 clsync_CFLAGS += -DBSM_SUPPORT
-clsync_SOURCES += mon_bsm.c
+clsync_SOURCES += mon_bsm.c mon_bsm.h
 endif
 if HAVE_DTRACEPIPE
 clsync_CFLAGS += -DDTRACEPIPE_SUPPORT
-clsync_SOURCES += mon_dtracepipe.c
+clsync_SOURCES += mon_dtracepipe.c mon_dtracepipe.h
 endif
 
 if SOCKET
-clsync_SOURCES += socket.c control.c
+clsync_SOURCES += socket.c control.c program.h
 endif
 
 main.o: revision.h
 
-man_MANS = man/man1/clsync.1
-
-exampledir=$(docdir)/examples
-
-example_DATA = \
- $(wildcard $(srcdir)/examples/*.c) \
- $(wildcard $(srcdir)/examples/*.sh)
+dist_man_MANS = man/man1/clsync.1
 endif
 
-doc_DATA = CONTRIB DEVELOPING LICENSE PROTOCOL README.md TODO
+dist_doc_DATA = CONTRIB DEVELOPING LICENSE PROTOCOL README.md TODO
+
+EXTRA_DIST = .doxygen .travis.sh .travis.yml NOTES SHORTHANDS freebsd debian gentoo
 
 if LIBCLSYNC
 lib_LTLIBRARIES = libclsync.la
@@ -92,18 +93,9 @@ endif
 doc:
 	doxygen .doxygen
 
-install-data-local:
-if LIBCLSYNC
-	mkdir -p $(DESTDIR)/$(libdir)/pkgconfig
-	cp pkgconfig/*.pc $(DESTDIR)/$(libdir)/pkgconfig/
+if SOCKET
+pkgconfig_DATA = pkgconfig/libclsync.pc
 endif
-if CLSYNC
-	mkdir -p $(DESTDIR)/$(exampledir)
-	cp -R examples/production $(DESTDIR)/$(exampledir)/
-endif
-
-uninstall-local:
-	rm -rf $(DESTDIR)/$(exampledir)/production
 
 CLEANFILES = revision.h
 if CLSYNC
