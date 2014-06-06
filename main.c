@@ -1366,7 +1366,7 @@ int main(int argc, char *argv[]) {
 				error("Watch dir cannot be symlink, but \"%s\" is a symlink.", ctx.watchdir);
 				ret = EINVAL;
 #else
-				char *watchdir_resolved_part = alloca(PATH_MAX+1);
+				char *watchdir_resolved_part = xcalloc(1, PATH_MAX+2);
 				ssize_t r = readlink(ctx.watchdir, watchdir_resolved_part, PATH_MAX+1);
 	
 				if(r>=PATH_MAX) {	// TODO: check if it's possible
@@ -1394,19 +1394,22 @@ int main(int argc, char *argv[]) {
 						// Relative symlink :(
 						char *rslash = strrchr(ctx.watchdir, '/');
 
-						char *watchdir_resolved_rel  = alloca(PATH_MAX+1);
+						char *watchdir_resolved_rel  = xmalloc(PATH_MAX+2);
 						size_t watchdir_resolved_rel_len = rslash-ctx.watchdir + 1;
 						memcpy(watchdir_resolved_rel, ctx.watchdir, watchdir_resolved_rel_len);
 						memcpy(&watchdir_resolved_rel[watchdir_resolved_rel_len], watchdir_resolved_part, watchdir_resolved_part_len+1);
 
 						watchdir_resolved = realpath(watchdir_resolved_rel, NULL);
+
+						free(watchdir_resolved_rel);
 					}
 
 					
 					debug(1, "Symlink resolved: watchdir \"%s\" -> \"%s\"", ctx.watchdir, watchdir_resolved);
 					ctx.watchdir = watchdir_resolved;
 				}
-#endif
+				free(watchdir_resolved_part);
+#endif // VERYPARANOID else
 			}
 		}
 
