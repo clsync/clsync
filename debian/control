@@ -22,7 +22,8 @@ Description: live sync tool based on inotify, written in GNU C
  multi-threading.
 
 Package: clsync-doc
-Architecture: any
+Section: doc
+Architecture: all
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: examples and other documentation for clsync
  Clsync recursively watches for source directory and executes external
@@ -31,7 +32,7 @@ Description: examples and other documentation for clsync
  features as separate queue for big files, regex file filter,
  multi-threading.
 
-Package: libclsync
+Package: libclsync0
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: clsync control socket library
@@ -42,8 +43,9 @@ Description: clsync control socket library
  multi-threading.
 
 Package: libclsync-dev
+Section: libdevel
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}, libclsync0 (= ${binary:Version})
 Description: development files for libclsync
  Clsync recursively watches for source directory and executes external
  program to sync the changes. Clsync is adapted to use together with rsync.

@@ -20,7 +20,7 @@
 /debian/clsync-dev/
 /debian/clsync-doc/
 /debian/libclsync-dev/
-/debian/libclsync/
+/debian/libclsync0/
 /debian/patches/
 
 # other:
