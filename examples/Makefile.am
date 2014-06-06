@@ -24,5 +24,6 @@ nobase_dist_example_DATA = production/etc/clsync/rules/hpc	\
 	 production/etc/clsync/rules/lxc			\
 	 production/etc/clsync/synchandler/hpc/handler-backup.c	\
 	 production/etc/clsync/synchandler/hpc/handler-pdcp.c	\
+	 production/etc/clsync/synchandler/hpc/Makefile		\
 	 production/etc/clsync/synchandler/lxc/rsync.exclude	\
 	 production/etc/clsync/clsync.conf
