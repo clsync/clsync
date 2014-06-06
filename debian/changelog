@@ -20,8 +20,9 @@ clsync (0.3-1) unstable; urgency=medium
     - the actual clsync executable (!)
     - its man page
     - some *.h header files
+  * Fold small (14k) clsync-doc package into clsync
 
- -- Barak A. Pearlmutter <bap@debian.org>  Fri, 06 Jun 2014 09:32:14 +0100
+ -- Barak A. Pearlmutter <bap@debian.org>  Fri, 06 Jun 2014 09:44:28 +0100
 
 clsync (0.2.1-1) unstable; urgency=low
 
