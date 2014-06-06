@@ -722,7 +722,8 @@ static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_ev
 		int rc=0, ret=0, err=0;
 		int try_n=0, try_again;
 
-		indexes_p->nonthreaded_syncing_fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
+//		indexes_p->nonthreaded_syncing_fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
+		indexes_p->nonthreaded_syncing_fpath2ei_ht = indexes_p->fpath2ei_ht;
 
 		do {
 			try_again = 0;
@@ -746,7 +747,8 @@ static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_ev
 			ret = err;
 		}
 
-		g_hash_table_destroy(indexes_p->nonthreaded_syncing_fpath2ei_ht);
+//		g_hash_table_destroy(indexes_p->nonthreaded_syncing_fpath2ei_ht);
+		indexes_p->nonthreaded_syncing_fpath2ei_ht = NULL;
 
 		so_call_sync_finished(n, ei);
 		return ret;
@@ -857,7 +859,8 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 	if (!SHOULD_THREAD(ctx_p)) {
 		debug(3, "ctx_p->handler_funct.rsync == %p", ctx_p->handler_funct.rsync);
 
-		indexes_p->nonthreaded_syncing_fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
+//		indexes_p->nonthreaded_syncing_fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
+		indexes_p->nonthreaded_syncing_fpath2ei_ht = indexes_p->fpath2ei_ht;
 
 		int rc=0, err=0;
 		int try_n=0, try_again;
@@ -883,7 +886,8 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 			rc = err;
 		}
 
-		g_hash_table_destroy(indexes_p->nonthreaded_syncing_fpath2ei_ht);
+//		g_hash_table_destroy(indexes_p->nonthreaded_syncing_fpath2ei_ht);
+		indexes_p->nonthreaded_syncing_fpath2ei_ht = NULL;
 
 		int ret_cleanup;
 		if ((ret_cleanup=so_call_rsync_finished(ctx_p, inclistfile, exclistfile)))
@@ -1045,7 +1049,8 @@ int sync_exec(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callbac
 	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
 	memset(argv, 0, sizeof(char *)*MAXARGUMENTS);
 
-	indexes_p->nonthreaded_syncing_fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
+//	indexes_p->nonthreaded_syncing_fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
+	indexes_p->nonthreaded_syncing_fpath2ei_ht = indexes_p->fpath2ei_ht;
 
 	_sync_exec_getargv(argv, callback, arg);
 
@@ -1085,7 +1090,8 @@ int sync_exec(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callbac
 		}
 	}
 
-	g_hash_table_destroy(indexes_p->nonthreaded_syncing_fpath2ei_ht);
+//	g_hash_table_destroy(indexes_p->nonthreaded_syncing_fpath2ei_ht);
+	indexes_p->nonthreaded_syncing_fpath2ei_ht = NULL;
 	free(argv);
 	return ret;
 }
@@ -3152,7 +3158,7 @@ int sync_dump(ctx_t *ctx_p, const char *const dir_path) {
 	indexes_t	*indexes_p	= ctx_p->indexes_p;
 
 	int rootfd, fd_out;
-	struct sync_dump_arg arg;
+	struct sync_dump_arg arg = {0};
 	enum dump_dirfd_obj dirfd_obj;
 
 	arg.ctx_p	 = ctx_p;
@@ -3170,17 +3176,22 @@ int sync_dump(ctx_t *ctx_p, const char *const dir_path) {
 	errno = 0;
 
 	rootfd = mkdirat_open(dir_path, AT_FDCWD, DUMP_DIRMODE);
-	if (rootfd == -1)
+	if (rootfd == -1) {
+		error("Cannot open directory \"%s\"", dir_path);
 		goto l_sync_dump_end;
+	}
 
 	fd_out = openat(rootfd, "instance", O_WRONLY|O_CREAT, DUMP_FILEMODE);
-	if (fd_out == -1)
+	if (fd_out == -1) {
+		error("Cannot open file \"%s\" for writing");
 		goto l_sync_dump_end;
+	}
 
 	dprintf(fd_out, "status == %s\n", getenv("CLSYNC_STATUS"));	// TODO: remove getenv() from here
 	arg.fd_out = fd_out;
 	arg.data   = DUMP_LTYPE_EVINFO;
-	g_hash_table_foreach(indexes_p->nonthreaded_syncing_fpath2ei_ht, sync_dump_liststep, &arg);
+	if (indexes_p->nonthreaded_syncing_fpath2ei_ht != NULL)
+		g_hash_table_foreach(indexes_p->nonthreaded_syncing_fpath2ei_ht, sync_dump_liststep, &arg);
 
 	close(fd_out);
 
@@ -3191,8 +3202,10 @@ int sync_dump(ctx_t *ctx_p, const char *const dir_path) {
 		const char *const subdir = subdirs[dirfd_obj];
 
 		arg.dirfd[dirfd_obj] = mkdirat_open(subdir, rootfd, DUMP_DIRMODE);
-		if (arg.dirfd[dirfd_obj] == -1)
+		if (arg.dirfd[dirfd_obj] == -1) {
+			error("Cannot open directory \"%s\"", subdir);
 			goto l_sync_dump_end;
+		}
 
 		dirfd_obj++;
 	}
@@ -3220,7 +3233,7 @@ int sync_dump(ctx_t *ctx_p, const char *const dir_path) {
 l_sync_dump_end:
 	dirfd_obj = DUMP_DIRFD_ROOT;
 	while (dirfd_obj < DUMP_DIRFD_MAX) {
-		if (arg.dirfd[dirfd_obj] != -1)
+		if (arg.dirfd[dirfd_obj] != -1 && arg.dirfd[dirfd_obj] != 0)
 			close(arg.dirfd[dirfd_obj]);
 		dirfd_obj++;
 	}
