@@ -31,6 +31,8 @@ Description: examples and other documentation for clsync
  This utility is much more lightweight than competitors and supports such
  features as separate queue for big files, regex file filter,
  multi-threading.
+ .
+ This package contains documentation and examples.
 
 Package: libclsync0
 Architecture: any
@@ -41,6 +43,8 @@ Description: clsync control socket library
  This utility is much more lightweight than competitors and supports such
  features as separate queue for big files, regex file filter,
  multi-threading.
+ .
+ This package contains a shared library to control clsync via socket.
 
 Package: libclsync-dev
 Section: libdevel
@@ -52,3 +56,5 @@ Description: development files for libclsync
  This utility is much more lightweight than competitors and supports such
  features as separate queue for big files, regex file filter,
  multi-threading.
+ .
+ This package contains development files for controlling clsync via socket.
