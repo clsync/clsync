@@ -29,8 +29,16 @@
 // children count limit
 #define MAXCHILDREN			(1<<8)
 
+#ifdef __CLSYNC_COMMON_H
+#	if INOTIFY_SUPPORT
+#		define DEFAULT_NOTIFYENGINE	NE_INOTIFY
+#	elif KQUEUE_SUPPORT
+#		define DEFAULT_NOTIFYENGINE	NE_KQUEUE
+#	else
+#		error No inotify/kqueue support, cannot compile working clsync
+#	endif
+#endif
 #define DEFAULT_RULES_PERM		RA_ALL
-#define DEFAULT_NOTIFYENGINE		NE_INOTIFY
 #define DEFAULT_COLLECTDELAY		30
 #define DEFAULT_SYNCDELAY		(DEFAULT_COLLECTDELAY)
 #define DEFAULT_BFILETHRESHOLD		(128 * 1024 * 1024)
@@ -75,3 +83,22 @@
 
 #define DUMP_DIRMODE			0750
 #define DUMP_FILEMODE			0644
+
+// size of event chain size to be processes at a time
+#define KQUEUE_EVENTLISTSIZE		256
+
+#define AUDITPIPE_PATH "/dev/auditpipe"
+#define AUDIT_CONTROL_PATH "/etc/security/audit_control"
+#define AUDIT_CONTROL_INITSCRIPT "/etc/rc.d/auditd"
+#define AUDIT_CONTROL_HEADER "#clsync\n"
+#define AUDIT_CONTROL_CONTENT "\n\
+dir:/var/audit\n\
+flags:fc,fd,fw,fm,cl\n\
+minfree:0\n\
+naflags:fc,fd,fw,fm,cl\n\
+policy:cnt\n\
+filesz:1M\n\
+"
+
+#define DTRACE_PATH			"dtrace"
+

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 
 IFACE="$1"
 
@@ -15,7 +15,7 @@ if [ "$IPADDR" = "" ]; then
 	exit 2
 fi
 
-mkdir -m 700 -p testdir/{from,to,listdir}
+mkdir -m 700 -p testdir/from testdir/to testdir/listdir
 
 cat > rules <<EOF
 -d^[Dd]ont[Ss]ync\$

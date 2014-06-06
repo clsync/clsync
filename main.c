@@ -1,5 +1,5 @@
 /*
-    clsync - file tree sync utility based on fanotify and inotify
+    clsync - file tree sync utility based on inotify
 
     Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 
@@ -19,6 +19,8 @@
 
 
 #include "common.h"
+
+#include "port-hacks.h"
 
 #include <pwd.h>	// For getpwnam()
 #include <grp.h>	// For getgrnam()
@@ -95,10 +97,7 @@ static const struct option long_options[] =
 	{"debug",		optional_argument,	NULL,	DEBUG},
 	{"dump-dir",		required_argument,	NULL,	DUMPDIR},
 	{"quiet",		optional_argument,	NULL,	QUIET},
-#ifdef FANOTIFY_SUPPORT
-	{"fanotify",		optional_argument,	NULL,	FANOTIFY},
-	{"inotify",		optional_argument,	NULL,	INOTIFY},
-#endif
+	{"monitor",		required_argument,	NULL,	MONITOR},
 	{"label",		required_argument,	NULL,	LABEL},
 	{"help",		optional_argument,	NULL,	HELP},
 	{"version",		optional_argument,	NULL,	SHOW_VERSION},
@@ -117,6 +116,16 @@ static char *const threading_modes[] = {
 	[PM_OFF]		= "off",
 	[PM_SAFE]		= "safe",
 	[PM_FULL]		= "full",
+	NULL
+};
+
+static char *const notify_engines[] = {
+	[NE_UNDEFINED]		= "",
+	[NE_INOTIFY]		= "inotify",
+	[NE_KQUEUE]		= "kqueue",
+	[NE_FANOTIFY]		= "fanotify",
+	[NE_BSM]		= "bsm",
+	[NE_DTRACEPIPE]		= "dtracepipe",
 	NULL
 };
 
@@ -268,7 +277,7 @@ char *parameter_expand(ctx_t *ctx_p, char *arg, int ignorewarnings) {
 							size_t variable_value_len = strlen(variable_value);
 							if (ret_len+variable_value_len+1 >= ret_size) {
 								ret_size = ret_len+variable_value_len+1 + ALLOC_PORTION;
-								ret      = realloc(ret, ret_size);
+								ret      = xrealloc(ret, ret_size);
 							}
 							memcpy(&ret[ret_len], variable_value, variable_value_len);
 							ret_len += variable_value_len;
@@ -282,7 +291,7 @@ char *parameter_expand(ctx_t *ctx_p, char *arg, int ignorewarnings) {
 			default: {
 				if (ret_len+2 >= ret_size) {
 					ret_size = ret_len+2 + ALLOC_PORTION;
-					ret      = realloc(ret, ret_size);
+					ret      = xrealloc(ret, ret_size);
 				}
 				ret[ret_len++] = *ptr;
 				break;
@@ -359,7 +368,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			}
 
 			threadingmode_t threadingmode = getsubopt(&arg, threading_modes, &value);
-			if(threadingmode == -1) {
+			if((int)threadingmode == -1) {
 				errno = EINVAL;
 				error("Invalid threading mode entered: \"%s\"", arg_orig);
 				return EINVAL;
@@ -377,7 +386,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			}
 
 			outputmethod_t outputmethod = getsubopt(&arg, output_methods, &value);
-			if(outputmethod == -1) {
+			if((int)outputmethod == -1) {
 				errno = EINVAL;
 				error("Invalid log writing destination entered: \"%s\"", arg_orig);
 				return EINVAL;
@@ -439,14 +448,47 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 		case BFILETHRESHOLD:
 			ctx_p->bfilethreshold = (unsigned long)atol(arg);
 			break;
+		case MONITOR: {
+			char *value, *arg_orig = arg;
+
+			if (!*arg) {
+				ctx_p->flags_set[param_id] = 0;
+				return 0;
+			}
+
+			notifyengine_t notifyengine = getsubopt(&arg, notify_engines, &value);
+			if((int)notifyengine == -1) {
+				errno = EINVAL;
+				error("Invalid FS monitor subsystem entered: \"%s\"", arg_orig);
+				return EINVAL;
+			}
+
+			switch (notifyengine) {
 #ifdef FANOTIFY_SUPPORT
-		case FANOTIFY:
-			ctx_p->notifyengine = NE_FANOTIFY;
-			break;
+				case NE_FANOTIFY:
 #endif
-		case INOTIFY:
-			ctx_p->notifyengine = NE_INOTIFY;
+#ifdef INOTIFY_SUPPORT
+				case NE_INOTIFY:
+#endif
+#ifdef KQUEUE_SUPPORT
+				case NE_KQUEUE:
+#endif
+#ifdef BSM_SUPPORT
+				case NE_BSM:
+#endif
+#ifdef DTRACEPIPE_SUPPORT
+				case NE_DTRACEPIPE:
+#endif
+					break;
+				default:
+					error(PROGRAM" is compiled without %s subsystem support. Recompile with option \"--with-%s\" if you're planning to use it.", arg_orig, arg_orig);
+					return EINVAL;
+			}
+
+			ctx_p->flags[MONITOR] = notifyengine;
+
 			break;
+		}
 		case RSYNCINCLIMIT:
 			ctx_p->rsyncinclimit = (unsigned int)atol(arg);
 			break;
@@ -519,7 +561,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			}
 		}
 		case SOCKETMOD:
-			if(!sscanf(arg, "%o", &ctx_p->socketmod)) {
+			if(!sscanf(arg, "%o", (unsigned int *)&ctx_p->socketmod)) {
 				error("Non octal value passed to --socket-mod: \"%s\"", arg);
 				return EINVAL;
 			}
@@ -1111,7 +1153,7 @@ int main(int argc, char *argv[]) {
 	memset(&ctx, 0, sizeof(ctx));
 
 	int ret = 0, nret;
-	ctx.notifyengine 			 = DEFAULT_NOTIFYENGINE;
+	ctx.flags[MONITOR]			 = DEFAULT_NOTIFYENGINE;
 	ctx.syncdelay 				 = DEFAULT_SYNCDELAY;
 	ctx._queues[QUEUE_NORMAL].collectdelay   = DEFAULT_COLLECTDELAY;
 	ctx._queues[QUEUE_BIGFILE].collectdelay  = DEFAULT_BFILECOLLECTDELAY;
@@ -1129,14 +1171,13 @@ int main(int argc, char *argv[]) {
 	ctx.config_block			 = DEFAULT_CONFIG_BLOCK;
 	ctx.retries				 = DEFAULT_RETRIES;
 	ctx.flags[VERBOSE]			 = DEFAULT_VERBOSE;
-	ctx.flags[INOTIFY]			 = 1;
 
 	error_init(&ctx.flags[OUTPUT_METHOD], &ctx.flags[QUIET], &ctx.flags[VERBOSE], &ctx.flags[DEBUG]);
 
 	nret = arguments_parse(argc, argv, &ctx);
-	if(nret) ret = nret;
+	if (nret) ret = nret;
 
-	if(!ret) {
+	if (!ret) {
 		nret = configs_parse(&ctx);
 		if(nret) ret = nret;
 	}
@@ -1309,7 +1350,7 @@ int main(int argc, char *argv[]) {
 			ret = errno;
 		}
 
-		struct stat64 stat64={0};
+		stat64_t stat64={0};
 		if(lstat64(ctx.watchdir, &stat64)) {
 			error("Cannot lstat64() on \"%s\"", ctx.watchdir);
 			if(!ret)
@@ -1325,7 +1366,7 @@ int main(int argc, char *argv[]) {
 				error("Watch dir cannot be symlink, but \"%s\" is a symlink.", ctx.watchdir);
 				ret = EINVAL;
 #else
-				char *watchdir_resolved_part = alloca(PATH_MAX+1);
+				char *watchdir_resolved_part = xcalloc(1, PATH_MAX+2);
 				ssize_t r = readlink(ctx.watchdir, watchdir_resolved_part, PATH_MAX+1);
 	
 				if(r>=PATH_MAX) {	// TODO: check if it's possible
@@ -1353,19 +1394,22 @@ int main(int argc, char *argv[]) {
 						// Relative symlink :(
 						char *rslash = strrchr(ctx.watchdir, '/');
 
-						char *watchdir_resolved_rel  = alloca(PATH_MAX+1);
+						char *watchdir_resolved_rel  = xmalloc(PATH_MAX+2);
 						size_t watchdir_resolved_rel_len = rslash-ctx.watchdir + 1;
 						memcpy(watchdir_resolved_rel, ctx.watchdir, watchdir_resolved_rel_len);
 						memcpy(&watchdir_resolved_rel[watchdir_resolved_rel_len], watchdir_resolved_part, watchdir_resolved_part_len+1);
 
 						watchdir_resolved = realpath(watchdir_resolved_rel, NULL);
+
+						free(watchdir_resolved_rel);
 					}
 
 					
 					debug(1, "Symlink resolved: watchdir \"%s\" -> \"%s\"", ctx.watchdir, watchdir_resolved);
 					ctx.watchdir = watchdir_resolved;
 				}
-#endif
+				free(watchdir_resolved_part);
+#endif // VERYPARANOID else
 			}
 		}
 
@@ -1525,12 +1569,23 @@ int main(int argc, char *argv[]) {
 	}
 
 #ifdef FANOTIFY_SUPPORT
-	if(ctx.notifyengine != NE_INOTIFY) {
-		warning("fanotify is not supported, now!");
-	}
+	if (ctx.flags[MONITOR] == NE_FANOTIFY)
+		critical("fanotify is not supported, now!");
+	else
 #endif
+	if (ctx.flags[MONITOR] == NE_UNDEFINED) {
+		ret = errno = EINVAL;
+		error("Required one of next options:"
+#ifdef INOTIFY_SUPPORT
+			" \"--inotify\""
+#endif
+#ifdef KQUEUE_SUPPORT
+			" \"--kqueue\""
+#endif
+		);
+	}
 
-	if(ctx.flags[EXITHOOK]) {
+	if (ctx.flags[EXITHOOK]) {
 #ifdef VERYPARANOID
 		if(ctx.exithookfile == NULL) {
 			ret = errno = EINVAL;

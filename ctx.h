@@ -1,5 +1,5 @@
 /*
-    clsync - file tree sync utility based on fanotify and inotify
+    clsync - file tree sync utility based on inotify
 
     Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 
@@ -70,10 +70,6 @@ enum flags_enum {
 	DONTUNLINK	= 'U',
 	INITFULL	= 'F',
 	SYNCTIMEOUT	= 'k',
-#ifdef FANOTIFY_SUPPORT
-	FANOTIFY	= 'f',
-#endif
-	INOTIFY		= 'i',
 	LABEL		= 'l',
 	SHOW_VERSION	= 'V',
 
@@ -100,6 +96,8 @@ enum flags_enum {
 	DUMPDIR			= 17|OPTION_LONGOPTONLY,
 
 	CONFIGBLOCKINHERITS	= 18|OPTION_LONGOPTONLY,
+
+	MONITOR			= 19|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -170,6 +168,12 @@ struct api_functs {
 };
 typedef struct api_functs api_functs_t;
 
+struct notifyenginefuncts {
+	int (*wait)(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *tv_p);
+	int (*handle)(struct ctx *ctx_p, struct indexes *indexes_p);
+	int (*add_watch_dir)(struct ctx *ctx_p, struct indexes *indexes_p, const char *const accpath);
+};
+
 struct ctx {
 #ifndef LIBCLSYNC
 	uid_t uid;
@@ -224,7 +228,7 @@ struct ctx {
 	api_functs_t handler_funct;
 	char *rulfpath;
 	char *listoutdir;
-	int notifyengine;
+	struct notifyenginefuncts notifyenginefunct;
 	int retries;
 	size_t bfilethreshold;
 	unsigned int syncdelay;
@@ -236,6 +240,7 @@ struct ctx {
 	char isignoredexitcode[(1<<8)];
 #endif
 	void *indexes_p;
+	void *fsmondata;
 };
 typedef struct ctx ctx_t;
 

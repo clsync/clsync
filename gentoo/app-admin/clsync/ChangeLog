@@ -2,6 +2,15 @@
 # Copyright 1999-2014 Gentoo Foundation; Distributed under the GPL v2
 # $Header: $
 
+*clsync-0.3 (15 May 2014)
+
+  15 May 2014; Andrew Savchenko <bircoph@gmail.com> clsync-0.2.1.ebuild,
+  +clsync-0.3.ebuild, clsync-9999.ebuild, files/clsync.conf-2,
+  files/clsync.initd-2, files/clsync.conf, files/clsync.confd,
+  files/clsync.initd, metadata.xml:
+  Version bump. Now package.use.mask is used for flags in
+  development.
+
 *clsync-0.2.1 (15 Oct 2013)
 
   15 Oct 2013; Andrew Savchenko <bircoph@gmail.com> -clsync-0.1.ebuild,

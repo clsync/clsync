@@ -43,26 +43,28 @@ to/
 tmp
 
 # autotools build debris
-/compile
-/libtool
-/ltmain.sh
 /.deps/
+/Makefile
+/Makefile.in
 /aclocal.m4
 /autom4te.cache/
+/compile
+/config.guess
 /config.h*
 /config.log
 /config.status
-/config.guess
 /config.sub
 /configure
 /depcomp
+/examples/Makefile
+/examples/Makefile.in
 /install-sh
+/libtool
+/ltmain.sh
 /m4/
 /missing
+/pkgconfig/libclsync.pc
 /stamp-h1
-Makefile
-Makefile.in
-pkgconfig/clsync.pc
 
 /debian/autoreconf.after
 /debian/autoreconf.before

@@ -1,5 +1,5 @@
 /*
-    clsync - file tree sync utility based on fanotify and inotify
+    clsync - file tree sync utility based on inotify
 
     Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 
@@ -17,14 +17,20 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#define _GNU_SOURCE
-#define _XOPEN_SOURCE 700
-#define _LARGEFILE64_SOURCE
 
-#define PROGRAM "clsync"
-#define VERSION_MAJ	0
-#define VERSION_MIN	3
-#define AUTHOR "Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C"
+#ifndef __CLSYNC_COMMON_H
+#define __CLSYNC_COMMON_H
+
+#ifndef __linux__
+#	ifdef HAVE_CAPABILITIES
+#		undef HAVE_CAPABILITIES
+#		warning Capabilities support can be built only on Linux
+#	endif
+#endif
+
+#define _GNU_SOURCE
+//#define _XOPEN_SOURCE 700
+#define _LARGEFILE64_SOURCE
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,58 +48,57 @@
 #include <errno.h>
 #include <ctype.h>
 #include <signal.h>
-#include <wait.h>
-#include <fts.h>
-#ifdef FANOTIFY_SUPPORT
-#include <sys/fanotify.h>
+#ifdef KQUEUE_SUPPORT
+#	include <sys/event.h>
 #endif
-#include <sys/inotify.h>
+#ifdef INOTIFY_SUPPORT
+#	include <sys/inotify.h>
+#endif
+#ifdef FANOTIFY_SUPPORT
+#	include <sys/fanotify.h>
+#endif
+#include <sys/wait.h>
+#include <fts.h>
 #include <sys/time.h>
 #include <dirent.h>
 #include <sys/utsname.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <libgen.h>
 #include <pthread.h>
+#include <glib.h>
 
 #ifdef HAVE_CAPABILITIES
-#include <sys/capability.h>	// for capset()/capget() for --preserve-file-access
-#include <sys/prctl.h>		// for prctl() for --preserve-fil-access
+#	include <sys/capability.h>	// for capset()/capget() for --preserve-file-access
+#	include <sys/prctl.h>		// for prctl() for --preserve-fil-access
 #endif
 
 #include "configuration.h"
 #ifdef HAVE_CONFIG_H
-#include "config.h"
+#	include "config.h"
 #endif
 
 #include "clsync.h"
 #include "ctx.h"
-#include "indexes.h"
+#include "program.h"
 
-#ifndef MIN
-#define MIN(a,b) ((a)>(b)?(b):(a))
-#endif
-
-#ifndef MAX
-#define MAX(a,b) ((a)>(b)?(a):(b))
-#endif
+#include <sys/param.h>
 
 #ifndef IN_CREATE_SELF
-#define IN_CREATE_SELF IN_CREATE
+#	define IN_CREATE_SELF IN_CREATE
 #endif
 
 #ifdef _DEBUG
-#define DEBUGV(...) __VA_ARGS__
+#	define DEBUGV(...) __VA_ARGS__
 #else
-#define DEBUGV(...)
+#	define DEBUGV(...)
 #endif
 
 #ifdef PARANOID
-#define PARANOIDV(...) __VA_ARGS__
+#	define PARANOIDV(...) __VA_ARGS__
 #else
-#define PARANOIDV(...)
+#	define PARANOIDV(...)
 #endif
 
 #ifdef _GNU_SOURCE
@@ -118,6 +123,9 @@
 
 #define COLLECTDELAY_INSTANT ((unsigned int)~0)
 
+#define require_strlen_le(str, limit) \
+	if (strlen(str) >= limit)\
+		critical("length of "TOSTR(str)" (\"%s\") >= "TOSTR(limit));\
 
 enum paramsource_enum {
 	PS_UNKNOWN	 = 0,
@@ -129,12 +137,13 @@ typedef enum paramsource_enum paramsource_t;
 
 enum notifyengine_enum {
 	NE_UNDEFINED = 0,
-#ifdef FANOTIFY_SUPPORT
 	NE_FANOTIFY,
-#endif
-	NE_INOTIFY
+	NE_INOTIFY,
+	NE_KQUEUE,
+	NE_BSM,
+	NE_DTRACEPIPE,
 };
-typedef enum notifyengine_enum notifyenfine_t;
+typedef enum notifyengine_enum notifyengine_t;
 
 #define STATE_STARTING(state_p) (state_p == NULL)
 enum state_enum {
@@ -230,7 +239,7 @@ struct dosync_arg {
 	char outf_path[PATH_MAX+1];
 	FILE *outf;
 	ctx_t *ctx_p;
-	indexes_t *indexes_p;
+	struct indexes *indexes_p;
 	void *data;
 	int linescount;
 	api_eventinfo_t *api_ei;
@@ -254,7 +263,7 @@ struct pushdoubleentry_arg {
 	struct doubleentry	*entry;
 };
 
-struct entry {
+struct myentry {
 	size_t  size;
 	size_t  alloc;
 	void   *dat;
@@ -264,7 +273,7 @@ struct pushentry_arg {
 	int		 allocated;
 	int		 total;
 	size_t		 size;
-	struct entry	*entry;
+	struct myentry	*entry;
 };
 
 enum initsync {
@@ -283,9 +292,5 @@ struct sighandler_arg {
 };
 typedef struct sighandler_arg sighandler_arg_t;
 
-enum unified_evetnmask {
-	UEM_DIR		= 0x01,
-	UEM_CREATED	= 0x02,
-	UEM_DELETED	= 0x04,
-};
+#endif
 

@@ -15,8 +15,10 @@ Contents
 7.  Other uses
 8.  Clustering
 9.  Known building issues
-10. Support
-11. Developing
+10. FreeBSD support
+11. Support
+12. Developing
+13. Articles
 
 
 1. Name
@@ -26,9 +28,9 @@ Why "clsync"? The first name of the utility was "insync" (due to inotify), but
 then I suggested to use "fanotify" instead of "inotify" and utility was been
 renamed to "fasync". After that I started to intensively write the program.
 However I faced with some problems in "fanotify", so I was have to temporary
-fallback to "inotify", then I decided, that the best name is "Runtime Sync" or
-"Live Sync", but "rtsync" is a name of some corporation, and "lsync" is busy
-by "lsyncd" project ("https://github.com/axkibe/lsyncd"). So I called it
+fallback to "inotify", then I decided that the best name is "Runtime Sync" or
+"Live Sync", but "rtsync" is a name of some corporation and "lsync" is busy
+by "[lsyncd](https://github.com/axkibe/lsyncd)". So I called it
 "clsync", that should be interpreted as "lsync, but on c" due to "lsyncd" that
 written on "LUA" and may be used for the same purposes.
 
@@ -40,15 +42,15 @@ can be interpreted as "cluster live sync". ;)
 -------------
 
 This utility was been writted for two purposes:
-- for making failover clusters
+- for making high availability clusters
 - for making backups of them
 
-To do failover cluster I've tried a lot of different solutions, like "simple 
+To do HA cluster I've tried a lot of different solutions, like "simple 
 rsync by cron", "glusterfs", "ocfs2 over drbd", "common mirrorable external 
-storage", "incron + perl + rsync", "inosync", "lsyncd" and so on. Currently we
-are using "lsyncd", "ceph" and "ocfs2 over drbd". However all of this
-solutions doesn't arrange me, so I was have to write own utility for this
-purpose.
+storage", "incron + perl + rsync", "inosync", "lsyncd" and so on. When I 
+started to write the utility we was using "lsyncd", "ceph" and
+"ocfs2 over drbd". However all of this solutions doesn't arrange me, so I
+was have to write own utility for this purpose.
 
 To do backups we also tried a lot of different solution, and again I was have
 to write own utility for this purpose.
@@ -70,9 +72,10 @@ event. :(
 - It can't set another event-collecting delay for big files. We don't
 want to sync big files (`>1GiB`) so often as ordinary files.
 - Shared object (.so file) cannot be used as rsync-wrapper.
+- It doesn't support kqueue/bsm
 
 Sorry, if I'm wrong. Let me know if it is, please :). "lsyncd" - is really
-good and useful utility, just it's not appropriate for us.
+interesting and useful utility, just it's not appropriate for us.
 
 UPD.: Also clsync was used to replace incron/csync2/etc in HPC-clusters for
 syncing /etc/{passwd,shadow,group,shells} files.
@@ -234,7 +237,28 @@ May be problems with "configuring" or compilation. In this case just try
 next command:
     echo '#define REVISION "-custom"' > revision.h; gcc -std=gnu99 -D\_FORTIFY\_SOURCE=2 -DPARANOID -pipe -Wall -ggdb3 --param ssp-buffer-size=4 -fstack-check -fstack-protector-all -Xlinker -zrelro -pthread $(pkg-config --cflags glib-2.0) $(pkg-config --libs glib-2.0) -ldl \*.c -o /tmp/clsync
 
-10. Support
+
+10. FreeBSD support
+-------------------
+
+clsync was been ported to FreeBSD.
+
+FreeBSD doesn't support inotify, so there're 3 ways to use clsync on it:
+* using [libinotify](https://github.com/dmatveev/libinotify-kqueue);
+* using BSM API;
+* using kqueue/kevent directly.
+
+However:
+* kqueue/kevent doesn't allow to catch file creation events. However it allows to catch an event of directory content change (without details). So clsync waits for such events and rescans (non-recursively) the whole dir on each such event. This algorithm is not tested and may be buggy. Moreover kqueue/kevent requires to open a file descriptor for every watched file. So this way may eat a lot of CPU and file descriptors.
+* libinotify is not production ready. There may be problems with it. Moreover libinotify backends to kqueue API anyway. On the other hand inotify support is well tested in clsync, so this way should be stable (if libinotify is stable) in contrast to kqueue direct use.
+* Using of BSM API requires auditd reconfiguration. It may hopple to real audit. Moreover this's a global OS setting. And using of this way forces clsync to catch all FS events of the whole system.
+
+I recommend to use the BSM API at the moment. However when the libinotify will be production ready you should try that way.
+
+I hope you will send me bugreports to make me able to improve the FreeBSD support :)
+
+
+11. Support
 -----------
 
 To get support, you can contact with me this ways:
@@ -242,13 +266,21 @@ To get support, you can contact with me this ways:
 - Where else can you find me: IRC:SSL+UTF-8 irc.campus.mephi.ru:6695#mephi,xaionaro,xai
 - And e-mail: <dyokunev@ut.mephi.ru>, <xaionaro@gmail.com>; PGP pubkey: 0x8E30679C
 
-11. Developing
+12. Developing
 --------------
 
 I started to write "DEVELOPING" and "PROTOCOL" files.
 You can look there if you wish. ;)
 
 I'll be glad to receive code contribution :)
+
+13. Articles
+------------
+
+Russian:
+- [HA clustering](https://gitlab.ut.mephi.ru/ut/articles/blob/master/clsync/ha)
+- [syncing to many nodes](https://gitlab.ut.mephi.ru/ut/articles/blob/master/clsync/inotify-to-many-nodes)
+- [atomic sync](https://gitlab.ut.mephi.ru/ut/articles/blob/master/clsync/atomicsync)
 
 
 

@@ -1,5 +1,5 @@
 /*
-    clsync - file tree sync utility based on fanotify and inotify
+    clsync - file tree sync utility based on inotify
     
     Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
     
@@ -244,7 +244,7 @@ typedef int (*cluster_recvproc_funct_t)(clustercmd_t *clustercmd_p);
 
 // Externs
 
-extern int cluster_init(ctx_t *ctx_p, indexes_t *indexes_p);
+extern int cluster_init(struct ctx *ctx_p, struct indexes *indexes_p);
 extern int cluster_deinit();
 
 extern int cluster_lock(const char *fpath);

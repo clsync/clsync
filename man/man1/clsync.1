@@ -842,22 +842,100 @@ Is not set by default.
 .RE
 
 .PP
-.B \-f, \-\-fanotify
+.B \-\-monitor
+.I monitor\-subsystem
 .RS 8
-.B Don't use this option!
+Switches FS monitor subsystem.
 
-Switches monitor subsystem to "fanotify" [it's described for
-future\-compatibility].
+Possible values:
+.RS 8
+.IR inotify 
+.RS
+.BR inotify "(7) [Linux]"
 
-Is not set by default.
+Native, fast, reliable and well tested Linux FS monitor subsystem.
+
+There's no performance profit to use "inotify" instead of "kevent" on FreeBSD
+using "libinotify". It backends to "kevent" anyway. However inotify support is
+well tested and may be useful even via "libinotify".
+
+.RE
+.IR kqueue
+.RS
+.BR kqueue "(2) [FreeBSD]"
+
+A *BSD kernel event notification mechanism (inc. timer, sockets, files etc).
+
+This monitor subsystem that cannot determine file creation event, but it can
+determine a directory where something happened. So
+.B clsync
+is have to rescan whole dir every time on any content change.
+
+Also this API requires to open every monitored file and directory. So it may
+produce a huge amount of file descriptors. Be sure that
+.I kern.maxfiles
+is big enough (in FreeBSD).
+
+CPU/HDD expensive way.
+
+.B Not well tested. Use with caution!
+
+FreeBSD users: notify me about found bugs or performance issues, please. And
+before the bugfix you can switch to "inotify" through libinotify or to "bsm".
+.RE
+.IR bsm
+.RS
+.BR bsm "(3) [FreeBSD]"
+
+Basic Security Module (BSM) Audit API.
+
+This is not a FS monitor subsystem, actually. It's just an API to access to 
+audit information (inc. logs).
+.B clsync
+can setup audit to watch FS events and report it into log. After that
+.B clsync
+will just parse the log via
+.BR auditpipe "(4) [FreeBSD]."
+
+Reliable, but hacky way. It requires global audit reconfiguration that
+may hopple audit analysis.
+
+.B Not well tested. Use with caution!
+Also file /etc/security/audit_control will be overwritten with:
+.RS
+#clsync
+.br
+ 
+.br
+dir:/var/audit
+.br
+flags:fc,fd,fw,fm,cl
+.br
+minfree:0
+.br
+naflags:fc,fd,fw,fm,cl
+.br
+policy:cnt
+.br
+filesz:1M
+.RE
+.RE
+.IR dtracepipe
+.RS
+.BR dtrace "(1) [FreeBSD]"
+
+.B clsync
+will run dtrace with special script (on "d") using
+.BR popen (3)
+and parse it's output.
+
+IMHO, this way is the best for FreeBSD.
+.RE
 .RE
 
-.PP
-.B \-i, \-\-inotify
-.RS 8
-Switches monitor subsystem to "inotify".
-
-Is set by default.
+The default value on Linux is "inotify".
+.br
+The default value on FreeBSD is "dtracepipe"
 .RE
 
 .PP
@@ -1509,4 +1587,5 @@ Don't be afraid to ask about clsync configuration, ;).
 .BR rsync (1),
 .BR pthreads (7),
 .BR inotify (7)
+.BR kqueue (2)
 

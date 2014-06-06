@@ -17,6 +17,7 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <sys/types.h>
 
 void *xmalloc(size_t size);
 void *xcalloc(size_t nmemb, size_t size);

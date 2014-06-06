@@ -1,5 +1,5 @@
 /*
-    clsync - file tree sync utility based on fanotify and inotify
+    clsync - file tree sync utility based on inotify
     
     Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
     
@@ -20,8 +20,8 @@
 #ifndef __CLSYNC_CONTROL_H
 #define __CLSYNC_CONTROL_H
 
-extern int control_run(ctx_t *ctx_p);
-extern int control_cleanup(ctx_t *ctx_p);
+extern int control_run(struct ctx *ctx_p);
+extern int control_cleanup(struct ctx *ctx_p);
 
 #endif
 
