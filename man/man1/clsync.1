@@ -1125,12 +1125,12 @@ is set.
 .br
 .I "Excludes takes precedence over includes."
 
-Also may be defined functions "int clsyncapi_init(options_t *, indexes_t *)"
+Also may be defined functions "int clsyncapi_init(ctx_t *, indexes_t *)"
 and "int clsyncapi_deinit()" to initialize and deinitialize the syncing
 process by this shared object.
 
 To fork the process should be used function
-"pid_t clsyncapi_fork(options_t *)" instead of "pid_t fork()" to make clsync
+"pid_t clsyncapi_fork(ctx_t *)" instead of "pid_t fork()" to make clsync
 be able to kill the child.
 
 See example file "clsync-synchandler-rsyncso.c".
