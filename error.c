@@ -100,8 +100,11 @@ static int syslog_buf(const char *fmt, ...) {
 	);
 	va_end(args);
 
-	if (len>0)
+	if (len>0) {
 		_syslog_buffer_filled += len;
+		if (_syslog_buffer_filled > BUFSIZ)
+			_syslog_buffer_filled = BUFSIZ;
+	}
 
 	return 0;
 }
@@ -115,13 +118,17 @@ static int vsyslog_buf(const char *fmt, va_list args) {
 		args
 	);
 
-	if (len>0)
+	if (len>0) {
 		_syslog_buffer_filled += len;
+		if (_syslog_buffer_filled > BUFSIZ)
+			_syslog_buffer_filled = BUFSIZ;
+	}
 
 	return 0;
 }
 static void syslog_flush(int level) {
 	syslog(level, "%s", _syslog_buffer);
+	_syslog_buffer_filled = 0;
 }
 
 typedef int  *(  *outfunct_t)(const char *format, ...);
