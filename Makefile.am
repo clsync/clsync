@@ -92,7 +92,7 @@ endif
 doc:
 	doxygen .doxygen
 
-if SOCKET
+if LIBCLSYNC
 pkgconfig_DATA = pkgconfig/libclsync.pc
 endif
 
