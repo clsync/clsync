@@ -17,7 +17,7 @@ fi
 inherit autotools
 
 DESCRIPTION="Live sync tool based on inotify, written in GNU C"
-HOMEPAGE="http://ut.mephi.ru/oss"
+HOMEPAGE="http://ut.mephi.ru/oss/clsync https://github.com/xaionaro/clsync"
 LICENSE="GPL-3+"
 SLOT="0"
 IUSE="caps cluster control-socket debug doc +examples extra-hardened hardened mhash"
@@ -32,7 +32,7 @@ RDEPEND="
 "
 DEPEND="${RDEPEND}
 	virtual/pkgconfig
-	doc? ( app-doc/doxygen )
+	doc? ( app-doc/clsync-docs )
 "
 
 src_prepare() {
@@ -46,9 +46,12 @@ src_configure() {
 
 	econf \
 		--docdir="${EPREFIX}/usr/share/doc/${PF}" \
-		--enable-clsync \
 		--disable-socket-library \
+		--enable-clsync \
 		--enable-paranoid=${harden_level} \
+		--with-inotify=native \
+		--without-bsm \
+		--without-kqueue \
 		$(use_enable cluster) \
 		$(use_enable control-socket socket) \
 		$(use_enable debug) \
@@ -58,12 +61,10 @@ src_configure() {
 
 src_compile() {
 	emake
-	use doc && emake doc
 }
 
 src_install() {
 	emake DESTDIR="${D}" install
-	use doc && dohtml -r doc/html/*
 
 	# remove unwanted docs
 	rm "${ED}/usr/share/doc/${PF}"/{LICENSE,TODO} || die "failed to cleanup docs"
