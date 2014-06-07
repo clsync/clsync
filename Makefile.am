@@ -69,16 +69,15 @@ libclsync_includedir = $(includedir)/libclsync
 
 if CLSYNC
 clsync_include_HEADERS = \
-	error.h \
-	malloc.h
-clsync_include_HEADERS += \
 	clsync.h \
 	configuration.h \
-	indexes.h
+	ctx.h \
+	error.h \
+	indexes.h \
+	malloc.h
 if SOCKET
 clsync_include_HEADERS += \
-	socket.h \
-	ctx.h
+	socket.h
 endif
 endif
 if LIBCLSYNC
