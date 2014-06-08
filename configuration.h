@@ -102,3 +102,4 @@ filesz:1M\n\
 
 #define DTRACE_PATH			"dtrace"
 
+#define SYSLOG_BUFSIZ			(1<<16)

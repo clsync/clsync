@@ -85,47 +85,59 @@ static void flush_stdout(int level) {
 }
 
 
-static char _syslog_buffer[BUFSIZ];
-size_t _syslog_buffer_filled = 0;
-static int syslog_buf(const char *fmt, ...) {
-	int len;
-	va_list args;
+static char _syslog_buffer[SYSLOG_BUFSIZ+1] = {0};
+size_t      _syslog_buffer_filled = 0;
 
-	va_start(args, fmt);
-	len = vsnprintf (
-		&_syslog_buffer[_syslog_buffer_filled],
-		BUFSIZ - _syslog_buffer_filled,
-		fmt,
-		args
-	);
-	va_end(args);
-
-	if (len>0) {
-		_syslog_buffer_filled += len;
-		if (_syslog_buffer_filled > BUFSIZ)
-			_syslog_buffer_filled = BUFSIZ;
-	}
-
-	return 0;
-}
 static int vsyslog_buf(const char *fmt, va_list args) {
 	int len;
+	size_t size;
+
+	size = SYSLOG_BUFSIZ - _syslog_buffer_filled;
+
+#ifdef VERYPARANOID
+	if (
+		(			 size	> SYSLOG_BUFSIZ)	|| 
+		(_syslog_buffer_filled + size	> SYSLOG_BUFSIZ)	||
+		(_syslog_buffer_filled		> SYSLOG_BUFSIZ)
+	) {
+		fprintf(stderr, "Security problem while vsyslog_buf(): "
+			"_syslog_buffer_filled == %lu; "
+			"size == %lu; "
+			"SYSLOG_BUFSIZ == "XTOSTR(SYSLOG_BUFSIZ)"\n",
+			_syslog_buffer_filled, size);
+		exit(ENOBUFS);
+	}
+#endif
+	if (!size)
+		return 0;
 
 	len = vsnprintf (
 		&_syslog_buffer[_syslog_buffer_filled],
-		BUFSIZ - _syslog_buffer_filled,
+		size,
 		fmt,
 		args
 	);
 
 	if (len>0) {
 		_syslog_buffer_filled += len;
-		if (_syslog_buffer_filled > BUFSIZ)
-			_syslog_buffer_filled = BUFSIZ;
+		if (_syslog_buffer_filled > SYSLOG_BUFSIZ)
+			_syslog_buffer_filled = SYSLOG_BUFSIZ;
 	}
 
 	return 0;
 }
+
+static int syslog_buf(const char *fmt, ...) {
+	va_list args;
+	int rc;
+
+	va_start(args, fmt);
+	rc = vsyslog_buf(fmt, args);
+	va_end(args);
+
+	return rc;
+}
+
 static void syslog_flush(int level) {
 	syslog(level, "%s", _syslog_buffer);
 	_syslog_buffer_filled = 0;
