@@ -1176,7 +1176,7 @@ int main(int argc, char *argv[]) {
 
 	int ret = 0, nret;
 	ctx_p->flags[MONITOR]			 = DEFAULT_NOTIFYENGINE;
-	ctx_p->syncdelay 				 = DEFAULT_SYNCDELAY;
+	ctx_p->syncdelay 			 = DEFAULT_SYNCDELAY;
 	ctx_p->_queues[QUEUE_NORMAL].collectdelay   = DEFAULT_COLLECTDELAY;
 	ctx_p->_queues[QUEUE_BIGFILE].collectdelay  = DEFAULT_BFILECOLLECTDELAY;
 	ctx_p->_queues[QUEUE_INSTANT].collectdelay  = COLLECTDELAY_INSTANT;
@@ -1184,11 +1184,11 @@ int main(int argc, char *argv[]) {
 	ctx_p->bfilethreshold			 = DEFAULT_BFILETHRESHOLD;
 	ctx_p->label				 = DEFAULT_LABEL;
 	ctx_p->rsyncinclimit			 = DEFAULT_RSYNCINCLUDELINESLIMIT;
-	ctx_p->synctimeout				 = DEFAULT_SYNCTIMEOUT;
+	ctx_p->synctimeout			 = DEFAULT_SYNCTIMEOUT;
 #ifdef CLUSTER_SUPPORT
-	ctx_p->cluster_hash_dl_min			 = DEFAULT_CLUSTERHDLMIN;
-	ctx_p->cluster_hash_dl_max			 = DEFAULT_CLUSTERHDLMAX;
-	ctx_p->cluster_scan_dl_max			 = DEFAULT_CLUSTERSDLMAX;
+	ctx_p->cluster_hash_dl_min		 = DEFAULT_CLUSTERHDLMIN;
+	ctx_p->cluster_hash_dl_max		 = DEFAULT_CLUSTERHDLMAX;
+	ctx_p->cluster_scan_dl_max		 = DEFAULT_CLUSTERSDLMAX;
 #endif
 	ctx_p->config_block			 = DEFAULT_CONFIG_BLOCK;
 	ctx_p->retries				 = DEFAULT_RETRIES;
@@ -1597,16 +1597,42 @@ int main(int argc, char *argv[]) {
 		critical("fanotify is not supported, now!");
 	else
 #endif
-	if (ctx_p->flags[MONITOR] == NE_UNDEFINED) {
-		ret = errno = EINVAL;
-		error("Required one of next options:"
+	switch (ctx_p->flags[MONITOR]) {
 #ifdef INOTIFY_SUPPORT
-			" \"--inotify\""
+		case NE_INOTIFY:
+#endif
+#ifdef FANOTIFY_SUPPORT
+		case NE_FANOTIFY:
 #endif
 #ifdef KQUEUE_SUPPORT
-			" \"--kqueue\""
+		case NE_KQUEUE:
 #endif
-		);
+#ifdef BSM_SUPPORT
+		case NE_BSM:
+#endif
+#ifdef DTRACEPIPE_SUPPORT
+		case NE_DTRACEPIPE:
+#endif
+			break;
+		default:
+			ret = errno = EINVAL;
+			error("Required one of next options:"
+#ifdef INOTIFY_SUPPORT
+				" \"--monitor=inotify\""
+#endif
+#ifdef FANOTIFY_SUPPORT
+				" \"--monitor=fanotify\""
+#endif
+#ifdef KQUEUE_SUPPORT
+				" \"--monitor=kqueue\""
+#endif
+#ifdef BSM_SUPPORT
+				" \"--monitor=bsm\""
+#endif
+#ifdef DTRACEPIPE_SUPPORT
+				" \"--monitor=dtracepipe\""
+#endif
+			);
 	}
 
 	if (ctx_p->flags[EXITHOOK]) {
