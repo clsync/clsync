@@ -1102,7 +1102,6 @@ int sync_exec_argv(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t ca
 
 //	g_hash_table_destroy(indexes_p->nonthreaded_syncing_fpath2ei_ht);
 	indexes_p->nonthreaded_syncing_fpath2ei_ht = NULL;
-	free(argv);
 	return ret;
 }
 
@@ -2105,18 +2104,21 @@ int sync_idle_dosync_collectedevents_cleanup(ctx_t *ctx_p, thread_callbackfunct_
 	if(ctx_p->flags[DONTUNLINK]) 
 		return 0;
 
-	debug(3, "thread %p", pthread_self());
+	debug(3, "(ctx_p, {inc: %p, exc: %p}) thread %p", arg_p->incfpath, arg_p->excfpath, pthread_self());
 
 	if (arg_p->excfpath != NULL) {
-		debug(3, "unlink()-ing \"%s\"", arg_p->excfpath);
+		debug(3, "unlink()-ing include-file: \"%s\"", arg_p->excfpath);
 		ret0 = unlink(arg_p->excfpath);
+		free(arg_p->excfpath);
 	}
 
 	if (arg_p->incfpath != NULL) {
-		debug(3, "unlink()-ing \"%s\"", arg_p->incfpath);
+		debug(3, "unlink()-ing exclude-file \"%s\"", arg_p->incfpath);
 		ret1 = unlink(arg_p->incfpath);
+		free(arg_p->incfpath);
 	}
 
+	free(arg_p);
 	return ret0 ? ret0 : ret1;
 }
 
@@ -2444,7 +2446,7 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 	}
 
 	if (dosync_arg_p->evcount > 0) {
-		thread_callbackfunct_arg_t callback_arg = {NULL};
+		thread_callbackfunct_arg_t *callback_arg_p;
 
 		debug(3, "%s [%s] (%p) -> %s [%s]", ctx_p->watchdir, ctx_p->watchdirwslash, ctx_p->watchdirwslash, 
 								ctx_p->destdir?ctx_p->destdir:"", ctx_p->destdirwslash?ctx_p->destdirwslash:"");
@@ -2461,14 +2463,18 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 				dosync_arg_p->outf_path, 
 				*(dosync_arg_p->excf_path) ? dosync_arg_p->excf_path : NULL);
 
-		callback_arg.incfpath = dosync_arg_p->outf_path;
-		callback_arg.excfpath = dosync_arg_p->excf_path;
+		callback_arg_p = xcalloc(1, sizeof(*callback_arg_p));
+
+		if (dosync_arg_p->outf_path != NULL)
+			callback_arg_p->incfpath = strdup(dosync_arg_p->outf_path);
+		if (dosync_arg_p->excf_path != NULL)
+			callback_arg_p->excfpath = strdup(dosync_arg_p->excf_path);
 
 		if (ctx_p->flags[MODE] == MODE_RSYNCDIRECT) {
 			if (!ctx_p->synchandler_argc)
 				return SYNC_EXEC(ctx_p, indexes_p,
 					sync_idle_dosync_collectedevents_cleanup,
-					&callback_arg,
+					callback_arg_p,
 					ctx_p->handlerfpath,
 					"-aH", 
 					"--delete",
@@ -2496,14 +2502,14 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 					ctx_p,
 					indexes_p,
 					sync_idle_dosync_collectedevents_cleanup,
-					&callback_arg,
+					callback_arg_p,
 					argv);
 			}
 		}
 
 		return SYNC_EXEC(ctx_p, indexes_p,
 			sync_idle_dosync_collectedevents_cleanup,
-			&callback_arg,
+			callback_arg_p,
 			ctx_p->handlerfpath,
 			ctx_p->flags[MODE]==MODE_RSYNCSHELL?"rsynclist":"synclist", 
 			ctx_p->label,
