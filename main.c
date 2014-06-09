@@ -1169,257 +1169,256 @@ int main_status_update(ctx_t *ctx_p, state_t state) {
 }
 
 int main(int argc, char *argv[]) {
-	struct ctx ctx;
+	struct ctx *ctx_p = xcalloc(1, sizeof(*ctx_p));
 #ifdef CLUSTER_SUPPORT
 	struct utsname utsname;
 #endif
-	memset(&ctx, 0, sizeof(ctx));
 
 	int ret = 0, nret;
-	ctx.flags[MONITOR]			 = DEFAULT_NOTIFYENGINE;
-	ctx.syncdelay 				 = DEFAULT_SYNCDELAY;
-	ctx._queues[QUEUE_NORMAL].collectdelay   = DEFAULT_COLLECTDELAY;
-	ctx._queues[QUEUE_BIGFILE].collectdelay  = DEFAULT_BFILECOLLECTDELAY;
-	ctx._queues[QUEUE_INSTANT].collectdelay  = COLLECTDELAY_INSTANT;
-	ctx._queues[QUEUE_LOCKWAIT].collectdelay = COLLECTDELAY_INSTANT;
-	ctx.bfilethreshold			 = DEFAULT_BFILETHRESHOLD;
-	ctx.label				 = DEFAULT_LABEL;
-	ctx.rsyncinclimit			 = DEFAULT_RSYNCINCLUDELINESLIMIT;
-	ctx.synctimeout				 = DEFAULT_SYNCTIMEOUT;
+	ctx_p->flags[MONITOR]			 = DEFAULT_NOTIFYENGINE;
+	ctx_p->syncdelay 				 = DEFAULT_SYNCDELAY;
+	ctx_p->_queues[QUEUE_NORMAL].collectdelay   = DEFAULT_COLLECTDELAY;
+	ctx_p->_queues[QUEUE_BIGFILE].collectdelay  = DEFAULT_BFILECOLLECTDELAY;
+	ctx_p->_queues[QUEUE_INSTANT].collectdelay  = COLLECTDELAY_INSTANT;
+	ctx_p->_queues[QUEUE_LOCKWAIT].collectdelay = COLLECTDELAY_INSTANT;
+	ctx_p->bfilethreshold			 = DEFAULT_BFILETHRESHOLD;
+	ctx_p->label				 = DEFAULT_LABEL;
+	ctx_p->rsyncinclimit			 = DEFAULT_RSYNCINCLUDELINESLIMIT;
+	ctx_p->synctimeout				 = DEFAULT_SYNCTIMEOUT;
 #ifdef CLUSTER_SUPPORT
-	ctx.cluster_hash_dl_min			 = DEFAULT_CLUSTERHDLMIN;
-	ctx.cluster_hash_dl_max			 = DEFAULT_CLUSTERHDLMAX;
-	ctx.cluster_scan_dl_max			 = DEFAULT_CLUSTERSDLMAX;
+	ctx_p->cluster_hash_dl_min			 = DEFAULT_CLUSTERHDLMIN;
+	ctx_p->cluster_hash_dl_max			 = DEFAULT_CLUSTERHDLMAX;
+	ctx_p->cluster_scan_dl_max			 = DEFAULT_CLUSTERSDLMAX;
 #endif
-	ctx.config_block			 = DEFAULT_CONFIG_BLOCK;
-	ctx.retries				 = DEFAULT_RETRIES;
-	ctx.flags[VERBOSE]			 = DEFAULT_VERBOSE;
+	ctx_p->config_block			 = DEFAULT_CONFIG_BLOCK;
+	ctx_p->retries				 = DEFAULT_RETRIES;
+	ctx_p->flags[VERBOSE]			 = DEFAULT_VERBOSE;
 
-	error_init(&ctx.flags[OUTPUT_METHOD], &ctx.flags[QUIET], &ctx.flags[VERBOSE], &ctx.flags[DEBUG]);
+	error_init(&ctx_p->flags[OUTPUT_METHOD], &ctx_p->flags[QUIET], &ctx_p->flags[VERBOSE], &ctx_p->flags[DEBUG]);
 
-	nret = arguments_parse(argc, argv, &ctx);
+	nret = arguments_parse(argc, argv, ctx_p);
 	if (nret) ret = nret;
 
 	if (!ret) {
-		nret = configs_parse(&ctx);
+		nret = configs_parse(ctx_p);
 		if(nret) ret = nret;
 	}
 
-	if (ctx.dump_path == NULL) {
-		ctx.dump_path = parameter_expand(&ctx, strdup(DEFAULT_DUMPDIR), 2);
-		ctx.flags_values_raw[DUMPDIR] = ctx.dump_path;
+	if (ctx_p->dump_path == NULL) {
+		ctx_p->dump_path = parameter_expand(ctx_p, strdup(DEFAULT_DUMPDIR), 2);
+		ctx_p->flags_values_raw[DUMPDIR] = ctx_p->dump_path;
 	}
 
-	debug(4, "debugging flags: %u %u %u %u", ctx.flags[OUTPUT_METHOD], ctx.flags[QUIET], ctx.flags[VERBOSE], ctx.flags[DEBUG]);
+	debug(4, "debugging flags: %u %u %u %u", ctx_p->flags[OUTPUT_METHOD], ctx_p->flags[QUIET], ctx_p->flags[VERBOSE], ctx_p->flags[DEBUG]);
 
-	main_status_update(&ctx, STATE_STARTING);
+	main_status_update(ctx_p, STATE_STARTING);
 
-	if(ctx.socketpath != NULL) {
+	if(ctx_p->socketpath != NULL) {
 #ifndef ENABLE_SOCKET
 		ret = EINVAL;
 		error("clsync is compiled without control socket support, option \"--socket\" cannot be used.");
 #endif
-		if(ctx.flags[SOCKETAUTH] == SOCKAUTH_UNSET)
-			ctx.flags[SOCKETAUTH] = SOCKAUTH_NULL;
+		if(ctx_p->flags[SOCKETAUTH] == SOCKAUTH_UNSET)
+			ctx_p->flags[SOCKETAUTH] = SOCKAUTH_NULL;
 	}
 
-	if((ctx.flags[SOCKETOWN]) && (ctx.socketpath == NULL)) {
+	if((ctx_p->flags[SOCKETOWN]) && (ctx_p->socketpath == NULL)) {
 		ret = errno = EINVAL;
 		error("\"--socket-own\" is useless without \"--socket\"");
 	}
 
-	if((ctx.flags[SOCKETMOD]) && (ctx.socketpath == NULL)) {
+	if((ctx_p->flags[SOCKETMOD]) && (ctx_p->socketpath == NULL)) {
 		ret = errno = EINVAL;
 		error("\"--socket-mod\" is useless without \"--socket\"");
 	}
 
-	if((ctx.flags[SOCKETAUTH]) && (ctx.socketpath == NULL)) {
+	if((ctx_p->flags[SOCKETAUTH]) && (ctx_p->socketpath == NULL)) {
 		ret = errno = EINVAL;
 		error("\"--socket-auth\" is useless without \"--socket\"");
 	}
 
 #ifdef VERYPARANOID
-	if((ctx.retries != 1) && ctx.flags[THREADING]) {
+	if((ctx_p->retries != 1) && ctx_p->flags[THREADING]) {
 		ret = errno = EINVAL;
 		error("\"--retries\" values should be equal to \"1\" for this \"--threading\" value.");
 	}
 #endif
 
-	if(ctx.flags[STANDBYFILE] && (ctx.flags[MODE] == MODE_SIMPLE)) {
+	if(ctx_p->flags[STANDBYFILE] && (ctx_p->flags[MODE] == MODE_SIMPLE)) {
 		ret = errno = EINVAL;
 		error("Sorry but option \"--standby-file\" cannot be used in mode \"simple\", yet.");
 	}
 
-	if(ctx.flags[THREADING] && ctx.flags[ONLYINITSYNC]) {
+	if(ctx_p->flags[THREADING] && ctx_p->flags[ONLYINITSYNC]) {
 		ret = errno = EINVAL;
 		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--only-initialsync\".");
 	}
 
-	if(ctx.flags[THREADING] && ctx.flags[EXITONNOEVENTS]) {
+	if(ctx_p->flags[THREADING] && ctx_p->flags[EXITONNOEVENTS]) {
 		ret = errno = EINVAL;
 		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--exit-on-no-events\".");
 	}
-	if(ctx.flags[THREADING] && ctx.flags[MAXITERATIONS]) {
+	if(ctx_p->flags[THREADING] && ctx_p->flags[MAXITERATIONS]) {
 		ret = errno = EINVAL;
 		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--max-iterations\".");
 	}
-	if(ctx.flags[SKIPINITSYNC] && ctx.flags[EXITONNOEVENTS]) {
+	if(ctx_p->flags[SKIPINITSYNC] && ctx_p->flags[EXITONNOEVENTS]) {
 		ret = errno = EINVAL;
 		error("Conflicting options: \"--skip-initialsync\" and \"--exit-on-no-events\" cannot be used together.");
 	}
-	if(ctx.flags[ONLYINITSYNC] && ctx.flags[EXITONNOEVENTS]) {
+	if(ctx_p->flags[ONLYINITSYNC] && ctx_p->flags[EXITONNOEVENTS]) {
 		ret = errno = EINVAL;
 		error("Conflicting options: \"--only-initialsync\" and \"--exit-on-no-events\" cannot be used together.");
 	}
 
-	if(ctx.flags[SKIPINITSYNC] && ctx.flags[ONLYINITSYNC]) {
+	if(ctx_p->flags[SKIPINITSYNC] && ctx_p->flags[ONLYINITSYNC]) {
 		ret = errno = EINVAL;
 		error("Conflicting options: \"--skip-initialsync\" and \"--only-initialsync\" cannot be used together.");
 	}
 
-	if(ctx.flags[INITFULL] && ctx.flags[SKIPINITSYNC]) {
+	if(ctx_p->flags[INITFULL] && ctx_p->flags[SKIPINITSYNC]) {
 		ret = errno = EINVAL;
 		error("Conflicting options: \"--full-initialsync\" and \"--skip-initialsync\" cannot be used together.");
 	}
 
-	if(ctx.flags[EXCLUDEMOUNTPOINTS])
-		ctx.flags[ONEFILESYSTEM]=1;
+	if(ctx_p->flags[EXCLUDEMOUNTPOINTS])
+		ctx_p->flags[ONEFILESYSTEM]=1;
 
-	if(ctx.flags[MODE] == MODE_UNSET) {
+	if(ctx_p->flags[MODE] == MODE_UNSET) {
 		ret = errno = EINVAL;
 		error("\"--mode\" is not set.");
 	}
 
-	if(ctx.watchdir == NULL) {
+	if(ctx_p->watchdir == NULL) {
 		ret = errno = EINVAL;
 		error("\"--watchdir\" is not set.");
 	}
 
-	if(ctx.handlerfpath == NULL) {
+	if(ctx_p->handlerfpath == NULL) {
 		ret = errno = EINVAL;
 		error("\"--sync-handler\" path is not set.");
 	}
 /*
-	if(ctx.flags[SYNCHANDLERSO] && ctx.flags[RSYNC]) {
+	if(ctx_p->flags[SYNCHANDLERSO] && ctx_p->flags[RSYNC]) {
 		ret = EINVAL;
 		ret = errno = EINVAL;
 		error("Option \"--rsync\" cannot be used in conjunction with \"--synchandler-so-module\".");
 	}
 */
-//	if(ctx.flags[SYNCHANDLERSO] && (ctx.listoutdir != NULL))
+//	if(ctx_p->flags[SYNCHANDLERSO] && (ctx_p->listoutdir != NULL))
 //		error("Warning: Option \"--dir-lists\" has no effect conjunction with \"--synchandler-so-module\".");
 
-//	if(ctx.flags[SYNCHANDLERSO] && (ctx.destdir != NULL))
+//	if(ctx_p->flags[SYNCHANDLERSO] && (ctx_p->destdir != NULL))
 //		error("Warning: Destination directory argument has no effect conjunction with \"--synchandler-so-module\".");
 
-	if((ctx.flags[MODE] == MODE_RSYNCDIRECT) && (ctx.destdir == NULL)) {
+	if((ctx_p->flags[MODE] == MODE_RSYNCDIRECT) && (ctx_p->destdir == NULL)) {
 		ret = errno = EINVAL;
 		error("Mode \"rsyncdirect\" cannot be used without specifying \"destination directory\".");
 	}
 
 #ifdef CLUSTER_SUPPORT
-	if((ctx.flags[MODE] == MODE_RSYNCDIRECT ) && (ctx.cluster_iface != NULL)) {
+	if((ctx_p->flags[MODE] == MODE_RSYNCDIRECT ) && (ctx_p->cluster_iface != NULL)) {
 		ret = errno = EINVAL;
 		error("Mode \"rsyncdirect\" cannot be used in conjunction with \"--cluster-iface\".");
 	}
 
-	if((ctx.cluster_iface == NULL) && ((ctx.cluster_mcastipaddr != NULL) || (ctx.cluster_nodename != NULL) || (ctx.cluster_timeout) || (ctx.cluster_mcastipport))) {
+	if((ctx_p->cluster_iface == NULL) && ((ctx_p->cluster_mcastipaddr != NULL) || (ctx_p->cluster_nodename != NULL) || (ctx_p->cluster_timeout) || (ctx_p->cluster_mcastipport))) {
 		ret = errno = EINVAL;
 		error("ctx \"--cluster-ip\", \"--cluster-node-name\", \"--cluster_timeout\" and/or \"cluster_ipport\" cannot be used without \"--cluster-iface\".");
 	}
 
-	if(ctx.cluster_hash_dl_min > ctx.cluster_hash_dl_max) {
+	if(ctx_p->cluster_hash_dl_min > ctx_p->cluster_hash_dl_max) {
 		ret = errno = EINVAL;
 		error("\"--cluster-hash-dl-min\" cannot be greater than \"--cluster-hash-dl-max\".");
 	}
 
-	if(ctx.cluster_hash_dl_max > ctx.cluster_scan_dl_max) {
+	if(ctx_p->cluster_hash_dl_max > ctx_p->cluster_scan_dl_max) {
 		ret = errno = EINVAL;
 		error("\"--cluster-hash-dl-max\" cannot be greater than \"--cluster-scan-dl-max\".");
 	}
 
-	if(!ctx.cluster_timeout)
-		ctx.cluster_timeout	    = DEFAULT_CLUSTERTIMEOUT;
-	if(!ctx.cluster_mcastipport)
-		ctx.cluster_mcastipport = DEFAULT_CLUSTERIPPORT;
-	if(!ctx.cluster_mcastipaddr)
-		ctx.cluster_mcastipaddr = DEFAULT_CLUSTERIPADDR;
+	if(!ctx_p->cluster_timeout)
+		ctx_p->cluster_timeout	    = DEFAULT_CLUSTERTIMEOUT;
+	if(!ctx_p->cluster_mcastipport)
+		ctx_p->cluster_mcastipport = DEFAULT_CLUSTERIPPORT;
+	if(!ctx_p->cluster_mcastipaddr)
+		ctx_p->cluster_mcastipaddr = DEFAULT_CLUSTERIPADDR;
 
-	if(ctx.cluster_iface != NULL) {
+	if(ctx_p->cluster_iface != NULL) {
 #ifndef _DEBUG
 		ret = errno = EINVAL;
 		error("Cluster subsystem is not implemented, yet. Sorry.");
 #endif
-		if(ctx.cluster_nodename == NULL) {
+		if(ctx_p->cluster_nodename == NULL) {
 
 			if(!uname(&utsname))
-				ctx.cluster_nodename = utsname.nodename;
+				ctx_p->cluster_nodename = utsname.nodename;
 
-			debug(1, "cluster node name is: %s", ctx.cluster_nodename);
+			debug(1, "cluster node name is: %s", ctx_p->cluster_nodename);
 		}
-		if(ctx.cluster_nodename == NULL) {
+		if(ctx_p->cluster_nodename == NULL) {
 			ret = errno = EINVAL;
 			error("Option \"--cluster-iface\" is set, but \"--cluster-node-name\" is not set and cannot get the nodename with uname().");
 		} else {
-			ctx.cluster_nodename_len = strlen(ctx.cluster_nodename);
+			ctx_p->cluster_nodename_len = strlen(ctx_p->cluster_nodename);
 		}
 	}
 #endif // CLUSTER_SUPPORT
 
-	if (ctx.watchdir != NULL) {
-		char *rwatchdir = realpath(ctx.watchdir, NULL);
+	if (ctx_p->watchdir != NULL) {
+		char *rwatchdir = realpath(ctx_p->watchdir, NULL);
 		if(rwatchdir == NULL) {
-			error("Got error while realpath() on \"%s\" [#0].", ctx.watchdir);
+			error("Got error while realpath() on \"%s\" [#0].", ctx_p->watchdir);
 			ret = errno;
 		}
 
 		stat64_t stat64={0};
-		if(lstat64(ctx.watchdir, &stat64)) {
-			error("Cannot lstat64() on \"%s\"", ctx.watchdir);
+		if(lstat64(ctx_p->watchdir, &stat64)) {
+			error("Cannot lstat64() on \"%s\"", ctx_p->watchdir);
 			if(!ret)
 				ret = errno;
 		} else {
-			if(ctx.flags[EXCLUDEMOUNTPOINTS])
-				ctx.st_dev = stat64.st_dev;
+			if(ctx_p->flags[EXCLUDEMOUNTPOINTS])
+				ctx_p->st_dev = stat64.st_dev;
 			if((stat64.st_mode & S_IFMT) == S_IFLNK) {
 				// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
 				// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
 				// it disables filters, because exclude-list will be empty.
 #ifdef VERYPARANOID
-				error("Watch dir cannot be symlink, but \"%s\" is a symlink.", ctx.watchdir);
+				error("Watch dir cannot be symlink, but \"%s\" is a symlink.", ctx_p->watchdir);
 				ret = EINVAL;
 #else
 				char *watchdir_resolved_part = xcalloc(1, PATH_MAX+2);
-				ssize_t r = readlink(ctx.watchdir, watchdir_resolved_part, PATH_MAX+1);
+				ssize_t r = readlink(ctx_p->watchdir, watchdir_resolved_part, PATH_MAX+1);
 	
 				if(r>=PATH_MAX) {	// TODO: check if it's possible
 					ret = errno = EINVAL;
-					error("Too long file path resolved from symbolic link \"%s\"", ctx.watchdir);
+					error("Too long file path resolved from symbolic link \"%s\"", ctx_p->watchdir);
 				} else
 				if(r<0) {
-					error("Cannot resolve symbolic link \"%s\": readlink() error", ctx.watchdir);
+					error("Cannot resolve symbolic link \"%s\": readlink() error", ctx_p->watchdir);
 					ret = EINVAL;
 				} else {
 					char *watchdir_resolved;
 #ifdef VERYPARANOID
-					if(ctx.watchdirsize)
-						if(ctx.watchdir != NULL)
-							free(ctx.watchdir);
+					if(ctx_p->watchdirsize)
+						if(ctx_p->watchdir != NULL)
+							free(ctx_p->watchdir);
 #endif
 
 					size_t watchdir_resolved_part_len = strlen(watchdir_resolved_part);
-					ctx.watchdirsize = watchdir_resolved_part_len+1;	// Not true for case of relative symlink
+					ctx_p->watchdirsize = watchdir_resolved_part_len+1;	// Not true for case of relative symlink
 					if(*watchdir_resolved_part == '/') {
 						// Absolute symlink
-						watchdir_resolved = malloc(ctx.watchdirsize);
-						memcpy(watchdir_resolved, watchdir_resolved_part, ctx.watchdirsize);
+						watchdir_resolved = malloc(ctx_p->watchdirsize);
+						memcpy(watchdir_resolved, watchdir_resolved_part, ctx_p->watchdirsize);
 					} else {
 						// Relative symlink :(
-						char *rslash = strrchr(ctx.watchdir, '/');
+						char *rslash = strrchr(ctx_p->watchdir, '/');
 
 						char *watchdir_resolved_rel  = xmalloc(PATH_MAX+2);
-						size_t watchdir_resolved_rel_len = rslash-ctx.watchdir + 1;
-						memcpy(watchdir_resolved_rel, ctx.watchdir, watchdir_resolved_rel_len);
+						size_t watchdir_resolved_rel_len = rslash-ctx_p->watchdir + 1;
+						memcpy(watchdir_resolved_rel, ctx_p->watchdir, watchdir_resolved_rel_len);
 						memcpy(&watchdir_resolved_rel[watchdir_resolved_rel_len], watchdir_resolved_part, watchdir_resolved_part_len+1);
 
 						watchdir_resolved = realpath(watchdir_resolved_rel, NULL);
@@ -1428,8 +1427,8 @@ int main(int argc, char *argv[]) {
 					}
 
 					
-					debug(1, "Symlink resolved: watchdir \"%s\" -> \"%s\"", ctx.watchdir, watchdir_resolved);
-					ctx.watchdir = watchdir_resolved;
+					debug(1, "Symlink resolved: watchdir \"%s\" -> \"%s\"", ctx_p->watchdir, watchdir_resolved);
+					ctx_p->watchdir = watchdir_resolved;
 				}
 				free(watchdir_resolved_part);
 #endif // VERYPARANOID else
@@ -1437,12 +1436,12 @@ int main(int argc, char *argv[]) {
 		}
 
 		if(!ret) {
-			ctx.watchdir     = rwatchdir;
-			ctx.watchdirlen  = strlen(ctx.watchdir);
-			ctx.watchdirsize = ctx.watchdirlen;
+			ctx_p->watchdir     = rwatchdir;
+			ctx_p->watchdirlen  = strlen(ctx_p->watchdir);
+			ctx_p->watchdirsize = ctx_p->watchdirlen;
 
 #ifdef VERYPARANOID
-			if(ctx.watchdirlen == 1) {
+			if(ctx_p->watchdirlen == 1) {
 				ret = errno = EINVAL;
 				error("Very-Paranoid: --watch-dir is supposed to be not \"/\".");
 			}
@@ -1450,99 +1449,99 @@ int main(int argc, char *argv[]) {
 		}
 
 		if(!ret) {
-			if(ctx.watchdirlen == 1) {
-				ctx.watchdirwslash     = ctx.watchdir;
-				ctx.watchdirwslashsize = 0;
-				ctx.watchdir_dirlevel  = 0;
+			if(ctx_p->watchdirlen == 1) {
+				ctx_p->watchdirwslash     = ctx_p->watchdir;
+				ctx_p->watchdirwslashsize = 0;
+				ctx_p->watchdir_dirlevel  = 0;
 			} else {
-				size_t size = ctx.watchdirlen + 2;
+				size_t size = ctx_p->watchdirlen + 2;
 				char *newwatchdir = xmalloc(size);
-				memcpy( newwatchdir, ctx.watchdir, ctx.watchdirlen);
-				ctx.watchdirwslash     = newwatchdir;
-				ctx.watchdirwslashsize = size;
-				memcpy(&ctx.watchdirwslash[ctx.watchdirlen], "/", 2);
+				memcpy( newwatchdir, ctx_p->watchdir, ctx_p->watchdirlen);
+				ctx_p->watchdirwslash     = newwatchdir;
+				ctx_p->watchdirwslashsize = size;
+				memcpy(&ctx_p->watchdirwslash[ctx_p->watchdirlen], "/", 2);
 
-				ctx.watchdir_dirlevel  = fileutils_calcdirlevel(ctx.watchdirwslash);
+				ctx_p->watchdir_dirlevel  = fileutils_calcdirlevel(ctx_p->watchdirwslash);
 			}
 		}
 	}
 
-	if((ctx.destdir != NULL) && (ctx.destproto == NULL)) {	// "ctx.destproto == NULL" means "no protocol"/"local directory"
-		char *rdestdir = realpath(ctx.destdir, NULL);
+	if((ctx_p->destdir != NULL) && (ctx_p->destproto == NULL)) {	// "ctx_p->destproto == NULL" means "no protocol"/"local directory"
+		char *rdestdir = realpath(ctx_p->destdir, NULL);
 		if(rdestdir == NULL) {
-			error("Got error while realpath() on \"%s\" [#1].", ctx.destdir);
+			error("Got error while realpath() on \"%s\" [#1].", ctx_p->destdir);
 			ret = errno;
 		}
 
 		if(!ret) {
-			ctx.destdir     = rdestdir;
-			ctx.destdirlen  = strlen(ctx.destdir);
-			ctx.destdirsize = ctx.destdirlen;
+			ctx_p->destdir     = rdestdir;
+			ctx_p->destdirlen  = strlen(ctx_p->destdir);
+			ctx_p->destdirsize = ctx_p->destdirlen;
 
-			if(ctx.destdirlen == 1) {
+			if(ctx_p->destdirlen == 1) {
 				ret = errno = EINVAL;
 				error("destdir is supposed to be not \"/\".");
 			}
 		}
 
 		if(!ret) {
-			size_t size = ctx.destdirlen  + 2;
+			size_t size = ctx_p->destdirlen  + 2;
 			char *newdestdir  = xmalloc(size);
-			memcpy( newdestdir,  ctx.destdir,  ctx.destdirlen);
-			ctx.destdirwslash     = newdestdir;
-			ctx.destdirwslashsize = size;
-			memcpy(&ctx.destdirwslash[ctx.destdirlen], "/", 2);
+			memcpy( newdestdir,  ctx_p->destdir,  ctx_p->destdirlen);
+			ctx_p->destdirwslash     = newdestdir;
+			ctx_p->destdirwslashsize = size;
+			memcpy(&ctx_p->destdirwslash[ctx_p->destdirlen], "/", 2);
 		}
 	} else
-	if (ctx.destproto != NULL)
-		ctx.destdirwslash = ctx.destdir;
+	if (ctx_p->destproto != NULL)
+		ctx_p->destdirwslash = ctx_p->destdir;
 
-	debug(1, "%s [%s] (%p) -> %s [%s]", ctx.watchdir, ctx.watchdirwslash, ctx.watchdirwslash, ctx.destdir?ctx.destdir:"", ctx.destdirwslash?ctx.destdirwslash:"");
+	debug(1, "%s [%s] (%p) -> %s [%s]", ctx_p->watchdir, ctx_p->watchdirwslash, ctx_p->watchdirwslash, ctx_p->destdir?ctx_p->destdir:"", ctx_p->destdirwslash?ctx_p->destdirwslash:"");
 
 	if(
 		(
-			(ctx.flags[MODE]==MODE_RSYNCDIRECT) || 
-			(ctx.flags[MODE]==MODE_RSYNCSHELL)  ||
-			(ctx.flags[MODE]==MODE_RSYNCSO)
-		) && (ctx.listoutdir == NULL)
+			(ctx_p->flags[MODE]==MODE_RSYNCDIRECT) || 
+			(ctx_p->flags[MODE]==MODE_RSYNCSHELL)  ||
+			(ctx_p->flags[MODE]==MODE_RSYNCSO)
+		) && (ctx_p->listoutdir == NULL)
 	) {
 		ret = errno = EINVAL;
 		error("Modes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" cannot be used without \"--lists-dir\".");
 	}
 
 	if(
-		ctx.flags[RSYNCPREFERINCLUDE] && 
+		ctx_p->flags[RSYNCPREFERINCLUDE] && 
 		!(
-			ctx.flags[MODE] == MODE_RSYNCDIRECT ||
-			ctx.flags[MODE] == MODE_RSYNCSHELL  ||
-			ctx.flags[MODE] == MODE_RSYNCSO
+			ctx_p->flags[MODE] == MODE_RSYNCDIRECT ||
+			ctx_p->flags[MODE] == MODE_RSYNCSHELL  ||
+			ctx_p->flags[MODE] == MODE_RSYNCSO
 		)
 	)
 		warning("Option \"--rsyncpreferinclude\" is useless if mode is not \"rsyncdirect\", \"rsyncshell\" or \"rsyncso\".");
 
 	if(
 		(
-			ctx.flags[MODE] == MODE_RSYNCDIRECT ||
-			ctx.flags[MODE] == MODE_RSYNCSHELL  ||
-			ctx.flags[MODE] == MODE_RSYNCSO
+			ctx_p->flags[MODE] == MODE_RSYNCDIRECT ||
+			ctx_p->flags[MODE] == MODE_RSYNCSHELL  ||
+			ctx_p->flags[MODE] == MODE_RSYNCSO
 		)
-		&& ctx.flags[AUTORULESW]
+		&& ctx_p->flags[AUTORULESW]
 	)
 		warning("Option \"--auto-add-rules-w\" in modes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" may cause unexpected problems.");
 
-	if(ctx.listoutdir != NULL) {
+	if(ctx_p->listoutdir != NULL) {
 		struct stat st={0};
 		errno = 0;
-		if(stat(ctx.listoutdir, &st)) {
+		if(stat(ctx_p->listoutdir, &st)) {
 			if(errno == ENOENT) {
-				warning("Directory \"%s\" doesn't exist. Creating it.", ctx.listoutdir);
+				warning("Directory \"%s\" doesn't exist. Creating it.", ctx_p->listoutdir);
 				errno = 0;
-				if(mkdir(ctx.listoutdir, S_IRWXU)) {
-					error("Cannot create directory \"%s\".", ctx.listoutdir);
+				if(mkdir(ctx_p->listoutdir, S_IRWXU)) {
+					error("Cannot create directory \"%s\".", ctx_p->listoutdir);
 					ret = errno;
 				}
 			} else {
-				error("Got error while stat() on \"%s\".", ctx.listoutdir);
+				error("Got error while stat() on \"%s\".", ctx_p->listoutdir);
 				ret = errno;
 			}
 		}
@@ -1550,43 +1549,43 @@ int main(int argc, char *argv[]) {
 			if(st.st_mode & (S_IRWXG|S_IRWXO)) {
 #ifdef PARANOID
 				ret = errno = EACCES;
-				error("Insecure: Others have access to directory \"%s\". Exit.", ctx.listoutdir);
+				error("Insecure: Others have access to directory \"%s\". Exit.", ctx_p->listoutdir);
 #else
-				warning("Insecure: Others have access to directory \"%s\".", ctx.listoutdir);
+				warning("Insecure: Others have access to directory \"%s\".", ctx_p->listoutdir);
 #endif
 			}
 	}
 
 /*
-	if(ctx.flags[HAVERECURSIVESYNC] && (ctx.listoutdir == NULL)) {
+	if(ctx_p->flags[HAVERECURSIVESYNC] && (ctx_p->listoutdir == NULL)) {
 		error("Option \"--dir-lists\" should be set to use option \"--have-recursive-sync\".");
 		ret = EINVAL;
 	}
 */
 
 	if(
-		ctx.flags[HAVERECURSIVESYNC] &&
+		ctx_p->flags[HAVERECURSIVESYNC] &&
 		(
-			ctx.flags[MODE] == MODE_RSYNCDIRECT ||
-			ctx.flags[MODE] == MODE_RSYNCSHELL  ||
-			ctx.flags[MODE] == MODE_RSYNCSO
+			ctx_p->flags[MODE] == MODE_RSYNCDIRECT ||
+			ctx_p->flags[MODE] == MODE_RSYNCSHELL  ||
+			ctx_p->flags[MODE] == MODE_RSYNCSO
 		)
 	) {
 		ret = errno = EINVAL;
 		error("Option \"--have-recursive-sync\" with nodes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" are incompatible.");
 	}
 
-	if(ctx.flags[SYNCLISTSIMPLIFY] && (ctx.listoutdir == NULL)) {
+	if(ctx_p->flags[SYNCLISTSIMPLIFY] && (ctx_p->listoutdir == NULL)) {
 		ret = errno = EINVAL;
 		error("Option \"--dir-lists\" should be set to use option \"--synclist-simplify\".");
 	}
 
 	if(
-		ctx.flags[SYNCLISTSIMPLIFY] && 
+		ctx_p->flags[SYNCLISTSIMPLIFY] && 
 		(
-			ctx.flags[MODE] == MODE_RSYNCDIRECT ||
-			ctx.flags[MODE] == MODE_RSYNCSHELL  ||
-			ctx.flags[MODE] == MODE_RSYNCSO
+			ctx_p->flags[MODE] == MODE_RSYNCDIRECT ||
+			ctx_p->flags[MODE] == MODE_RSYNCSHELL  ||
+			ctx_p->flags[MODE] == MODE_RSYNCSO
 		)
 	) {
 		ret = errno = EINVAL;
@@ -1594,11 +1593,11 @@ int main(int argc, char *argv[]) {
 	}
 
 #ifdef FANOTIFY_SUPPORT
-	if (ctx.flags[MONITOR] == NE_FANOTIFY)
+	if (ctx_p->flags[MONITOR] == NE_FANOTIFY)
 		critical("fanotify is not supported, now!");
 	else
 #endif
-	if (ctx.flags[MONITOR] == NE_UNDEFINED) {
+	if (ctx_p->flags[MONITOR] == NE_UNDEFINED) {
 		ret = errno = EINVAL;
 		error("Required one of next options:"
 #ifdef INOTIFY_SUPPORT
@@ -1610,41 +1609,41 @@ int main(int argc, char *argv[]) {
 		);
 	}
 
-	if (ctx.flags[EXITHOOK]) {
+	if (ctx_p->flags[EXITHOOK]) {
 #ifdef VERYPARANOID
-		if(ctx.exithookfile == NULL) {
+		if(ctx_p->exithookfile == NULL) {
 			ret = errno = EINVAL;
-			error("ctx.exithookfile == NULL");
+			error("ctx_p->exithookfile == NULL");
 		} else 
 #endif
 		{
-			if(access(ctx.exithookfile, X_OK) == -1) {
-				error("\"%s\" is not executable.", ctx.exithookfile);
+			if(access(ctx_p->exithookfile, X_OK) == -1) {
+				error("\"%s\" is not executable.", ctx_p->exithookfile);
 				if(!ret)
 					ret = errno;
 			}
 		}
 	}
 
-	if (ctx.handlerfpath != NULL)
-		if (access(ctx.handlerfpath, X_OK) == -1) {
-			error("\"%s\" is not executable.", ctx.handlerfpath);
+	if (ctx_p->handlerfpath != NULL)
+		if (access(ctx_p->handlerfpath, X_OK) == -1) {
+			error("\"%s\" is not executable.", ctx_p->handlerfpath);
 			if (!ret)
 				ret = errno;
 		}
 
-	nret=main_rehash(&ctx);
+	nret=main_rehash(ctx_p);
 	if(nret)
 		ret = nret;
 
-	if(ctx.flags[BACKGROUND]) {
+	if(ctx_p->flags[BACKGROUND]) {
 		nret = becomedaemon();
 		if(nret)
 			ret = nret;
 	}
 
 #ifdef HAVE_CAPABILITIES
-	if(ctx.flags[CAP_PRESERVE_FILEACCESS]) {
+	if(ctx_p->flags[CAP_PRESERVE_FILEACCESS]) {
 		// Doesn't work, yet :(
 		//
 		// Error: Cannot inotify_add_watch() on "/home/xaionaro/clsync/examples/testdir/from": Permission denied (errno: 13).
@@ -1691,31 +1690,31 @@ int main(int argc, char *argv[]) {
 preserve_fileaccess_end:
 #endif
 
-	if(ctx.flags[UID]) {
-		if(setuid(ctx.uid)) {
-			error("Cannot setuid(%u)", ctx.uid);
+	if(ctx_p->flags[UID]) {
+		if(setuid(ctx_p->uid)) {
+			error("Cannot setuid(%u)", ctx_p->uid);
 			ret = errno;
 		}
 	}
 
-	if(ctx.flags[GID]) {
-		if(setuid(ctx.gid)) {
-			error("Cannot setgid(%u)", ctx.gid);
+	if(ctx_p->flags[GID]) {
+		if(setuid(ctx_p->gid)) {
+			error("Cannot setgid(%u)", ctx_p->gid);
 			ret = errno;
 		}
 	}
 
-	if(ctx.pidfile != NULL) {
+	if(ctx_p->pidfile != NULL) {
 		pid_t pid = getpid();
-		FILE *pidfile = fopen(ctx.pidfile, "w");
+		FILE *pidfile = fopen(ctx_p->pidfile, "w");
 		if(pidfile == NULL) {
 			error("Cannot open file \"%s\" to write a pid there",
-				ctx.pidfile);
+				ctx_p->pidfile);
 			ret = errno;
 		} else {
 			if(fprintf(pidfile, "%u", pid) < 0) {
 				error("Cannot write pid into file \"%s\"",
-					ctx.pidfile);
+					ctx_p->pidfile);
 				ret = errno;
 			}
 			fclose(pidfile);
@@ -1726,40 +1725,41 @@ preserve_fileaccess_end:
 
 	// == RUNNING ==
 	if(ret == 0)
-		ret = sync_run(&ctx);
+		ret = sync_run(ctx_p);
 	// == RUNNING ==
 
-	if(ctx.pidfile != NULL) {
-		if(unlink(ctx.pidfile)) {
+	if(ctx_p->pidfile != NULL) {
+		if(unlink(ctx_p->pidfile)) {
 			error("Cannot unlink pidfile \"%s\"",
-				ctx.pidfile);
+				ctx_p->pidfile);
 			ret = errno;
 		}
 	}
 
-	if(ctx.statusfile != NULL) {
-		if(unlink(ctx.statusfile)) {
+	if(ctx_p->statusfile != NULL) {
+		if(unlink(ctx_p->statusfile)) {
 			error("Cannot unlink status file \"%s\"",
-				ctx.statusfile);
+				ctx_p->statusfile);
 			ret = errno;
 		}
 	}
 
-	main_cleanup(&ctx);
+	main_cleanup(ctx_p);
 
-	if(ctx.watchdirsize)
-		free(ctx.watchdir);
+	if(ctx_p->watchdirsize)
+		free(ctx_p->watchdir);
 
-	if(ctx.watchdirwslashsize)
-		free(ctx.watchdirwslash);
+	if(ctx_p->watchdirwslashsize)
+		free(ctx_p->watchdirwslash);
 
-	if(ctx.destdirsize)
-		free(ctx.destdir);
+	if(ctx_p->destdirsize)
+		free(ctx_p->destdir);
 
-	if(ctx.destdirwslashsize)
-		free(ctx.destdirwslash);
+	if(ctx_p->destdirwslashsize)
+		free(ctx_p->destdirwslash);
 
-	options_cleanup(&ctx);
+	options_cleanup(ctx_p);
+	free(ctx_p);
 	debug(1, "finished, exitcode: %i: %s.", ret, strerror(ret));
 	return ret;
 }
