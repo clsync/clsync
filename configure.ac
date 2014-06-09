@@ -18,7 +18,17 @@ PKG_INSTALLDIR
 AC_CANONICAL_HOST
 
 m4_include(m4/ax_pthread.m4)
-AX_PTHREAD
+AX_PTHREAD(
+	[
+		CC="$PTHREAD_CC"
+		LIBS="$LIBS $PTHREAD_LIBS"
+		CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
+		LDFLAGS="$LDFLAGS $PTHREAD_LDFLAGS"
+	], [
+		AC_MSG_ERROR([Pthread library not found. Please set PTHREAD_CFLAGS and PTHREAD_LIBS correctly for your setup])
+	]
+)
+
 
 HAVE_BACKTRACE=1
 case $host_os in
