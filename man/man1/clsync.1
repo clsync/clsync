@@ -44,6 +44,13 @@ will be substituted with previously set value of option
 (see 
 .BR "CONFIGURATION FILE" )
 
+To set
+.I sync\-handler\-arguments
+in config file use '--'. An example:
+.RS
+-- = -aH --exclude-from %EXCLUDE-LIST% --include-from=%INCLUDE-LIST% --exclude '*' %watch-dir%/ %destination-dir%/
+.RE
+
 .B \-W, \-\-watch\-dir
 .I watch\-dir
 .RS 8
