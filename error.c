@@ -185,6 +185,7 @@ void _critical(const char *const function_name, const char *fmt, ...) {
 		flushfunct[method](LOG_CRIT);
 	}
 
+#ifdef BACKTRACE_SUPPORT
 	{
 		void  *buf[BACKTRACE_LENGTH];
 		char **strings;
@@ -204,6 +205,7 @@ void _critical(const char *const function_name, const char *fmt, ...) {
 			flushfunct[method](LOG_CRIT);
 		}
 	}
+#endif
 
 	pthread_mutex_unlock(&error_mutex);
 	exit(errno);

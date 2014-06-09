@@ -33,6 +33,9 @@ if HAVE_DTRACEPIPE
 clsync_CFLAGS += -DDTRACEPIPE_SUPPORT
 clsync_SOURCES += mon_dtracepipe.c mon_dtracepipe.h
 endif
+if HAVE_BACKTRACE
+clsync_CFLAGS += -DBACKTRACE_SUPPORT
+endif
 
 if SOCKET
 clsync_SOURCES += socket.c control.c program.h

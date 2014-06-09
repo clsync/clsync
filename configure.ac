@@ -20,10 +20,11 @@ AC_CANONICAL_HOST
 m4_include(m4/ax_pthread.m4)
 AX_PTHREAD
 
+HAVE_BACKTRACE=1
 case $host_os in
 	*bsd*)
 		AC_SEARCH_LIBS([backtrace], [execinfo], [],
-			[AC_MSG_ERROR("Unable to find libexecinfo")])
+			[HAVE_BACKTRACE=])
 		;;
 esac
 
@@ -276,6 +277,7 @@ AM_CONDITIONAL([INOTIFY_OLD],    [test "x$INOTIFY_OLD"     != "x"])
 AM_CONDITIONAL([HAVE_FANOTIFY],  [test "x$HAVE_FANOTIFY"   != "x"])
 AM_CONDITIONAL([HAVE_BSM],       [test "x$HAVE_BSM"        != "x"])
 AM_CONDITIONAL([HAVE_DTRACEPIPE],[test "x$HAVE_DTRACEPIPE" != "x"])
+AM_CONDITIONAL([HAVE_BACKTRACE], [test "x$HAVE_BACKTRACE"  != "x"])
 
 AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' ], [AC_MSG_FAILURE([kqueue, inotify and bsm are not supported on this system])])
 
