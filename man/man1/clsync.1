@@ -7,7 +7,7 @@
 .SH NAME
 clsync \- live sync tool, written in GNU C
 .SH SYNOPSIS
-.B clsync [ ... ] 
+.B clsync [ ... ] -- [ sync\-handler\-arguments ]
 .SH DESCRIPTION
 .B clsync
 executes
@@ -106,8 +106,7 @@ calls
 .IR rsyncdirect
 .RS
 calls rsync by path
-.IR sync\-handler " directly (inflexible and unreliable, should be used only
-as a proof of concept)"
+.IR sync\-handler " directly"
 .RE
 .IR rsyncshell
 .RS
@@ -1045,26 +1044,50 @@ case
 .RS
 Executes for every sync:
 .br
-.I sync\-handler
-\-\-inplace \-aH \-\-delete\-before [\-\-exclude\-from
-.I rsync\-exclude\-listpath
-]
-\-\-include\-from
-.I rsync\-listpath
-\-\-exclude '*'
-.I watch-dir/ dest-dir/
+.I sync\-handler sync\-handler\-arguments
 
-In this case,
 .I sync\-handler
 is supposed to be a path to
 .B rsync
 binary.
 
+Default value for
+.I sync\-handler\-arguments
+is
+
+.RS
+\-aH \-\-delete \-\-exclude\-from %EXCLUDE\-LIST% \-\-include\-from
+%INCLUDE-LIST% --exclude='*' %watch-dir%/ %destination-dir%/
+.RE
+
+if option
+.I \-\-rsync-\-prefer\-include
+is not set and
+
+.RS
+\-aH \-\-delete \-\-include\-from %INCLUDE-LIST% --exclude='*' %watch-dir%/
+%destination-dir%/
+.RE
+
+if the option is set
+
 Error code "24" from
 .I sync\-handler
 will be ignored in this case.
 
-This case is supposed to be used only as a proof of concept.
+Additional substitutions:
+.RS
+%INCLUDE-LIST%
+.RS
+Is replaced by path to include list file
+.RE
+%EXCLUDE-LIST%
+.RS
+Is replaced by path to exclude list file
+.RE
+.RE
+
+Recommended case.
 .RE
 
 case
@@ -1135,7 +1158,7 @@ be able to kill the child.
 
 See example file "clsync-synchandler-rsyncso.c".
 
-Recommended case. IMHO, this way is the best.
+Recommended case.
 .RE
 
 case

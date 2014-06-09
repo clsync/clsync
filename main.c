@@ -1,7 +1,7 @@
 /*
-    clsync - file tree sync utility based on inotify
+    clsync - file tree sync utility based on inotify/kqueue/bsm
 
-    Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
+    Copyright (C) 2014  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -26,6 +26,7 @@
 #include <grp.h>	// For getgrnam()
 
 #include "error.h"
+#include "stringex.h"
 #include "sync.h"
 #include "malloc.h"
 #include "cluster.h"
@@ -38,6 +39,7 @@ static const struct option long_options[] =
 {
 	{"watch-dir",		required_argument,	NULL,	WATCHDIR},
 	{"sync-handler",	required_argument,	NULL,	SYNCHANDLER},
+	{"--",			required_argument,	NULL,	SYNCHANDLERARGS},
 	{"rules-file",		required_argument,	NULL,	RULESFILE},
 	{"destination-dir",	required_argument,	NULL,	DESTDIR},
 	{"mode",		required_argument,	NULL,	MODE},
@@ -191,7 +193,8 @@ int clsyncapi_getapiversion() {
  * @retval	NULL		On error
  * 
  */
-char *parameter_get(ctx_t *ctx_p, char *variable_name) {
+char *parameter_get(char *variable_name, void *_ctx_p) {
+	ctx_t *ctx_p = _ctx_p;
 	const struct option *long_option_p = long_options;
 	int param_id = -1;
 
@@ -222,7 +225,8 @@ char *parameter_get(ctx_t *ctx_p, char *variable_name) {
  * @retval	NULL		On error
  * 
  */
-char *parameter_expand(ctx_t *ctx_p, char *arg, int ignorewarnings) {
+char *parameter_expand(ctx_t *ctx_p, char *arg, int exceptionflags, char *(*parameter_get)(char *variable_name, void *arg), void *parameter_get_arg) {
+	debug(9, "");
 	char *ret = NULL;
 	size_t ret_size = 0, ret_len = 0;
 
@@ -239,8 +243,12 @@ char *parameter_expand(ctx_t *ctx_p, char *arg, int ignorewarnings) {
 
 		switch (*ptr) {
 			case 0:
+				if (ret == NULL) {
+					debug(3, "Expanding value \"%s\" to \"%s\" (case #1)", arg, arg);
+					return arg;
+				}
 				ret[ret_len] = 0;
-				debug(3, "Expanding value \"%s\" to \"%s\"", arg, ret);
+				debug(3, "Expanding value \"%s\" to \"%s\" (case #0)", arg, ret);
 				free(arg);
 				return ret;
 			case '%': {
@@ -257,24 +265,33 @@ char *parameter_expand(ctx_t *ctx_p, char *arg, int ignorewarnings) {
 					switch (*ptr_nest) {
 						case 0:
 							ret[ret_len] = 0;
-							if (!(ignorewarnings&1))
-								warning("Unexpected end of macro-substitution \"%%%s\" in value \"%s\"; result value is \"%s\"", ptr_nest, arg, ret);
+							if (!(exceptionflags&1))
+								warning("Unexpected end of macro-substitution \"%s\" in value \"%s\"; result value is \"%s\"", ptr, arg, ret);
 							free(arg);
 							return ret;
 						case '%': {
+							char *variable_name;
+							char *variable_value;
+							size_t variable_value_len;
+
 							nest_searching = 0;
-							*ptr_nest = 0;
-							char *variable_name  = &ptr[1];
-							char *variable_value = parameter_get(ctx_p, variable_name);
-							if (variable_value == NULL) {
-								if (!(ignorewarnings&2))
-									warning("Variable \"%s\" is not set (%s)", variable_name, strerror(errno));
+							if (ptr[1] >= 'A' && ptr[1] <= 'Z' && (exceptionflags&4)) {	// Lazy substitution, preserving the value
+								variable_value     =  ptr;
+								variable_value_len = (ptr_nest - ptr + 1);
+							} else {							// Substituting
+								*ptr_nest = 0;
+								variable_name  = &ptr[1];
+								variable_value = parameter_get(variable_name, parameter_get_arg);
+								if (variable_value == NULL) {
+									if (!(exceptionflags&2))
+										warning("Variable \"%s\" is not set (%s)", variable_name, strerror(errno));
+									*ptr_nest = '%';
+									errno = 0;
+									break;
+								}
 								*ptr_nest = '%';
-								errno = 0;
-								break;
+								variable_value_len = strlen(variable_value);
 							}
-							*ptr_nest = '%';
-							size_t variable_value_len = strlen(variable_value);
 							if (ret_len+variable_value_len+1 >= ret_size) {
 								ret_size = ret_len+variable_value_len+1 + ALLOC_PORTION;
 								ret      = xrealloc(ret, ret_size);
@@ -302,6 +319,22 @@ char *parameter_expand(ctx_t *ctx_p, char *arg, int ignorewarnings) {
 	return arg;
 }
 
+static int synchandler_arg(char *arg, size_t arg_len, void *_ctx_p) {
+	ctx_t *ctx_p = _ctx_p;
+	debug(9, "(\"%s\", %u, %p)", arg, arg_len, _ctx_p);
+
+	if (ctx_p->synchandler_argc >= MAXARGUMENTS-2) {
+		errno = E2BIG;
+		error("There're too many sync-handler arguments "
+			"(%u > "XTOSTR(MAXARGUMENTS-2)"; arg == \"%s\").",
+			arg);
+		return errno;
+	}
+
+	ctx_p->synchandler_argv[ctx_p->synchandler_argc++] = arg;
+	return 0;
+}
+
 int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t paramsource) {
 #ifdef _DEBUG
 	fprintf(stderr, "Force-Debug: parse_parameter(): %i: %i = \"%s\"\n", paramsource, param_id, arg);
@@ -325,7 +358,8 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 	}
 
 	if (arg != NULL) {
-		arg = parameter_expand(ctx_p, arg, 0);
+		if (param_id != SYNCHANDLERARGS)
+			arg = parameter_expand(ctx_p, arg, 0, parameter_get, ctx_p);
 
 		if (ctx_p->flags_values_raw[param_id] != NULL)
 			free(ctx_p->flags_values_raw[param_id]);
@@ -660,6 +694,9 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			}
 			break;
 		}
+		case SYNCHANDLERARGS:
+			str_splitargs(arg, synchandler_arg, ctx_p);
+			break;
 		default:
 			if(arg == NULL)
 				ctx_p->flags[param_id]++;
@@ -682,7 +719,7 @@ int arguments_parse(int argc, char *argv[], struct ctx *ctx_p) {
 	char *optstring_ptr = optstring;
 
 	const struct option *lo_ptr = long_options;
-	while(lo_ptr->name != NULL) {
+	while (lo_ptr->name != NULL) {
 		if(!(lo_ptr->val & (OPTION_CONFIGONLY|OPTION_LONGOPTONLY))) {
 			*(optstring_ptr++) = lo_ptr->val & 0xff;
 
@@ -702,20 +739,31 @@ int arguments_parse(int argc, char *argv[], struct ctx *ctx_p) {
 #endif
 
 	// Parsing arguments
-	while(1) {
+	while (1) {
 		c = getopt_long(argc, argv, optstring, long_options, &option_index);
 	
 		if (c == -1) break;
 		int ret = parse_parameter(ctx_p, c, optarg == NULL ? NULL : strdup(optarg), PS_ARGUMENT);
-		if(ret) return ret;
+		if (ret) return ret;
 	}
-	if(optind+1 < argc)
-		syntax();
+
+	if (optind < argc) {
+		while (ctx_p->synchandler_argc)
+			free(ctx_p->synchandler_argv[--ctx_p->synchandler_argc]);
+
+		if ((optind+1 != argc) || (*argv[optind])) {	// If there's only "" after the "--", just reset "synchandler_argc" to "0", otherwise:
+			do {
+				if (synchandler_arg(argv[optind++], 0, ctx_p))
+					return errno;
+			} while (optind < argc);
+		}
+	}
 
 	return 0;
 }
 
 void gkf_parse(ctx_t *ctx_p, GKeyFile *gkf) {
+	debug(9, "");
 	char *config_block = ctx_p->config_block;
 	do {
 		const struct option *lo_ptr = long_options;
@@ -758,7 +806,7 @@ int configs_parse(ctx_t *ctx_p) {
 			return 0;
 		}
 
-		debug(1, "Trying config-file \"%s\"", ctx_p->config_path);
+		debug(1, "Trying config-file \"%s\" (case #0)", ctx_p->config_path);
 		if (!g_key_file_load_from_file(gkf, ctx_p->config_path, G_KEY_FILE_NONE, &g_error)) {
 			error("Cannot open/parse file \"%s\" (g_error #%u.%u: %s)", ctx_p->config_path, g_error->domain, g_error->code, g_error->message);
 			g_key_file_free(gkf);
@@ -789,7 +837,7 @@ int configs_parse(ctx_t *ctx_p) {
 			} else 
 				memcpy(config_path_real, *config_path_p, config_path_len+1);
 
-			debug(1, "Trying config-file \"%s\"", config_path_real);
+			debug(1, "Trying config-file \"%s\" (case #1)", config_path_real);
 			if(!g_key_file_load_from_file(gkf, config_path_real, G_KEY_FILE_NONE, NULL)) {
 				debug(1, "Cannot open/parse file \"%s\"", config_path_real);
 				config_path_p++;
@@ -819,6 +867,18 @@ void options_cleanup(ctx_t *ctx_p) {
 		i++;
 	}
 
+#if 0
+	{
+		int i = 0;
+		while (i < ctx_p->synchandler_argc) {
+	// TODO: FIXME: Here's a double "free":
+			free(ctx_p->synchandler_argv[i]);
+			ctx_p->synchandler_argv[i] = NULL;
+			i++;
+		}
+		ctx_p->synchandler_argc = 0;
+	}
+#endif
 	return;
 }
 
@@ -1205,8 +1265,16 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (ctx_p->dump_path == NULL) {
-		ctx_p->dump_path = parameter_expand(ctx_p, strdup(DEFAULT_DUMPDIR), 2);
+		ctx_p->dump_path = parameter_expand(ctx_p, strdup(DEFAULT_DUMPDIR), 2, parameter_get, ctx_p);
 		ctx_p->flags_values_raw[DUMPDIR] = ctx_p->dump_path;
+	}
+
+	{
+		int i = 0;
+		while (i < ctx_p->synchandler_argc) {
+			ctx_p->synchandler_argv[i] = parameter_expand(ctx_p, strdup(ctx_p->synchandler_argv[i]), 4, parameter_get, ctx_p);
+			i++;
+		}
 	}
 
 	debug(4, "debugging flags: %u %u %u %u", ctx_p->flags[OUTPUT_METHOD], ctx_p->flags[QUIET], ctx_p->flags[VERBOSE], ctx_p->flags[DEBUG]);

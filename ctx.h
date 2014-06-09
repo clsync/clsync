@@ -98,6 +98,8 @@ enum flags_enum {
 	CONFIGBLOCKINHERITS	= 18|OPTION_LONGOPTONLY,
 
 	MONITOR			= 19|OPTION_LONGOPTONLY,
+
+	SYNCHANDLERARGS		= 20|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -242,6 +244,9 @@ struct ctx {
 #endif
 	void *indexes_p;
 	void *fsmondata;
+
+	char *synchandler_argv[MAXARGUMENTS];
+	int   synchandler_argc;
 };
 typedef struct ctx ctx_t;
 

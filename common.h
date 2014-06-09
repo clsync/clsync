@@ -187,29 +187,35 @@ struct eventinfo {
 };
 typedef struct eventinfo eventinfo_t;
 
+struct thread_callbackfunct_arg {
+	char *excfpath;
+	char *incfpath;
+};
+typedef struct thread_callbackfunct_arg thread_callbackfunct_arg_t;
 
-typedef int (*thread_callbackfunct_t)(ctx_t *ctx_p, char **argv);
+typedef int (*thread_callbackfunct_t)(ctx_t *ctx_p, thread_callbackfunct_arg_t *arg_p);
 struct threadinfo {
-	int			  thread_num;
-	uint32_t		  iteration;
-	thread_callbackfunct_t 	  callback;
-	char 			**argv;
-	pthread_t		  pthread;
-	int			  exitcode;
-	int			  errcode;
-	state_t			  state;
-	ctx_t			 *ctx_p;
-	time_t			  starttime;
-	time_t			  expiretime;
-	int			  child_pid;
+	int				  thread_num;
+	uint32_t			  iteration;
+	thread_callbackfunct_t 		  callback;
+	thread_callbackfunct_arg_t 	 *callback_arg;
+	char 				**argv;
+	pthread_t			  pthread;
+	int				  exitcode;
+	int				  errcode;
+	state_t				  state;
+	ctx_t				 *ctx_p;
+	time_t				  starttime;
+	time_t				  expiretime;
+	int				  child_pid;
 
-	GHashTable		 *fpath2ei_ht;		// file path -> event information
+	GHashTable			 *fpath2ei_ht;		// file path -> event information
 
-	int			  try_n;
+	int				  try_n;
 
 	// for so-synchandler
-	int			  n;
-	api_eventinfo_t		 *ei;
+	int				  n;
+	api_eventinfo_t			 *ei;
 };
 typedef struct threadinfo threadinfo_t;
 

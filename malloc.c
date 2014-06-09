@@ -24,6 +24,9 @@
 #include "error.h"
 
 void *xmalloc(size_t size) {
+#ifdef _DEBUG
+	debug(20, "(%u)", size);
+#endif
 #ifdef PARANOID
 	size++;	// Just in case
 #endif
@@ -40,6 +43,9 @@ void *xmalloc(size_t size) {
 }
 
 void *xcalloc(size_t nmemb, size_t size) {
+#ifdef _DEBUG
+	debug(20, "(%u, %u)", nmemb, size);
+#endif
 #ifdef PARANOID
 	nmemb++; // Just in case
 	size++;	 // Just in case
@@ -55,6 +61,9 @@ void *xcalloc(size_t nmemb, size_t size) {
 }
 
 void *xrealloc(void *oldptr, size_t size) {
+#ifdef _DEBUG
+	debug(20, "(%p, %u)", oldptr, size);
+#endif
 #ifdef PARANOID
 	size++;	// Just in case
 #endif
