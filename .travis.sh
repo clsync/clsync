@@ -22,7 +22,7 @@ build_test() {
 	$MAKE clean
 	echo ">>> Testing with \"$@\""
 	# make sure we test paralled build as they tend to fail when single works
-	./configure $@ && $MAKE -j5 || {
+	./configure -C $@ && $MAKE -j5 || {
 		echo "!!! test with \"$@\" configure options failed"
 		exit 1
 	}
@@ -50,7 +50,7 @@ run_example() {
 
 	trap run_example_cleanup_failure INT TERM
 	cd examples
-	bash -x clsync-start-"$MODE".sh --background --pid-file "$CLSYNC_PIDFILE" --config-file '/NULL/' -w1 -t1 -d1
+	bash -x clsync-start-"$MODE".sh --background --pid-file "$CLSYNC_PIDFILE" --config-file '/NULL/' -w1 -t1 -d9
 	cd -
 
 	sleep 1
@@ -94,7 +94,7 @@ run_example() {
 	run_example_cleanup_failure "$MODE" "no successful sync"
 }
 
-if true; then
+if false; then
 
 	# Test all possible package-specific configure options.
 	# Do not test empty cases save as no options at all.
