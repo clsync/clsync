@@ -196,6 +196,7 @@ struct ctx {
 	char *standbyfile;
 	char *exithookfile;
 	char *destdir;
+	char *destproto;
 	char *watchdirwslash;
 	char *destdirwslash;
 	char *statusfile;

@@ -537,17 +537,40 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			version();
 			break;
 		case WATCHDIR:
-			ctx_p->watchdir	= arg;
+			ctx_p->watchdir		= arg;
 			break;
 		case SYNCHANDLER:
 			ctx_p->handlerfpath	= arg;
 			break;
 		case RULESFILE:
-			ctx_p->rulfpath	= arg;
+			ctx_p->rulfpath		= arg;
 			break;
-		case DESTDIR:
-			ctx_p->destdir	= arg;
+		case DESTDIR: {
+			char *sep = strstr(arg, "://");
+
+			if (ctx_p->destproto != NULL) {
+				free(ctx_p->destproto);
+				ctx_p->destproto = NULL;
+			}
+
+			if (sep != NULL) {
+				char *ptr = arg;
+				while (ptr < sep) {
+					if (*ptr<'a' || *ptr>'z')
+						break;
+					ptr++;
+				}
+				if (ptr == sep) {
+					size_t len = (ptr-arg)+1;
+					ctx_p->destproto = xmalloc(len+1);
+					memcpy(ctx_p->destproto, arg, len);
+					ctx_p->destproto[len] = 0;
+				}
+			}
+
+			ctx_p->destdir	 = arg;
 			break;
+		}
 		case SOCKETPATH:
 			ctx_p->socketpath	= arg;
 			break;
@@ -1444,7 +1467,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	if(ctx.destdir != NULL) {
+	if((ctx.destdir != NULL) && (ctx.destproto == NULL)) {	// "ctx.destproto == NULL" means "no protocol"/"local directory"
 		char *rdestdir = realpath(ctx.destdir, NULL);
 		if(rdestdir == NULL) {
 			error("Got error while realpath() on \"%s\" [#1].", ctx.destdir);
@@ -1470,7 +1493,9 @@ int main(int argc, char *argv[]) {
 			ctx.destdirwslashsize = size;
 			memcpy(&ctx.destdirwslash[ctx.destdirlen], "/", 2);
 		}
-	}
+	} else
+	if (ctx.destproto != NULL)
+		ctx.destdirwslash = ctx.destdir;
 
 	debug(1, "%s [%s] (%p) -> %s [%s]", ctx.watchdir, ctx.watchdirwslash, ctx.watchdirwslash, ctx.destdir?ctx.destdir:"", ctx.destdirwslash?ctx.destdirwslash:"");
 
