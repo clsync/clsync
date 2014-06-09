@@ -16,21 +16,14 @@ LT_INIT
 PKG_INSTALLDIR
 
 AC_CANONICAL_HOST
+
+m4_include(m4/ax_pthread.m4)
+AX_PTHREAD
+
 case $host_os in
 	*bsd*)
 		AC_SEARCH_LIBS([backtrace], [execinfo], [],
 			[AC_MSG_ERROR("Unable to find libexecinfo")])
-
-		AC_CHECK_LIB(pthread, pthread_create)
-		PTHREAD_LIBS=-pthread
-		AC_SUBST(PTHREAD_LIBS)
-		;;
-
-	linux*)
-		AC_CHECK_LIB([pthread], [pthread_create],
-			[CPPFLAGS+=" -pthread" LDFLAGS+=" -pthread"],
-			[AC_MSG_ERROR("Pthread support is mandatory")])
-
 		;;
 esac
 
@@ -119,8 +112,8 @@ AC_SEARCH_LIBS([dlopen], [dl], [LDFLAGS="${LDFLAGS} -rdynamic"],
 [AC_MSG_ERROR("Unable to find libdl")])
 
 dnl -lrt is needed on < glibc-2.17
-#AC_SEARCH_LIBS([clock_getres], [rt], [],
-#    [AC_MSG_ERROR("Unable to find librt; clock_getres() is needed")])
+AC_SEARCH_LIBS([clock_getres], [rt], [],
+    [AC_MSG_ERROR("Unable to find librt; clock_getres() is needed")])
 
 dnl capabilities check
 AC_ARG_WITH(capabilities,
@@ -277,12 +270,12 @@ esac
 
 AS_IF([test "$HAVE_INOTIFY" != ""], [AC_CHECK_FUNC([inotify_init1], [], [INOTIFY_OLD=1])])
 
-AM_CONDITIONAL([HAVE_KQUEUE],    [test "$HAVE_KQUEUE"     != ""])
-AM_CONDITIONAL([HAVE_INOTIFY],   [test "$HAVE_INOTIFY"    != ""])
-AM_CONDITIONAL([INOTIFY_OLD],    [test "$INOTIFY_OLD"     != ""])
-AM_CONDITIONAL([HAVE_FANOTIFY],  [test "$HAVE_FANOTIFY"   != ""])
-AM_CONDITIONAL([HAVE_BSM],       [test "$HAVE_BSM"        != ""])
-AM_CONDITIONAL([HAVE_DTRACEPIPE],[test "$HAVE_DTRACEPIPE" != ""])
+AM_CONDITIONAL([HAVE_KQUEUE],    [test "x$HAVE_KQUEUE"     != "x"])
+AM_CONDITIONAL([HAVE_INOTIFY],   [test "x$HAVE_INOTIFY"    != "x"])
+AM_CONDITIONAL([INOTIFY_OLD],    [test "x$INOTIFY_OLD"     != "x"])
+AM_CONDITIONAL([HAVE_FANOTIFY],  [test "x$HAVE_FANOTIFY"   != "x"])
+AM_CONDITIONAL([HAVE_BSM],       [test "x$HAVE_BSM"        != "x"])
+AM_CONDITIONAL([HAVE_DTRACEPIPE],[test "x$HAVE_DTRACEPIPE" != "x"])
 
 AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' ], [AC_MSG_FAILURE([kqueue, inotify and bsm are not supported on this system])])
 
