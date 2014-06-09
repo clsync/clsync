@@ -94,7 +94,7 @@ run_example() {
 	run_example_cleanup_failure "$MODE" "no successful sync"
 }
 
-if false; then
+if true; then
 
 	# Test all possible package-specific configure options.
 	# Do not test empty cases save as no options at all.
