@@ -164,14 +164,20 @@ static char *const status_descr[] = {
 
 int syntax() {
 	info("possible options:");
-	int i=0;
-	while(long_options[i].name != NULL) {
-		if(!(long_options[i].val & OPTION_CONFIGONLY))
-			info("\t--%-24s%c%c%s", long_options[i].name, 
-				 long_options[i].val & OPTION_LONGOPTONLY ? ' ' : '-', 
-				 long_options[i].val & OPTION_LONGOPTONLY ? ' ' : long_options[i].val, 
-				(long_options[i].has_arg == required_argument ? " argument" : ""));
-		i++;
+	int i=-1;
+	while (long_options[i++].name != NULL) {
+		switch (long_options[i].val) {
+			case SYNCHANDLERARGS0:
+			case SYNCHANDLERARGS1:
+				continue;
+		}
+		if (long_options[i].val & OPTION_CONFIGONLY)
+			continue;
+
+		info("\t--%-24s%c%c%s", long_options[i].name, 
+				long_options[i].val & OPTION_LONGOPTONLY ? ' ' : '-', 
+				long_options[i].val & OPTION_LONGOPTONLY ? ' ' : long_options[i].val, 
+			(long_options[i].has_arg == required_argument ? " argument" : ""));
 	}
 	exit(EINVAL);
 }
