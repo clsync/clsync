@@ -123,6 +123,9 @@
 
 #define COLLECTDELAY_INSTANT ((unsigned int)~0)
 
+
+#define MSG_SECURITY_PROBLEM "Security problem: argv_free(NULL). Don't use this application until the bug fill be fixed. Report about the problem to: "AUTHOR
+
 #define require_strlen_le(str, limit) \
 	if (strlen(str) >= limit)\
 		critical("length of "TOSTR(str)" (\"%s\") >= "TOSTR(limit));\
@@ -130,7 +133,8 @@
 enum paramsource_enum {
 	PS_UNKNOWN	 = 0,
 	PS_ARGUMENT,
-	PS_CONFIG
+	PS_CONFIG,
+	PS_DEFAULTS,
 };
 typedef enum paramsource_enum paramsource_t;
 
@@ -199,7 +203,7 @@ struct threadinfo {
 	uint32_t			  iteration;
 	thread_callbackfunct_t 		  callback;
 	thread_callbackfunct_arg_t 	 *callback_arg;
-	char 				**argv;
+	char				**argv;
 	pthread_t			  pthread;
 	int				  exitcode;
 	int				  errcode;
@@ -251,6 +255,12 @@ struct dosync_arg {
 	api_eventinfo_t *api_ei;
 	int api_ei_count;
 	char buf[BUFSIZ+1];
+
+// for be read by sync_parameter_get():
+	const char *include_list[MAXARGUMENTS+2];
+	size_t      include_list_count;
+	const char *list_type_str;
+	const char *evmask_str;
 };
 
 struct doubleentry {

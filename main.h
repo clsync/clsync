@@ -19,5 +19,12 @@
 
 extern int main_rehash(ctx_t *ctx_p);
 extern int main_status_update(ctx_t *ctx_p, state_t state);
-extern char *parameter_expand(ctx_t *ctx_p, char *arg, int ignorewarnings, char *(*parameter_get)(char *variable_name, void *arg), void *parameter_get_arg);
-
+extern char *parameter_expand(
+		ctx_t *ctx_p,
+		char *arg,
+		int exceptionflags,
+		int *macros_count_p,
+		int *expand_count_p,
+		const char *(*parameter_get)(const char *variable_name, void *arg),
+		void *parameter_get_arg
+	);

@@ -103,3 +103,31 @@ filesz:1M\n\
 #define DTRACE_PATH			"dtrace"
 
 #define SYSLOG_BUFSIZ			(1<<16)
+
+#define DEFAULT_SYNCHANDLER_ARGS_SIMPLE		"sync \%label\% \%EVENT-MASK\% \%INCLUDE-LIST\%"
+#define DEFAULT_SYNCHANDLER_ARGS_DIRECT		"\%INCLUDE-LIST\% \%destination-dir\%/"
+#define DEFAULT_SYNCHANDLER_ARGS_SHELL_NR	"synclist \%label\% \%INCLUDE-LIST-PATH\%"
+#define DEFAULT_SYNCHANDLER_ARGS_SHELL_R	"initialsync \%label\% \%INCLUDE-LIST\%"
+#define DEFAULT_SYNCHANDLER_ARGS_RDIRECT_E	"-aH --delete --exclude-from \%EXCLUDE-LIST-PATH\% --include-from \%INCLUDE-LIST-PATH\% --exclude=* \%watch-dir\%/ \%destination-dir\%/"
+#define DEFAULT_SYNCHANDLER_ARGS_RDIRECT_I	"-aH --delete --include-from \%INCLUDE-LIST-PATH\% --exclude=* \%watch-dir\%/ \%destination-dir\%/"
+#define DEFAULT_SYNCHANDLER_ARGS_RSHELL_E	"rsynclist \%label% \%INCLUDE-LIST-PATH\% %EXCLUDE-LIST-PATH%"
+#define DEFAULT_SYNCHANDLER_ARGS_RSHELL_I	"rsynclist \%label% \%INCLUDE-LIST-PATH\%"
+
+#define RSYNC_ARGS_E	{ 		\
+		"-aH", 			\
+		"--delete", 		\
+		"--exclude-from",	\
+		"\%EXCLUDE-LIST-PATH\%",\
+		"--include-from",	\
+		"\%INCLUDE-LIST-PATH\%",\
+		"--exclude=*",		\
+		NULL }
+
+#define RSYNC_ARGS_I	{ 		\
+		"-aH", 			\
+		"--delete", 		\
+		"--include-from",	\
+		"\%INCLUDE-LIST-PATH\%",\
+		"--exclude=*",		\
+		NULL }
+

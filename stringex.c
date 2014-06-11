@@ -70,14 +70,15 @@ static int _str_splitargs(
 }
 
 int str_splitargs(
-		char *instr,
+		char *_instr,
 		int (*handler)(char *, size_t, void *),
 		void *arg
 ) {
 	debug(9, "");
-	char *arg_start, *ptr;
+	char *arg_start, *ptr, *instr;
 	int quotes = 0;
 
+	instr     = strdup(_instr);
 	ptr       = instr;
 	arg_start = instr;
 	while (1) {
@@ -145,5 +146,7 @@ int str_splitargs(
 		}
 	}
 
-	return _str_splitargs(strchr(arg_start, 0), &arg_start, quotes, handler, arg);
+	int rc = _str_splitargs(strchr(arg_start, 0), &arg_start, quotes, handler, arg);
+	free(instr);
+	return rc;
 }
