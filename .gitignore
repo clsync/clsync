@@ -54,6 +54,7 @@ tmp
 /config.log
 /config.status
 /config.sub
+/config.cache
 /configure
 /depcomp
 /examples/Makefile
