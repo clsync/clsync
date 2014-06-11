@@ -22,7 +22,7 @@ build_test() {
 	$MAKE clean
 	echo ">>> Testing with \"$@\""
 	# make sure we test paralled build as they tend to fail when single works
-	./configure -C $@ && $MAKE -j5 || {
+	./configure -C $@ || rm -f config.cache && ./configure -C $@ && $MAKE -j5 || {
 		echo "!!! test with \"$@\" configure options failed"
 		exit 1
 	}
