@@ -1027,10 +1027,10 @@ sync
 
 In this case,
 .I sync\-handler
-is supposed to non\-recursively sync file or directory by
-.IR path .
+is supposed to non\-recursively sync file or directory by path
+.IR %INCLUDE\-LIST% .
 With
-.I evmask
+.I %EVENT\-MASK%
 it's passed bitmask of events with the file or directory (see 
 "/usr/include/linux/inotify.h").
 
@@ -1389,40 +1389,6 @@ See example file "clsync-synchandler-so.c".
 
 Recommended case.
 .RE
-
-The
-.I %label%
-see
-.IR \-\-label .
-
-The listfile by path
-.I %INCLUDE\-LIST\-PATH%
-(case
-.BR shell ")"
-contains lines separated by NL (without CR) of next format:
-.RS
-sync
-.I label evmask path
-.RS
-if option
-.I \-\-synclist\-simplify
-is not set
-.RE
-.I path
-.RS
-if option
-.I \-\-synclist\-simplify
-is set
-.RE
-
-Every lines is supposed to be proceed by external syncer to sync file or
-directory by path
-.IR path .
-With
-.I evmask
-it's passed bitmask of events with the file or directory (see
-"/usr/include/linux/inotify.h").
-
 .RE
 
 .SH ENVIRONMENT VARIABLES
