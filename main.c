@@ -396,19 +396,20 @@ static inline int synchandler_arg(char *arg, size_t arg_len, void *_ctx_p, enum 
 	ctx_t *ctx_p = _ctx_p;
 	debug(9, "(\"%s\" [%p], %u, %p, %u)", arg, arg, arg_len, _ctx_p, shargsid);
 
-	if (!strcmp(arg, "RSYNC-ARGS")) {
+	if (!strcmp(arg, "%RSYNC-ARGS%")) {
 		char *args_e[] = RSYNC_ARGS_E, *args_i[] = RSYNC_ARGS_I, **args_p;
+		free(arg);
 
 		args_p = ctx_p->flags[RSYNCPREFERINCLUDE] ? args_i : args_e;
 
 		while (*args_p != NULL) {
 #ifdef VERYPARANOID
-			if (!strcmp(arg, "RSYNC-ARGS")) {
+			if (!strcmp(*args_p, "%RSYNC-ARGS%")) {
 				errno = EINVAL;
 				critical("Infinite recursion detected");
 			}
 #endif
-			if (synchandler_arg(*args_p, strlen(*args_p), ctx_p, shargsid))
+			if (synchandler_arg(strdup(*args_p), strlen(*args_p), ctx_p, shargsid))
 				return errno;
 			args_p++;
 		}
