@@ -165,7 +165,7 @@ static char *const status_descr[] = {
 int syntax() {
 	info("possible options:");
 	int i=-1;
-	while (long_options[i++].name != NULL) {
+	while (long_options[++i].name != NULL) {
 		switch (long_options[i].val) {
 			case SYNCHANDLERARGS0:
 			case SYNCHANDLERARGS1:
