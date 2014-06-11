@@ -47,7 +47,7 @@ will be substituted with previously set value of option
 .I sync\-handler\-arguments
 applies only to modes:
 .RS
-simple, shell, rsyncdirect, rsyncshell
+simple, direct, shell, rsyncdirect, rsyncshell
 .RE
 
 To set
@@ -111,10 +111,17 @@ Sets syncing mode. Possible values:
 calls
 .IR sync\-handler " for every event"
 .RE
+.IR direct
+.RS
+calls
+.IR sync\-handler " for every sync"
+with passing files lists as arguments
+.RE
 .IR shell
 .RS
 calls
 .IR sync\-handler " for every sync"
+with passing files lists in a file
 .RE
 .IR rsyncdirect
 .RS
@@ -994,9 +1001,11 @@ in seven ways. Which way will be used depends on specified mode (see
 .IR \-\-mode )
 
 .I sync\-handler\-arguments
-is used only in modes:
+are used only in modes:
 .RS
 simple
+.br
+direct
 .br
 shell
 .br
