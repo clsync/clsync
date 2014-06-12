@@ -19,6 +19,7 @@ Contents
 11. Support
 12. Developing
 13. Articles
+14. See also
 
 
 1. Name
@@ -282,6 +283,11 @@ Russian:
 - [syncing to many nodes](https://gitlab.ut.mephi.ru/ut/articles/blob/master/clsync/inotify-to-many-nodes)
 - [atomic sync](https://gitlab.ut.mephi.ru/ut/articles/blob/master/clsync/atomicsync)
 
+
+14. See also
+------------
+
+- [lrsync](https://github.com/xaionaro/lrsync)
 
 
                                                -- Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
