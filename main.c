@@ -1910,12 +1910,14 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+#if 0
 	if (ctx_p->handlerfpath != NULL)
 		if (access(ctx_p->handlerfpath, X_OK) == -1) {
 			error("\"%s\" is not executable.", ctx_p->handlerfpath);
 			if (!ret)
 				ret = errno;
 		}
+#endif
 
 	nret=main_rehash(ctx_p);
 	if(nret)
