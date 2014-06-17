@@ -7,7 +7,7 @@
 .SH NAME
 clsync \- live sync tool, written in GNU C
 .SH SYNOPSIS
-.B clsync [ ... ] 
+.B clsync [ ... ] -- [ sync\-handler\-arguments ]
 .SH DESCRIPTION
 .B clsync
 executes
@@ -44,6 +44,19 @@ will be substituted with previously set value of option
 (see 
 .BR "CONFIGURATION FILE" )
 
+.I sync\-handler\-arguments
+applies only to modes:
+.RS
+simple, direct, shell, rsyncdirect, rsyncshell
+.RE
+
+To set
+.I sync\-handler\-arguments
+in config file use '--'. An example:
+.RS
+-- = -aH --exclude-from %EXCLUDE-LIST% --include-from=%INCLUDE-LIST% --exclude '*' %watch-dir%/ %destination-dir%/
+.RE
+ 
 .B \-W, \-\-watch\-dir
 .I watch\-dir
 .RS 8
@@ -98,16 +111,22 @@ Sets syncing mode. Possible values:
 calls
 .IR sync\-handler " for every event"
 .RE
+.IR direct
+.RS
+calls
+.IR sync\-handler " for every sync"
+with passing files lists as arguments
+.RE
 .IR shell
 .RS
 calls
 .IR sync\-handler " for every sync"
+with passing files lists in a file
 .RE
 .IR rsyncdirect
 .RS
 calls rsync by path
-.IR sync\-handler " directly (inflexible and unreliable, should be used only
-as a proof of concept)"
+.IR sync\-handler " directly"
 .RE
 .IR rsyncshell
 .RS
@@ -978,28 +997,96 @@ is only a convenient way to run a syncing script.
 .B clsync
 can run
 .I sync\-handler
-in six ways. Which way will be used depends on specified mode (see
+in seven ways. Which way will be used depends on specified mode (see
 .IR \-\-mode )
+
+.I sync\-handler\-arguments
+are used only in modes:
+.RS
+simple
+.br
+direct
+.br
+shell
+.br
+rsyncdirect
+.br
+rsyncshell
+.RE
+
+If
+.I sync\-handler\-arguments
+are not set then the default setting is used (see below).
 
 case
 .B simple
 .RS
 Executes for every syncing file/dir:
-.br
-.I sync\-handler
+.RS
+.I sync\-handler sync\-handler\-arguments
+.RE
+
+Default
+.I sync\-handler\-arguments
+are:
+.RS
 sync
-.I label evmask path [nodes]
+.I %label% %EVENT\-MASK% %INCLUDE\-LIST%
+.RE
 
 In this case,
 .I sync\-handler
-is supposed to non\-recursively sync file or directory by
-.IR path .
+is supposed to non\-recursively sync file or directory by path
+.IR %INCLUDE\-LIST% .
 With
-.I evmask
+.I %EVENT\-MASK%
 it's passed bitmask of events with the file or directory (see 
 "/usr/include/linux/inotify.h").
 
+Additional substitutions:
+.RS
+.B %EVENT\-MASK%
+.RS
+Is replaced by integer of events IDs.
+.RE
+.B %INCLUDE\-LIST%
+.RS
+Is replaced by the file/dir to be synced
+.RE
+.RE
+
 Not recommended. Not well tested.
+.RE
+
+case
+.B direct
+.RS
+Executes for every sync:
+.RS
+.I sync\-handler sync\-handler\-arguments
+.RE
+
+.I sync\-handler
+is supposed to be a path to
+.BR cp "-like"
+utility.
+
+Default
+.I sync\-handler\-arguments
+are:
+.RS
+%INCLUDE\-LIST% %destination-dir%/
+.RE
+
+Additional substitutions:
+.RS
+.B %INCLUDE\-LIST%
+.RS
+Is replaced by the list of files/dirs to be synced 
+.RE
+.RE
+
+Recommended case.
 .RE
 
 case
@@ -1008,34 +1095,51 @@ case
 Executes for every sync (if 
 .B recursivesync
 is not used instead):
-.br
-.I sync\-handler
-synclist
-.I label listpath [nodes]
+.RS
+.I sync\-handler sync\-handler\-arguments
+.RE
 
-Executes for initial syncs if option
+Default
+.I sync\-handler\-arguments
+are:
+.RS
+synclist %label% %INCLUDE\-LIST\-PATH%
+.RE
+
+Default
+.I sync\-handler\-arguments
+for initial sync if
 .I \-\-have\-recursive\-sync
-is set:
-.br
-.I sync\-handler
-recursivesync
-.I label dirpath [nodes]
+is set are:
+.RS
+initialsync %label% %INCLUDE\-LIST%
+.RE
 
 In this case,
 .I sync\-handler
 is supposed to non\-recursively sync files and directories from list in a file
-by path
-.I listpath
-(see below). With
-.I evmask
-it's passed bitmask of events with the file or directory (see 
-"/usr/include/linux/inotify.h").
+by path %INCLUDE\-LIST\-PATH% on "synclist". 
 
 Also
 .I sync\-handler
 is supposed to recursively sync data from directory by path
-.I dirpath
-with manual excluding extra files.
+%INCLUDE\-LIST\-PATH% with manual excluding extra files on "initialsync".
+
+Additional substitutions:
+.RS
+.B %TYPE%
+.RS
+Is replaced by "sync"/"initialsync".
+.RE
+.B %INCLUDE\-LIST\-PATH%
+.RS
+Is replaced by the path of the include list file
+.RE
+.B %INCLUDE\-LIST%
+.RS
+Is replaced by the list of files/dirs to be synced 
+.RE
+.RE
 
 Not recommended. Not well tested.
 .RE
@@ -1044,44 +1148,77 @@ case
 .B rsyncdirect
 .RS
 Executes for every sync:
-.br
-.I sync\-handler
-\-\-inplace \-aH \-\-delete\-before [\-\-exclude\-from
-.I rsync\-exclude\-listpath
-]
-\-\-include\-from
-.I rsync\-listpath
-\-\-exclude '*'
-.I watch-dir/ dest-dir/
+.RS
+.I sync\-handler sync\-handler\-arguments
+.RE
 
-In this case,
 .I sync\-handler
 is supposed to be a path to
 .B rsync
 binary.
 
+Default
+.I sync\-handler\-arguments
+are:
+.RS
+\-aH \-\-delete \-\-exclude\-from %EXCLUDE\-LIST\-PATH% \-\-include\-from
+%INCLUDE\-LIST\-PATH% --exclude='*' %watch-dir%/ %destination-dir%/
+.RE
+if option
+.I \-\-rsync-\-prefer\-include
+is not set and
+.RS
+\-aH \-\-delete \-\-include\-from %INCLUDE\-LIST\-PATH% --exclude='*'
+%watch-dir%/ %destination-dir%/
+.RE
+if the option is set
+
 Error code "24" from
 .I sync\-handler
-will be ignored in this case.
+will be ignored in this case. We also recommend to ignore exitcode "23".
 
-This case is supposed to be used only as a proof of concept.
+Additional substitutions:
+.RS
+.B %INCLUDE\-LIST\-PATH%
+.RS
+Is replaced by the path of the include list file
+.RE
+.B %EXCLUDE\-LIST\-PATH%
+.RS
+Is replaced by the path of the exclude list file
+.RE
+.B %RSYNC\-ARGS%
+.RS
+Is replaced by default
+.IR sync\-handler\-arguments ", but"
+without "%watch-dir%/ %destination-dir%/"
+.RE
+.RE
+
+Recommended case.
 .RE
 
 case
 .B rsyncshell
 .RS
 Executes for every sync:
-.br
-.I sync\-handler
-rsynclist
-.I label rsync\-listpath [nodes] [rsync\-exclude\-listpath]
+.RS
+.I sync\-handler sync\-handler\-arguments
+.RE
+
+Default
+.I sync\-handler\-arguments
+are:
+.RS
+rsynclist %label% %INCLUDE\-LIST\-PATH% [%EXCLUDE\-LIST\-PATH%]
+.RE
 
 In this case,
 .I sync\-handler
 is supposed to run "rsync" application with parameters: 
 
 \-aH \-\-delete\-before \-\-include\-from
-.I rsync\-listpath
+.I %INCLUDE\-LIST\-PATH%
 \-\-exclude '*'
 
 if option
@@ -1091,14 +1228,26 @@ is enabled.
 And with parameters:
 
 \-aH \-\-delete\-before \-\-exclude\-from
-.I rsync\-exclude\-listpath
+.I %EXCLUDE\-LIST\-PATH%
 \-\-include\-from
-.I rsync\-listpath
+.I %INCLUDE\-LIST\-PATH%
 \-\-exclude '*'
 
 if option
 .I \-\-rsync\-prefer\-include
 is disabled.
+
+Additional substitutions:
+.RS
+.B %INCLUDE\-LIST\-PATH%
+.RS
+Is replaced by the path of the rsync include list file
+.RE
+.B %EXCLUDE\-LIST\-PATH%
+.RS
+Is replaced by the path of the rsync exclude list file
+.RE
+.RE
 
 Recommended case.
 .RE
@@ -1135,7 +1284,7 @@ be able to kill the child.
 
 See example file "clsync-synchandler-rsyncso.c".
 
-Recommended case. IMHO, this way is the best.
+Recommended case.
 .RE
 
 case
@@ -1249,42 +1398,6 @@ See example file "clsync-synchandler-so.c".
 
 Recommended case.
 .RE
-
-About the
-.I label
-see
-.IR \-\-label .
-.br
-.I nodes
-is comma-separated list of cluster nodes names where to sync to (see
-.IR \-\-cluster-node-name )
-
-The listfile by path
-.I listpath
-contains lines separated by NL (without CR) of next format:
-.RS
-sync
-.I label evmask path
-.RS
-if option
-.I \-\-synclist\-simplify
-is not set
-.RE
-.I path
-.RS
-if option
-.I \-\-synclist\-simplify
-is set
-.RE
-
-Every lines is supposed to be proceed by external syncer to sync file or
-directory by path
-.IR path .
-With
-.I evmask
-it's passed bitmask of events with the file or directory (see
-"/usr/include/linux/inotify.h").
-
 .RE
 
 .SH ENVIRONMENT VARIABLES

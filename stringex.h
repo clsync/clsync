@@ -1,7 +1,7 @@
 /*
-    clsync - file tree sync utility based on fanotify and inotify
+    clsync - file tree sync utility based on inotify/kqueue/bsm
 
-    Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
+    Copyright (C) 2014  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -17,14 +17,5 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-extern int main_rehash(ctx_t *ctx_p);
-extern int main_status_update(ctx_t *ctx_p, state_t state);
-extern char *parameter_expand(
-		ctx_t *ctx_p,
-		char *arg,
-		int exceptionflags,
-		int *macros_count_p,
-		int *expand_count_p,
-		const char *(*parameter_get)(const char *variable_name, void *arg),
-		void *parameter_get_arg
-	);
+extern int str_splitargs(const char *const instr, int (*handler)(char *outstr, size_t outstr_len, void *arg), void *arg);
+

@@ -1,7 +1,7 @@
 /*
-    clsync - file tree sync utility based on inotify
+    clsync - file tree sync utility based on inotify/kqueue/bsm
 
-    Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
+    Copyright (C) 2014  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -26,6 +26,7 @@
 #include <grp.h>	// For getgrnam()
 
 #include "error.h"
+#include "stringex.h"
 #include "sync.h"
 #include "malloc.h"
 #include "cluster.h"
@@ -38,6 +39,8 @@ static const struct option long_options[] =
 {
 	{"watch-dir",		required_argument,	NULL,	WATCHDIR},
 	{"sync-handler",	required_argument,	NULL,	SYNCHANDLER},
+	{"--",			required_argument,	NULL,	SYNCHANDLERARGS0},
+	{"---",			required_argument,	NULL,	SYNCHANDLERARGS1},
 	{"rules-file",		required_argument,	NULL,	RULESFILE},
 	{"destination-dir",	required_argument,	NULL,	DESTDIR},
 	{"mode",		required_argument,	NULL,	MODE},
@@ -139,6 +142,7 @@ static char *const output_methods[] = {
 static char *const modes[] = {
 	[MODE_UNSET]		= "",
 	[MODE_SIMPLE]		= "simple",
+	[MODE_DIRECT]		= "direct",
 	[MODE_SHELL]		= "shell",
 	[MODE_RSYNCSHELL]	= "rsyncshell",
 	[MODE_RSYNCDIRECT]	= "rsyncdirect",
@@ -160,14 +164,20 @@ static char *const status_descr[] = {
 
 int syntax() {
 	info("possible options:");
-	int i=0;
-	while(long_options[i].name != NULL) {
-		if(!(long_options[i].val & OPTION_CONFIGONLY))
-			info("\t--%-24s%c%c%s", long_options[i].name, 
-				 long_options[i].val & OPTION_LONGOPTONLY ? ' ' : '-', 
-				 long_options[i].val & OPTION_LONGOPTONLY ? ' ' : long_options[i].val, 
-				(long_options[i].has_arg == required_argument ? " argument" : ""));
-		i++;
+	int i=-1;
+	while (long_options[++i].name != NULL) {
+		switch (long_options[i].val) {
+			case SYNCHANDLERARGS0:
+			case SYNCHANDLERARGS1:
+				continue;
+		}
+		if (long_options[i].val & OPTION_CONFIGONLY)
+			continue;
+
+		info("\t--%-24s%c%c%s", long_options[i].name, 
+				long_options[i].val & OPTION_LONGOPTONLY ? ' ' : '-', 
+				long_options[i].val & OPTION_LONGOPTONLY ? ' ' : long_options[i].val, 
+			(long_options[i].has_arg == required_argument ? " argument" : ""));
 	}
 	exit(EINVAL);
 }
@@ -184,14 +194,15 @@ int clsyncapi_getapiversion() {
 /**
  * @brief 			Gets raw (string) an option value by an option name
  * 
- * @param[in]	ctx_p		Context
+ * @param[in]	_ctx_p		Context
  @ @param[in]	variable_name	The name of the option
  * 
  * @retval	char *		Pointer to newly allocated string, if successful
  * @retval	NULL		On error
  * 
  */
-char *parameter_get(ctx_t *ctx_p, char *variable_name) {
+const char *parameter_get(const char *variable_name, void *_ctx_p) {
+	const ctx_t *ctx_p = _ctx_p;
 	const struct option *long_option_p = long_options;
 	int param_id = -1;
 
@@ -213,16 +224,73 @@ char *parameter_get(ctx_t *ctx_p, char *variable_name) {
 }
 
 /**
- * @brief 			Expands option values, e. g. "/var/log/clsync-%label%.pid" -> "/var/log/clsync-clone.pid"
+ * @brief 			Gets raw (string) an option value by an option name and
+ * 				updates ctx_p->synchandler_argf
  * 
- * @param[in]	ctx_p		Context
- @ @param[in]	arg		Allocated string with unexpanded value. Will be free'd
+ * @param[in]	_ctx_p		Context
+ @ @param[in]	variable_name	The name of the option
  * 
  * @retval	char *		Pointer to newly allocated string, if successful
  * @retval	NULL		On error
  * 
  */
-char *parameter_expand(ctx_t *ctx_p, char *arg, int ignorewarnings) {
+const char *parameter_get_wmacro(const char *variable_name, void *_ctx_p) {
+	ctx_t *ctx_p = _ctx_p;
+	static struct dosync_arg dosync_arg = {0};
+	debug(9, "(\"%s\", %p)", variable_name, _ctx_p);
+
+	if (*variable_name < 'A' || *variable_name > 'Z')
+		return parameter_get(variable_name, _ctx_p);
+
+	if (!strcmp(variable_name, "RSYNC-ARGS")) {
+		ctx_p->synchandler_argf |= SHFL_RSYNC_ARGS;
+		return NULL;
+	}
+	if (!strcmp(variable_name, "INCLUDE-LIST")) {
+		ctx_p->synchandler_argf |= SHFL_INCLUDE_LIST;
+		return NULL;
+	}
+
+	const char *r = sync_parameter_get(variable_name, &dosync_arg);
+
+	if (r == dosync_arg.outf_path) {
+		ctx_p->synchandler_argf |= SHFL_INCLUDE_LIST_PATH;
+		return NULL;
+	}
+
+	if (r == dosync_arg.excf_path) {
+		ctx_p->synchandler_argf |= SHFL_EXCLUDE_LIST_PATH;
+		return NULL;
+	}
+
+	errno = ENOENT;
+	return NULL;
+}
+
+/**
+ * @brief 			Expands option values, e. g. "/var/log/clsync-%label%.pid" -> "/var/log/clsync-clone.pid"
+ * 
+ * @param[in]	ctx_p		Context
+ * @param[in]	arg		An allocated string with unexpanded value. Will be free'd
+ * @param[out]	macro_count_p	A pointer to count of found macro-s
+ * @param[out]	expand_count_p	A pointer to count of expanded macro-s
+ * @param[in]	parameter_get	A function to resolve macro-s
+ * @param[in]	parameter_get_arg An argument to the function
+ * 
+ * @retval	char *		Pointer to newly allocated string, if successful
+ * @retval	NULL		On error
+ * 
+ */
+char *parameter_expand(
+		ctx_t *ctx_p,
+		char *arg,
+		int exceptionflags,
+		int *macro_count_p,
+		int *expand_count_p,
+		const char *(*parameter_get)(const char *variable_name, void *arg),
+		void *parameter_get_arg
+) {
+	debug(9, "(ctx_p, \"%s\" [%p], ...)", arg, arg);
 	char *ret = NULL;
 	size_t ret_size = 0, ret_len = 0;
 
@@ -233,14 +301,23 @@ char *parameter_expand(ctx_t *ctx_p, char *arg, int ignorewarnings) {
 	}
 #endif
 
+	if (macro_count_p != NULL)
+		*macro_count_p  = 0;
+	if (expand_count_p != NULL)
+		*expand_count_p = 0;
+
 	char *ptr = &arg[-1];
 	while (1) {
 		ptr++;
 
 		switch (*ptr) {
 			case 0:
+				if (ret == NULL) {
+					debug(3, "Expanding value \"%s\" to \"%s\" (case #1)", arg, arg);
+					return arg;
+				}
 				ret[ret_len] = 0;
-				debug(3, "Expanding value \"%s\" to \"%s\"", arg, ret);
+				debug(3, "Expanding value \"%s\" to \"%s\" (case #0)", arg, ret);
 				free(arg);
 				return ret;
 			case '%': {
@@ -257,24 +334,43 @@ char *parameter_expand(ctx_t *ctx_p, char *arg, int ignorewarnings) {
 					switch (*ptr_nest) {
 						case 0:
 							ret[ret_len] = 0;
-							if (!(ignorewarnings&1))
-								warning("Unexpected end of macro-substitution \"%%%s\" in value \"%s\"; result value is \"%s\"", ptr_nest, arg, ret);
+							if (!(exceptionflags&1))
+								warning("Unexpected end of macro-substitution \"%s\" in value \"%s\"; result value is \"%s\"", ptr, arg, ret);
 							free(arg);
 							return ret;
 						case '%': {
+							char       *variable_name;
+							const char *variable_value;
+							size_t      variable_value_len;
+
+							if (macro_count_p != NULL)
+								(*macro_count_p)++;
+
 							nest_searching = 0;
-							*ptr_nest = 0;
-							char *variable_name  = &ptr[1];
-							char *variable_value = parameter_get(ctx_p, variable_name);
-							if (variable_value == NULL) {
-								if (!(ignorewarnings&2))
-									warning("Variable \"%s\" is not set (%s)", variable_name, strerror(errno));
+							if (ptr[1] >= 'A' && ptr[1] <= 'Z' && (exceptionflags&4)) {	// Lazy substitution, preserving the value
+								variable_value     =  ptr;
+								variable_value_len = (ptr_nest - ptr + 1);
+								*ptr_nest = 0;
+								variable_name  = &ptr[1];
+								parameter_get(variable_name, parameter_get_arg);
 								*ptr_nest = '%';
-								errno = 0;
-								break;
+							} else {							// Substituting
+								*ptr_nest = 0;
+								variable_name  = &ptr[1];
+								variable_value = parameter_get(variable_name, parameter_get_arg);
+								if (variable_value == NULL) {
+									if (!(exceptionflags&2))
+										warning("Variable \"%s\" is not set (%s)", variable_name, strerror(errno));
+									*ptr_nest = '%';
+									errno = 0;
+									break;
+								}
+								*ptr_nest = '%';
+								variable_value_len = strlen(variable_value);
+
+								if (expand_count_p != NULL)
+									(*expand_count_p)++;
 							}
-							*ptr_nest = '%';
-							size_t variable_value_len = strlen(variable_value);
 							if (ret_len+variable_value_len+1 >= ret_size) {
 								ret_size = ret_len+variable_value_len+1 + ALLOC_PORTION;
 								ret      = xrealloc(ret, ret_size);
@@ -290,8 +386,8 @@ char *parameter_expand(ctx_t *ctx_p, char *arg, int ignorewarnings) {
 			}
 			default: {
 				if (ret_len+2 >= ret_size) {
-					ret_size = ret_len+2 + ALLOC_PORTION;
-					ret      = xrealloc(ret, ret_size);
+					ret_size += ALLOC_PORTION+2;
+					ret       = xrealloc(ret, ret_size);
 				}
 				ret[ret_len++] = *ptr;
 				break;
@@ -302,22 +398,78 @@ char *parameter_expand(ctx_t *ctx_p, char *arg, int ignorewarnings) {
 	return arg;
 }
 
+static inline int synchandler_arg(char *arg, size_t arg_len, void *_ctx_p, enum shargsid shargsid) {
+	ctx_t *ctx_p = _ctx_p;
+	debug(9, "(\"%s\" [%p], %u, %p, %u)", arg, arg, arg_len, _ctx_p, shargsid);
+
+	if (!strcmp(arg, "%RSYNC-ARGS%")) {
+		char *args_e[] = RSYNC_ARGS_E, *args_i[] = RSYNC_ARGS_I, **args_p;
+		free(arg);
+
+		args_p = ctx_p->flags[RSYNCPREFERINCLUDE] ? args_i : args_e;
+
+		while (*args_p != NULL) {
+#ifdef VERYPARANOID
+			if (!strcmp(*args_p, "%RSYNC-ARGS%")) {
+				errno = EINVAL;
+				critical("Infinite recursion detected");
+			}
+#endif
+			if (synchandler_arg(strdup(*args_p), strlen(*args_p), ctx_p, shargsid))
+				return errno;
+			args_p++;
+		}
+		return 0;
+	}
+
+	if (ctx_p->synchandler_args[shargsid].c >= MAXARGUMENTS-2) {
+		errno = E2BIG;
+		error("There're too many sync-handler arguments "
+			"(%u > "XTOSTR(MAXARGUMENTS-2)"; arg == \"%s\").",
+			arg);
+		return errno;
+	}
+
+#ifdef _DEBUG
+	debug(14, "ctx_p->synchandler_args[%u].v[%u] = %p", shargsid, ctx_p->synchandler_args[shargsid].c, arg);
+#endif
+	ctx_p->synchandler_args[shargsid].v[ctx_p->synchandler_args[shargsid].c++] = arg;
+
+	return 0;
+}
+
+static int synchandler_arg0(char *arg, size_t arg_len, void *_ctx_p) {
+	return synchandler_arg(arg, arg_len, _ctx_p, SHARGS_PRIMARY);
+}
+
+static int synchandler_arg1(char *arg, size_t arg_len, void *_ctx_p) {
+	return synchandler_arg(arg, arg_len, _ctx_p, SHARGS_INITIAL);
+}
+
 int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t paramsource) {
 #ifdef _DEBUG
 	fprintf(stderr, "Force-Debug: parse_parameter(): %i: %i = \"%s\"\n", paramsource, param_id, arg);
 #endif
-	switch(paramsource) {
+	switch (paramsource) {
 		case PS_ARGUMENT:
-			if(param_id & OPTION_CONFIGONLY) {
+			if (param_id & OPTION_CONFIGONLY) {
 				syntax();
 				return 0;
 			}
 			ctx_p->flags_set[param_id] = 1;
 			break;
 		case PS_CONFIG:
-			if(ctx_p->flags_set[param_id])
+			if (ctx_p->flags_set[param_id])
 				return 0;
 			ctx_p->flags_set[param_id] = 1;
+			break;
+		case PS_DEFAULTS:
+#ifdef VERYPARANOID
+			if (ctx_p->flags_set[param_id]) {
+				error("Parameter #%i is already set. No need in setting the default value.", param_id);
+				return 0;
+			}
+#endif
 			break;
 		default:
 			error("Warning: Unknown parameter #%i source (value \"%s\").", param_id, arg!=NULL ? arg : "");
@@ -325,7 +477,8 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 	}
 
 	if (arg != NULL) {
-		arg = parameter_expand(ctx_p, arg, 0);
+		if (param_id != SYNCHANDLERARGS0 && param_id != SYNCHANDLERARGS1)
+			arg = parameter_expand(ctx_p, arg, 0, NULL, NULL, parameter_get, ctx_p);
 
 		if (ctx_p->flags_values_raw[param_id] != NULL)
 			free(ctx_p->flags_values_raw[param_id]);
@@ -660,6 +813,12 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			}
 			break;
 		}
+		case SYNCHANDLERARGS0:
+			str_splitargs(arg, synchandler_arg0, ctx_p);
+			break;
+		case SYNCHANDLERARGS1:
+			str_splitargs(arg, synchandler_arg1, ctx_p);
+			break;
 		default:
 			if(arg == NULL)
 				ctx_p->flags[param_id]++;
@@ -682,7 +841,7 @@ int arguments_parse(int argc, char *argv[], struct ctx *ctx_p) {
 	char *optstring_ptr = optstring;
 
 	const struct option *lo_ptr = long_options;
-	while(lo_ptr->name != NULL) {
+	while (lo_ptr->name != NULL) {
 		if(!(lo_ptr->val & (OPTION_CONFIGONLY|OPTION_LONGOPTONLY))) {
 			*(optstring_ptr++) = lo_ptr->val & 0xff;
 
@@ -702,20 +861,33 @@ int arguments_parse(int argc, char *argv[], struct ctx *ctx_p) {
 #endif
 
 	// Parsing arguments
-	while(1) {
+	while (1) {
 		c = getopt_long(argc, argv, optstring, long_options, &option_index);
 	
 		if (c == -1) break;
 		int ret = parse_parameter(ctx_p, c, optarg == NULL ? NULL : strdup(optarg), PS_ARGUMENT);
-		if(ret) return ret;
+		if (ret) return ret;
 	}
-	if(optind+1 < argc)
-		syntax();
+
+	if (optind < argc) {
+		synchandler_args_t *args_p = &ctx_p->synchandler_args[SHARGS_PRIMARY];
+
+		while (args_p->c)
+			free(args_p->v[--args_p->c]);
+
+		if ((optind+1 != argc) || (*argv[optind])) {	// If there's only "" after the "--", just reset "synchandler_argc" to "0", otherwise:
+			do {
+				if (synchandler_arg0(strdup(argv[optind++]), 0, ctx_p))
+					return errno;
+			} while (optind < argc);
+		}
+	}
 
 	return 0;
 }
 
 void gkf_parse(ctx_t *ctx_p, GKeyFile *gkf) {
+	debug(9, "");
 	char *config_block = ctx_p->config_block;
 	do {
 		const struct option *lo_ptr = long_options;
@@ -758,7 +930,7 @@ int configs_parse(ctx_t *ctx_p) {
 			return 0;
 		}
 
-		debug(1, "Trying config-file \"%s\"", ctx_p->config_path);
+		debug(1, "Trying config-file \"%s\" (case #0)", ctx_p->config_path);
 		if (!g_key_file_load_from_file(gkf, ctx_p->config_path, G_KEY_FILE_NONE, &g_error)) {
 			error("Cannot open/parse file \"%s\" (g_error #%u.%u: %s)", ctx_p->config_path, g_error->domain, g_error->code, g_error->message);
 			g_key_file_free(gkf);
@@ -789,7 +961,7 @@ int configs_parse(ctx_t *ctx_p) {
 			} else 
 				memcpy(config_path_real, *config_path_p, config_path_len+1);
 
-			debug(1, "Trying config-file \"%s\"", config_path_real);
+			debug(1, "Trying config-file \"%s\" (case #1)", config_path_real);
 			if(!g_key_file_load_from_file(gkf, config_path_real, G_KEY_FILE_NONE, NULL)) {
 				debug(1, "Cannot open/parse file \"%s\"", config_path_real);
 				config_path_p++;
@@ -808,8 +980,9 @@ int configs_parse(ctx_t *ctx_p) {
 	return 0;
 }
 
-void options_cleanup(ctx_t *ctx_p) {
+void ctx_cleanup(ctx_t *ctx_p) {
 	int i=0;
+	debug(9, "");
 
 	while (i < OPTION_FLAGS) {
 		if (ctx_p->flags_values_raw[i] != NULL) {
@@ -817,6 +990,23 @@ void options_cleanup(ctx_t *ctx_p) {
 			ctx_p->flags_values_raw[i] = NULL;
 		}
 		i++;
+	}
+
+	{
+		int n = 0;
+		while (n < SHARGS_MAX) {
+			int i = 0,  e = ctx_p->synchandler_args[n].c;
+			while (i < e) {
+#ifdef _DEBUG
+				debug(14, "synchandler args: %u, %u: free(%p)", n, i, ctx_p->synchandler_args[n].v[i]);
+#endif
+				free(ctx_p->synchandler_args[n].v[i]);
+				ctx_p->synchandler_args[n].v[i] = NULL;
+				i++;
+			}
+			ctx_p->synchandler_args[n].c = 0;
+			n++;
+		}
 	}
 
 	return;
@@ -1205,8 +1395,55 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (ctx_p->dump_path == NULL) {
-		ctx_p->dump_path = parameter_expand(ctx_p, strdup(DEFAULT_DUMPDIR), 2);
+		ctx_p->dump_path = parameter_expand(ctx_p, strdup(DEFAULT_DUMPDIR), 2, NULL, NULL, parameter_get, ctx_p);
 		ctx_p->flags_values_raw[DUMPDIR] = ctx_p->dump_path;
+	}
+
+	if (!ctx_p->synchandler_args[SHARGS_PRIMARY].c) {
+		char *args_line0 = NULL, *args_line1 = NULL;
+		switch (ctx_p->flags[MODE]) {
+			case MODE_SIMPLE:
+				args_line0 = DEFAULT_SYNCHANDLER_ARGS_SIMPLE;
+				break;
+			case MODE_DIRECT:
+				args_line0 = DEFAULT_SYNCHANDLER_ARGS_DIRECT;
+				break;
+			case MODE_SHELL:
+				args_line0 = DEFAULT_SYNCHANDLER_ARGS_SHELL_NR;
+				args_line1 = DEFAULT_SYNCHANDLER_ARGS_SHELL_R;
+				break;
+			case MODE_RSYNCDIRECT:
+				args_line0 = (ctx_p->flags[RSYNCPREFERINCLUDE]) ? DEFAULT_SYNCHANDLER_ARGS_RDIRECT_I : DEFAULT_SYNCHANDLER_ARGS_RDIRECT_E;
+				break;
+			case MODE_RSYNCSHELL:
+				args_line0 = (ctx_p->flags[RSYNCPREFERINCLUDE]) ? DEFAULT_SYNCHANDLER_ARGS_RSHELL_I  : DEFAULT_SYNCHANDLER_ARGS_RSHELL_E;
+				break;
+		}
+
+		if (args_line0 != NULL)
+			parse_parameter(ctx_p, SYNCHANDLERARGS0, strdup(args_line0), PS_DEFAULTS);
+
+		if (args_line1 != NULL)
+			parse_parameter(ctx_p, SYNCHANDLERARGS1, strdup(args_line1), PS_DEFAULTS);
+	}
+
+	{
+		int n = 0;
+		while (n < SHARGS_MAX) {
+			synchandler_args_t *args_p = &ctx_p->synchandler_args[n++];
+			debug(9, "Custom arguments %u count: %u", n-1, args_p->c);
+			int i = 0;
+			while (i < args_p->c) {
+				int macros_count, expanded;
+
+				args_p->v[i] = parameter_expand(ctx_p, args_p->v[i], 4, &macros_count, &expanded, parameter_get_wmacro, ctx_p);
+
+				debug(12, "args_p->v[%u] == \"%s\" (t: %u; e: %u)", i, args_p->v[i], macros_count, expanded);
+				if (macros_count == expanded)
+					args_p->isexpanded[i]++;
+				i++;
+			}
+		}
 	}
 
 	debug(4, "debugging flags: %u %u %u %u", ctx_p->flags[OUTPUT_METHOD], ctx_p->flags[QUIET], ctx_p->flags[VERBOSE], ctx_p->flags[DEBUG]);
@@ -1498,7 +1735,29 @@ int main(int argc, char *argv[]) {
 
 	debug(1, "%s [%s] (%p) -> %s [%s]", ctx_p->watchdir, ctx_p->watchdirwslash, ctx_p->watchdirwslash, ctx_p->destdir?ctx_p->destdir:"", ctx_p->destdirwslash?ctx_p->destdirwslash:"");
 
-	if(
+
+	switch (ctx_p->flags[MODE]) {
+		case MODE_RSYNCSO:
+			ctx_p->synchandler_argf |= SHFL_EXCLUDE_LIST_PATH;
+			ctx_p->synchandler_argf |= SHFL_INCLUDE_LIST_PATH;
+			break;
+	}
+
+	if (
+		(ctx_p->listoutdir == NULL) && 
+		(
+			ctx_p->synchandler_argf & 
+			(
+				SHFL_INCLUDE_LIST_PATH |
+				SHFL_EXCLUDE_LIST_PATH
+			)
+		)
+	) {
+		ret = errno = EINVAL;
+		error("Variable %%INCLUDE-LIST-PATH%% or %%EXCLUDE-LIST-PATH%% is used but --lists-dir is not set.");
+	}
+
+/*	if(
 		(
 			(ctx_p->flags[MODE]==MODE_RSYNCDIRECT) || 
 			(ctx_p->flags[MODE]==MODE_RSYNCSHELL)  ||
@@ -1507,7 +1766,7 @@ int main(int argc, char *argv[]) {
 	) {
 		ret = errno = EINVAL;
 		error("Modes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" cannot be used without \"--lists-dir\".");
-	}
+	}*/
 
 	if(
 		ctx_p->flags[RSYNCPREFERINCLUDE] && 
@@ -1651,12 +1910,14 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+#if 0
 	if (ctx_p->handlerfpath != NULL)
 		if (access(ctx_p->handlerfpath, X_OK) == -1) {
 			error("\"%s\" is not executable.", ctx_p->handlerfpath);
 			if (!ret)
 				ret = errno;
 		}
+#endif
 
 	nret=main_rehash(ctx_p);
 	if(nret)
@@ -1784,9 +2045,9 @@ preserve_fileaccess_end:
 	if(ctx_p->destdirwslashsize)
 		free(ctx_p->destdirwslash);
 
-	options_cleanup(ctx_p);
-	free(ctx_p);
+	ctx_cleanup(ctx_p);
 	debug(1, "finished, exitcode: %i: %s.", ret, strerror(ret));
+	free(ctx_p);
 	return ret;
 }
 

@@ -98,12 +98,16 @@ enum flags_enum {
 	CONFIGBLOCKINHERITS	= 18|OPTION_LONGOPTONLY,
 
 	MONITOR			= 19|OPTION_LONGOPTONLY,
+
+	SYNCHANDLERARGS0	= 20|OPTION_LONGOPTONLY,
+	SYNCHANDLERARGS1	= 21|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
 enum mode_id {
 	MODE_UNSET	= 0,
 	MODE_SIMPLE,
+	MODE_DIRECT,
 	MODE_SHELL,
 	MODE_RSYNCSHELL,
 	MODE_RSYNCDIRECT,
@@ -174,6 +178,28 @@ struct notifyenginefuncts {
 	int (*add_watch_dir)(struct ctx *ctx_p, struct indexes *indexes_p, const char *const accpath);
 };
 
+enum shflags {
+	SHFL_NONE		= 0x00,
+	SHFL_RSYNC_ARGS		= 0x01,
+	SHFL_INCLUDE_LIST	= 0x02,
+	SHFL_INCLUDE_LIST_PATH	= 0x04,
+	SHFL_EXCLUDE_LIST_PATH	= 0x08,
+};
+typedef enum shflags shflags_t;
+
+enum shargsid {
+	SHARGS_PRIMARY = 0,
+	SHARGS_INITIAL,
+	SHARGS_MAX,
+};
+
+struct synchandler_args {
+	char	*v[MAXARGUMENTS];
+	int	 c;
+	char	 isexpanded[MAXARGUMENTS];
+};
+typedef struct synchandler_args synchandler_args_t;
+
 struct ctx {
 #ifndef LIBCLSYNC
 	uid_t uid;
@@ -242,6 +268,9 @@ struct ctx {
 #endif
 	void *indexes_p;
 	void *fsmondata;
+
+	synchandler_args_t synchandler_args[SHARGS_MAX];
+	shflags_t synchandler_argf;
 };
 typedef struct ctx ctx_t;
 

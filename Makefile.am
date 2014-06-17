@@ -5,8 +5,9 @@ if CLSYNC
 bin_PROGRAMS = clsync
 
 clsync_SOURCES = calc.c cluster.c error.c fileutils.c glibex.c		\
-	indexes.c main.c malloc.c sync.c calc.h cluster.h fileutils.h	\
-	glibex.h main.h port-hacks.h sync.h common.h control.h
+	indexes.c main.c malloc.c stringex.c sync.c calc.h cluster.h	\
+	fileutils.h glibex.h main.h port-hacks.h stringex.h sync.h	\
+	common.h control.h
 
 clsync_CFLAGS = $(AM_CFLAGS)
 

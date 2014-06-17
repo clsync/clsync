@@ -188,7 +188,7 @@ ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rul
 
 	debug(3, "Starting from position %i", i);
 	while(rule_p->mask != RA_NONE) {
-		debug(3, "%i -> %p/%p: type compare: %p, %p -> %p", 
+		debug(3, "%i -> %p/%p: type compare: %p, %p -> %i", 
 				i,
 				(void *)(long)rule_p->perm, (void *)(long)rule_p->mask,
 				(void *)(unsigned long)ftype, (void *)(unsigned long)rule_p->objtype, 
@@ -250,7 +250,7 @@ static inline ruleaction_t rules_getperm(const char *fpath, mode_t st_mode, rule
 }
 
 threadsinfo_t *thread_info() {	// TODO: optimize this
-	static threadsinfo_t threadsinfo={{0},{0},0};
+	static threadsinfo_t threadsinfo={{{{0}}},{{{0}}},0};
 	if(!threadsinfo.mutex_init) {
 		int i=0;
 		while(i < PTHREAD_MUTEX_MAX) {
@@ -641,7 +641,7 @@ static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode ) {
 				argv++;
 			}
 		}
-		if ((err=threadinfo_p->callback(threadinfo_p->ctx_p, threadinfo_p->argv))) {
+		if ((err=threadinfo_p->callback(threadinfo_p->ctx_p, threadinfo_p->callback_arg))) {
 			error("Got error from callback function.", strerror(err), err);
 			threadinfo_p->errcode = err;
 		}
@@ -924,7 +924,25 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 
 // === SYNC_EXEC() === {
 
-#define SYNC_EXEC(...) (SHOULD_THREAD(ctx_p) ? sync_exec_thread : sync_exec)(__VA_ARGS__)
+#define SYNC_EXEC(...)      (SHOULD_THREAD(ctx_p) ? sync_exec_thread      : sync_exec     )(__VA_ARGS__)
+#define SYNC_EXEC_ARGV(...) (SHOULD_THREAD(ctx_p) ? sync_exec_argv_thread : sync_exec_argv)(__VA_ARGS__)
+
+#define debug_argv_dump(level, argv)\
+	if (unlikely(ctx_p->flags[DEBUG] >= level))\
+		argv_dump(level, argv)
+
+static inline void argv_dump(int debug_level, char **argv) {
+#ifdef _DEBUG
+	debug(19, "(%u, %p)", debug_level, argv);
+#endif
+	char **argv_p = argv;
+	while (*argv_p != NULL) {
+		debug(debug_level, "%p: \"%s\"", *argv_p, *argv_p);
+		argv_p++;
+	}
+
+	return;
+}
 
 #define _sync_exec_getargv(argv, firstarg, COPYARG) {\
 	va_list arglist;\
@@ -939,8 +957,6 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 		}\
 		arg = (char *)va_arg(arglist, const char *const);\
 		argv[i] = arg!=NULL ? COPYARG : NULL;\
-\
-		debug(2, "argv[%i] = %s", i, argv[i]);\
 	} while(argv[i++] != NULL);\
 	va_end(arglist);\
 }
@@ -1043,16 +1059,13 @@ pid_t clsyncapi_fork(ctx_t *ctx_p) {
 	return pid;
 }
 
-int sync_exec(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callback, ...) {
+int sync_exec_argv(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callback, thread_callbackfunct_arg_t *callback_arg_p, char **argv) {
 	debug(2, "");
 
-	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
-	memset(argv, 0, sizeof(char *)*MAXARGUMENTS);
+	debug_argv_dump(2, argv);
 
 //	indexes_p->nonthreaded_syncing_fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
 	indexes_p->nonthreaded_syncing_fpath2ei_ht = indexes_p->fpath2ei_ht;
-
-	_sync_exec_getargv(argv, callback, arg);
 
 	int exitcode=0, ret=0, err=0;
 	int try_n=0, try_again;
@@ -1083,7 +1096,7 @@ int sync_exec(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callbac
 	}
 
 	if (callback != NULL) {
-		int nret = callback(ctx_p, argv);
+		int nret = callback(ctx_p, callback_arg_p);
 		if (nret) {
 			error("Got error while callback().");
 			if (!ret) ret=nret;
@@ -1092,12 +1105,25 @@ int sync_exec(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callbac
 
 //	g_hash_table_destroy(indexes_p->nonthreaded_syncing_fpath2ei_ht);
 	indexes_p->nonthreaded_syncing_fpath2ei_ht = NULL;
-	free(argv);
 	return ret;
 }
 
+static inline int sync_exec(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callback, thread_callbackfunct_arg_t *callback_arg_p, ...) {
+	int rc;
+	debug(2, "");
+
+	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
+	memset(argv, 0, sizeof(char *)*MAXARGUMENTS);
+
+	_sync_exec_getargv(argv, callback_arg_p, arg);
+
+	rc = sync_exec_argv(ctx_p, indexes_p, callback, callback_arg_p, argv);
+	free(argv);
+	return rc;
+}
+
 int __sync_exec_thread(threadinfo_t *threadinfo_p) {
-	char **argv			= threadinfo_p->argv;
+	char **argv		= threadinfo_p->argv;
 	ctx_t *ctx_p		= threadinfo_p->ctx_p;
 
 	debug(3, "thread_num == %i; threadinfo_p == %p; i_p->pthread %p; thread %p""", 
@@ -1128,7 +1154,7 @@ int __sync_exec_thread(threadinfo_t *threadinfo_p) {
 
 	g_hash_table_destroy(threadinfo_p->fpath2ei_ht);
 
-	if ((err=thread_exit(threadinfo_p, exec_exitcode ))) {
+	if ((err=thread_exit(threadinfo_p, exec_exitcode))) {
 		exitcode = err;	// This's global variable "exitcode"
 		pthread_kill(pthread_sighandler, SIGTERM);
 	}
@@ -1138,25 +1164,23 @@ int __sync_exec_thread(threadinfo_t *threadinfo_p) {
 	return exec_exitcode;
 }
 
-static inline int sync_exec_thread(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callback, ...) {
+static inline int sync_exec_argv_thread(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callback, thread_callbackfunct_arg_t *callback_arg_p, char **argv) {
 	debug(2, "");
 
-	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
-	memset(argv, 0, sizeof(char *)*MAXARGUMENTS);
-
-	_sync_exec_getargv(argv, callback, strdup(arg));
+	debug_argv_dump(2, argv);
 
 	threadinfo_t *threadinfo_p = thread_new();
 	if (threadinfo_p == NULL)
 		return errno;
 
-	threadinfo_p->try_n       = 0;
-	threadinfo_p->callback    = callback;
-	threadinfo_p->argv        = argv;
-	threadinfo_p->ctx_p       = ctx_p;
-	threadinfo_p->starttime	  = time(NULL);
-	threadinfo_p->fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
-	threadinfo_p->iteration   = ctx_p->iteration_num;
+	threadinfo_p->try_n        = 0;
+	threadinfo_p->callback     = callback;
+	threadinfo_p->callback_arg = callback_arg_p;
+	threadinfo_p->argv         = argv;
+	threadinfo_p->ctx_p        = ctx_p;
+	threadinfo_p->starttime	   = time(NULL);
+	threadinfo_p->fpath2ei_ht  = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
+	threadinfo_p->iteration    = ctx_p->iteration_num;
 
 	if (ctx_p->synctimeout)
 		threadinfo_p->expiretime = threadinfo_p->starttime + ctx_p->synctimeout;
@@ -1167,6 +1191,17 @@ static inline int sync_exec_thread(ctx_t *ctx_p, indexes_t *indexes_p, thread_ca
 	}
 	debug(3, "thread %p", threadinfo_p->pthread);
 	return 0;
+}
+
+static inline int sync_exec_thread(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callback, thread_callbackfunct_arg_t *callback_arg_p, ...) {
+	debug(2, "");
+
+	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS);
+	memset(argv, 0, sizeof(char *)*MAXARGUMENTS);
+
+	_sync_exec_getargv(argv, callback_arg_p, strdup(arg));
+
+	return sync_exec_argv_thread(ctx_p, indexes_p, callback, callback_arg_p, argv);
 }
 
 // } === SYNC_EXEC() ===
@@ -1401,6 +1436,116 @@ l_sync_initialsync_walk_end:
 	return ret;
 }
 
+const char *sync_parameter_get(const char *variable_name, void *_dosync_arg_p) {
+	struct dosync_arg *dosync_arg_p = _dosync_arg_p;
+	ctx_t *ctx_p = dosync_arg_p->ctx_p;
+
+#ifdef _DEBUG
+	debug(15, "(\"%s\", %p): 0x%x", variable_name, _dosync_arg_p, ctx_p == NULL ? 0 : ctx_p->synchandler_argf);
+#endif
+
+	if ((ctx_p == NULL || (ctx_p->synchandler_argf & SHFL_INCLUDE_LIST_PATH)) && !strcmp(variable_name, "INCLUDE-LIST-PATH"))
+		return dosync_arg_p->outf_path;
+	else
+	if ((ctx_p == NULL || (ctx_p->synchandler_argf & SHFL_EXCLUDE_LIST_PATH)) && !strcmp(variable_name, "EXCLUDE-LIST-PATH"))
+		return dosync_arg_p->excf_path;
+	else
+	if (!strcmp(variable_name, "TYPE"))
+		return dosync_arg_p->list_type_str;
+	else
+	if (!strcmp(variable_name, "EVENT-MASK"))
+		return dosync_arg_p->evmask_str;
+
+	errno = ENOENT;
+	return NULL;
+}
+
+static char **sync_customargv(ctx_t *ctx_p, struct dosync_arg *dosync_arg_p, synchandler_args_t *args_p) {
+	int d, s;
+	char **argv = (char **)xcalloc(sizeof(char *), MAXARGUMENTS+2);
+
+	s = d = 0;
+
+	argv[d++] = strdup(ctx_p->handlerfpath);
+	while (s < args_p->c) {
+		char *arg        = args_p->v[s];
+		char  isexpanded = args_p->isexpanded[s];
+		s++;
+#ifdef _DEBUG
+		debug(30, "\"%s\" [%p]", arg, arg);
+#endif
+
+		if (isexpanded) {
+#ifdef _DEBUG
+			debug(19, "\"%s\" [%p] is already expanded, just strdup()-ing it", arg, arg);
+#endif
+			argv[d++] = strdup(arg);
+			continue;
+		}
+
+		if (!strcmp(arg, "%INCLUDE-LIST%")) {
+			int i = 0,              e = dosync_arg_p->include_list_count;
+			const char **include_list = dosync_arg_p->include_list;
+#ifdef _DEBUG
+			debug(19, "INCLUDE-LIST: e == %u; d,s: %u,%u", e, d, s);
+#endif
+			while (i < e) {
+#ifdef PARANOID
+				if (d >= MAXARGUMENTS) {
+					errno = E2BIG;
+					critical("Too many arguments");
+				}
+#endif
+				argv[d++] = parameter_expand(ctx_p, strdup(include_list[i++]), 0, NULL, NULL, sync_parameter_get, dosync_arg_p);
+#ifdef _DEBUG
+				debug(19, "include-list: argv[%u] == %p", d-1, argv[d-1]);
+#endif
+			}
+			continue;
+		}
+
+#ifdef PARANOID
+		if (d >= MAXARGUMENTS) {
+			errno = E2BIG;
+			critical("Too many arguments");
+		}
+#endif
+
+		argv[d] = parameter_expand(ctx_p, strdup(arg), 0, NULL, NULL, sync_parameter_get, dosync_arg_p);
+#ifdef _DEBUG
+		debug(19, "argv[%u] == %p \"%s\"", d, argv[d], argv[d]);
+#endif
+		d++;
+	}
+	argv[d]   = NULL;
+
+#ifdef _DEBUG
+	debug(18, "return %p", argv);
+#endif
+	return argv;
+}
+
+static void argv_free(char **argv) {
+	char **argv_p;
+#ifdef _DEBUG
+	debug(18, "(%p)", argv);
+#endif
+#ifdef VERYPARANOID
+	if (argv == NULL)
+		critical(MSG_SECURITY_PROBLEM);
+#endif
+	argv_p = argv;
+	while (*argv_p != NULL) {
+#ifdef _DEBUG
+		debug(25, "free(%p)", *argv_p);
+#endif
+		free(*(argv_p++));
+	}
+
+	free(argv);
+	return;
+}
+
 static inline int sync_initialsync_cleanup(ctx_t *ctx_p, initsync_t initsync, int ret) {
 	return ret;
 }
@@ -1449,21 +1594,34 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 				ret = so_call_sync(ctx_p, indexes_p, 1, ei);
 				return sync_initialsync_cleanup(ctx_p, initsync, ret);
 			} else {
-				ret = SYNC_EXEC(
-						ctx_p,
-						indexes_p,
-						NULL,
-						ctx_p->handlerfpath, 
-						"initialsync",
-						ctx_p->label,
-						path,
-						NULL
-					);
+
+				struct dosync_arg dosync_arg;
+				synchandler_args_t *args_p;
+
+				args_p = ctx_p->synchandler_args[SHARGS_INITIAL].c ?
+						&ctx_p->synchandler_args[SHARGS_INITIAL] :
+						&ctx_p->synchandler_args[SHARGS_PRIMARY];
+
+				 dosync_arg.ctx_p	       = ctx_p;
+				*dosync_arg.include_list       = path;
+				 dosync_arg.include_list_count = 1;
+				 dosync_arg.list_type_str      = "initialsync";
+				char **argv = sync_customargv(ctx_p, &dosync_arg, args_p);
+				ret = SYNC_EXEC_ARGV(
+					ctx_p,
+					indexes_p,
+					NULL,
+					NULL,
+					argv);
+
+				if (!SHOULD_THREAD(ctx_p))	// If it's a thread then it will free the argv in GC. If not a thread then we have to free right here.
+					argv_free(argv);
+
 				return sync_initialsync_cleanup(ctx_p, initsync, ret);
 			}
 		}
 #ifdef DOXYGEN
-		sync_exec(NULL, NULL); sync_exec_thread(NULL, NULL);
+		sync_exec_argv(NULL, NULL); sync_exec_argv_thread(NULL, NULL);
 #endif
 
 		ret = sync_initialsync_walk(ctx_p, path, indexes_p, queue_id, initsync);
@@ -1705,12 +1863,29 @@ int sync_notify_init(ctx_t *ctx_p) {
 }
 
 static inline int sync_dosync_exec(ctx_t *ctx_p, indexes_t *indexes_p, const char *evmask_str, const char *fpath) {
-	return SYNC_EXEC(ctx_p, indexes_p, NULL, ctx_p->handlerfpath, "sync", ctx_p->label, evmask_str, fpath, NULL);
+	int rc;
+	struct dosync_arg dosync_arg;
+
+	 dosync_arg.ctx_p	       = ctx_p;
+	*dosync_arg.include_list       = fpath;
+	 dosync_arg.include_list_count = 1;
+	 dosync_arg.list_type_str      = "sync";
+	 dosync_arg.evmask_str         = evmask_str;
+
+	char **argv = sync_customargv(ctx_p, &dosync_arg, &ctx_p->synchandler_args[SHARGS_PRIMARY]);
+	rc = SYNC_EXEC_ARGV(
+		ctx_p,
+		indexes_p,
+		NULL, NULL,
+		argv);
+	
+	if (!SHOULD_THREAD(ctx_p))	// If it's a thread then it will free the argv in GC. If not a thread then we have to free right here.
+		argv_free(argv);
+	return rc;
 
 #ifdef DOXYGEN
-	sync_exec(NULL, NULL); sync_exec_thread(NULL, NULL);
+	sync_exec_argv(NULL, NULL); sync_exec_argv_thread(NULL, NULL);
 #endif
-
 }
 
 static int sync_dosync(const char *fpath, uint32_t evmask, ctx_t *ctx_p, indexes_t *indexes_p) {
@@ -1981,7 +2156,7 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 		}
 	
 
-	if ((ctx_p->listoutdir == NULL) && (!(ctx_p->flags[MODE]==MODE_SO))) {
+	if ((ctx_p->listoutdir == NULL) && (!(ctx_p->synchandler_argf & SHFL_INCLUDE_LIST)) && (!(ctx_p->flags[MODE]==MODE_SO))) {
 		debug(3, "calling sync_dosync()");
 		int ret;
 		if((ret=sync_dosync(fpath, evinfo->evmask, ctx_p, indexes_p))) {
@@ -2065,65 +2240,27 @@ gboolean sync_trylocked(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) 
 	return FALSE;
 }
 
-int sync_idle_dosync_collectedevents_cleanup(ctx_t *ctx_p, char **argv) {
+int sync_idle_dosync_collectedevents_cleanup(ctx_t *ctx_p, thread_callbackfunct_arg_t *arg_p) {
+	int ret0 = 0, ret1 = 0;
 	if(ctx_p->flags[DONTUNLINK]) 
 		return 0;
 
-	debug(3, "thread %p", pthread_self());
+	debug(3, "(ctx_p, {inc: %p, exc: %p}) thread %p", arg_p->incfpath, arg_p->excfpath, pthread_self());
 
-	if(ctx_p->flags[MODE] == MODE_RSYNCDIRECT) {
-		int ret0, ret1;
-		if(argv[5] == NULL) {
-			error("Unexpected *argv[] end.");
-			return EINVAL;
-		}
-
-		debug(3, "unlink()-ing \"%s\"", argv[5]);
-		ret0 = unlink(argv[5]);
-
-		if(ctx_p->flags[RSYNCPREFERINCLUDE])
-			return ret0;
-
-		if(argv[7] == NULL) {
-			error("Unexpected *argv[] end.");
-			return EINVAL;
-		}
-
-		debug(3, "unlink()-ing \"%s\"", argv[7]);
-		ret1 = unlink(argv[7]);
-
-		return ret0 == 0 ? ret1 : ret0;
+	if (arg_p->excfpath != NULL) {
+		debug(3, "unlink()-ing exclude-file: \"%s\"", arg_p->excfpath);
+		ret0 = unlink(arg_p->excfpath);
+		free(arg_p->excfpath);
 	}
 
-	if(argv[3] == NULL) {
-		error("Unexpected *argv[] end.");
-		return EINVAL;
+	if (arg_p->incfpath != NULL) {
+		debug(3, "unlink()-ing include-file: \"%s\"", arg_p->incfpath);
+		ret1 = unlink(arg_p->incfpath);
+		free(arg_p->incfpath);
 	}
 
-	int ret0;
-	debug(3, "unlink()-ing \"%s\"", argv[3]);
-	ret0 = unlink(argv[3]);
-
-	if(ctx_p->flags[MODE] == MODE_RSYNCSHELL) {
-		int ret1;
-
-		// There's no exclude file-list if "--rsyncpreferinclude" is enabled, so return
-		if(ctx_p->flags[RSYNCPREFERINCLUDE])
-			return ret0;
-
-		if(argv[4] == NULL) 
-			return ret0;
-
-		if(*argv[4] == 0x00)
-			return ret0;
-
-		debug(3, "unlink()-ing \"%s\"", argv[4]);
-		ret1 = unlink(argv[4]);	// remove exclude list, too
-
-		return ret0 == 0 ? ret1 : ret0;
-	}
-
-	return ret0;
+	free(arg_p);
+	return ret0 ? ret0 : ret1;
 }
 
 void sync_queuesync_wrapper(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
@@ -2418,66 +2555,115 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 
 	debug(3, "Committing the file (flags[MODE] == %i)", ctx_p->flags[MODE]);
 
-	if(
-		(ctx_p->flags[MODE] == MODE_RSYNCDIRECT)	|| 
-		(ctx_p->flags[MODE] == MODE_RSYNCSHELL)	||
+	if (
+		(ctx_p->flags[MODE] == MODE_RSYNCDIRECT) || 
+		(ctx_p->flags[MODE] == MODE_RSYNCSHELL)	 ||
 		(ctx_p->flags[MODE] == MODE_RSYNCSO)
 	)
 		g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, rsync_aggrout, dosync_arg_p);
 
-	if(ctx_p->flags[MODE] != MODE_SO) {
+	if (dosync_arg_p->outf != NULL) {
 		fclose(dosync_arg_p->outf);
 		dosync_arg_p->outf = NULL;
 	}
 
-	if(dosync_arg_p->evcount > 0) {
+	if (dosync_arg_p->evcount > 0) {
+		thread_callbackfunct_arg_t *callback_arg_p;
 
 		debug(3, "%s [%s] (%p) -> %s [%s]", ctx_p->watchdir, ctx_p->watchdirwslash, ctx_p->watchdirwslash, 
 								ctx_p->destdir?ctx_p->destdir:"", ctx_p->destdirwslash?ctx_p->destdirwslash:"");
 
-		if(ctx_p->flags[MODE] == MODE_SO) {
+		if (ctx_p->flags[MODE] == MODE_SO) {
 			api_eventinfo_t *ei = dosync_arg_p->api_ei;
 			return so_call_sync(ctx_p, indexes_p, dosync_arg_p->evcount, ei);
 		}
 
-		if(ctx_p->flags[MODE] == MODE_RSYNCSO) 
+		if (ctx_p->flags[MODE] == MODE_RSYNCSO) 
 			return so_call_rsync(
 				ctx_p, 
 				indexes_p, 
 				dosync_arg_p->outf_path, 
 				*(dosync_arg_p->excf_path) ? dosync_arg_p->excf_path : NULL);
 
-		if(ctx_p->flags[MODE] == MODE_RSYNCDIRECT)
-			return SYNC_EXEC(ctx_p, indexes_p,
-				sync_idle_dosync_collectedevents_cleanup,
-				ctx_p->handlerfpath,
-				"--inplace",
-				"-aH", 
-				"--delete-before",
-				*(dosync_arg_p->excf_path) ? "--exclude-from"		: "--include-from",
-				*(dosync_arg_p->excf_path) ? dosync_arg_p->excf_path	: dosync_arg_p->outf_path,
-				*(dosync_arg_p->excf_path) ? "--include-from"		: "--exclude=*",
-				*(dosync_arg_p->excf_path) ? dosync_arg_p->outf_path	: ctx_p->watchdirwslash,
-				*(dosync_arg_p->excf_path) ? "--exclude=*"		: ctx_p->destdirwslash,
-				*(dosync_arg_p->excf_path) ? ctx_p->watchdirwslash	: NULL,
-				*(dosync_arg_p->excf_path) ? ctx_p->destdirwslash	: NULL,
-				NULL);
+		callback_arg_p = xcalloc(1, sizeof(*callback_arg_p));
 
-		return SYNC_EXEC(ctx_p, indexes_p,
-			sync_idle_dosync_collectedevents_cleanup,
-			ctx_p->handlerfpath,
-			ctx_p->flags[MODE]==MODE_RSYNCSHELL?"rsynclist":"synclist", 
-			ctx_p->label,
-			dosync_arg_p->outf_path,
-			*(dosync_arg_p->excf_path)?dosync_arg_p->excf_path:NULL,
-			NULL);
+		if (ctx_p->synchandler_argf & SHFL_INCLUDE_LIST_PATH)
+			callback_arg_p->incfpath = strdup(dosync_arg_p->outf_path);
+
+		if (ctx_p->synchandler_argf & SHFL_EXCLUDE_LIST_PATH)
+			callback_arg_p->excfpath = strdup(dosync_arg_p->excf_path);
+
+		{
+			int rc;
+			dosync_arg_p->list_type_str =
+				ctx_p->flags[MODE]==MODE_RSYNCDIRECT ||
+				ctx_p->flags[MODE]==MODE_RSYNCSHELL
+					? "rsynclist" : "synclist";
+
+			debug(9, "dosync_arg_p->include_list_count == %u", dosync_arg_p->include_list_count);
+			char **argv = sync_customargv(ctx_p, dosync_arg_p, &ctx_p->synchandler_args[SHARGS_PRIMARY]);
+
+			while (dosync_arg_p->include_list_count)
+				free((char *)dosync_arg_p->include_list[--dosync_arg_p->include_list_count]);
+
+			rc = SYNC_EXEC_ARGV(
+				ctx_p,
+				indexes_p,
+				sync_idle_dosync_collectedevents_cleanup,
+				callback_arg_p,
+				argv);
+
+			if (!SHOULD_THREAD(ctx_p))	// If it's a thread then it will free the argv in GC. If not a thread then we have to free right here.
+				argv_free(argv);
+			return rc;
+		}
 	}
 
 	return 0;
 
 #ifdef DOXYGEN
-	sync_exec(NULL, NULL); sync_exec_thread(NULL, NULL);
+	sync_exec_argv(NULL, NULL);	sync_exec_argv_thread(NULL, NULL);
 #endif
+}
+
+void sync_inclist_rotate(ctx_t *ctx_p, struct dosync_arg *dosync_arg_p) {
+	int ret;
+	char newexc_path[PATH_MAX+1];
+
+	if (ctx_p->synchandler_argf & SHFL_EXCLUDE_LIST_PATH) {
+		// TODO: optimize this out {
+		if ((ret=sync_idle_dosync_collectedevents_uniqfname(ctx_p, newexc_path, "exclist"))) {
+			error("Cannot get unique file name.");
+			exit(ret);
+		}
+		if ((ret=fileutils_copy(dosync_arg_p->excf_path, newexc_path))) {
+			error("Cannot copy file \"%s\" to \"%s\".", dosync_arg_p->excf_path, newexc_path);
+			exit(ret);
+		}
+		// }
+		// That's required to copy excludes' list file for every rsync execution.
+		// The problem appears do to unlink()-ing the excludes' list file on callback function 
+		// "sync_idle_dosync_collectedevents_cleanup()" of every execution.
+	}
+
+	if ((ret=sync_idle_dosync_collectedevents_commitpart(dosync_arg_p))) {
+		error("Cannot commit list-file \"%s\"", dosync_arg_p->outf_path);
+		exit(ret);	// TODO: replace with kill(0, ...);
+	}
+
+	if (ctx_p->synchandler_argf & SHFL_EXCLUDE_LIST_PATH) {
+#ifdef VERYPARANOID
+		require_strlen_le(newexc_path, PATH_MAX);
+#endif
+		strcpy(dosync_arg_p->excf_path, newexc_path);		// TODO: optimize this out
+
+		if ((ret=sync_idle_dosync_collectedevents_listcreate(dosync_arg_p, "list"))) {
+			error("Cannot create new list-file");
+			exit(ret);	// TODO: replace with kill(0, ...);
+		}
+	}
+
+	return;
 }
 
 void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
@@ -2486,7 +2672,7 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 	eventinfo_t *evinfo	   =  (eventinfo_t *)evinfo_gp;
 	//int *evcount_p		  =&dosync_arg_p->evcount;
 	FILE *outf		   =  dosync_arg_p->outf;
-	ctx_t *ctx_p 	   =  dosync_arg_p->ctx_p;
+	ctx_t *ctx_p 		   =  dosync_arg_p->ctx_p;
 	int *linescount_p	   = &dosync_arg_p->linescount;
 	indexes_t *indexes_p 	   =  dosync_arg_p->indexes_p;
 	api_eventinfo_t **api_ei_p = &dosync_arg_p->api_ei;
@@ -2510,12 +2696,34 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 		return;
 	}
 
+	if (ctx_p->synchandler_argf & SHFL_INCLUDE_LIST) {
+		dosync_arg_p->include_list[dosync_arg_p->include_list_count++] = strdup(fpath);
+		if (
+			dosync_arg_p->include_list_count >= 
+				(MAXARGUMENTS - 
+					MAX(
+						ctx_p->synchandler_args[SHARGS_PRIMARY].c,
+						ctx_p->synchandler_args[SHARGS_INITIAL].c
+					)
+				)
+		)
+			sync_inclist_rotate(ctx_p, dosync_arg_p);
+	}
+
+	// Finish if we don't use list files
+	if (!(ctx_p->synchandler_argf &
+		( SHFL_INCLUDE_LIST_PATH | SHFL_EXCLUDE_LIST_PATH ) ))
+
+		return;
+
+	// List files cases:
+
+	// non-RSYNC case
 	if (!(
 		(ctx_p->flags[MODE] == MODE_RSYNCSHELL)	 || 
 		(ctx_p->flags[MODE] == MODE_RSYNCDIRECT) ||
 		(ctx_p->flags[MODE] == MODE_RSYNCSO)
 	)) {
-		// non-RSYNC case
 		if (ctx_p->flags[SYNCLISTSIMPLIFY])
 			fprintf(outf, "%s\n", fpath);
 		else 
@@ -2524,40 +2732,8 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 	}
 
 	// RSYNC case
-	if (ctx_p->rsyncinclimit && (*linescount_p >= ctx_p->rsyncinclimit)) {
-		int ret;
-
-		// TODO: optimize this out {
-		char newexc_path[PATH_MAX+1];
-		if ((ret=sync_idle_dosync_collectedevents_uniqfname(ctx_p, newexc_path, "exclist"))) {
-			error("Cannot get unique file name.");
-			exit(ret);
-		}
-		if ((ret=fileutils_copy(dosync_arg_p->excf_path, newexc_path))) {
-			error("Cannot copy file \"%s\" to \"%s\".", dosync_arg_p->excf_path, newexc_path);
-			exit(ret);
-		}
-		// }
-		// That's required to copy excludes' list file for every rsync execution.
-		// The problem appears do to unlink()-ing the excludes' list file on callback function 
-		// "sync_idle_dosync_collectedevents_cleanup()" of every execution.
-
-		if ((ret=sync_idle_dosync_collectedevents_commitpart(dosync_arg_p))) {
-			error("Cannot commit list-file \"%s\"", dosync_arg_p->outf_path);
-			exit(ret);	// TODO: replace with kill(0, ...);
-		}
-
-#ifdef VERYPARANOID
-		require_strlen_le(newexc_path, PATH_MAX);
-#endif
-		strcpy(dosync_arg_p->excf_path, newexc_path);		// TODO: optimize this out
-
-		if ((ret=sync_idle_dosync_collectedevents_listcreate(dosync_arg_p, "list"))) {
-			error("Cannot create new list-file");
-			exit(ret);	// TODO: replace with kill(0, ...);
-		}
-		outf = dosync_arg_p->outf;
-	}
+	if (ctx_p->rsyncinclimit && (*linescount_p >= ctx_p->rsyncinclimit))
+		sync_inclist_rotate(ctx_p, dosync_arg_p);
 
 	int ret;
 	if ((ret=rsync_listpush(indexes_p, fpath, strlen(fpath), evinfo->flags, linescount_p))) {
@@ -2635,49 +2811,54 @@ int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
 		dosync_arg.api_ei = (api_eventinfo_t *)xmalloc(dosync_arg.evcount * sizeof(*dosync_arg.api_ei));
 	}
 
-	if ((ctx_p->listoutdir != NULL) || (ctx_p->flags[MODE] == MODE_SO)) {
+	{
 		int ret;
+		if ((ctx_p->listoutdir != NULL) || (ctx_p->flags[MODE] == MODE_SO)) {
+			if (!(ctx_p->flags[MODE]==MODE_SO)) {
+				*(dosync_arg.excf_path) = 0x00;
+				if (isrsyncpreferexclude) {
+					if ((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "exclist"))) {
+						error("Cannot create list-file");
+						return ret;
+					}
 
-		if (!(ctx_p->flags[MODE]==MODE_SO)) {
-			*(dosync_arg.excf_path) = 0x00;
-			if (isrsyncpreferexclude) {
-				if ((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "exclist"))) {
+#ifdef PARANOID
+					g_hash_table_remove_all(indexes_p->out_lines_aggr_ht);
+#endif
+					g_hash_table_foreach_remove(indexes_p->exc_fpath_ht, sync_idle_dosync_collectedevents_rsync_exclistpush, &dosync_arg);
+					g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, rsync_aggrout, &dosync_arg);
+					fclose(dosync_arg.outf);
+#ifdef VERYPARANOID
+					require_strlen_le(dosync_arg.outf_path, PATH_MAX);
+#endif
+					strcpy(dosync_arg.excf_path, dosync_arg.outf_path);	// TODO: remove this strcpy()
+				}
+
+				if ((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "list"))) {
 					error("Cannot create list-file");
 					return ret;
 				}
+			}
+		}
+
+
+		if ((ctx_p->listoutdir != NULL) || (ctx_p->flags[MODE] == MODE_SO) || (ctx_p->synchandler_argf & SHFL_INCLUDE_LIST)) {
 
 #ifdef PARANOID
-				g_hash_table_remove_all(indexes_p->out_lines_aggr_ht);
+			g_hash_table_remove_all(indexes_p->out_lines_aggr_ht);
 #endif
-				g_hash_table_foreach_remove(indexes_p->exc_fpath_ht, sync_idle_dosync_collectedevents_rsync_exclistpush, &dosync_arg);
-				g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, rsync_aggrout, &dosync_arg);
-				fclose(dosync_arg.outf);
-#ifdef VERYPARANOID
-				require_strlen_le(dosync_arg.outf_path, PATH_MAX);
-#endif
-				strcpy(dosync_arg.excf_path, dosync_arg.outf_path);	// TODO: remove this strcpy()
-			}
 
-			if ((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "list"))) {
-				error("Cannot create list-file");
+			g_hash_table_foreach(indexes_p->fpath2ei_ht, sync_idle_dosync_collectedevents_listpush, &dosync_arg);
+
+			if ((ret=sync_idle_dosync_collectedevents_commitpart(&dosync_arg))) {
+				error("Cannot submit to sync the list \"%s\"", dosync_arg.outf_path);
+				// TODO: free dosync_arg.api_ei on case of error
+				g_hash_table_remove_all(indexes_p->fpath2ei_ht);
 				return ret;
 			}
-		}
 
-#ifdef PARANOID
-		g_hash_table_remove_all(indexes_p->out_lines_aggr_ht);
-#endif
-
-		g_hash_table_foreach(indexes_p->fpath2ei_ht, sync_idle_dosync_collectedevents_listpush, &dosync_arg);
-
-		if ((ret=sync_idle_dosync_collectedevents_commitpart(&dosync_arg))) {
-			error("Cannot submit to sync the list \"%s\"", dosync_arg.outf_path);
-			// TODO: free dosync_arg.api_ei on case of error
 			g_hash_table_remove_all(indexes_p->fpath2ei_ht);
-			return ret;
 		}
-
-		g_hash_table_remove_all(indexes_p->fpath2ei_ht);
 	}
 
 	if(ctx_p->iteration_num < ~0) // ~0 is the max value for unsigned variables
