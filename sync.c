@@ -2944,20 +2944,20 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
 	long queue_id = 0;
-	while(queue_id < QUEUE_MAX) {
+	while (queue_id < QUEUE_MAX) {
 		queueinfo_t *queueinfo = &ctx_p->_queues[queue_id++];
 
-		if(!queueinfo->stime)
+		if (!queueinfo->stime)
 			continue;
 
-		if(queueinfo->collectdelay == COLLECTDELAY_INSTANT) {
+		if (queueinfo->collectdelay == COLLECTDELAY_INSTANT) {
 			debug(3, "There're events in instant queue (#%i), don't waiting.", queue_id-1);
 			return 0;
 		}
 
 		int qdelay = queueinfo->stime + queueinfo->collectdelay - tm;
 		debug(3, "queue #%i: %i %i %i -> %i", queue_id-1, queueinfo->stime, queueinfo->collectdelay, tm, qdelay);
-		if(qdelay < -(long)ctx_p->syncdelay)
+		if (qdelay < -(long)ctx_p->syncdelay)
 			qdelay = -(long)ctx_p->syncdelay;
 
 		delay = MIN(delay, qdelay);
@@ -2970,7 +2970,7 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 	delay = MAX(delay, synctime_delay);
 	delay = delay > 0 ? delay : 0;
 
-	if(ctx_p->flags[THREADING]) {
+	if (ctx_p->flags[THREADING]) {
 		time_t _thread_nextexpiretime = thread_nextexpiretime();
 		debug(3, "thread_nextexpiretime == %i", _thread_nextexpiretime);
 		if(_thread_nextexpiretime) {
@@ -2982,10 +2982,10 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 		}
 	}
 
-	if((!delay) || (*state_p != STATE_RUNNING))
+	if ((!delay) || (*state_p != STATE_RUNNING))
 		return 0;
 
-	if(ctx_p->flags[EXITONNOEVENTS]) { // zero delay if "--exit-on-no-events" is set
+	if (ctx_p->flags[EXITONNOEVENTS]) { // zero delay if "--exit-on-no-events" is set
 		tv.tv_sec  = 0;
 		tv.tv_usec = 0;
 	} else {
@@ -3000,7 +3000,7 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 	debug(4, "pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
 	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
-	if(*state_p != STATE_RUNNING)
+	if (*state_p != STATE_RUNNING)
 		return 0;
 
 	debug(4, "pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
@@ -3012,7 +3012,7 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
 
-	if((ret == -1) && (errno == EINTR)) {
+	if ((ret == -1) && (errno == EINTR)) {
 		errno = 0;
 		ret   = 0;
 	}
@@ -3020,8 +3020,13 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 	debug(4, "pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
 	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
-	if((ctx_p->flags[EXITONNOEVENTS]) && (ret == 0)) // if not events and "--exit-on-no-events" is set
-		*state_p = STATE_EXIT;
+	if ((ctx_p->flags[EXITONNOEVENTS]) && (ret == 0)) {
+		// if not events and "--exit-on-no-events" is set
+		if (ctx_p->flags[PREEXITHOOK])
+			*state_p = STATE_PREEXIT;
+		else
+			*state_p = STATE_EXIT;
+	}
 
 	return ret;
 }
@@ -3042,6 +3047,8 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 }
 
 void hook_preexit(ctx_t *ctx_p) {
+	debug(2, "");
+
 #ifdef VERYPARANOID
 	if (ctx_p->preexithookfile == NULL)
 		critical("ctx_p->preexithookfile == NULL");
@@ -3776,7 +3783,7 @@ int sync_run(ctx_t *ctx_p) {
 
 	debug(1, "killing sighandler");
 	// TODO: Do cleanup of watching points
-	pthread_kill(pthread_sighandler, SIGTERM);
+	pthread_kill(pthread_sighandler, SIGINT);
 	pthread_join(pthread_sighandler, NULL);
 
 	// Killing children

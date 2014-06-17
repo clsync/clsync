@@ -817,7 +817,7 @@ Is not set by default.
 .RS 8
 Sets path of program to be executed on clsync exit.
 
-If this parameter is set, clsync will exec on exit:
+If this parameter is set then clsync will exec on exit:
 .RS
 .I path\-of\-exit\-hook\-program label 
 .RE
@@ -832,14 +832,24 @@ Is not set by default.
 .I path\-of\-pre\-exit\-hook\-program
 .RS 8
 Sets path of program to be executed before the last sync iteration (see
-.IR "\-\-max\-iterations" " and " "\-\-exit\-on\-no\-events" ")."
+.IR "\-\-max\-iterations" ", " "\-\-exit\-on\-no\-events" " and "
+.BR SIGNALS ")."
 
-If this parameter is set, clsync will exec on exit:
+If this parameter is set then clsync will exec on exit:
 .RS
 .I path\-of\-pre\-exit\-hook\-program label
 .RE
 
 The execution will be skipped if initial sync wasn't complete.
+
+If
+.B clsync
+finishes due to
+.I \-\-exit\-on\-no\-events
+and
+.I \-\-pre\-exit\-hook
+is set then the pre-exit hook will be executed and additional sync iteration
+will be triggered.
 
 Is not set by default.
 .RE
