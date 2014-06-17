@@ -3041,6 +3041,18 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 	continue;\
 }
 
+void hook_preexit(ctx_t *ctx_p) {
+#ifdef VERYPARANOID
+	if (ctx_p->preexithookfile == NULL)
+		critical("ctx_p->preexithookfile == NULL");
+#endif
+
+	char *argv[] = { ctx_p->preexithookfile, ctx_p->label, NULL};
+	exec_argv(argv, NULL);
+
+	return;
+}
+
 int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 	int state = ctx_p->flags[SKIPINITSYNC] ? STATE_RUNNING : STATE_INITSYNC;
 	int ret;
@@ -3084,17 +3096,28 @@ int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 				state = STATE_RUNNING;
 				continue;
+			case STATE_PREEXIT:
 			case STATE_RUNNING:
-				if(!ctx_p->flags[THREADING])
-					if (ctx_p->flags[MAXITERATIONS] &&
-					    ctx_p->flags[MAXITERATIONS] <= ctx_p->iteration_num)
-							state = STATE_EXIT;
+				if((!ctx_p->flags[THREADING]) && ctx_p->flags[MAXITERATIONS]) {
+					if (ctx_p->flags[MAXITERATIONS] == ctx_p->iteration_num-1)
+						state = STATE_PREEXIT;
+					else
+					if (ctx_p->flags[MAXITERATIONS] <= ctx_p->iteration_num)
+						state = STATE_EXIT;
+				}
 
-				if(state == STATE_RUNNING)
-					events = notify_wait(ctx_p, indexes_p);
+				switch (state) {
+					case STATE_PREEXIT:
+						main_status_update(ctx_p, state);
+						if (ctx_p->flags[PREEXITHOOK])
+							hook_preexit(ctx_p);
+					case STATE_RUNNING:
+						events = notify_wait(ctx_p, indexes_p);
+						break;
+					default:
+						SYNC_LOOP_CONTINUE_UNLOCK;
+				}
 
-				if(state != STATE_RUNNING)
-					SYNC_LOOP_CONTINUE_UNLOCK;
 				break;
 			case STATE_REHASH:
 				main_status_update(ctx_p, state);
@@ -3112,24 +3135,24 @@ int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 		pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
 		pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
-		if(events == 0) {
+		if (events == 0) {
 			debug(2, "sync_x_wait(ctx_p, indexes_p) timed-out.");
 			SYNC_LOOP_IDLE;
 			continue;	// Timeout
 		}
-		if(events  < 0) {
+		if (events  < 0) {
 			error("Got error while waiting for event from notify subsystem.");
 			return errno;
 		}
 
 		int count = ctx_p->notifyenginefunct.handle(ctx_p, indexes_p);
-		if(count  <= 0) {
+		if (count  <= 0) {
 			error("Cannot handle with notify events.");
 			return errno;
 		}
 		main_status_update(ctx_p, state);
 
-		if(ctx_p->flags[EXITONNOEVENTS]) // clsync exits on no events, so sync_idle() is never called. We have to force the calling of it.
+		if (ctx_p->flags[EXITONNOEVENTS]) // clsync exits on no events, so sync_idle() is never called. We have to force the calling of it.
 			SYNC_LOOP_IDLE;
 	}
 
@@ -3469,10 +3492,15 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 			case SIGALRM:
 				*exitcode_p = ETIME;
 			case SIGTERM:
+				if (ctx_p->flags[PREEXITHOOK])
+					sync_switch_state(pthread_parent, STATE_PREEXIT);
+				else
+					sync_switch_state(pthread_parent, STATE_TERM);
+				break;
 			case SIGINT:
 				sync_switch_state(pthread_parent, STATE_TERM);
 				// bugfix of https://github.com/xaionaro/clsync/issues/44
-				while(ctx_p->children) { // Killing children if non-pthread mode or/and (mode=="so" or mode=="rsyncso")
+				while (ctx_p->children) { // Killing children if non-pthread mode or/and (mode=="so" or mode=="rsyncso")
 					pid_t child_pid = ctx_p->child_pid[--ctx_p->children];
 					if(waitpid(child_pid, NULL, WNOHANG)>=0) {
 						debug(3, "Sending signal %u to child process with pid %u.",

@@ -250,6 +250,10 @@ running threads' garbage collector
 .RS
 received signal to die, preparing to die
 .RE
+.IR preexit
+.RS
+waiting for the last iteration
+.RE
 .IR exiting
 .RS
 cleaning up [for
@@ -818,7 +822,24 @@ If this parameter is set, clsync will exec on exit:
 .I path\-of\-exit\-hook\-program label 
 .RE
 
-The execution will be skipped if syncing process wasn't started.
+The execution will be skipped if initial sync wasn't complete.
+
+Is not set by default.
+.RE
+
+.PP
+.B \-\-pre\-exit\-hook
+.I path\-of\-pre\-exit\-hook\-program
+.RS 8
+Sets path of program to be executed before the last sync iteration (see
+.IR "\-\-max\-iterations" " and " "\-\-exit\-on\-no\-events" ")."
+
+If this parameter is set, clsync will exec on exit:
+.RS
+.I path\-of\-pre\-exit\-hook\-program label
+.RE
+
+The execution will be skipped if initial sync wasn't complete.
 
 Is not set by default.
 .RE
@@ -1511,17 +1532,24 @@ Syncing /srv/lxc tree (rsync case):
 .RE
 
 .SH SIGNALS
-1  \- to reread filter rules
+1  \- (HUP) rereads filter rules
+
+2  \- (INT) exits without waiting of syncing processes
 
 10 \- runs threads' GC function
 
 12 \- runs full resync
+
+15 \- (TERM) waits for current syncing processes and exit ("soft kill")
 
 16 \- interrupts sleep()/select() and wait() [for debugging and internal uses]
 
 29 \- dump information to
 .IR dump-dir
 [for debugging]
+
+If you need to kill clsync but leave children then you can use 9-th (KILL)
+signal.
 
 .SH DIAGNOSTICS
 

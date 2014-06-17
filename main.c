@@ -96,6 +96,7 @@ static const struct option long_options[] =
 	{"skip-initialsync",	optional_argument,	NULL,	SKIPINITSYNC},
 	{"exit-on-no-events",	optional_argument,	NULL,	EXITONNOEVENTS},
 	{"exit-hook",		required_argument,	NULL,	EXITHOOK},
+	{"pre-exit-hook",	required_argument,	NULL,	PREEXITHOOK},
 	{"verbose",		optional_argument,	NULL,	VERBOSE},
 	{"debug",		optional_argument,	NULL,	DEBUG},
 	{"dump-dir",		required_argument,	NULL,	DUMPDIR},
@@ -648,13 +649,22 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 		case SYNCTIMEOUT:
 			ctx_p->synctimeout   = (unsigned int)atol(arg);
 			break;
+		case PREEXITHOOK:
+			if (strlen(arg)) {
+				ctx_p->preexithookfile		= arg;
+				ctx_p->flags[PREEXITHOOK]	= 1;
+			} else {
+				ctx_p->preexithookfile		= NULL;
+				ctx_p->flags[PREEXITHOOK]	= 0;
+			}
+			break;
 		case EXITHOOK:
-			if(strlen(arg)) {
+			if (strlen(arg)) {
 				ctx_p->exithookfile		= arg;
-				ctx_p->flags[EXITHOOK]	= 1;
+				ctx_p->flags[EXITHOOK]		= 1;
 			} else {
 				ctx_p->exithookfile		= NULL;
-				ctx_p->flags[EXITHOOK]	= 0;
+				ctx_p->flags[EXITHOOK]		= 0;
 			}
 			break;
 		case IGNOREEXITCODE: {
@@ -1498,6 +1508,10 @@ int main(int argc, char *argv[]) {
 	if(ctx_p->flags[THREADING] && ctx_p->flags[MAXITERATIONS]) {
 		ret = errno = EINVAL;
 		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--max-iterations\".");
+	}
+	if(ctx_p->flags[THREADING] && ctx_p->flags[PREEXITHOOK]) {
+		ret = errno = EINVAL;
+		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--pre-exit-hook\".");
 	}
 	if(ctx_p->flags[SKIPINITSYNC] && ctx_p->flags[EXITONNOEVENTS]) {
 		ret = errno = EINVAL;
