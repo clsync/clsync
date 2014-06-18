@@ -993,6 +993,9 @@ int configs_parse(ctx_t *ctx_p) {
 
 int ctx_check(ctx_t *ctx_p) {
 	int ret;
+#ifdef CLUSTER_SUPPORT
+	struct utsname utsname;
+#endif
 
 	if (ctx_p->socketpath != NULL) {
 #ifndef ENABLE_SOCKET
@@ -1868,9 +1871,6 @@ int main_status_update(ctx_t *ctx_p, state_t state) {
 
 int main(int argc, char *argv[]) {
 	struct ctx *ctx_p = xcalloc(1, sizeof(*ctx_p));
-#ifdef CLUSTER_SUPPORT
-	struct utsname utsname;
-#endif
 
 	int ret = 0, nret;
 	ctx_p->flags[MONITOR]			 = DEFAULT_NOTIFYENGINE;
