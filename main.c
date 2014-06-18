@@ -992,7 +992,7 @@ int configs_parse(ctx_t *ctx_p) {
 }
 
 int ctx_check(ctx_t *ctx_p) {
-	int ret;
+	int ret = 0;
 #ifdef CLUSTER_SUPPORT
 	struct utsname utsname;
 #endif
