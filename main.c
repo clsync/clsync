@@ -1477,7 +1477,7 @@ int ctx_set(ctx_t *ctx_p, const char *const parameter_name, const char *const pa
 
 	while (lo_ptr->name != NULL) {
 		if (!strcmp(lo_ptr->name, parameter_name)) {
-			ret = parse_parameter(ctx_p, lo_ptr->val, parameter_value, PS_CONTROL);
+			ret = parse_parameter(ctx_p, lo_ptr->val, strdup(parameter_value), PS_CONTROL);
 			break;
 		}
 		lo_ptr++;
