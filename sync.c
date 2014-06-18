@@ -3118,6 +3118,8 @@ int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 						main_status_update(ctx_p, state);
 						if (ctx_p->flags[PREEXITHOOK])
 							hook_preexit(ctx_p);
+
+						state = STATE_TERM;
 					case STATE_RUNNING:
 						events = notify_wait(ctx_p, indexes_p);
 						break;
@@ -3139,6 +3141,7 @@ int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 				main_status_update(ctx_p, state);
 				SYNC_LOOP_CONTINUE_UNLOCK;
 		}
+
 		pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
 		pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 

@@ -246,17 +246,20 @@ reloading configuration files
 .RS
 running threads' garbage collector
 .RE
-.IR terminating
-.RS
-received signal to die, preparing to die
-.RE
 .IR preexit
 .RS
-waiting for the last iteration
+executing the
+.I \-\-pre\-exit\-hook
+.RE
+.IR terminating
+.RS
+running the last iteration (if required) and preparing to die
 .RE
 .IR exiting
 .RS
-cleaning up [for
+executing the
+.I \-\-exit\-hook
+and cleaning up [for
 .BR valgrind (1)]
 .RE
 .RE
@@ -848,7 +851,7 @@ finishes due to
 .I \-\-exit\-on\-no\-events
 and
 .I \-\-pre\-exit\-hook
-is set then the pre-exit hook will be executed and additional sync iteration
+is set then the pre\-exit hook will be executed and additional sync iteration
 will be triggered.
 
 Is not set by default.
