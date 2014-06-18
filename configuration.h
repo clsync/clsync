@@ -104,6 +104,8 @@ filesz:1M\n\
 
 #define SYSLOG_BUFSIZ			(1<<16)
 
+#define CLSYNCSOCK_WINDOW		(1<<8)
+
 #define DEFAULT_SYNCHANDLER_ARGS_SIMPLE		"sync \%label\% \%EVENT-MASK\% \%INCLUDE-LIST\%"
 #define DEFAULT_SYNCHANDLER_ARGS_DIRECT		"\%INCLUDE-LIST\% \%destination-dir\%/"
 #define DEFAULT_SYNCHANDLER_ARGS_SHELL_NR	"synclist \%label\% \%INCLUDE-LIST-PATH\%"

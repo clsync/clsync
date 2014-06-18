@@ -49,10 +49,28 @@
 #	define SOCKET_MAX SOCKET_MAX_CLSYNC
 #endif
 
+struct socket_sockthreaddata;
+struct sockcmd;
+
+typedef int (*clsyncsock_cb_funct_t)(struct socket_sockthreaddata *thread, struct sockcmd *sockcmd_p, void *arg);
+struct clsynccbqueue {
+	uint64_t		 cmd_num;
+
+	clsyncsock_cb_funct_t	 callback_funct;
+	void			*callback_arg;
+};
+typedef struct clsynccbqueue clsynccbqueue_t;
+
 struct clsyncsock {
 	int sock;
 	uint16_t prot;
 	uint16_t subprot;
+
+	uint64_t cmd_num;
+
+	size_t		 cbqueue_len;
+	clsynccbqueue_t  cbqueue[CLSYNCSOCK_WINDOW+1];
+	clsynccbqueue_t *cbqueue_cache[4*CLSYNCSOCK_WINDOW+1];	// It's a hacky hash-table of size "CLSYNCSOCK_WINDOW*2"
 };
 typedef struct clsyncsock clsyncsock_t;
 
@@ -201,7 +219,9 @@ struct socket_sockthreaddata {
 };
 typedef struct socket_sockthreaddata socket_sockthreaddata_t;
 
+extern int socket_reply(clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p, sockcmd_id_t cmd_id, ...);
 extern int socket_send(clsyncsock_t *clsyncsock, sockcmd_id_t cmd_id, ...);
+extern int socket_send_cb(clsyncsock_t *clsyncsock_p, sockcmd_id_t cmd_id, clsyncsock_cb_funct_t cb, void *cb_arg, ...);
 extern int socket_sendinvalid(clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p);
 extern int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd);
 extern int socket_check_bysock(int sock);
