@@ -1547,13 +1547,18 @@ Syncing /srv/lxc tree (rsync case):
 .SH SIGNALS
 1  \- (HUP) rereads filter rules
 
-2  \- (INT) exits without waiting of syncing processes
+2  \- (INT) exits without waiting of syncing processes ("hard kill",
+kills children)
+
+3  \- (QUIT) waits for current syncing processes and exit ("soft kill", waits
+for children)
 
 10 \- runs threads' GC function
 
 12 \- runs full resync
 
-15 \- (TERM) waits for current syncing processes and exit ("soft kill")
+15 \- (TERM) exits without waiting of syncing processes ("hard kill",
+kills children)
 
 16 \- interrupts sleep()/select() and wait() [for debugging and internal uses]
 

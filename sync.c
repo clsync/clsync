@@ -3480,6 +3480,7 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 			switch(signal) {
 				case SIGALRM:
 					*exitcode_p = ETIME;
+				case SIGQUIT:
 				case SIGTERM:
 				case SIGINT:
 					// TODO: remove the exit() from here. Main thread should exit itself
@@ -3501,12 +3502,13 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 		switch(signal) {
 			case SIGALRM:
 				*exitcode_p = ETIME;
-			case SIGTERM:
+			case SIGQUIT:
 				if (ctx_p->flags[PREEXITHOOK])
 					sync_switch_state(pthread_parent, STATE_PREEXIT);
 				else
 					sync_switch_state(pthread_parent, STATE_TERM);
 				break;
+			case SIGTERM:
 			case SIGINT:
 				sync_switch_state(pthread_parent, STATE_TERM);
 				// bugfix of https://github.com/xaionaro/clsync/issues/44
@@ -3574,6 +3576,7 @@ int sync_run(ctx_t *ctx_p) {
 	sigemptyset(&sigset_sighandler);
 	sigaddset(&sigset_sighandler, SIGALRM);
 	sigaddset(&sigset_sighandler, SIGHUP);
+	sigaddset(&sigset_sighandler, SIGQUIT);
 	sigaddset(&sigset_sighandler, SIGTERM);
 	sigaddset(&sigset_sighandler, SIGINT);
 	sigaddset(&sigset_sighandler, SIGUSR_THREAD_GC);
