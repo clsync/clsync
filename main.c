@@ -950,7 +950,7 @@ int configs_parse(ctx_t *ctx_p) {
 			gkf_parse(ctx_p, gkf);
 
 	} else {
-		char *config_paths[] = CONFIG_PATHS;
+		char  *config_paths[] = CONFIG_PATHS;
 		char **config_path_p = config_paths, *config_path_real = xmalloc(PATH_MAX);
 		size_t config_path_real_size=PATH_MAX;
 
@@ -1286,7 +1286,6 @@ int ctx_check(ctx_t *ctx_p) {
 
 	debug(1, "%s [%s] (%p) -> %s [%s]", ctx_p->watchdir, ctx_p->watchdirwslash, ctx_p->watchdirwslash, ctx_p->destdir?ctx_p->destdir:"", ctx_p->destdirwslash?ctx_p->destdirwslash:"");
 
-	ctx_p->synchandler_argf = 0;
 	switch (ctx_p->flags[MODE]) {
 		case MODE_RSYNCSO:
 			ctx_p->synchandler_argf |= SHFL_EXCLUDE_LIST_PATH;
