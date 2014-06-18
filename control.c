@@ -27,6 +27,7 @@
 
 
 #include "indexes.h"
+#include "main.h"
 #include "ctx.h"
 #include "error.h"
 #include "sync.h"
@@ -64,6 +65,16 @@ int control_procclsyncsock(socket_sockthreaddata_t *arg, sockcmd_t *sockcmd_p) {
 		case SOCKCMD_REQUEST_INFO:
 			rc = socket_send(clsyncsock_p, SOCKCMD_REPLY_INFO, ctx_p->config_block, ctx_p->label, ctx_p->flags, ctx_p->flags_set);
 			break;
+		case SOCKCMD_REQUEST_SET: {
+			sockcmd_dat_set_t *dat = sockcmd_p->data;
+			rc = ctx_set(ctx_p, dat->key, dat->value);
+			if (rc) {
+				control_error(clsyncsock_p, "ctx_set", dat->key);
+				break;
+			}
+			rc = socket_send(clsyncsock_p, SOCKCMD_REPLY_SET);
+			break;
+		}
 		case SOCKCMD_REQUEST_DIE:
 			rc = sync_term(SIGTERM);
 			break;

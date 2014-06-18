@@ -68,6 +68,7 @@ static char *recv_ptrs[SOCKET_MAX];
 const char *const textmessage_args[SOCKCMD_MAXID] = {
 	[SOCKCMD_REQUEST_NEGOTIATION] 	= "%u",
 	[SOCKCMD_REQUEST_DUMP]	 	= "%s",
+	[SOCKCMD_REQUEST_SET]	 	= "%s\003/ %s\003/",
 	[SOCKCMD_REPLY_NEGOTIATION] 	= "%u",
 	[SOCKCMD_REPLY_ACK]		= "%03u %lu",
 	[SOCKCMD_REPLY_EINVAL]		= "%03u %lu",
@@ -91,6 +92,7 @@ const char *const textmessage_descr[SOCKCMD_MAXID] = {
 	[SOCKCMD_REPLY_BYE]		= "Bye.",
 	[SOCKCMD_REPLY_VERSION]		= "clsync v%u.%u%s",
 	[SOCKCMD_REPLY_INFO]		= "config_block == \"%s\"; label == \"%s\"; flags == %x; flags_set == %x.",
+	[SOCKCMD_REPLY_SET]		= "Set",
 	[SOCKCMD_REPLY_DUMP]		= "Ready",
 	[SOCKCMD_REPLY_UNKNOWNCMD]	= "Unknown command.",
 	[SOCKCMD_REPLY_INVALIDCMDID]	= "Invalid command id. Required: 0 <= cmd_id < 1000.",
@@ -370,6 +372,9 @@ static inline int parse_text_data(sockcmd_t *sockcmd_p, char *args, size_t args_
 			break;
 		case SOCKCMD_REQUEST_DUMP:
 			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_dump_t, &d->dir_path);
+			break;
+		case SOCKCMD_REQUEST_SET:
+			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_set_t, &d->key, &d->value);
 			break;
 		case SOCKCMD_REPLY_ACK:
 			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_ack_t, &d->cmd_id, &d->cmd_num);

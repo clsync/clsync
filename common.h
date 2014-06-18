@@ -134,6 +134,7 @@ enum paramsource_enum {
 	PS_UNKNOWN	 = 0,
 	PS_ARGUMENT,
 	PS_CONFIG,
+	PS_CONTROL,
 	PS_DEFAULTS,
 };
 typedef enum paramsource_enum paramsource_t;
