@@ -614,7 +614,7 @@ int socket_procclsyncsock(socket_sockthreaddata_t *arg) {
 		// Receiving message
 		int ret;
 		if ((ret = socket_recv(clsyncsock_p, sockcmd_p))) {
-			error("Got error while receiving a message from clsyncsock with sock %u: %s (errno: %u)", 
+			error("Got error while receiving a message from clsyncsock with sock %u", 
 				arg->clsyncsock_p->sock);
 			break;
 		}
