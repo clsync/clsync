@@ -3062,29 +3062,37 @@ void hook_preexit(ctx_t *ctx_p) {
 
 int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 	int ret;
+	threadsinfo_t *threadsinfo_p = thread_info();
 	state_p = &ctx_p->state;
 	ctx_p->state = ctx_p->flags[SKIPINITSYNC] ? STATE_RUNNING : STATE_INITSYNC;
 
 	while (ctx_p->state != STATE_EXIT) {
 		int events;
 
-		threadsinfo_t *threadsinfo_p = thread_info();
 		debug(4, "pthread_mutex_lock()");
 		pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
-		debug(3, "current state is %i (iteration: %u/%u)",
-			ctx_p->state, ctx_p->iteration_num, ctx_p->flags[MAXITERATIONS]);
+		debug(3, "current state is %i (iteration: %u/%u); threadsinfo_p->used == %u",
+			ctx_p->state, ctx_p->iteration_num, ctx_p->flags[MAXITERATIONS], threadsinfo_p->used);
+
+		while ((ctx_p->flags[THREADING] == PM_OFF) && threadsinfo_p->used) {
+			debug(1, "We are in non-threading mode but have %u syncer threads. Waiting for them end.", threadsinfo_p->used);
+
+			pthread_cond_wait(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE], &threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
+			pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
+		}
+
 		events = 0;
 		switch (ctx_p->state) {
 			case STATE_THREAD_GC:
 				main_status_update(ctx_p);
-				if(thread_gc(ctx_p)) {
+				if (thread_gc(ctx_p)) {
 					ctx_p->state = STATE_EXIT;
 					break;
 				}
 				ctx_p->state = STATE_RUNNING;
 				SYNC_LOOP_CONTINUE_UNLOCK;
 			case STATE_INITSYNC:
-				if(!ctx_p->flags[THREADING]) {
+				if (!ctx_p->flags[THREADING]) {
 					ctx_p->iteration_num = 0;
 					setenv_iteration(ctx_p->iteration_num);
 				}
@@ -3105,7 +3113,7 @@ int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 				continue;
 			case STATE_PREEXIT:
 			case STATE_RUNNING:
-				if((!ctx_p->flags[THREADING]) && ctx_p->flags[MAXITERATIONS]) {
+				if ((!ctx_p->flags[THREADING]) && ctx_p->flags[MAXITERATIONS]) {
 					if (ctx_p->flags[MAXITERATIONS] == ctx_p->iteration_num-1)
 						ctx_p->state = STATE_PREEXIT;
 					else
@@ -3474,13 +3482,13 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 
 	sync_sighandler_exitcode_p = exitcode_p;
 
-	while(1) {
+	while (state_p == NULL || ((*state_p != STATE_TERM) && (*state_p != STATE_EXIT))) {
 		debug(3, "waiting for signal");
 		ret = sigwait(sigset_p, &signal);
 
-		if(state_p == NULL) {
+		if (state_p == NULL) {
 
-			switch(signal) {
+			switch (signal) {
 				case SIGALRM:
 					*exitcode_p = ETIME;
 				case SIGQUIT:
@@ -3498,11 +3506,19 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 
 		debug(3, "got signal %i. *state_p == %i.", signal, *state_p);
 
-		if(ret) {
+		if (ret) {
 			// TODO: handle an error here
 		}
 
-		switch(signal) {
+		if (ctx_p->customsignal[signal] != NULL) {
+			if (config_block_parse(ctx_p, ctx_p->customsignal[signal])) {
+				*exitcode_p = errno;
+				 signal = SIGTERM;
+			}
+			continue;
+		}
+
+		switch (signal) {
 			case SIGALRM:
 				*exitcode_p = ETIME;
 			case SIGQUIT:
@@ -3517,21 +3533,21 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 				// bugfix of https://github.com/xaionaro/clsync/issues/44
 				while (ctx_p->children) { // Killing children if non-pthread mode or/and (mode=="so" or mode=="rsyncso")
 					pid_t child_pid = ctx_p->child_pid[--ctx_p->children];
-					if(waitpid(child_pid, NULL, WNOHANG)>=0) {
+					if (waitpid(child_pid, NULL, WNOHANG)>=0) {
 						debug(3, "Sending signal %u to child process with pid %u.",
 							signal, child_pid);
 						kill(child_pid, signal);
 						sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
 					} else
 						continue;
-					if(waitpid(child_pid, NULL, WNOHANG)>=0) {
+					if (waitpid(child_pid, NULL, WNOHANG)>=0) {
 						debug(3, "Sending signal SIGQUIT to child process with pid %u.",
 							child_pid);
 						kill(child_pid, SIGQUIT);
 						sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
 					} else
 						continue;
-					if(waitpid(child_pid, NULL, WNOHANG)>=0) {
+					if (waitpid(child_pid, NULL, WNOHANG)>=0) {
 						debug(3, "Sending signal SIGKILL to child process with pid %u.",
 							child_pid);
 						kill(child_pid, SIGKILL);
@@ -3556,9 +3572,6 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 				break;
 		}
 
-		if((*state_p == STATE_TERM) || (*state_p == STATE_EXIT)) {
-			break;
-		}
 	}
 
 	debug(3, "signal handler closed.");
@@ -3571,62 +3584,75 @@ int sync_term(int exitcode) {
 }
 
 int sync_run(ctx_t *ctx_p) {
-	int ret, i;
+	int ret;
 	sighandler_arg_t sighandler_arg = {0};
+	indexes_t        indexes        = {NULL};
 
 	// Creating signal handler thread
-	sigset_t sigset_sighandler;
-	sigemptyset(&sigset_sighandler);
-	sigaddset(&sigset_sighandler, SIGALRM);
-	sigaddset(&sigset_sighandler, SIGHUP);
-	sigaddset(&sigset_sighandler, SIGQUIT);
-	sigaddset(&sigset_sighandler, SIGTERM);
-	sigaddset(&sigset_sighandler, SIGINT);
-	sigaddset(&sigset_sighandler, SIGUSR_THREAD_GC);
-	sigaddset(&sigset_sighandler, SIGUSR_INITSYNC);
-	sigaddset(&sigset_sighandler, SIGUSR_DUMP);
+	{
+		int i;
 
-	ret = pthread_sigmask(SIG_BLOCK, &sigset_sighandler, NULL);
-	if (ret) return ret;
+		sigset_t sigset_sighandler;
+		sigemptyset(&sigset_sighandler);
+		sigaddset(&sigset_sighandler, SIGALRM);
+		sigaddset(&sigset_sighandler, SIGHUP);
+		sigaddset(&sigset_sighandler, SIGQUIT);
+		sigaddset(&sigset_sighandler, SIGTERM);
+		sigaddset(&sigset_sighandler, SIGINT);
+		sigaddset(&sigset_sighandler, SIGUSR_THREAD_GC);
+		sigaddset(&sigset_sighandler, SIGUSR_INITSYNC);
+		sigaddset(&sigset_sighandler, SIGUSR_DUMP);
 
-	sighandler_arg.ctx_p		=  ctx_p;
-//	sighandler_arg.indexes_p	= &indexes;
-	sighandler_arg.pthread_parent	=  pthread_self();
-	sighandler_arg.exitcode_p	= &ret;
-	sighandler_arg.sigset_p		= &sigset_sighandler;
-	ret = pthread_create(&pthread_sighandler, NULL, (void *(*)(void *))sync_sighandler, &sighandler_arg);
-	if (ret) return ret;
+		i = 0;
+		while (i < MAXSIGNALNUM) {
+			if (ctx_p->customsignal[i] != NULL)
+				sigaddset(&sigset_sighandler, i);
+			i++;
+		}
 
-	sigset_t sigset_parent;
-	sigemptyset(&sigset_parent);
+		ret = pthread_sigmask(SIG_BLOCK, &sigset_sighandler, NULL);
+		if (ret) return ret;
 
-	sigaddset(&sigset_parent, SIGUSR_BLOPINT);
-	ret = pthread_sigmask(SIG_UNBLOCK, &sigset_parent, NULL);
-	if (ret) return ret;
+		sighandler_arg.ctx_p		=  ctx_p;
+		sighandler_arg.pthread_parent	=  pthread_self();
+		sighandler_arg.exitcode_p	= &ret;
+		sighandler_arg.sigset_p		= &sigset_sighandler;
+		ret = pthread_create(&pthread_sighandler, NULL, (void *(*)(void *))sync_sighandler, &sighandler_arg);
+		if (ret) return ret;
 
-	signal(SIGUSR_BLOPINT,	sync_sig_int);
+		sigset_t sigset_parent;
+		sigemptyset(&sigset_parent);
+
+		sigaddset(&sigset_parent, SIGUSR_BLOPINT);
+		ret = pthread_sigmask(SIG_UNBLOCK, &sigset_parent, NULL);
+		if (ret) return ret;
+
+		signal(SIGUSR_BLOPINT,	sync_sig_int);
+	}
 
 	// Creating hash tables
+	{
+		int i;
 
-	indexes_t indexes         =  {NULL};
-	ctx_p->indexes_p	  = &indexes;
+		ctx_p->indexes_p	  = &indexes;
 
-	indexes.wd2fpath_ht	  =  g_hash_table_new_full(g_direct_hash, g_direct_equal, 0,    0);
-	indexes.fpath2wd_ht	  =  g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
-	indexes.fpath2ei_ht	  =  g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, free);
-	indexes.exc_fpath_ht	  =  g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
-	indexes.out_lines_aggr_ht =  g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
-	i=0;
-	while (i<QUEUE_MAX) {
-		switch (i) {
-			case QUEUE_LOCKWAIT:
-				indexes.fpath2ei_coll_ht[i]  = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
-				break;
-			default:
-				indexes.fpath2ei_coll_ht[i]  = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, free);
-				indexes.exc_fpath_coll_ht[i] = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
+		indexes.wd2fpath_ht	  =  g_hash_table_new_full(g_direct_hash, g_direct_equal, 0,    0);
+		indexes.fpath2wd_ht	  =  g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
+		indexes.fpath2ei_ht	  =  g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, free);
+		indexes.exc_fpath_ht	  =  g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
+		indexes.out_lines_aggr_ht =  g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
+		i=0;
+		while (i<QUEUE_MAX) {
+			switch (i) {
+				case QUEUE_LOCKWAIT:
+					indexes.fpath2ei_coll_ht[i]  = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
+					break;
+				default:
+					indexes.fpath2ei_coll_ht[i]  = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, free);
+					indexes.exc_fpath_coll_ht[i] = g_hash_table_new_full(g_str_hash,    g_str_equal,    free, 0);
+			}
+			i++;
 		}
-		i++;
 	}
 
 	// Loading dynamical libraries
@@ -3844,23 +3870,27 @@ int sync_run(ctx_t *ctx_p) {
 	rsync_escape_cleanup();
 
 	// Removing hash-tables
-	debug(3, "Closing hash tables");
-	g_hash_table_destroy(indexes.wd2fpath_ht);
-	g_hash_table_destroy(indexes.fpath2wd_ht);
-	g_hash_table_destroy(indexes.fpath2ei_ht);
-	g_hash_table_destroy(indexes.exc_fpath_ht);
-	g_hash_table_destroy(indexes.out_lines_aggr_ht);
-	i=0;
-	while(i<QUEUE_MAX) {
-		switch (i) {
-			case QUEUE_LOCKWAIT:
-				g_hash_table_destroy(indexes.fpath2ei_coll_ht[i]);
-				break;
-			default:
-				g_hash_table_destroy(indexes.fpath2ei_coll_ht[i]);
-				g_hash_table_destroy(indexes.exc_fpath_coll_ht[i]);
+	{
+		int i;
+
+		debug(3, "Closing hash tables");
+		g_hash_table_destroy(indexes.wd2fpath_ht);
+		g_hash_table_destroy(indexes.fpath2wd_ht);
+		g_hash_table_destroy(indexes.fpath2ei_ht);
+		g_hash_table_destroy(indexes.exc_fpath_ht);
+		g_hash_table_destroy(indexes.out_lines_aggr_ht);
+		i = 0;
+		while (i<QUEUE_MAX) {
+			switch (i) {
+				case QUEUE_LOCKWAIT:
+					g_hash_table_destroy(indexes.fpath2ei_coll_ht[i]);
+					break;
+				default:
+					g_hash_table_destroy(indexes.fpath2ei_coll_ht[i]);
+					g_hash_table_destroy(indexes.exc_fpath_coll_ht[i]);
+			}
+			i++;
 		}
-		i++;
 	}
 
 	// Deinitializing cluster subsystem

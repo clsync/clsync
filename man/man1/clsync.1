@@ -207,6 +207,31 @@ Default value is "default".
 .PP
 .RE
 
+.B \-\-custom\-signals
+.I custom\-signals
+.RS
+Set a list of signals and corresponding config block names. The config block
+will be use on catching the corresponding signal.
+
+Format is
+.RS
+.I signal:config\-block\-name[,signal:config\-block\-name[,...]]
+.RE
+
+For example:
+.RS
+\-\-custom\-signals=29:debug,28:normal
+.RE
+In this line signals "28" and "29" will be added to the sighandler.
+And clsync will use options from config block "debug" on signal 29 and
+"normal" on signal 28.
+
+To reset all custom signals use the 0-th signal (e.g. "\-\-custom\-signals=0").
+
+Default value is "".
+.PP
+.RE
+
 .B \-z, \-\-pid\-file
 .I path\-to\-pidfile
 .RS 8

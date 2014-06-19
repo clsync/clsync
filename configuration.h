@@ -13,6 +13,8 @@
 // clsync should be used, if there's more than 5-10 nodes. So the limit in 255 is quite enough. :)
 #define MAXNODES			((1<<8)-1)
 
+#define MAXSIGNALNUM			(1<<9)
+
 // max user/group lengths
 #define USER_LEN			(1<<8)
 #define GROUP_LEN			USER_LEN
