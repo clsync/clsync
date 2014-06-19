@@ -629,12 +629,12 @@ int socket_procclsyncsock(socket_sockthreaddata_t *arg) {
 			while (clsyncsock_p->cbqueue_cache[i] != NULL) {
 				if (clsyncsock_p->cbqueue_cache[i]->cmd_num == cmd_num) { // Found!
 					clsynccbqueue_t *cbq;
+					cbq = clsyncsock_p->cbqueue_cache[i];
 
 					// Calling the callback function
 					cbq->callback_funct(arg, sockcmd_p, cbq->callback_arg);
 
 					// Removing from queue
-					cbq = clsyncsock_p->cbqueue_cache[i];
 					memcpy(cbq, &clsyncsock_p->cbqueue[--clsyncsock_p->cbqueue_len], sizeof(*cbq));
 					clsyncsock_p->cbqueue_cache[i] = NULL;
 				}
