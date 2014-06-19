@@ -483,6 +483,7 @@ int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p) {
 	char *buf, *ptr, *start, *end;
 	int clsyncsock_sock;
 	size_t filled_length, rest_length, recv_length, filled_length_new;
+	errno = 0;
 
 	clsyncsock_sock = clsyncsock->sock;
 
@@ -529,7 +530,7 @@ int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p) {
 					case SUBPROT0_TEXT:
 						if((end=strchr(ptr, '\n'))!=NULL) {
 							if(sscanf(start, "%lu %03u", &sockcmd_p->cmd_num, (unsigned int *)&sockcmd_p->cmd_id) != 1)
-								return ENOMSG;
+								return errno = ENOMSG;
 
 							char *str_args = &start[3+1];
 							parse_text_data(sockcmd_p, str_args, end-str_args);
@@ -541,12 +542,12 @@ int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p) {
 						}
 						break;
 					default:
-						return ENOPROTOOPT;
+						return errno = ENOPROTOOPT;
 				}
 				break;
 			}
 			default:
-				return ENOPROTOOPT;
+				return errno = ENOPROTOOPT;
 		}
 
 		
