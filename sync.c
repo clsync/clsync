@@ -3482,13 +3482,13 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 
 	sync_sighandler_exitcode_p = exitcode_p;
 
-	while((*state_p != STATE_TERM) && (*state_p != STATE_EXIT)) {
+	while (state_p == NULL || ((*state_p != STATE_TERM) && (*state_p != STATE_EXIT))) {
 		debug(3, "waiting for signal");
 		ret = sigwait(sigset_p, &signal);
 
-		if(state_p == NULL) {
+		if (state_p == NULL) {
 
-			switch(signal) {
+			switch (signal) {
 				case SIGALRM:
 					*exitcode_p = ETIME;
 				case SIGQUIT:
