@@ -150,20 +150,6 @@ enum notifyengine_enum {
 };
 typedef enum notifyengine_enum notifyengine_t;
 
-#define STATE_STARTING(state_p) (state_p == NULL)
-enum state_enum {
-	STATE_EXIT 	= 0,
-	STATE_STARTING,
-	STATE_RUNNING,
-	STATE_REHASH,
-	STATE_PREEXIT,
-	STATE_TERM,
-	STATE_THREAD_GC,
-	STATE_INITSYNC,
-	STATE_UNKNOWN
-};
-typedef enum state_enum state_t;
-
 enum threadingmode {
 	PM_OFF	= 0,
 	PM_SAFE,

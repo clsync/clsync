@@ -201,6 +201,20 @@ struct synchandler_args {
 };
 typedef struct synchandler_args synchandler_args_t;
 
+#define STATE_STARTING(state_p) (state_p == NULL)
+enum state_enum {
+	STATE_EXIT 	= 0,
+	STATE_STARTING,
+	STATE_RUNNING,
+	STATE_REHASH,
+	STATE_PREEXIT,
+	STATE_TERM,
+	STATE_THREAD_GC,
+	STATE_INITSYNC,
+	STATE_UNKNOWN
+};
+typedef enum state_enum state_t;
+
 struct ctx {
 	state_t state;
 

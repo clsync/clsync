@@ -570,7 +570,7 @@ int thread_cleanup(ctx_t *ctx_p) {
 	return thread_info_unlock(0);
 }
 
-int *state_p = NULL;
+state_t *state_p = NULL;
 int exitcode = 0;
 #define SHOULD_THREAD(ctx_p) ((ctx_p->flags[THREADING] != PM_OFF) && (ctx_p->flags[THREADING] != PM_SAFE || ctx_p->iteration_num))
 
@@ -3115,7 +3115,7 @@ int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 				switch (ctx_p->state) {
 					case STATE_PREEXIT:
-						main_status_update(ctx_p, state);
+						main_status_update(ctx_p);
 						if (ctx_p->flags[PREEXITHOOK])
 							hook_preexit(ctx_p);
 
@@ -3140,6 +3140,9 @@ int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 			case STATE_EXIT:
 				main_status_update(ctx_p);
 				SYNC_LOOP_CONTINUE_UNLOCK;
+			default:
+				critical("internal error: ctx_p->state == %u", ctx_p->state);
+				break;
 		}
 
 		pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
