@@ -70,11 +70,11 @@ const char *const textmessage_args[SOCKCMD_MAXID] = {
 	[SOCKCMD_REQUEST_DUMP]	 	= "%s",
 	[SOCKCMD_REQUEST_SET]	 	= "%s\003/ %s\003/",
 	[SOCKCMD_REPLY_NEGOTIATION] 	= "%u",
-	[SOCKCMD_REPLY_ACK]		= "%03u %lu",
-	[SOCKCMD_REPLY_EINVAL]		= "%03u %lu",
+	[SOCKCMD_REPLY_ACK]		= "%u %lu",
+	[SOCKCMD_REPLY_EINVAL]		= "%u %lu",
 	[SOCKCMD_REPLY_VERSION]		= "%u %u %s",
 	[SOCKCMD_REPLY_INFO]		= "%s\003/ %s\003/ %x %x",
-	[SOCKCMD_REPLY_UNKNOWNCMD]	= "%03u %lu",
+	[SOCKCMD_REPLY_UNKNOWNCMD]	= "%u %lu",
 	[SOCKCMD_REPLY_INVALIDCMDID]	= "%lu",
 	[SOCKCMD_REPLY_EEXIST]		= "%s\003/",
 	[SOCKCMD_REPLY_EPERM]		= "%s\003/",
@@ -84,8 +84,8 @@ const char *const textmessage_args[SOCKCMD_MAXID] = {
 const char *const textmessage_descr[SOCKCMD_MAXID] = {
 	[SOCKCMD_REQUEST_NEGOTIATION]	= "Protocol version is %u.",
 	[SOCKCMD_REPLY_NEGOTIATION]	= "Protocol version is %u.",
-	[SOCKCMD_REPLY_ACK]		= "Acknowledged command: id == %03u; num == %lu.",
-	[SOCKCMD_REPLY_EINVAL]		= "Rejected command: id == %03u; num == %lu. Invalid arguments: %s.",
+	[SOCKCMD_REPLY_ACK]		= "Acknowledged command: id == %u; num == %lu.",
+	[SOCKCMD_REPLY_EINVAL]		= "Rejected command: id == %u; num == %lu. Invalid arguments: %s.",
 	[SOCKCMD_REPLY_LOGIN]		= "Enter your login and password, please.",
 	[SOCKCMD_REPLY_UNEXPECTEDEND]	= "Need to go, sorry. :)",
 	[SOCKCMD_REPLY_DIE]		= "Okay :(",
@@ -411,6 +411,8 @@ static inline int socket_overflow_fix(char *buf, char **data_start_p, char **dat
 }
 
 static inline int parse_text_data(sockcmd_t *sockcmd_p, char *args, size_t args_len) {
+	debug(6, "(%p, %p, %u)", sockcmd_p, args, args_len);
+
 	if (!args_len)
 		return 0;
 
@@ -512,7 +514,12 @@ int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p) {
 		recv_length = recv(clsyncsock_sock, ptr, rest_length, 0);
 		filled_length_new = filled_length + recv_length;
 
-		if (recv_length <= 0)
+		debug(5, "recv_length == %u; filled_length_new == %u", recv_length, filled_length_new);
+
+		if (recv_length == 0)
+			return ECONNRESET;
+
+		if (recv_length < 0)
 			return errno;
 
 		switch (clsyncsock->prot) {
@@ -529,8 +536,12 @@ int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p) {
 				switch (clsyncsock->subprot) {
 					case SUBPROT0_TEXT:
 						if ((end=strchr(ptr, '\n')) != NULL) {
-							if (sscanf(start, "%lu %u", &sockcmd_p->cmd_num, (unsigned int *)&sockcmd_p->cmd_id) != 1)
+							if (sscanf(start, "%lu %u", &sockcmd_p->cmd_num, (unsigned int *)&sockcmd_p->cmd_id) != 2) {
+								*end = 0;
+								error("It's expected to parse \"%%lu %%u\" from \"%s\"", start);
+								*end = '\n';
 								return errno = ENOMSG;
+							}
 
 							char *str_args = start;
 
@@ -544,7 +555,8 @@ int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p) {
 							str_args++;
 
 							// Parsing the arguments
-							parse_text_data(sockcmd_p, str_args, end-str_args);
+							if (end > str_args)
+								parse_text_data(sockcmd_p, str_args, end-str_args);
 
 							// TODO Process message here
 
@@ -625,7 +637,7 @@ int socket_procclsyncsock(socket_sockthreaddata_t *arg) {
 		// Receiving message
 		int ret;
 		if ((ret = socket_recv(clsyncsock_p, sockcmd_p))) {
-			error("Got error while receiving a message from clsyncsock with sock %u", 
+			debug(2, "Got error while receiving a message from clsyncsock with sock %u. Ending the thread.", 
 				arg->clsyncsock_p->sock);
 			break;
 		}
