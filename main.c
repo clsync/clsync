@@ -506,6 +506,7 @@ int parse_customsignals(ctx_t *ctx_p, char *arg) {
 #ifdef _DEBUG
 						fprintf(stderr, "Force-Debug: parse_parameter(): Adding custom signal %u.\n", signal);
 #endif
+						ptr = end;
 					}
 				}
 				start = ptr+1;
