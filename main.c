@@ -54,6 +54,7 @@ static const struct option long_options[] =
 	{"config-file",		required_argument,	NULL,	CONFIGFILE},
 	{"config-block",	required_argument,	NULL,	CONFIGBLOCK},
 	{"config-block-inherits",required_argument,	NULL,	CONFIGBLOCKINHERITS},
+	{"custom-signals",	required_argument,	NULL,	CUSTOMSIGNALS},
 	{"pid-file",		required_argument,	NULL,	PIDFILE},
 	{"uid",			required_argument,	NULL,	UID},
 	{"gid",			required_argument,	NULL,	GID},
@@ -447,6 +448,80 @@ static int synchandler_arg1(char *arg, size_t arg_len, void *_ctx_p) {
 	return synchandler_arg(arg, arg_len, _ctx_p, SHARGS_INITIAL);
 }
 
+int parse_customsignals(ctx_t *ctx_p, char *arg) {
+	char *ptr = arg, *start = arg;
+	unsigned int signal;
+	do {
+		switch (*ptr) {
+			case 0:
+			case ',':
+			case ':':
+				signal = (unsigned int)atoi(start);
+				if (signal == 0) {
+					// flushing the setting
+					int i = 0;
+					while (i < 256) {
+						if (ctx_p->customsignal[i]) {
+							free(ctx_p->customsignal[i]);
+							ctx_p->customsignal[i] = NULL;
+						}
+						i++;
+					}
+#ifdef _DEBUG
+					fprintf(stderr, "Force-Debug: parse_parameter(): Reset custom signals.\n");
+#endif
+				} else {
+					if (*ptr != ':') {
+						char ch = *ptr;
+
+						*ptr = 0;
+							errno = EINVAL;
+							error("Expected \":\" in \"%s\"", start);
+						*ptr = ch;
+						return errno;
+					}
+
+					{
+						char ch, *end;
+						ptr++;
+
+						end = ptr;
+						while (*end && *end != ',') end++;
+
+						if (end == ptr) {
+							errno = EINVAL;
+							error("Empty config block name on signal \"%u\"", signal);
+							return errno;
+						}
+
+						if (signal > MAXSIGNALNUM) {
+							errno = EINVAL;
+							error("Too high value of the signal: \"%u\" > "XTOSTR(MAXSIGNALNUM)"", signal);
+							return errno;
+						}
+
+						ch = *end; *end = 0;
+						ctx_p->customsignal[signal] = strdup(ptr);
+						*end = ch;
+#ifdef _DEBUG
+						fprintf(stderr, "Force-Debug: parse_parameter(): Adding custom signal %u.\n", signal);
+#endif
+					}
+				}
+				start = ptr+1;
+				break;
+			case '0' ... '9':
+				break;
+			default:
+				errno = EINVAL;
+				error("Expected a digit, comma (or colon) but got \"%c\"", *ptr);
+				return errno;
+		}
+	} while (*(ptr++));
+
+	return 0;
+}
+
 int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t paramsource) {
 #ifdef _DEBUG
 	fprintf(stderr, "Force-Debug: parse_parameter(): %i: %i = \"%s\"\n", paramsource, param_id, arg);
@@ -500,6 +575,15 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			break;
 		case CONFIGBLOCKINHERITS:
 			break;
+		case CUSTOMSIGNALS:
+			if (paramsource == PS_CONTROL) {
+				warning("Cannot change \"custom-signal\" in run-time. Ignoring.");
+				return 0;
+			}
+
+			if (parse_customsignals(ctx_p, arg))
+				return errno;
+			break;
 		case GID:
 			ctx_p->gid = (unsigned int)atol(arg);
 			ctx_p->flags[param_id]++;
@@ -552,7 +636,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 		}
 #ifdef CLUSTER_SUPPORT
 		case CLUSTERIFACE:
-			ctx_p->cluster_iface	= arg;
+			ctx_p->cluster_iface		= arg;
 			break;
 		case CLUSTERMCASTIPADDR:
 			ctx_p->cluster_mcastipaddr	= arg;
@@ -561,10 +645,10 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			ctx_p->cluster_mcastipport	= (uint16_t)atoi(arg);
 			break;
 		case CLUSTERTIMEOUT:
-			ctx_p->cluster_timeout	= (unsigned int)atol(arg);
+			ctx_p->cluster_timeout		= (unsigned int)atol(arg);
 			break;
 		case CLUSTERNODENAME:
-			ctx_p->cluster_nodename	= arg;
+			ctx_p->cluster_nodename		= arg;
 			break;
 		case CLUSTERHDLMIN:
 			ctx_p->cluster_hash_dl_min	= (uint16_t)atoi(arg);
@@ -580,7 +664,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			ctx_p->listoutdir		= arg;
 			break;
 		case LABEL:
-			ctx_p->label		= arg;
+			ctx_p->label			= arg;
 			break;
 		case STANDBYFILE:
 			if(strlen(arg)) {
@@ -677,10 +761,10 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 					case ',':
 //						*ptr=0;
 						exitcode = (unsigned char)atoi(start);
-						if(exitcode == 0) {
+						if (exitcode == 0) {
 							// flushing the setting
 							int i = 0;
-							while(i < 256)
+							while (i < 256)
 								ctx_p->isignoredexitcode[i++] = 0;
 #ifdef _DEBUG
 							fprintf(stderr, "Force-Debug: parse_parameter(): Reset ignored exitcodes.\n");
@@ -693,6 +777,12 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 						}
 						start = ptr+1;
 						break;
+					case '0' ... '9':
+						break;
+					default:
+						errno = EINVAL;
+						error("Expected a digit or comma but got \"%c\"", *ptr);
+						return errno;
 				}
 			} while(*(ptr++));
 			break;
@@ -989,6 +1079,16 @@ int configs_parse(ctx_t *ctx_p) {
 	g_key_file_free(gkf);
 
 	return 0;
+}
+
+int config_block_parse(ctx_t *ctx_p, const char *const config_block_name)
+{
+	debug(1, "(ctx_p, \"%s\")", config_block_name);
+
+	free(ctx_p->config_block);
+
+	ctx_p->config_block = strdup(config_block_name);
+	return configs_parse(ctx_p);
 }
 
 int ctx_check(ctx_t *ctx_p) {
@@ -1486,6 +1586,8 @@ int ctx_set(ctx_t *ctx_p, const char *const parameter_name, const char *const pa
 	}
 
 	ret = ctx_check(ctx_p);
+	if (ret)
+		critical("Cannot continue with this setup");
 
 	return ret;
 }

@@ -102,6 +102,8 @@ enum flags_enum {
 
 	SYNCHANDLERARGS0	= 21|OPTION_LONGOPTONLY,
 	SYNCHANDLERARGS1	= 22|OPTION_LONGOPTONLY,
+
+	CUSTOMSIGNALS		= 23|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -233,6 +235,7 @@ struct ctx {
 #ifndef LIBCLSYNC
 	char *config_path;
 	char *config_block;
+	char *customsignal[MAXSIGNALNUM+1];
 	char *label;
 	char *watchdir;
 	char *pidfile;
