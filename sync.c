@@ -3061,27 +3061,27 @@ void hook_preexit(ctx_t *ctx_p) {
 }
 
 int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
-	int state = ctx_p->flags[SKIPINITSYNC] ? STATE_RUNNING : STATE_INITSYNC;
 	int ret;
-	state_p = &state;
+	state_p = &ctx_p->state;
+	ctx_p->state = ctx_p->flags[SKIPINITSYNC] ? STATE_RUNNING : STATE_INITSYNC;
 
-	while(state != STATE_EXIT) {
+	while (ctx_p->state != STATE_EXIT) {
 		int events;
 
 		threadsinfo_t *threadsinfo_p = thread_info();
 		debug(4, "pthread_mutex_lock()");
 		pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 		debug(3, "current state is %i (iteration: %u/%u)",
-			state, ctx_p->iteration_num, ctx_p->flags[MAXITERATIONS]);
+			ctx_p->state, ctx_p->iteration_num, ctx_p->flags[MAXITERATIONS]);
 		events = 0;
-		switch(state) {
+		switch (ctx_p->state) {
 			case STATE_THREAD_GC:
-				main_status_update(ctx_p, state);
+				main_status_update(ctx_p);
 				if(thread_gc(ctx_p)) {
-					state=STATE_EXIT;
+					ctx_p->state = STATE_EXIT;
 					break;
 				}
-				state = STATE_RUNNING;
+				ctx_p->state = STATE_RUNNING;
 				SYNC_LOOP_CONTINUE_UNLOCK;
 			case STATE_INITSYNC:
 				if(!ctx_p->flags[THREADING]) {
@@ -3089,7 +3089,7 @@ int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 					setenv_iteration(ctx_p->iteration_num);
 				}
 
-				main_status_update(ctx_p, state);
+				main_status_update(ctx_p);
 				pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
 				pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 				ret = sync_initialsync(ctx_p->watchdir, ctx_p, indexes_p, INITSYNC_FULL);
@@ -3097,29 +3097,29 @@ int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 				if(ctx_p->flags[ONLYINITSYNC]) {
 					SYNC_LOOP_IDLE;
-					state = STATE_EXIT;
+					ctx_p->state = STATE_EXIT;
 					return ret;
 				}
 
-				state = STATE_RUNNING;
+				ctx_p->state = STATE_RUNNING;
 				continue;
 			case STATE_PREEXIT:
 			case STATE_RUNNING:
 				if((!ctx_p->flags[THREADING]) && ctx_p->flags[MAXITERATIONS]) {
 					if (ctx_p->flags[MAXITERATIONS] == ctx_p->iteration_num-1)
-						state = STATE_PREEXIT;
+						ctx_p->state = STATE_PREEXIT;
 					else
 					if (ctx_p->flags[MAXITERATIONS] <= ctx_p->iteration_num)
-						state = STATE_EXIT;
+						ctx_p->state = STATE_EXIT;
 				}
 
-				switch (state) {
+				switch (ctx_p->state) {
 					case STATE_PREEXIT:
 						main_status_update(ctx_p, state);
 						if (ctx_p->flags[PREEXITHOOK])
 							hook_preexit(ctx_p);
 
-						state = STATE_TERM;
+						ctx_p->state = STATE_TERM;
 					case STATE_RUNNING:
 						events = notify_wait(ctx_p, indexes_p);
 						break;
@@ -3129,16 +3129,16 @@ int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 				break;
 			case STATE_REHASH:
-				main_status_update(ctx_p, state);
+				main_status_update(ctx_p);
 				debug(1, "rehashing.");
 				main_rehash(ctx_p);
-				state = STATE_RUNNING;
+				ctx_p->state = STATE_RUNNING;
 				SYNC_LOOP_CONTINUE_UNLOCK;
 			case STATE_TERM:
-				main_status_update(ctx_p, state);
-				state = STATE_EXIT;
+				main_status_update(ctx_p);
+				ctx_p->state = STATE_EXIT;
 			case STATE_EXIT:
-				main_status_update(ctx_p, state);
+				main_status_update(ctx_p);
 				SYNC_LOOP_CONTINUE_UNLOCK;
 		}
 
@@ -3160,7 +3160,7 @@ int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 			error("Cannot handle with notify events.");
 			return errno;
 		}
-		main_status_update(ctx_p, state);
+		main_status_update(ctx_p);
 
 		if (ctx_p->flags[EXITONNOEVENTS]) // clsync exits on no events, so sync_idle() is never called. We have to force the calling of it.
 			SYNC_LOOP_IDLE;

@@ -202,6 +202,8 @@ struct synchandler_args {
 typedef struct synchandler_args synchandler_args_t;
 
 struct ctx {
+	state_t state;
+
 #ifndef LIBCLSYNC
 	uid_t uid;
 	gid_t gid;

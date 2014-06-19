@@ -1820,8 +1820,10 @@ int main_rehash(ctx_t *ctx_p) {
 	return ret;
 }
 
-int main_status_update(ctx_t *ctx_p, state_t state) {
+int main_status_update(ctx_t *ctx_p) {
 	static state_t state_old = STATE_UNKNOWN;
+	state_t        state     = ctx_p->state;
+
 	debug(4, "%u", state);
 
 	if(state == state_old) {
