@@ -988,7 +988,7 @@ int arguments_parse(int argc, char *argv[], struct ctx *ctx_p) {
 	return 0;
 }
 
-void gkf_parse(ctx_t *ctx_p, GKeyFile *gkf) {
+void gkf_parse(ctx_t *ctx_p, GKeyFile *gkf, paramsource_t paramsource) {
 	debug(9, "");
 	char *config_block = ctx_p->config_block;
 	do {
@@ -1001,7 +1001,7 @@ void gkf_parse(ctx_t *ctx_p, GKeyFile *gkf) {
 		while(lo_ptr->name != NULL) {
 			gchar *value = g_key_file_get_value(gkf, config_block, lo_ptr->name, NULL);
 			if(value != NULL) {
-				int ret = parse_parameter(ctx_p, lo_ptr->val, value, PS_CONFIG);
+				int ret = parse_parameter(ctx_p, lo_ptr->val, value, paramsource);
 				if(ret) exit(ret);
 			}
 			lo_ptr++;
@@ -1019,7 +1019,7 @@ void gkf_parse(ctx_t *ctx_p, GKeyFile *gkf) {
 	return;
 }
 
-int configs_parse(ctx_t *ctx_p) {
+int configs_parse(ctx_t *ctx_p, paramsource_t paramsource) {
 	GKeyFile *gkf;
 
 	gkf = g_key_file_new();
@@ -1038,7 +1038,7 @@ int configs_parse(ctx_t *ctx_p) {
 			g_key_file_free(gkf);
 			return -1;
 		} else
-			gkf_parse(ctx_p, gkf);
+			gkf_parse(ctx_p, gkf, paramsource);
 
 	} else {
 		char  *config_paths[] = CONFIG_PATHS;
@@ -1070,7 +1070,7 @@ int configs_parse(ctx_t *ctx_p) {
 				continue;
 			}
 
-			gkf_parse(ctx_p, gkf);
+			gkf_parse(ctx_p, gkf, paramsource);
 
 			break;
 		}
@@ -1080,16 +1080,6 @@ int configs_parse(ctx_t *ctx_p) {
 	g_key_file_free(gkf);
 
 	return 0;
-}
-
-int config_block_parse(ctx_t *ctx_p, const char *const config_block_name)
-{
-	debug(1, "(ctx_p, \"%s\")", config_block_name);
-
-	free(ctx_p->config_block);
-
-	ctx_p->config_block = strdup(config_block_name);
-	return configs_parse(ctx_p);
 }
 
 int ctx_check(ctx_t *ctx_p) {
@@ -1573,6 +1563,20 @@ int ctx_check(ctx_t *ctx_p) {
 	return ret;
 }
 
+int config_block_parse(ctx_t *ctx_p, const char *const config_block_name)
+{
+	int rc;
+	debug(1, "(ctx_p, \"%s\")", config_block_name);
+
+	ctx_p->config_block = config_block_name;
+	rc = configs_parse(ctx_p, PS_CONTROL);
+
+	if (!rc)
+		rc = ctx_check(ctx_p);
+
+	return errno = rc;
+}
+
 int ctx_set(ctx_t *ctx_p, const char *const parameter_name, const char *const parameter_value)
 {
 	int ret = ENOENT;
@@ -2002,7 +2006,7 @@ int main(int argc, char *argv[]) {
 	if (nret) ret = nret;
 
 	if (!ret) {
-		nret = configs_parse(ctx_p);
+		nret = configs_parse(ctx_p, PS_CONFIG);
 		if(nret) ret = nret;
 	}
 

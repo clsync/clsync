@@ -3511,7 +3511,10 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 		}
 
 		if (ctx_p->customsignal[signal] != NULL) {
-			config_block_parse(ctx_p, ctx_p->customsignal[signal]);
+			if (config_block_parse(ctx_p, ctx_p->customsignal[signal])) {
+				*exitcode_p = errno;
+				 signal = SIGTERM;
+			}
 			continue;
 		}
 
