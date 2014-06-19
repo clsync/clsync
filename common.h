@@ -134,6 +134,7 @@ enum paramsource_enum {
 	PS_UNKNOWN	 = 0,
 	PS_ARGUMENT,
 	PS_CONFIG,
+	PS_CONTROL,
 	PS_DEFAULTS,
 };
 typedef enum paramsource_enum paramsource_t;
@@ -148,19 +149,6 @@ enum notifyengine_enum {
 	NE_DTRACEPIPE,
 };
 typedef enum notifyengine_enum notifyengine_t;
-
-#define STATE_STARTING(state_p) (state_p == NULL)
-enum state_enum {
-	STATE_EXIT 	= 0,
-	STATE_STARTING,
-	STATE_RUNNING,
-	STATE_REHASH,
-	STATE_TERM,
-	STATE_THREAD_GC,
-	STATE_INITSYNC,
-	STATE_UNKNOWN
-};
-typedef enum state_enum state_t;
 
 enum threadingmode {
 	PM_OFF	= 0,

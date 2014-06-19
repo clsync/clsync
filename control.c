@@ -27,6 +27,7 @@
 
 
 #include "indexes.h"
+#include "main.h"
 #include "ctx.h"
 #include "error.h"
 #include "sync.h"
@@ -36,9 +37,9 @@
 static pthread_t pthread_control;
 
 
-static inline int control_error(clsyncsock_t *clsyncsock_p, const char *const funct, const char *const args) {
+static inline int control_error(clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p, const char *const funct, const char *const args) {
 	debug(3, "%s(%s): %u: %s", funct, args, errno, strerror(errno));
-	return socket_send(clsyncsock_p, SOCKCMD_REPLY_ECUSTOM, funct, args, errno, strerror(errno));
+	return socket_reply(clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_ECUSTOM, funct, args, errno, strerror(errno));
 }
 
 
@@ -48,8 +49,8 @@ int control_dump(ctx_t *ctx_p, clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p)
 	debug(3, "%s", dat->dir_path);
 
 	return (sync_dump(ctx_p, dat->dir_path)) ? 
-		control_error(clsyncsock_p, "sync_dump", dat->dir_path) :
-		socket_send(clsyncsock_p, SOCKCMD_REPLY_DUMP);
+		control_error(clsyncsock_p, sockcmd_p, "sync_dump", dat->dir_path) :
+		socket_reply(clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_DUMP);
 }
 
 int control_procclsyncsock(socket_sockthreaddata_t *arg, sockcmd_t *sockcmd_p) {
@@ -62,8 +63,18 @@ int control_procclsyncsock(socket_sockthreaddata_t *arg, sockcmd_t *sockcmd_p) {
 			rc = control_dump(ctx_p, clsyncsock_p, sockcmd_p);
 			break;
 		case SOCKCMD_REQUEST_INFO:
-			rc = socket_send(clsyncsock_p, SOCKCMD_REPLY_INFO, ctx_p->config_block, ctx_p->label, ctx_p->flags, ctx_p->flags_set);
+			rc = socket_reply(clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_INFO, ctx_p->config_block, ctx_p->label, ctx_p->flags, ctx_p->flags_set);
 			break;
+		case SOCKCMD_REQUEST_SET: {
+			sockcmd_dat_set_t *dat = sockcmd_p->data;
+			rc = ctx_set(ctx_p, dat->key, dat->value);
+			if (rc) {
+				control_error(clsyncsock_p, sockcmd_p, "ctx_set", dat->key);
+				break;
+			}
+			rc = socket_reply(clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_SET);
+			break;
+		}
 		case SOCKCMD_REQUEST_DIE:
 			rc = sync_term(SIGTERM);
 			break;

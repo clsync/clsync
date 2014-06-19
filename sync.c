@@ -570,7 +570,7 @@ int thread_cleanup(ctx_t *ctx_p) {
 	return thread_info_unlock(0);
 }
 
-int *state_p = NULL;
+state_t *state_p = NULL;
 int exitcode = 0;
 #define SHOULD_THREAD(ctx_p) ((ctx_p->flags[THREADING] != PM_OFF) && (ctx_p->flags[THREADING] != PM_SAFE || ctx_p->iteration_num))
 
@@ -2944,20 +2944,20 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
 	long queue_id = 0;
-	while(queue_id < QUEUE_MAX) {
+	while (queue_id < QUEUE_MAX) {
 		queueinfo_t *queueinfo = &ctx_p->_queues[queue_id++];
 
-		if(!queueinfo->stime)
+		if (!queueinfo->stime)
 			continue;
 
-		if(queueinfo->collectdelay == COLLECTDELAY_INSTANT) {
+		if (queueinfo->collectdelay == COLLECTDELAY_INSTANT) {
 			debug(3, "There're events in instant queue (#%i), don't waiting.", queue_id-1);
 			return 0;
 		}
 
 		int qdelay = queueinfo->stime + queueinfo->collectdelay - tm;
 		debug(3, "queue #%i: %i %i %i -> %i", queue_id-1, queueinfo->stime, queueinfo->collectdelay, tm, qdelay);
-		if(qdelay < -(long)ctx_p->syncdelay)
+		if (qdelay < -(long)ctx_p->syncdelay)
 			qdelay = -(long)ctx_p->syncdelay;
 
 		delay = MIN(delay, qdelay);
@@ -2970,7 +2970,7 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 	delay = MAX(delay, synctime_delay);
 	delay = delay > 0 ? delay : 0;
 
-	if(ctx_p->flags[THREADING]) {
+	if (ctx_p->flags[THREADING]) {
 		time_t _thread_nextexpiretime = thread_nextexpiretime();
 		debug(3, "thread_nextexpiretime == %i", _thread_nextexpiretime);
 		if(_thread_nextexpiretime) {
@@ -2982,10 +2982,10 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 		}
 	}
 
-	if((!delay) || (*state_p != STATE_RUNNING))
+	if ((!delay) || (*state_p != STATE_RUNNING))
 		return 0;
 
-	if(ctx_p->flags[EXITONNOEVENTS]) { // zero delay if "--exit-on-no-events" is set
+	if (ctx_p->flags[EXITONNOEVENTS]) { // zero delay if "--exit-on-no-events" is set
 		tv.tv_sec  = 0;
 		tv.tv_usec = 0;
 	} else {
@@ -3000,7 +3000,7 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 	debug(4, "pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
 	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
-	if(*state_p != STATE_RUNNING)
+	if (*state_p != STATE_RUNNING)
 		return 0;
 
 	debug(4, "pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
@@ -3012,7 +3012,7 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
 
-	if((ret == -1) && (errno == EINTR)) {
+	if ((ret == -1) && (errno == EINTR)) {
 		errno = 0;
 		ret   = 0;
 	}
@@ -3020,8 +3020,13 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 	debug(4, "pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
 	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
-	if((ctx_p->flags[EXITONNOEVENTS]) && (ret == 0)) // if not events and "--exit-on-no-events" is set
-		*state_p = STATE_EXIT;
+	if ((ctx_p->flags[EXITONNOEVENTS]) && (ret == 0)) {
+		// if not events and "--exit-on-no-events" is set
+		if (ctx_p->flags[PREEXITHOOK])
+			*state_p = STATE_PREEXIT;
+		else
+			*state_p = STATE_EXIT;
+	}
 
 	return ret;
 }
@@ -3041,28 +3046,42 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 	continue;\
 }
 
-int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
-	int state = ctx_p->flags[SKIPINITSYNC] ? STATE_RUNNING : STATE_INITSYNC;
-	int ret;
-	state_p = &state;
+void hook_preexit(ctx_t *ctx_p) {
+	debug(2, "");
 
-	while(state != STATE_EXIT) {
+#ifdef VERYPARANOID
+	if (ctx_p->preexithookfile == NULL)
+		critical("ctx_p->preexithookfile == NULL");
+#endif
+
+	char *argv[] = { ctx_p->preexithookfile, ctx_p->label, NULL};
+	exec_argv(argv, NULL);
+
+	return;
+}
+
+int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
+	int ret;
+	state_p = &ctx_p->state;
+	ctx_p->state = ctx_p->flags[SKIPINITSYNC] ? STATE_RUNNING : STATE_INITSYNC;
+
+	while (ctx_p->state != STATE_EXIT) {
 		int events;
 
 		threadsinfo_t *threadsinfo_p = thread_info();
 		debug(4, "pthread_mutex_lock()");
 		pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 		debug(3, "current state is %i (iteration: %u/%u)",
-			state, ctx_p->iteration_num, ctx_p->flags[MAXITERATIONS]);
+			ctx_p->state, ctx_p->iteration_num, ctx_p->flags[MAXITERATIONS]);
 		events = 0;
-		switch(state) {
+		switch (ctx_p->state) {
 			case STATE_THREAD_GC:
-				main_status_update(ctx_p, state);
+				main_status_update(ctx_p);
 				if(thread_gc(ctx_p)) {
-					state=STATE_EXIT;
+					ctx_p->state = STATE_EXIT;
 					break;
 				}
-				state = STATE_RUNNING;
+				ctx_p->state = STATE_RUNNING;
 				SYNC_LOOP_CONTINUE_UNLOCK;
 			case STATE_INITSYNC:
 				if(!ctx_p->flags[THREADING]) {
@@ -3070,7 +3089,7 @@ int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 					setenv_iteration(ctx_p->iteration_num);
 				}
 
-				main_status_update(ctx_p, state);
+				main_status_update(ctx_p);
 				pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
 				pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 				ret = sync_initialsync(ctx_p->watchdir, ctx_p, indexes_p, INITSYNC_FULL);
@@ -3078,58 +3097,75 @@ int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 				if(ctx_p->flags[ONLYINITSYNC]) {
 					SYNC_LOOP_IDLE;
-					state = STATE_EXIT;
+					ctx_p->state = STATE_EXIT;
 					return ret;
 				}
 
-				state = STATE_RUNNING;
+				ctx_p->state = STATE_RUNNING;
 				continue;
+			case STATE_PREEXIT:
 			case STATE_RUNNING:
-				if(!ctx_p->flags[THREADING])
-					if (ctx_p->flags[MAXITERATIONS] &&
-					    ctx_p->flags[MAXITERATIONS] <= ctx_p->iteration_num)
-							state = STATE_EXIT;
+				if((!ctx_p->flags[THREADING]) && ctx_p->flags[MAXITERATIONS]) {
+					if (ctx_p->flags[MAXITERATIONS] == ctx_p->iteration_num-1)
+						ctx_p->state = STATE_PREEXIT;
+					else
+					if (ctx_p->flags[MAXITERATIONS] <= ctx_p->iteration_num)
+						ctx_p->state = STATE_EXIT;
+				}
 
-				if(state == STATE_RUNNING)
-					events = notify_wait(ctx_p, indexes_p);
+				switch (ctx_p->state) {
+					case STATE_PREEXIT:
+						main_status_update(ctx_p);
+						if (ctx_p->flags[PREEXITHOOK])
+							hook_preexit(ctx_p);
 
-				if(state != STATE_RUNNING)
-					SYNC_LOOP_CONTINUE_UNLOCK;
+						ctx_p->state = STATE_TERM;
+					case STATE_RUNNING:
+						events = notify_wait(ctx_p, indexes_p);
+						break;
+					default:
+						SYNC_LOOP_CONTINUE_UNLOCK;
+				}
+
 				break;
 			case STATE_REHASH:
-				main_status_update(ctx_p, state);
+				main_status_update(ctx_p);
 				debug(1, "rehashing.");
 				main_rehash(ctx_p);
-				state = STATE_RUNNING;
+				ctx_p->state = STATE_RUNNING;
 				SYNC_LOOP_CONTINUE_UNLOCK;
 			case STATE_TERM:
-				main_status_update(ctx_p, state);
-				state = STATE_EXIT;
+				main_status_update(ctx_p);
+				ctx_p->state = STATE_EXIT;
 			case STATE_EXIT:
-				main_status_update(ctx_p, state);
+				main_status_update(ctx_p);
 				SYNC_LOOP_CONTINUE_UNLOCK;
+			default:
+				critical("internal error: ctx_p->state == %u", ctx_p->state);
+				break;
 		}
+
 		pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
 		pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
-		if(events == 0) {
+		if (events == 0) {
 			debug(2, "sync_x_wait(ctx_p, indexes_p) timed-out.");
 			SYNC_LOOP_IDLE;
 			continue;	// Timeout
 		}
-		if(events  < 0) {
+		if (events  < 0) {
 			error("Got error while waiting for event from notify subsystem.");
 			return errno;
 		}
 
 		int count = ctx_p->notifyenginefunct.handle(ctx_p, indexes_p);
-		if(count  <= 0) {
+		if (count  <= 0) {
 			error("Cannot handle with notify events.");
 			return errno;
 		}
-		main_status_update(ctx_p, state);
+		main_status_update(ctx_p);
 
-		if(ctx_p->flags[EXITONNOEVENTS]) // clsync exits on no events, so sync_idle() is never called. We have to force the calling of it.
+		if (ctx_p->flags[EXITONNOEVENTS]) // clsync exits on no events, so sync_idle() is never called. We have to force the calling of it.
 			SYNC_LOOP_IDLE;
 	}
 
@@ -3447,6 +3483,7 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 			switch(signal) {
 				case SIGALRM:
 					*exitcode_p = ETIME;
+				case SIGQUIT:
 				case SIGTERM:
 				case SIGINT:
 					// TODO: remove the exit() from here. Main thread should exit itself
@@ -3468,11 +3505,17 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 		switch(signal) {
 			case SIGALRM:
 				*exitcode_p = ETIME;
+			case SIGQUIT:
+				if (ctx_p->flags[PREEXITHOOK])
+					sync_switch_state(pthread_parent, STATE_PREEXIT);
+				else
+					sync_switch_state(pthread_parent, STATE_TERM);
+				break;
 			case SIGTERM:
 			case SIGINT:
 				sync_switch_state(pthread_parent, STATE_TERM);
 				// bugfix of https://github.com/xaionaro/clsync/issues/44
-				while(ctx_p->children) { // Killing children if non-pthread mode or/and (mode=="so" or mode=="rsyncso")
+				while (ctx_p->children) { // Killing children if non-pthread mode or/and (mode=="so" or mode=="rsyncso")
 					pid_t child_pid = ctx_p->child_pid[--ctx_p->children];
 					if(waitpid(child_pid, NULL, WNOHANG)>=0) {
 						debug(3, "Sending signal %u to child process with pid %u.",
@@ -3536,6 +3579,7 @@ int sync_run(ctx_t *ctx_p) {
 	sigemptyset(&sigset_sighandler);
 	sigaddset(&sigset_sighandler, SIGALRM);
 	sigaddset(&sigset_sighandler, SIGHUP);
+	sigaddset(&sigset_sighandler, SIGQUIT);
 	sigaddset(&sigset_sighandler, SIGTERM);
 	sigaddset(&sigset_sighandler, SIGINT);
 	sigaddset(&sigset_sighandler, SIGUSR_THREAD_GC);
@@ -3748,7 +3792,7 @@ int sync_run(ctx_t *ctx_p) {
 
 	debug(1, "killing sighandler");
 	// TODO: Do cleanup of watching points
-	pthread_kill(pthread_sighandler, SIGTERM);
+	pthread_kill(pthread_sighandler, SIGINT);
 	pthread_join(pthread_sighandler, NULL);
 
 	// Killing children

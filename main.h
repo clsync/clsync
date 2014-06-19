@@ -18,7 +18,8 @@
  */
 
 extern int main_rehash(ctx_t *ctx_p);
-extern int main_status_update(ctx_t *ctx_p, state_t state);
+extern int main_status_update(ctx_t *ctx_p);
+extern int ctx_set(ctx_t *ctx_p, const char *const parameter_name, const char *const parameter_value);
 extern char *parameter_expand(
 		ctx_t *ctx_p,
 		char *arg,

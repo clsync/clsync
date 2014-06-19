@@ -49,10 +49,28 @@
 #	define SOCKET_MAX SOCKET_MAX_CLSYNC
 #endif
 
+struct socket_sockthreaddata;
+struct sockcmd;
+
+typedef int (*clsyncsock_cb_funct_t)(struct socket_sockthreaddata *thread, struct sockcmd *sockcmd_p, void *arg);
+struct clsynccbqueue {
+	uint64_t		 cmd_num;
+
+	clsyncsock_cb_funct_t	 callback_funct;
+	void			*callback_arg;
+};
+typedef struct clsynccbqueue clsynccbqueue_t;
+
 struct clsyncsock {
 	int sock;
 	uint16_t prot;
 	uint16_t subprot;
+
+	uint64_t cmd_num;
+
+	size_t		 cbqueue_len;
+	clsynccbqueue_t  cbqueue[CLSYNCSOCK_WINDOW+1];
+	clsynccbqueue_t *cbqueue_cache[4*CLSYNCSOCK_WINDOW+1];	// It's a hacky hash-table of size "CLSYNCSOCK_WINDOW*2"
 };
 typedef struct clsyncsock clsyncsock_t;
 
@@ -88,17 +106,19 @@ enum sockcmd_id {
 	SOCKCMD_REPLY_EEXIST		= 163,
 	SOCKCMD_REPLY_EPERM		= 164,
 	SOCKCMD_REPLY_ECUSTOM		= 199,
-	SOCKCMD_REQUEST_LOGIN		= 200,
-	SOCKCMD_REQUEST_VERSION		= 201,
-	SOCKCMD_REQUEST_INFO		= 202,
-	SOCKCMD_REQUEST_DUMP		= 203,
-	SOCKCMD_REQUEST_DIE		= 210,
+	SOCKCMD_REQUEST_VERSION		= 200,
+	SOCKCMD_REQUEST_INFO		= 201,
+	SOCKCMD_REQUEST_DUMP		= 202,
+	SOCKCMD_REQUEST_LOGIN		= 210,
+	SOCKCMD_REQUEST_SET		= 211,
+	SOCKCMD_REQUEST_DIE		= 240,
 	SOCKCMD_REQUEST_QUIT		= 250,
-	SOCKCMD_REPLY_LOGIN		= 300,
-	SOCKCMD_REPLY_VERSION		= 301,
-	SOCKCMD_REPLY_INFO		= 302,
-	SOCKCMD_REPLY_DUMP		= 303,
-	SOCKCMD_REPLY_DIE		= 310,
+	SOCKCMD_REPLY_VERSION		= 300,
+	SOCKCMD_REPLY_INFO		= 301,
+	SOCKCMD_REPLY_DUMP		= 302,
+	SOCKCMD_REPLY_LOGIN		= 310,
+	SOCKCMD_REPLY_SET		= 311,
+	SOCKCMD_REPLY_DIE		= 340,
 	SOCKCMD_REPLY_BYE		= 350,
 	SOCKCMD_REPLY_UNEXPECTEDEND	= 351,
 	SOCKCMD_MAXID
@@ -156,6 +176,12 @@ struct sockcmd_dat_eperm {
 };
 typedef struct sockcmd_dat_eperm sockcmd_dat_eperm_t;
 
+struct sockcmd_dat_set {
+	char		key[BUFSIZ];
+	char		value[BUFSIZ];
+};
+typedef struct sockcmd_dat_set sockcmd_dat_set_t;
+
 struct sockcmd {
 	uint64_t	 cmd_num;
 	uint16_t	 cmd_id;
@@ -193,7 +219,9 @@ struct socket_sockthreaddata {
 };
 typedef struct socket_sockthreaddata socket_sockthreaddata_t;
 
+extern int socket_reply(clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p, sockcmd_id_t cmd_id, ...);
 extern int socket_send(clsyncsock_t *clsyncsock, sockcmd_id_t cmd_id, ...);
+extern int socket_send_cb(clsyncsock_t *clsyncsock_p, sockcmd_id_t cmd_id, clsyncsock_cb_funct_t cb, void *cb_arg, ...);
 extern int socket_sendinvalid(clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p);
 extern int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd);
 extern int socket_check_bysock(int sock);

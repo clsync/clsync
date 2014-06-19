@@ -246,13 +246,20 @@ reloading configuration files
 .RS
 running threads' garbage collector
 .RE
+.IR preexit
+.RS
+executing the
+.I \-\-pre\-exit\-hook
+.RE
 .IR terminating
 .RS
-received signal to die, preparing to die
+running the last iteration (if required) and preparing to die
 .RE
 .IR exiting
 .RS
-cleaning up [for
+executing the
+.I \-\-exit\-hook
+and cleaning up [for
 .BR valgrind (1)]
 .RE
 .RE
@@ -813,12 +820,39 @@ Is not set by default.
 .RS 8
 Sets path of program to be executed on clsync exit.
 
-If this parameter is set, clsync will exec on exit:
+If this parameter is set then clsync will exec on exit:
 .RS
 .I path\-of\-exit\-hook\-program label 
 .RE
 
-The execution will be skipped if syncing process wasn't started.
+The execution will be skipped if initial sync wasn't complete.
+
+Is not set by default.
+.RE
+
+.PP
+.B \-\-pre\-exit\-hook
+.I path\-of\-pre\-exit\-hook\-program
+.RS 8
+Sets path of program to be executed before the last sync iteration (see
+.IR "\-\-max\-iterations" ", " "\-\-exit\-on\-no\-events" " and "
+.BR SIGNALS ")."
+
+If this parameter is set then clsync will exec on exit:
+.RS
+.I path\-of\-pre\-exit\-hook\-program label
+.RE
+
+The execution will be skipped if initial sync wasn't complete.
+
+If
+.B clsync
+finishes due to
+.I \-\-exit\-on\-no\-events
+and
+.I \-\-pre\-exit\-hook
+is set then the pre\-exit hook will be executed and additional sync iteration
+will be triggered.
 
 Is not set by default.
 .RE
@@ -1511,17 +1545,29 @@ Syncing /srv/lxc tree (rsync case):
 .RE
 
 .SH SIGNALS
-1  \- to reread filter rules
+1  \- (HUP) rereads filter rules
+
+2  \- (INT) exits without waiting of syncing processes ("hard kill",
+kills children)
+
+3  \- (QUIT) waits for current syncing processes and exit ("soft kill", waits
+for children)
 
 10 \- runs threads' GC function
 
 12 \- runs full resync
+
+15 \- (TERM) exits without waiting of syncing processes ("hard kill",
+kills children)
 
 16 \- interrupts sleep()/select() and wait() [for debugging and internal uses]
 
 29 \- dump information to
 .IR dump-dir
 [for debugging]
+
+If you need to kill clsync but leave children then you can use 9-th (KILL)
+signal.
 
 .SH DIAGNOSTICS
 
@@ -1578,10 +1624,10 @@ this may happend, for example in next cases:
 \- Not enough space on destination.
 
 \- You're running clsync with 
-.B \-\-threading
+.B \-\-threading=full
 and rsync with
 .BR \-\-backup .
-See bugreport by URL:
+See a bugreport by URL:
 .IR https://bugzilla.samba.org/show_bug.cgi?id=10081 .
 
 .RE
