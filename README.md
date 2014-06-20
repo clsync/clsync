@@ -25,28 +25,28 @@ Contents
 1. Name
 -------
 
-Why "clsync"? The first name of the utility was "insync" (due to inotify), but
-then I suggested to use "fanotify" instead of "inotify" and utility was been
-renamed to "fasync". After that I started to intensively write the program.
-However I faced with some problems in "fanotify", so I was have to temporary
-fallback to "inotify", then I decided that the best name is "Runtime Sync" or
-"Live Sync", but "rtsync" is a name of some corporation and "lsync" is busy
+Why "clsync"? The first name of the utility was "insync" (due to inotify) but
+then I suggested to use "fanotify" instead of "inotify" and utility has been
+renamed to "fasync". After that I started to intensively write the program and
+I faced with some problems in "fanotify". So I was have to temporary fallback
+to "inotify" then I decided that the best name is "Runtime Sync" or
+"Live Sync" but "rtsync" is a name of some corporation and "lsync" is busy
 by "[lsyncd](https://github.com/axkibe/lsyncd)". So I called it
-"clsync", that should be interpreted as "lsync, but on c" due to "lsyncd" that
+"clsync" that should be interpreted as "lsync but on c" due to "lsyncd" that
 written on "LUA" and may be used for the same purposes.
 
-UPD: Also I was have to add somekind of clustering support. It's multicast
+UPD: Also I was have to add somekind of clustering support. It's a multicast
 notifing subsystem to prevent loops on bidirection syncing. So "clsync" also
 can be interpreted as "cluster live sync". ;)
 
 2. Motivation
 -------------
 
-This utility was been writted for two purposes:
+This utility has been written for two purposes:
 - for making high availability clusters
 - for making backups of them
 
-To do HA cluster I've tried a lot of different solutions, like "simple 
+To do a HA cluster I've tried a lot of different solutions, like "simple 
 rsync by cron", "glusterfs", "ocfs2 over drbd", "common mirrorable external 
 storage", "incron + perl + rsync", "inosync", "lsyncd" and so on. When I 
 started to write the utility we was using "lsyncd", "ceph" and
@@ -84,7 +84,7 @@ syncing /etc/{passwd,shadow,group,shells} files.
 3. inotify vs fanotify:
 -----------------------
 
-It's said, that fanotify is much better, than inotify. So I started to write 
+It's said that fanotify is much better than inotify. So I started to write 
 this program with using of fanotify. However I encountered the problem, that
 fanotify was unable to catch some important events at the moment of writing
 the program, like "directory creation" or "file deletion". So I switched to
@@ -242,7 +242,7 @@ next command:
 10. FreeBSD support
 -------------------
 
-clsync was been ported to FreeBSD.
+clsync has been ported to FreeBSD.
 
 FreeBSD doesn't support inotify, so there're 3 ways to use clsync on it:
 * using [libinotify](https://github.com/dmatveev/libinotify-kqueue);
