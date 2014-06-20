@@ -2045,6 +2045,71 @@ int main(int argc, char *argv[]) {
 	ctx_p->state = STATE_STARTING;
 	main_status_update(ctx_p);
 
+#ifdef CAPABILITIES_SUPPORT
+	if (ctx_p->flags[CAP_PRESERVE_FILEACCESS]) {
+		debug(1, "Preserving Linux capabilites");
+
+		// Tell kernel not clear capabilities when dropping root 
+		if (prctl(PR_SET_KEEPCAPS, 1) < 0) {
+			error("Cannot prctl(PR_SET_KEEPCAPS, 1) to preserve capabilities");
+			ret = errno;
+		}
+	}
+#endif
+
+	if (ctx_p->flags[GID]) {
+		debug(3, "Dropping gid to %i", ctx_p->gid);
+		if (setgid(ctx_p->gid)) {
+			error("Cannot setgid(%u)", ctx_p->gid);
+			ret = errno;
+		}
+	}
+
+	if (ctx_p->flags[UID]) {
+		debug(3, "Dropping uid to %i", ctx_p->uid);
+		if (setuid(ctx_p->uid)) {
+			error("Cannot setuid(%u)", ctx_p->uid);
+			ret = errno;
+		}
+	}
+
+#ifdef CAPABILITIES_SUPPORT
+	if (ctx_p->flags[CAP_PRESERVE_FILEACCESS]) {
+		// Doesn't work, yet :(
+		//
+		// Error: Cannot inotify_add_watch() on "/home/xaionaro/clsync/examples/testdir/from": Permission denied (errno: 13).
+		debug(1, "Dropping all Linux capabilites but CAP_DAC_READ_SEARCH");
+
+		struct __user_cap_header_struct	cap_hdr = {0};
+		struct __user_cap_data_struct	cap_dat = {0};
+
+		cap_hdr.version = _LINUX_CAPABILITY_VERSION;
+		if (capget(&cap_hdr, &cap_dat) < 0) {
+			error("Cannot get capabilites with capget()");
+			ret = errno;
+
+			goto preserve_fileaccess_end;
+		}
+
+		// From "man 7 capabilities":
+		// CAP_DAC_OVERRIDE    - Bypass file read, write, and execute permission checks. 
+		// CAP_DAC_READ_SEARCH - Bypass file read permission checks and directory read and execute permission checks.
+
+		cap_dat.effective    = CAP_TO_MASK(CAP_DAC_READ_SEARCH);
+		cap_dat.permitted    = cap_dat.effective;
+		cap_dat.inheritable  = cap_dat.effective;
+
+		debug(3, "cap.eff == 0x%04x; cap.prm == 0x%04x; cap.inh == 0x%04x.",
+			cap_dat.effective, cap_dat.permitted, cap_dat.inheritable);
+
+		if (capset(&cap_hdr, &cap_dat) < 0) {
+			error("Cannot set capabilities with capset().");
+			ret = errno;
+		}
+	}
+preserve_fileaccess_end:
+#endif
+
 	ret = ctx_check(ctx_p);
 
 	if (
@@ -2105,71 +2170,6 @@ int main(int argc, char *argv[]) {
 		if (nret)
 			ret = nret;
 	}
-
-#ifdef CAPABILITIES_SUPPORT
-	if (ctx_p->flags[CAP_PRESERVE_FILEACCESS]) {
-		debug(1, "Preserving Linux capabilites");
-
-		// Tell kernel not clear capabilities when dropping root 
-		if (prctl(PR_SET_KEEPCAPS, 1) < 0) {
-			error("Cannot prctl(PR_SET_KEEPCAPS, 1) to preserve capabilities");
-			ret = errno;
-		}
-	}
-#endif
-
-	if (ctx_p->flags[GID]) {
-		debug(3, "Dropping gid to %i", ctx_p->gid);
-		if (setuid(ctx_p->gid)) {
-			error("Cannot setgid(%u)", ctx_p->gid);
-			ret = errno;
-		}
-	}
-
-	if (ctx_p->flags[UID]) {
-		debug(3, "Dropping uid to %i", ctx_p->uid);
-		if (setuid(ctx_p->uid)) {
-			error("Cannot setuid(%u)", ctx_p->uid);
-			ret = errno;
-		}
-	}
-
-#ifdef CAPABILITIES_SUPPORT
-	if (ctx_p->flags[CAP_PRESERVE_FILEACCESS]) {
-		// Doesn't work, yet :(
-		//
-		// Error: Cannot inotify_add_watch() on "/home/xaionaro/clsync/examples/testdir/from": Permission denied (errno: 13).
-		debug(1, "Dropping all Linux capabilites but CAP_DAC_READ_SEARCH");
-
-		struct __user_cap_header_struct	cap_hdr = {0};
-		struct __user_cap_data_struct	cap_dat = {0};
-
-		cap_hdr.version = _LINUX_CAPABILITY_VERSION;
-		if (capget(&cap_hdr, &cap_dat) < 0) {
-			error("Cannot get capabilites with capget()");
-			ret = errno;
-
-			goto preserve_fileaccess_end;
-		}
-
-		// From "man 7 capabilities":
-		// CAP_DAC_OVERRIDE    - Bypass file read, write, and execute permission checks. 
-		// CAP_DAC_READ_SEARCH - Bypass file read permission checks and directory read and execute permission checks.
-
-		cap_dat.effective    = CAP_TO_MASK(CAP_DAC_READ_SEARCH);
-		cap_dat.permitted    = cap_dat.effective;
-		cap_dat.inheritable  = cap_dat.effective;
-
-		debug(3, "cap.eff == 0x%04x; cap.prm == 0x%04x; cap.inh == 0x%04x.",
-			cap_dat.effective, cap_dat.permitted, cap_dat.inheritable);
-
-		if (capset(&cap_hdr, &cap_dat) < 0) {
-			error("Cannot set capabilities with capset().");
-			ret = errno;
-		}
-	}
-preserve_fileaccess_end:
-#endif
 
 	if (ctx_p->pidfile != NULL) {
 		pid_t pid = getpid();
