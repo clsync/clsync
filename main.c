@@ -1011,7 +1011,7 @@ int arguments_parse(int argc, char *argv[], struct ctx *ctx_p) {
 
 void gkf_parse(ctx_t *ctx_p, GKeyFile *gkf, paramsource_t paramsource) {
 	debug(9, "");
-	char *config_block = ctx_p->config_block;
+	char *config_block = (char *)ctx_p->config_block;
 	do {
 		const struct option *lo_ptr = long_options;
 

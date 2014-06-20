@@ -234,7 +234,7 @@ struct ctx {
 	int flags_set[OPTION_FLAGS];
 #ifndef LIBCLSYNC
 	char *config_path;
-	char *config_block;
+	const char *config_block;
 	char *customsignal[MAXSIGNALNUM+1];
 	char *label;
 	char *watchdir;
