@@ -1195,8 +1195,17 @@ int ctx_check(ctx_t *ctx_p) {
 	}
 
 	if (ctx_p->handlerfpath == NULL) {
-		ret = errno = EINVAL;
-		error("\"--sync-handler\" path is not set.");
+		switch (ctx_p->flags[MODE]) {
+			case MODE_DIRECT:
+				ctx_p->handlerfpath = DEFAULT_CP_PATH;
+				break;
+			case MODE_RSYNCDIRECT:
+				ctx_p->handlerfpath = DEFAULT_RSYNC_PATH;
+				break;
+			default:
+				ret = errno = EINVAL;
+				error("\"--sync-handler\" path is not set.");
+		}
 	}
 /*
 	if (ctx_p->flags[SYNCHANDLERSO] && ctx_p->flags[RSYNC]) {

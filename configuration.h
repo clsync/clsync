@@ -86,6 +86,9 @@
 #define DUMP_DIRMODE			0750
 #define DUMP_FILEMODE			0644
 
+#define DEFAULT_CP_PATH			"cp"
+#define	DEFAULT_RSYNC_PATH		"rsync"
+
 // size of event chain size to be processes at a time
 #define KQUEUE_EVENTLISTSIZE		256
 
