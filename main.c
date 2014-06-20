@@ -1406,31 +1406,6 @@ int ctx_check(ctx_t *ctx_p) {
 	}
 
 	if (
-		(ctx_p->listoutdir == NULL) && 
-		(
-			ctx_p->synchandler_argf & 
-			(
-				SHFL_INCLUDE_LIST_PATH |
-				SHFL_EXCLUDE_LIST_PATH
-			)
-		)
-	) {
-		ret = errno = EINVAL;
-		error("Variable %%INCLUDE-LIST-PATH%% or %%EXCLUDE-LIST-PATH%% is used but --lists-dir is not set.");
-	}
-
-/*	if(
-		(
-			(ctx_p->flags[MODE]==MODE_RSYNCDIRECT) || 
-			(ctx_p->flags[MODE]==MODE_RSYNCSHELL)  ||
-			(ctx_p->flags[MODE]==MODE_RSYNCSO)
-		) && (ctx_p->listoutdir == NULL)
-	) {
-		ret = errno = EINVAL;
-		error("Modes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" cannot be used without \"--lists-dir\".");
-	}*/
-
-	if (
 		ctx_p->flags[RSYNCPREFERINCLUDE] && 
 		!(
 			ctx_p->flags[MODE] == MODE_RSYNCDIRECT ||
@@ -1449,33 +1424,6 @@ int ctx_check(ctx_t *ctx_p) {
 		&& ctx_p->flags[AUTORULESW]
 	)
 		warning("Option \"--auto-add-rules-w\" in modes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" may cause unexpected problems.");
-
-	if (ctx_p->listoutdir != NULL) {
-		struct stat st={0};
-		errno = 0;
-		if (stat(ctx_p->listoutdir, &st)) {
-			if (errno == ENOENT) {
-				warning("Directory \"%s\" doesn't exist. Creating it.", ctx_p->listoutdir);
-				errno = 0;
-				if(mkdir(ctx_p->listoutdir, S_IRWXU)) {
-					error("Cannot create directory \"%s\".", ctx_p->listoutdir);
-					ret = errno;
-				}
-			} else {
-				error("Got error while stat() on \"%s\".", ctx_p->listoutdir);
-				ret = errno;
-			}
-		}
-		if (!errno)
-			if (st.st_mode & (S_IRWXG|S_IRWXO)) {
-#ifdef PARANOID
-				ret = errno = EACCES;
-				error("Insecure: Others have access to directory \"%s\". Exit.", ctx_p->listoutdir);
-#else
-				warning("Insecure: Others have access to directory \"%s\".", ctx_p->listoutdir);
-#endif
-			}
-	}
 
 /*
 	if(ctx_p->flags[HAVERECURSIVESYNC] && (ctx_p->listoutdir == NULL)) {
@@ -2001,7 +1949,7 @@ int main_status_update(ctx_t *ctx_p) {
 int main(int argc, char *argv[]) {
 	struct ctx *ctx_p = xcalloc(1, sizeof(*ctx_p));
 
-	int ret = 0, nret;
+	int ret = 0, nret, rm_listoutdir = 0;
 	ctx_p->flags[MONITOR]			 = DEFAULT_NOTIFYENGINE;
 	ctx_p->syncdelay 			 = DEFAULT_SYNCDELAY;
 	ctx_p->_queues[QUEUE_NORMAL].collectdelay   = DEFAULT_COLLECTDELAY;
@@ -2089,6 +2037,55 @@ int main(int argc, char *argv[]) {
 	main_status_update(ctx_p);
 
 	ret = ctx_check(ctx_p);
+
+	if (
+		(ctx_p->listoutdir == NULL) && 
+		(
+			ctx_p->synchandler_argf & 
+			(
+				SHFL_INCLUDE_LIST_PATH |
+				SHFL_EXCLUDE_LIST_PATH
+			)
+		)
+	) {
+		char *template = strdup(TMPDIR_TEMPLATE);
+
+		ctx_p->listoutdir = mkdtemp(template);
+
+		if (ctx_p->listoutdir == NULL) {
+			ret = errno;
+			error("Cannot create temporary dir for list files");
+		} else
+			rm_listoutdir = 2;
+	}
+
+	if (ctx_p->listoutdir != NULL) {
+		struct stat st={0};
+		errno = 0;
+		if (stat(ctx_p->listoutdir, &st)) {
+			if (errno == ENOENT) {
+				warning("Directory \"%s\" doesn't exist. Creating it.", ctx_p->listoutdir);
+				errno = 0;
+				if (mkdir(ctx_p->listoutdir, S_IRWXU)) {
+					error("Cannot create directory \"%s\".", ctx_p->listoutdir);
+					ret = errno;
+				} else
+					rm_listoutdir = 1;
+			} else {
+				error("Got error while stat() on \"%s\".", ctx_p->listoutdir);
+				ret = errno;
+			}
+		}
+		if (!errno)
+			if (st.st_mode & (S_IRWXG|S_IRWXO)) {
+#ifdef PARANOID
+				ret = errno = EACCES;
+				error("Insecure: Others have access to directory \"%s\". Exit.", ctx_p->listoutdir);
+#else
+				warning("Insecure: Others have access to directory \"%s\".", ctx_p->listoutdir);
+#endif
+			}
+	}
 
 	nret=main_rehash(ctx_p);
 	if (nret)
@@ -2203,6 +2200,14 @@ preserve_fileaccess_end:
 				ctx_p->statusfile);
 			ret = errno;
 		}
+	}
+
+	if ((!ctx_p->flags[DONTUNLINK]) && (ctx_p->listoutdir != NULL) && rm_listoutdir) {
+		debug(2, "rmdir(\"%s\")", ctx_p->listoutdir);
+		if (rmdir(ctx_p->listoutdir))
+			error("Cannot rmdir(\"%s\")", ctx_p->listoutdir);
+		if (rm_listoutdir == 2)
+			free(ctx_p->listoutdir);
 	}
 
 	main_cleanup(ctx_p);

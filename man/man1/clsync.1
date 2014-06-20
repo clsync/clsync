@@ -695,20 +695,6 @@ Default value is "134217728" ["128 MiB"].
 .RS
 Sets directory path to output temporary events\-lists files.
 
-If this option is enabled,
-.B clsync
-will execute
-.I sync\-handler
-once for each aggregated event list, passing the path to a file containing
-this list (actions "synclist" and "rsynclist").
-Otherwise,
-.B clsync
-will execute
-.I sync\-handler
-for every file in the aggregated event list (action "sync").
-
-Cannot be used in mode "so".
-
 See
 .BR "SYNC HANDLER MODES" .
 

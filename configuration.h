@@ -104,6 +104,8 @@ filesz:1M\n\
 
 #define DTRACE_PATH			"dtrace"
 
+#define	TMPDIR_TEMPLATE			"clsync-XXXXXX"
+
 #define SYSLOG_BUFSIZ			(1<<16)
 
 #define CLSYNCSOCK_WINDOW		(1<<8)
