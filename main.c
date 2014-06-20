@@ -20,6 +20,11 @@
 
 #include "common.h"
 
+#ifdef CAPABILITIES_SUPPORT
+#	include <sys/capability.h>	// for capset()/capget() for --preserve-file-access
+#	include <sys/prctl.h>		// for prctl() for --preserve-fil-access
+#endif
+
 #include "port-hacks.h"
 
 #include <pwd.h>	// For getpwnam()
@@ -58,7 +63,7 @@ static const struct option long_options[] =
 	{"pid-file",		required_argument,	NULL,	PIDFILE},
 	{"uid",			required_argument,	NULL,	UID},
 	{"gid",			required_argument,	NULL,	GID},
-#ifdef HAVE_CAPABILITIES
+#ifdef CAPABILITIES_SUPPORT
 	{"preserve-file-access",optional_argument,	NULL,	CAP_PRESERVE_FILEACCESS},
 #endif
 	{"threading",		required_argument,	NULL,	THREADING},
@@ -585,14 +590,30 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			if (parse_customsignals(ctx_p, arg))
 				return errno;
 			break;
-		case GID:
-			ctx_p->gid = (unsigned int)atol(arg);
+		case UID: {
+			struct passwd *pwd = getpwnam(arg);
 			ctx_p->flags[param_id]++;
+
+			if (pwd == NULL) {
+				ctx_p->uid = (unsigned int)atol(arg);
+				break;
+			}
+
+			ctx_p->uid = pwd->pw_uid;
 			break;
-		case UID:
-			ctx_p->uid = (unsigned int)atol(arg);
+		}
+		case GID: {
+			struct group *grp = getgrnam(arg);
 			ctx_p->flags[param_id]++;
+
+			if (grp == NULL) {
+				ctx_p->gid = (unsigned int)atol(arg);
+				break;
+			}
+
+			ctx_p->gid = grp->gr_gid;
 			break;
+		}
 		case PIDFILE:
 			ctx_p->pidfile		= arg;
 			break;
@@ -2070,29 +2091,56 @@ int main(int argc, char *argv[]) {
 	ret = ctx_check(ctx_p);
 
 	nret=main_rehash(ctx_p);
-	if(nret)
+	if (nret)
 		ret = nret;
 
-	if(ctx_p->flags[BACKGROUND]) {
+	if (ctx_p->flags[BACKGROUND]) {
 		nret = becomedaemon();
-		if(nret)
+		if (nret)
 			ret = nret;
 	}
 
-#ifdef HAVE_CAPABILITIES
-	if(ctx_p->flags[CAP_PRESERVE_FILEACCESS]) {
+#ifdef CAPABILITIES_SUPPORT
+	if (ctx_p->flags[CAP_PRESERVE_FILEACCESS]) {
+		debug(1, "Preserving Linux capabilites");
+
+		// Tell kernel not clear capabilities when dropping root 
+		if (prctl(PR_SET_KEEPCAPS, 1) < 0) {
+			error("Cannot prctl(PR_SET_KEEPCAPS, 1) to preserve capabilities");
+			ret = errno;
+		}
+	}
+#endif
+
+	if (ctx_p->flags[GID]) {
+		debug(3, "Dropping gid to %i", ctx_p->gid);
+		if (setuid(ctx_p->gid)) {
+			error("Cannot setgid(%u)", ctx_p->gid);
+			ret = errno;
+		}
+	}
+
+	if (ctx_p->flags[UID]) {
+		debug(3, "Dropping uid to %i", ctx_p->uid);
+		if (setuid(ctx_p->uid)) {
+			error("Cannot setuid(%u)", ctx_p->uid);
+			ret = errno;
+		}
+	}
+
+#ifdef CAPABILITIES_SUPPORT
+	if (ctx_p->flags[CAP_PRESERVE_FILEACCESS]) {
 		// Doesn't work, yet :(
 		//
 		// Error: Cannot inotify_add_watch() on "/home/xaionaro/clsync/examples/testdir/from": Permission denied (errno: 13).
-
-		debug(1, "Preserving access to files with using linux capabilites");
+		debug(1, "Dropping all Linux capabilites but CAP_DAC_READ_SEARCH");
 
 		struct __user_cap_header_struct	cap_hdr = {0};
 		struct __user_cap_data_struct	cap_dat = {0};
 
 		cap_hdr.version = _LINUX_CAPABILITY_VERSION;
-		if(capget(&cap_hdr, &cap_dat) < 0) {
-			error("main() cannot get capabilites with capget()");
+		if (capget(&cap_hdr, &cap_dat) < 0) {
+			error("Cannot get capabilites with capget()");
 			ret = errno;
 
 			goto preserve_fileaccess_end;
@@ -2102,54 +2150,30 @@ int main(int argc, char *argv[]) {
 		// CAP_DAC_OVERRIDE    - Bypass file read, write, and execute permission checks. 
 		// CAP_DAC_READ_SEARCH - Bypass file read permission checks and directory read and execute permission checks.
 
-		cap_dat.effective    =  (CAP_TO_MASK(CAP_DAC_OVERRIDE)|CAP_TO_MASK(CAP_DAC_READ_SEARCH)|CAP_TO_MASK(CAP_FOWNER)|CAP_TO_MASK(CAP_SYS_ADMIN)|CAP_TO_MASK(CAP_SETUID));
-		cap_dat.permitted    =  (CAP_TO_MASK(CAP_DAC_OVERRIDE)|CAP_TO_MASK(CAP_DAC_READ_SEARCH)|CAP_TO_MASK(CAP_FOWNER)|CAP_TO_MASK(CAP_SYS_ADMIN)|CAP_TO_MASK(CAP_SETUID));
-		cap_dat.inheritable  = 0;
+		cap_dat.effective    = CAP_TO_MASK(CAP_DAC_READ_SEARCH);
+		cap_dat.permitted    = cap_dat.effective;
+		cap_dat.inheritable  = cap_dat.effective;
 
-		debug(3, "cap.eff == %p; cap.prm == %p.",
-			(void *)(long)cap_dat.effective, (void *)(long)cap_dat.permitted);
+		debug(3, "cap.eff == 0x%04x; cap.prm == 0x%04x; cap.inh == 0x%04x.",
+			cap_dat.effective, cap_dat.permitted, cap_dat.inheritable);
 
-		if(capset(&cap_hdr, &cap_dat) < 0) {
+		if (capset(&cap_hdr, &cap_dat) < 0) {
 			error("Cannot set capabilities with capset().");
 			ret = errno;
-
-			goto preserve_fileaccess_end;
-		}
-
-		// Tell kernel not clear capabilities when dropping root 
-		if(prctl(PR_SET_KEEPCAPS, 1) < 0) {
-			error("Cannot prctl(PR_SET_KEEPCAPS, 1) to preserve capabilities");
-			ret = errno;
-
-			goto preserve_fileaccess_end;
 		}
 	}
 preserve_fileaccess_end:
 #endif
 
-	if(ctx_p->flags[UID]) {
-		if(setuid(ctx_p->uid)) {
-			error("Cannot setuid(%u)", ctx_p->uid);
-			ret = errno;
-		}
-	}
-
-	if(ctx_p->flags[GID]) {
-		if(setuid(ctx_p->gid)) {
-			error("Cannot setgid(%u)", ctx_p->gid);
-			ret = errno;
-		}
-	}
-
-	if(ctx_p->pidfile != NULL) {
+	if (ctx_p->pidfile != NULL) {
 		pid_t pid = getpid();
 		FILE *pidfile = fopen(ctx_p->pidfile, "w");
-		if(pidfile == NULL) {
+		if (pidfile == NULL) {
 			error("Cannot open file \"%s\" to write a pid there",
 				ctx_p->pidfile);
 			ret = errno;
 		} else {
-			if(fprintf(pidfile, "%u", pid) < 0) {
+			if (fprintf(pidfile, "%u", pid) < 0) {
 				error("Cannot write pid into file \"%s\"",
 					ctx_p->pidfile);
 				ret = errno;
@@ -2161,20 +2185,20 @@ preserve_fileaccess_end:
 	debug(3, "Current errno is %i.", ret);
 
 	// == RUNNING ==
-	if(ret == 0)
-		ret = sync_run(ctx_p);
-	// == RUNNING ==
+	if (ret == 0)
+	         ret = sync_run(ctx_p);
+	// == /RUNNING ==
 
-	if(ctx_p->pidfile != NULL) {
-		if(unlink(ctx_p->pidfile)) {
-			error("Cannot unlink pidfile \"%s\"",
-				ctx_p->pidfile);
-			ret = errno;
-		}
+	if (ctx_p->pidfile != NULL) {
+	         if (unlink(ctx_p->pidfile)) {
+	         	error("Cannot unlink pidfile \"%s\"",
+	         		ctx_p->pidfile);
+	         	ret = errno;
+	         }
 	}
 
-	if(ctx_p->statusfile != NULL) {
-		if(unlink(ctx_p->statusfile)) {
+	if (ctx_p->statusfile != NULL) {
+		if (unlink(ctx_p->statusfile)) {
 			error("Cannot unlink status file \"%s\"",
 				ctx_p->statusfile);
 			ret = errno;
@@ -2183,16 +2207,16 @@ preserve_fileaccess_end:
 
 	main_cleanup(ctx_p);
 
-	if(ctx_p->watchdirsize)
-		free(ctx_p->watchdir);
+	if (ctx_p->watchdirsize)
+	         free(ctx_p->watchdir);
 
-	if(ctx_p->watchdirwslashsize)
-		free(ctx_p->watchdirwslash);
+	if (ctx_p->watchdirwslashsize)
+	         free(ctx_p->watchdirwslash);
 
-	if(ctx_p->destdirsize)
-		free(ctx_p->destdir);
+	if (ctx_p->destdirsize)
+	         free(ctx_p->destdir);
 
-	if(ctx_p->destdirwslashsize)
+	if (ctx_p->destdirwslashsize)
 		free(ctx_p->destdirwslash);
 
 	ctx_cleanup(ctx_p);

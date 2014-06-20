@@ -37,6 +37,9 @@ endif
 if HAVE_BACKTRACE
 clsync_CFLAGS += -DBACKTRACE_SUPPORT
 endif
+if HAVE_CAPABILITIES
+clsync_CFLAGS += -DCAPABILITIES_SUPPORT
+endif
 
 if SOCKET
 clsync_SOURCES += socket.c control.c program.h

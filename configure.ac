@@ -128,17 +128,33 @@ AC_SEARCH_LIBS([clock_getres], [rt], [],
 
 dnl capabilities check
 AC_ARG_WITH(capabilities,
-AS_HELP_STRING(--with-capabilities,
-[enable linux capabilities support, default: disabled]))
-
-AS_IF(
-	[test "x$with_capabilities" = "xyes"],
-		[AC_CHECK_HEADER(
-			[sys/capability.h],
-			[CPPFLAGS="${CPPFLAGS} -DHAVE_CAPABILITIES"],
-			[AC_MSG_ERROR("Unable to find sys/capability.h")]
-		)]
+	AS_HELP_STRING(--with-capabilities,
+		[Enable linux capabilities support; values: no, check, yes; default: check]),
+	[],
+	[with_capabilities=check]
 )
+
+case "$with_capabilities" in
+	yes)
+		AC_CHECK_FUNC([capset],
+			[
+				AC_CHECK_HEADER(sys/capability.h, [HAVE_CAPABILITIES=2], [AC_MSG_FAILURE([Cannot find sys/capability.h])])
+			],
+			[
+				AC_MSG_FAILURE([There is no capabilities support on this system])
+			]
+		)
+		;;
+	check)
+		AC_CHECK_FUNC([capset],
+			[
+				AC_CHECK_HEADER(sys/capability.h, [HAVE_CAPABILITIES=2])
+			]
+		)
+		;;
+esac
+
+dnl kqueue/inotify/bsm
 
 AC_ARG_WITH(kqueue,
 	AS_HELP_STRING(--with-kqueue,
@@ -281,13 +297,14 @@ esac
 
 AS_IF([test "$HAVE_INOTIFY" != ""], [AC_CHECK_FUNC([inotify_init1], [], [INOTIFY_OLD=1])])
 
-AM_CONDITIONAL([HAVE_KQUEUE],    [test "x$HAVE_KQUEUE"     != "x"])
-AM_CONDITIONAL([HAVE_INOTIFY],   [test "x$HAVE_INOTIFY"    != "x"])
-AM_CONDITIONAL([INOTIFY_OLD],    [test "x$INOTIFY_OLD"     != "x"])
-AM_CONDITIONAL([HAVE_FANOTIFY],  [test "x$HAVE_FANOTIFY"   != "x"])
-AM_CONDITIONAL([HAVE_BSM],       [test "x$HAVE_BSM"        != "x"])
-AM_CONDITIONAL([HAVE_DTRACEPIPE],[test "x$HAVE_DTRACEPIPE" != "x"])
-AM_CONDITIONAL([HAVE_BACKTRACE], [test "x$HAVE_BACKTRACE"  != "x"])
+AM_CONDITIONAL([HAVE_KQUEUE],       [test "x$HAVE_KQUEUE"       != "x"])
+AM_CONDITIONAL([HAVE_INOTIFY],      [test "x$HAVE_INOTIFY"      != "x"])
+AM_CONDITIONAL([INOTIFY_OLD],       [test "x$INOTIFY_OLD"       != "x"])
+AM_CONDITIONAL([HAVE_FANOTIFY],     [test "x$HAVE_FANOTIFY"     != "x"])
+AM_CONDITIONAL([HAVE_BSM],          [test "x$HAVE_BSM"          != "x"])
+AM_CONDITIONAL([HAVE_DTRACEPIPE],   [test "x$HAVE_DTRACEPIPE"   != "x"])
+AM_CONDITIONAL([HAVE_BACKTRACE],    [test "x$HAVE_BACKTRACE"    != "x"])
+AM_CONDITIONAL([HAVE_CAPABILITIES], [test "x$HAVE_CAPABILITIES" != "x"])
 
 AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' ], [AC_MSG_FAILURE([kqueue, inotify and bsm are not supported on this system])])
 

@@ -69,11 +69,6 @@
 #include <pthread.h>
 #include <glib.h>
 
-#ifdef HAVE_CAPABILITIES
-#	include <sys/capability.h>	// for capset()/capget() for --preserve-file-access
-#	include <sys/prctl.h>		// for prctl() for --preserve-fil-access
-#endif
-
 #include "configuration.h"
 #ifdef HAVE_CONFIG_H
 #	include "config.h"

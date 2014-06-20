@@ -59,7 +59,7 @@ in config file use '--'. An example:
  
 .B \-W, \-\-watch\-dir
 .I watch\-dir
-.RS 8
+.RS
 Root directory to be monitored by
 .BR clsync .
 
@@ -69,7 +69,7 @@ Required.
 
 .B \-S, \-\-sync\-handler
 .I sync\-handler
-.RS 8
+.RS
 Path to
 .I sync\-handler
 to be used for syncing by
@@ -83,7 +83,7 @@ Required.
 
 .B \-R, \-\-rules\-file
 .I rules\-file
-.RS 8
+.RS
 Path to file with filter rules of objects to be monitored. (see 
 .BR RULES )
 
@@ -93,7 +93,7 @@ Is not set by default.
 
 .B \-D, \-\-destination\-dir
 .I destination\-directory
-.RS 8
+.RS
 Defines directory to sync to for modes "rsyncdirect", "rsyncso" and "so". (see
 .IR \-\-mode )
 
@@ -103,7 +103,7 @@ Is not set by default.
 
 .B \-M, \-\-mode
 .I mode
-.RS 8
+.RS
 Sets syncing mode. Possible values:
 .RS
 .IR simple 
@@ -156,7 +156,7 @@ Required.
 .RE
 
 .B \-b, \-\-background
-.RS 8
+.RS
 Daemonize, forcing clsync to fork() on start.
 
 Is not set by default.
@@ -165,7 +165,7 @@ Is not set by default.
 
 .B \-H, \-\-config\-file
 .I config\-file\-path
-.RS 8
+.RS
 Use configuration from file
 .IR config\-file\-path
 (see 
@@ -179,7 +179,7 @@ Is not set by default.
 
 .B \-K, \-\-config\-block
 .I config\-block\-name
-.RS 8
+.RS
 Use configuration block with name
 .IR config\-block\-name
 (see 
@@ -191,7 +191,7 @@ Default value is "default".
 
 .B \-\-config\-block\-inherits
 .I config\-parent\-block\-name
-.RS 8
+.RS
 Use configuration block with name
 .IR config\-parent\-block\-name
 as parent for
@@ -234,7 +234,7 @@ Default value is "".
 
 .B \-z, \-\-pid\-file
 .I path\-to\-pidfile
-.RS 8
+.RS
 Writes pid to file by path
 .IR path\-to\-pidfile .
 
@@ -244,12 +244,12 @@ Is not set by default.
 
 .B \-\-status\-file
 .I status\-file\-path
-.RS 8
+.RS
 Write status description into file with path
 .IR status\-file\-path .
 
 Possible statuses:
-.RS 8
+.RS
 .IR starting
 .RS
 initializing subsystems and marking file tree with FS monitor
@@ -295,7 +295,7 @@ Is not set by default.
 
 .B \-u, \-\-uid
 .I uid
-.RS 8
+.RS
 Drop user privileges to uid
 .I uid
 with
@@ -307,7 +307,7 @@ Is not set by default.
 
 .B \-g, \-\-gid
 .I gid
-.RS 8
+.RS
 Drop group privileges to gid
 .I gid
 with
@@ -317,9 +317,33 @@ Is not set by default.
 .PP
 .RE
 
+.B \-C, \-\-preserve\-file\-access
+.RS
+.B [Linux only]
+
+Use
+.BR capset (2)
+and
+.BR prctl (2)
+to preserve "CAP_DAC_READ_SEARCH" [see 
+.BR capabilities (7)]
+Linux capability. This allows to preserve full FS read access after dropping
+privilegies using
+.BR setuid (2)
+and
+.BR setgid (2)
+[see
+.B \-\-uid
+and
+.BR \-\-gid ]
+
+Is not set by default.
+.PP
+.RE
+
 .B \-r, \-\-retries
 .I "number-of-tries"
-.RS 8
+.RS
 Tries limit to sync with
 .IR sync-handler .
 
@@ -338,7 +362,7 @@ Default value is "1".
 .RE
 
 .B \-\-ignore\-failures
-.RS 8
+.RS
 Don't die on sync failures.
 
 Is not set by default.
@@ -346,7 +370,7 @@ Is not set by default.
 
 .B \-p, \-\-threading
 .I threading-mode
-.RS 8
+.RS
 Use
 .BR pthreads (7)
 to parallelize syncing processes. For example if
@@ -412,7 +436,7 @@ Default value is "off".
 
 .B \-Y, \-\-output
 .I log\-destination
-.RS 8
+.RS
 Sets destination for log writing (errors, warnings, infos and debugging).
 
 Possible values:
@@ -428,7 +452,7 @@ Default value is "stderr".
 .RE
 
 .B \-\-one\-file\-system
-.RS 8
+.RS
 Don't follow to different devices' mount points. This option just adds option
 "FTS_XDEV" for
 .BR fts_open (3)
@@ -446,7 +470,7 @@ Is not set by default.
 .RE
 
 .B \-X, \-\-exclude\-mount\-points
-.RS 8
+.RS
 Forces
 .I \-\-one\-file\-system
 but also add excludes to do not sync mount points.
@@ -462,7 +486,7 @@ Is not set by default.
 .PP
 .B \-c, \-\-cluster\-iface
 .I interface\-ip
-.RS 8
+.RS
 .B Not implemented, yet.
 
 .B DANGEROUS OPTION. This functionality wasn't tested well. You can lost your data.
@@ -487,7 +511,7 @@ Is not set by default.
 .PP
 .B \-m, \-\-cluster\-ip
 .I multicast\-ip
-.RS 8
+.RS
 .B Not implemented yet.
 
 Sets IP-address for multicast group.
@@ -503,7 +527,7 @@ Default value is "227.108.115.121". [(128+"c")."l"."s"."y"]
 .PP
 .B \-P, \-\-cluster\-port
 .I multicast\-port
-.RS 8
+.RS
 .B Not implemented yet.
 
 Sets UDP-port number for multicast messages.
@@ -520,7 +544,7 @@ Default value is "40079". [("n" << 8) + "c"]
 .PP
 .B \-W, \-\-cluster\-timeout
 .I cluster\-timeout
-.RS 8
+.RS
 .B Not implemented yet.
 
 Sets timeout (in milliseconds) of waiting answer from another nodes of the
@@ -532,7 +556,7 @@ Default value is "1000". [1 second]
 .PP
 .B \-n, \-\-cluster\-node\-name
 .I cluster\-node\-name
-.RS 8
+.RS
 .B Not implemented yet.
 
 Sets the name of current node in the cluster. It will be used in action
@@ -545,7 +569,7 @@ Default value is $(uname \-n).
 .PP
 .B \-o, \-\-cluster\-hash\-dl\-min
 .I hash\-dirlevel\-min
-.RS 8
+.RS
 Sets minimal directory level for ctime hashing (see
 .BR CLUSTERING ).
 
@@ -555,7 +579,7 @@ Default value is "1".
 .PP
 .B \-O, \-\-cluster\-hash\-dl\-max
 .I hash\-dirlevel\-max
-.RS 8
+.RS
 .B Not implemented yet.
 
 Sets maximal directory level for ctime hashing (see
@@ -567,7 +591,7 @@ Default value is "16".
 .PP
 .B \-\-cluster\-scan\-dl\-max
 .I scan\-dirlevel\-max
-.RS 8
+.RS
 .B Not implemented yet.
 
 Sets maximal directory level for ctime scanning (see
@@ -579,7 +603,7 @@ Default value is "32".
 .PP
 .B \-\-standby\-file
 .I standby\-file\-path
-.RS 8
+.RS
 Sets file to path that should be checked before every sync. If file exists the
 sync will be suspended until the file is deleted. It may be useful if you need
 freeze destination directory while running some scripts.
@@ -590,12 +614,12 @@ Is not set by default.
 .PP
 .B \-\-max\-iterations
 .I iterations\-count
-.RS 8
+.RS
 Sets synchronization iterations limit. One iteration means one sync-handler
 execution.
 
 .I iterations\-count
-.RS 8
+.RS
 set to 0 means no limit (infinite loop).
 
 set to 1 means that only initial sync will be done
@@ -612,7 +636,7 @@ Default value is "0".
 .PP
 .B \-k, \-\-timeout\-sync
 .I sync-timeout
-.RS 8
+.RS
 Sets timeout for syncing processes.
 .B clsync
 will die if syncing process alive more than
@@ -627,7 +651,7 @@ Default value is "86400" ["24 hours"].
 .PP
 .B \-w, \-\-delay\-sync
 .I additional\-delay
-.RS 8
+.RS
 Sets the minimal delay (in seconds) between syncs.
 
 Default value is "30".
@@ -636,7 +660,7 @@ Default value is "30".
 .PP
 .B \-t, \-\-delay\-collect
 .I ordinary\-delay
-.RS 8
+.RS
 Sets the delay (in seconds) to collect events about ordinary files and
 directories.
 
@@ -646,7 +670,7 @@ Default value is "30".
 .PP
 .B \-T, \-\-delay\-collect\-bigfile
 .I bigfiles\-delay
-.RS 8
+.RS
 Sets the delay (in seconds) to collect events about "big files" (see
 .IR \-\-threshold\-bigfile ).
 
@@ -656,7 +680,7 @@ Default value is "1800".
 .PP
 .B \-B, \-\-threshold\-bigfile
 .I filesize\-threshold
-.RS 8
+.RS
 Sets file size threshold (in bytes) that separates ordinary files from
 "big files". Events about "big files" are processed in another queue with a
 separate collecting delay. This is supposed to be used as a means of unloading
@@ -668,7 +692,7 @@ Default value is "134217728" ["128 MiB"].
 .PP
 .B \-L, \-\-lists\-dir
 .I tmpdir\-path
-.RS 8
+.RS
 Sets directory path to output temporary events\-lists files.
 
 If this option is enabled,
@@ -693,7 +717,7 @@ Is not set by default.
 
 .PP
 .B \-\-have\-recursive\-sync
-.RS 8
+.RS
 Use action "recursivesync" instead of "synclist" for directories that were just marked (see
 .B "SYNC HANDLER MODES"
 case
@@ -704,7 +728,7 @@ Is not set by default.
 
 .PP
 .B \-\-synclist\-simplify
-.RS 8
+.RS
 Removes the first 3 parameters in list files of action "synclist" (see
 .B "SYNC HANDLER MODES"
 case
@@ -715,7 +739,7 @@ Is not set by default.
 
 .PP
 .B \-A, \-\-auto\-add\-rules\-w
-.RS 8
+.RS
 Forces clsync to create a "w\-rule" for every non-"w-rule" (see
 .BR RULES ).
 
@@ -727,7 +751,7 @@ Is not set by default.
 .PP
 .B \-\-rsync\-inclimit
 .I rsync\-includes\-line\-limit
-.RS 8
+.RS
 Sets soft limit for lines count in files by path
 .IR rsync\-listpath .
 Unfortunately, rsync works very slowly with huge "\-\-include\-from"
@@ -743,7 +767,7 @@ Default value is "20000".
 
 .PP
 .B \-\-rsync\-prefer\-include
-.RS 8
+.RS
 Forces
 .B clsync
 to prefer a "lot of includes" method instead of a "excludes+includes" for
@@ -765,7 +789,7 @@ Is not set by default.
 .PP
 .B \-x, \-\-ignore\-exitcode
 .I exitcode
-.RS 8
+.RS
 Forces
 .B clsync
 to do not process exitcode
@@ -786,7 +810,7 @@ Is not set by default (or equally is set to "0").
 
 .PP
 .B \-U, \-\-dont\-unlink\-lists
-.RS 8
+.RS
 Do not delete list\-files after
 .I sync\-handler
 has finished.
@@ -798,7 +822,7 @@ Is not set by default.
 
 .PP
 .B \-F, \-\-full\-initialsync
-.RS 8
+.RS
 Ignore filter rules from
 .I rules-file
 on initial sync.
@@ -811,7 +835,7 @@ Is not set by default.
 
 .PP
 .B \-\-only\-initialsync
-.RS 8
+.RS
 Exit after initial syncing on clsync start.
 
 Is not set by default.
@@ -819,7 +843,7 @@ Is not set by default.
 
 .PP
 .B \-\-exit\-on\-no\-events
-.RS 8
+.RS
 Exit if there's no events. Works like
 .IR \-\-only\-initialsync ,
 but also syncs events collected while the initial syncing.
@@ -833,7 +857,7 @@ Is not set by default.
 
 .PP
 .B \-\-skip\-initialsync
-.RS 8
+.RS
 Skip initial syncing on clsync start.
 
 Is not set by default.
@@ -842,7 +866,7 @@ Is not set by default.
 .PP
 .B \-\-exit\-hook
 .I path\-of\-exit\-hook\-program
-.RS 8
+.RS
 Sets path of program to be executed on clsync exit.
 
 If this parameter is set then clsync will exec on exit:
@@ -858,7 +882,7 @@ Is not set by default.
 .PP
 .B \-\-pre\-exit\-hook
 .I path\-of\-pre\-exit\-hook\-program
-.RS 8
+.RS
 Sets path of program to be executed before the last sync iteration (see
 .IR "\-\-max\-iterations" ", " "\-\-exit\-on\-no\-events" " and "
 .BR SIGNALS ")."
@@ -884,7 +908,7 @@ Is not set by default.
 
 .PP
 .B \-v, \-\-verbose
-.RS 8
+.RS
 This option is supposed to increase verbosity. But at the moment there's no
 "verbose output" in the code, so the option does nothing. :)
 
@@ -893,7 +917,7 @@ Is not set by default.
 
 .PP
 .B \-d, \-\-debug
-.RS 8
+.RS
 Increases debugging output. This may be supplied multiple times for more
 debugging information, up to a maximum of five "d" flags (more will do 
 nothing), for example "\-d \-d \-d \-d \-d" or "\-d5" (equivalent cases)
@@ -903,7 +927,7 @@ Is not set by default.
 
 .PP
 .B \-\-dump\-dir
-.RS 8
+.RS
 Directory to write clsync's instance information by signal 29 (see 
 .BR SIGNALS ")."
 The directory shouldn't exists before dumping.
@@ -913,7 +937,7 @@ Is set to "/tmp/clsync-dump-%label%" by default.
 
 .PP
 .B \-q, \-\-quiet
-.RS 8
+.RS
 Suppresses error messages.
 
 Is not set by default.
@@ -922,11 +946,11 @@ Is not set by default.
 .PP
 .B \-\-monitor
 .I monitor\-subsystem
-.RS 8
+.RS
 Switches FS monitor subsystem.
 
 Possible values:
-.RS 8
+.RS
 .IR inotify 
 .RS
 .BR inotify "(7) [Linux]"
@@ -1019,7 +1043,7 @@ The default value on FreeBSD is "kqueue".
 .PP
 .B \-l, \-\-label
 .I label
-.RS 8
+.RS
 Sets a label for this instance of clsync. The
 .I label
 will be passed to
@@ -1031,7 +1055,7 @@ Default value is "nolabel".
 
 .PP
 .B \-h, \-\-help
-.RS 8
+.RS
 Outputs options list and exits with exitcode "0".
 
 Is not set by default.
@@ -1039,7 +1063,7 @@ Is not set by default.
 
 .PP
 .B \-V, \-\-version
-.RS 8
+.RS
 Outputs clsync version and exits with exitcode "0".
 
 Is not set by default.
