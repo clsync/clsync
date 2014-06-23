@@ -657,6 +657,12 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 					continue;
 				}
 
+				if (ctx_p->mountpoints >= MAXMOUNTPOINTS) {
+					errno = EINVAL;
+					error("Too many mountpoints");
+					return errno;
+				}
+
 				ctx_p->mountpoint[ctx_p->mountpoints++] = strdup(ptr);
 				*end = ',';
 

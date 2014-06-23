@@ -297,7 +297,7 @@ struct ctx {
 	char *chroot_dir;
 
 #ifdef GETMNTENT_SUPPORT
-	char *mountpoint[MAXMOUNTPOINTS];
+	char *mountpoint[MAXMOUNTPOINTS+1];
 	int   mountpoints;
 #endif
 
