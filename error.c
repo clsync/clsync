@@ -318,6 +318,7 @@ void error_init(void *_outputmethod, int *_quiet, int *_verbose, int *_debug) {
 	debug		= _debug;
 
 	pthread_mutex_init(&error_mutex, NULL);
+	openlog(NULL, SYSLOG_FLAGS, SYSLOG_FACILITY);
 
 	return;
 }

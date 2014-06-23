@@ -113,6 +113,8 @@ filesz:1M\n\
 #define	TMPDIR_TEMPLATE			"/tmp/clsync-XXXXXX"
 
 #define SYSLOG_BUFSIZ			(1<<16)
+#define SYSLOG_FLAGS			(LOG_PID|LOG_CONS)
+#define SYSLOG_FACILITY			LOG_DAEMON
 
 #define CLSYNCSOCK_WINDOW		(1<<8)
 

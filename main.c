@@ -650,15 +650,16 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			ptr = arg;
 			while (1) {
 				char *end = strchr(ptr, ',');
-				if (end == NULL)
-					break;
 
-				*end =  0;
+				if (end != NULL)
+					*end =  0;
 
 				if (!*ptr) {
 					while (ctx_p->mountpoints)
 						free(ctx_p->mountpoint[--ctx_p->mountpoints]);
-					ptr = &end[1];
+
+					if (end != NULL)
+						ptr = &end[1];
 					continue;
 				}
 
@@ -669,10 +670,14 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 				}
 
 				ctx_p->mountpoint[ctx_p->mountpoints++] = strdup(ptr);
-				*end = ',';
 
+				if (end == NULL)
+					break;
+
+				*end = ',';
 				ptr = &end[1];
 			}
+			break;
 		}
 #endif
 		case PIDFILE:
@@ -2117,54 +2122,95 @@ int main(int argc, char *argv[]) {
 	debug(4, "debugging flags: %u %u %u %u", ctx_p->flags[OUTPUT_METHOD], ctx_p->flags[QUIET], ctx_p->flags[VERBOSE], ctx_p->flags[DEBUG]);
 
 	ctx_p->state = STATE_STARTING;
-	main_status_update(ctx_p);
 
-	if (ctx_p->chroot_dir != NULL) {
-		if (chroot(ctx_p->chroot_dir)) {
-			error("Got error while chroot(\"%s\")", ctx_p->chroot_dir);
-			ret = errno;
+	{
+#ifdef GETMNTENT_SUPPORT
+		struct mntent *ent;
+		FILE *ent_f;
+		if (ctx_p->mountpoints) {
+			// Openning the file with mount list
+			ent_f = setmntent("/proc/mounts", "r");
+			if (ent_f == NULL)
+				error("Got error while setmntent(\"/proc/mounts\", \"r\")");
 		}
+#endif
 
-		if (chdir(ctx_p->chroot_dir)) {
-			error("Got error while chdir(\"%s\")", ctx_p->chroot_dir);
-			ret = errno;
+		if (ctx_p->chroot_dir != NULL) {
+			debug(7, "chdir(\"%s\")", ctx_p->chroot_dir);
+			if (chdir(ctx_p->chroot_dir)) {
+				error("Got error while chdir(\"%s\")", ctx_p->chroot_dir);
+				ret = errno;
+			}
 		}
-	}
 
 #ifdef GETMNTENT_SUPPORT
-	if (ctx_p->mountpoints) {
-		struct mntent *ent;
-		FILE *f;
+		if (ctx_p->mountpoints && (ent_f != NULL)) {
+			char **to_umount       = NULL;
+			size_t to_umount_count = 0;
+			size_t to_umount_size  = 0;
 
-		// Detaching from current FS namespace
-		unshare(CLONE_NEWNS);
+			// Detaching from current FS namespace
+			unshare(CLONE_NEWNS);
 
-		// Scanning mountpoints
-		f = setmntent("/proc/mounts", "r");
-		if (f == NULL) {
-			perror("setmntent");
-			exit(1);
-		}
-		while (NULL != (ent = getmntent(f))) {
-			int i;
+			// Getting mount-points to be umounted
+			while (NULL != (ent = getmntent(ent_f))) {
+				int i;
+				debug(8, "Checking should \"%s\" be umount or not", ent->mnt_dir);
 
-			i=0;
-			while (i < ctx_p->mountpoints) {
-				if (!strcmp(ent->mnt_dir, ctx_p->mountpoint[i]))
-					break;
+				i=0;
+				while (i < ctx_p->mountpoints) {
+					debug(9, "\"%s\" <?> \"%s\"", ent->mnt_dir, ctx_p->mountpoint[i]);
+					if (!strcmp(ent->mnt_dir, ctx_p->mountpoint[i])) {
+						debug(9, "found");
+						break;
+					}
 
-				i++;
+					i++;
+				}
+
+				if (i >= ctx_p->mountpoints) {
+					debug(9, "queue umount \"%s\"", ent->mnt_dir);
+					if (to_umount_count >= to_umount_size) {
+						to_umount_size += ALLOC_PORTION;
+						to_umount       = xrealloc(to_umount, sizeof(*to_umount)*to_umount_size);
+					}
+
+					to_umount[to_umount_count++] = strdup(ent->mnt_dir);
+				}
 			}
 
-			if (i >= ctx_p->mountpoints) {
-				debug(1, "umount2(\"%s\", MNT_DETACH)", ent->mnt_dir);
-				if (umount2(ent->mnt_dir, MNT_DETACH))
-					warning("Cannot umount2(\"%s\", MNT_DETACH): %s", ent->mnt_dir, strerror(errno));
+			// Umounting
+			int umount_root = 0;
+			while (to_umount_count) {
+				char *mp = to_umount[--to_umount_count];
+				debug(1, "umount2(\"%s\", MNT_DETACH)", mp);
+
+				if (!strcmp(mp, "/"))
+					umount_root = 1;
+				else
+					umount2(mp, MNT_DETACH);
+				free(mp);
 			}
+
+			if (umount_root) {
+				debug(1, "umount2(\"/\", MNT_DETACH)");
+				umount2("/", MNT_DETACH);
+			}
+
+			free(to_umount);
 		}
-		endmntent(f);
-	}
+		endmntent(ent_f);
 #endif
+		if (ctx_p->chroot_dir != NULL) {
+			debug(7, "chroot(\".\")");
+			if (chroot(".")) {
+				error("Got error while chroot(\".\")");
+				ret = errno;
+			}
+		}
+	}
+
+	main_status_update(ctx_p);
 
 #ifdef CAPABILITIES_SUPPORT
 	if (ctx_p->flags[CAP_PRESERVE_FILEACCESS]) {
