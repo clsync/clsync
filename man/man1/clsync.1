@@ -342,6 +342,43 @@ Is not set by default.
 .PP
 .RE
 
+.B \-\-chroot
+.I chroot\-directory
+.RS
+clsync chroot()\-s [see
+.BR chroot (2)]
+to directory
+.I chroot\-directory
+before any syncing processes.
+
+This option may be used in conjunction with
+.I \-\-uid
+and
+.I \-\-gid
+for security reasons.
+
+Remeber! If you're chroot()\-ing somewhere, the
+.I sync\-handler
+will be limited by the chroot\-environment, too. If you're using rsync then
+you may want to "mount \-\-bind" some directories to the
+.IR chroot\-directory .
+
+Is not set by default.
+.PP
+.RE
+
+.B \-\-mountpoints
+.I [mountpoint[,mountpoint[,mountpoint]]]
+.RS
+.B [Linux only]
+
+Umount (with MNT_DETACH) everything except listed mountpoints.
+
+Supposed to be use for security reasons.
+
+Is not set by default.
+.RE
+
 .B \-r, \-\-retries
 .I "number-of-tries"
 .RS

@@ -40,6 +40,9 @@ endif
 if HAVE_CAPABILITIES
 clsync_CFLAGS += -DCAPABILITIES_SUPPORT
 endif
+if HAVE_GETMNTENT
+clsync_CFLAGS += -DGETMNTENT_SUPPORT
+endif
 
 if SOCKET
 clsync_SOURCES += socket.c control.c program.h

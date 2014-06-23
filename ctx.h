@@ -104,6 +104,10 @@ enum flags_enum {
 	SYNCHANDLERARGS1	= 22|OPTION_LONGOPTONLY,
 
 	CUSTOMSIGNALS		= 23|OPTION_LONGOPTONLY,
+	CHROOT			= 24|OPTION_LONGOPTONLY,
+#ifdef GETMNTENT_SUPPORT
+	MOUNTPOINTS		= 25|OPTION_LONGOPTONLY,
+#endif
 };
 typedef enum flags_enum flags_t;
 
@@ -289,6 +293,13 @@ struct ctx {
 #endif
 	void *indexes_p;
 	void *fsmondata;
+
+	char *chroot_dir;
+
+#ifdef GETMNTENT_SUPPORT
+	char *mountpoint[MAXMOUNTPOINTS];
+	int   mountpoints;
+#endif
 
 	synchandler_args_t synchandler_args[SHARGS_MAX];
 	shflags_t synchandler_argf;

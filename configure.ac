@@ -126,6 +126,9 @@ dnl -lrt is needed on < glibc-2.17
 AC_SEARCH_LIBS([clock_getres], [rt], [],
     [AC_MSG_ERROR("Unable to find librt; clock_getres() is needed")])
 
+dnl searching for getmntent
+AC_CHECK_FUNC([getmntent], [HAVE_GETMNTENT=1])
+
 dnl capabilities check
 AC_ARG_WITH(capabilities,
 	AS_HELP_STRING(--with-capabilities,
@@ -305,6 +308,7 @@ AM_CONDITIONAL([HAVE_BSM],          [test "x$HAVE_BSM"          != "x"])
 AM_CONDITIONAL([HAVE_DTRACEPIPE],   [test "x$HAVE_DTRACEPIPE"   != "x"])
 AM_CONDITIONAL([HAVE_BACKTRACE],    [test "x$HAVE_BACKTRACE"    != "x"])
 AM_CONDITIONAL([HAVE_CAPABILITIES], [test "x$HAVE_CAPABILITIES" != "x"])
+AM_CONDITIONAL([HAVE_GETMNTENT],    [test "x$HAVE_GETMNTENT"    != "x"])
 
 AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' ], [AC_MSG_FAILURE([kqueue, inotify and bsm are not supported on this system])])
 

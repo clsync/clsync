@@ -27,8 +27,14 @@
 
 #include "port-hacks.h"
 
-#include <pwd.h>	// For getpwnam()
-#include <grp.h>	// For getgrnam()
+#include <pwd.h>	// getpwnam()
+#include <grp.h>	// getgrnam()
+
+#ifdef GETMNTENT_SUPPORT
+#	include <mntent.h>	// getmntent()
+#	include <sched.h>	// unshare()
+#	include <sys/mount.h>	// umount2()
+#endif
 
 #include "error.h"
 #include "stringex.h"
@@ -63,6 +69,10 @@ static const struct option long_options[] =
 	{"pid-file",		required_argument,	NULL,	PIDFILE},
 	{"uid",			required_argument,	NULL,	UID},
 	{"gid",			required_argument,	NULL,	GID},
+	{"chroot",		required_argument,	NULL,	CHROOT},
+#ifdef GETMNTENT_SUPPORT
+	{"mountpoints",		optional_argument,	NULL,	MOUNTPOINTS},
+#endif
 #ifdef CAPABILITIES_SUPPORT
 	{"preserve-file-access",optional_argument,	NULL,	CAP_PRESERVE_FILEACCESS},
 #endif
@@ -555,7 +565,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 #endif
 			break;
 		default:
-			error("Warning: Unknown parameter #%i source (value \"%s\").", param_id, arg!=NULL ? arg : "");
+			error("Unknown parameter #%i source (value \"%s\").", param_id, arg!=NULL ? arg : "");
 			break;
 	}
 
@@ -614,7 +624,51 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			ctx_p->gid = grp->gr_gid;
 			break;
 		}
+		case CHROOT:
+			if (paramsource == PS_CONTROL) {
+				warning("Cannot change \"chroot\" in run-time. Ignoring.");
+				return 0;
+			}
+			ctx_p->chroot_dir	= arg;
+			break;
+#ifdef GETMNTENT_SUPPORT
+		case MOUNTPOINTS: {
+			char *ptr;
+			if (paramsource == PS_CONTROL) {
+				warning("Cannot change \"mountpoints\" in run-time. Ignoring.");
+				return 0;
+			}
+
+			while (ctx_p->mountpoints)
+				free(ctx_p->mountpoint[--ctx_p->mountpoints]);
+
+			ptr = arg;
+			while (1) {
+				char *end = strchr(ptr, ',');
+				if (end == NULL)
+					break;
+
+				*end =  0;
+
+				if (!*ptr) {
+					while (ctx_p->mountpoints)
+						free(ctx_p->mountpoint[--ctx_p->mountpoints]);
+					ptr = &end[1];
+					continue;
+				}
+
+				ctx_p->mountpoint[ctx_p->mountpoints++] = strdup(ptr);
+				*end = ',';
+
+				ptr = &end[1];
+			}
+		}
+#endif
 		case PIDFILE:
+			if (paramsource == PS_CONTROL) {
+				warning("Cannot change \"pid-file\" in run-time. Ignoring.");
+				return 0;
+			}
 			ctx_p->pidfile		= arg;
 			break;
 		case RETRIES:
@@ -711,6 +765,10 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			break;
 		case MONITOR: {
 			char *value, *arg_orig = arg;
+			if (paramsource == PS_CONTROL) {
+				warning("Cannot change \"monitor\" in run-time. Ignoring.");
+				return 0;
+			}
 
 			if (!*arg) {
 				ctx_p->flags_set[param_id] = 0;
@@ -813,6 +871,10 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			version();
 			break;
 		case WATCHDIR:
+			if (paramsource == PS_CONTROL) {
+				warning("Cannot change \"watch-dir\" in run-time. Ignoring.");
+				return 0;
+			}
 			ctx_p->watchdir		= arg;
 			break;
 		case SYNCHANDLER:
@@ -854,13 +916,13 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			char *value;
 
 			ctx_p->flags[SOCKETAUTH] = getsubopt(&arg, socketauth, &value);
-			if(ctx_p->flags[SOCKETAUTH] == -1) {
+			if (ctx_p->flags[SOCKETAUTH] == -1) {
 				error("Wrong socket auth mech entered: \"%s\"", arg);
 				return EINVAL;
 			}
 		}
 		case SOCKETMOD:
-			if(!sscanf(arg, "%o", (unsigned int *)&ctx_p->socketmod)) {
+			if (!sscanf(arg, "%o", (unsigned int *)&ctx_p->socketmod)) {
 				error("Non octal value passed to --socket-mod: \"%s\"", arg);
 				return EINVAL;
 			}
@@ -871,7 +933,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			uid_t uid;
 			gid_t gid;
 
-			if(colon == NULL) {
+			if (colon == NULL) {
 				struct passwd *pwent = getpwnam(arg);
 
 				if(pwent == NULL) {
@@ -930,7 +992,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			char *value;
 
 			ctx_p->flags[MODE]  = getsubopt(&arg, modes, &value);
-			if(ctx_p->flags[MODE] == -1) {
+			if (ctx_p->flags[MODE] == -1) {
 				error("Wrong mode name entered: \"%s\"", arg);
 				return EINVAL;
 			}
@@ -943,7 +1005,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			str_splitargs(arg, synchandler_arg1, ctx_p);
 			break;
 		default:
-			if(arg == NULL)
+			if (arg == NULL)
 				ctx_p->flags[param_id]++;
 			else
 				ctx_p->flags[param_id] = atoi(arg);
@@ -1191,7 +1253,7 @@ int ctx_check(ctx_t *ctx_p) {
 
 	if (ctx_p->watchdir == NULL) {
 		ret = errno = EINVAL;
-		error("\"--watchdir\" is not set.");
+		error("\"--watch-dir\" is not set.");
 	}
 
 	if (ctx_p->handlerfpath == NULL) {
@@ -1222,7 +1284,7 @@ int ctx_check(ctx_t *ctx_p) {
 
 	if ((ctx_p->flags[MODE] == MODE_RSYNCDIRECT) && (ctx_p->destdir == NULL)) {
 		ret = errno = EINVAL;
-		error("Mode \"rsyncdirect\" cannot be used without specifying \"destination directory\".");
+		error("Mode \"rsyncdirect\" cannot be used without specifying \"--dest-dir\".");
 	}
 
 #ifdef CLUSTER_SUPPORT
@@ -2044,6 +2106,53 @@ int main(int argc, char *argv[]) {
 
 	ctx_p->state = STATE_STARTING;
 	main_status_update(ctx_p);
+
+	if (ctx_p->chroot_dir != NULL) {
+		if (chroot(ctx_p->chroot_dir)) {
+			error("Got error while chroot(\"%s\")", ctx_p->chroot_dir);
+			ret = errno;
+		}
+
+		if (chdir(ctx_p->chroot_dir)) {
+			error("Got error while chdir(\"%s\")", ctx_p->chroot_dir);
+			ret = errno;
+		}
+	}
+
+#ifdef GETMNTENT_SUPPORT
+	if (ctx_p->mountpoints) {
+		struct mntent *ent;
+		FILE *f;
+
+		// Detaching from current FS namespace
+		unshare(CLONE_FS);
+
+		// Scanning mountpoints
+		f = setmntent("/proc/mounts", "r");
+		if (f == NULL) {
+			perror("setmntent");
+			exit(1);
+		}
+		while (NULL != (ent = getmntent(f))) {
+			int i;
+
+			i=0;
+			while (i < ctx_p->mountpoints) {
+				if (!strcmp(ent->mnt_dir, ctx_p->mountpoint[i]))
+					break;
+
+				i++;
+			}
+
+			if (i >= ctx_p->mountpoints) {
+				debug(1, "umount2(\"%s\", MNT_DETACH)", ent->mnt_dir);
+				if (umount2(ent->mnt_dir, MNT_DETACH))
+					warning("Cannot umount2(\"%s\", MNT_DETACH): %s", ent->mnt_dir, strerror(errno));
+			}
+		}
+		endmntent(f);
+	}
+#endif
 
 #ifdef CAPABILITIES_SUPPORT
 	if (ctx_p->flags[CAP_PRESERVE_FILEACCESS]) {
