@@ -364,16 +364,21 @@ char *parameter_expand(
 								(*macro_count_p)++;
 
 							nest_searching = 0;
-							if (ptr[1] >= 'A' && ptr[1] <= 'Z' && (exceptionflags&4)) {	// Lazy substitution, preserving the value
+							*ptr_nest = 0;
+							variable_name  = &ptr[1];
+							if (!strcmp(variable_name, "PID")) {
+								if (!*ctx_p->pid_str) {
+									snprintf(ctx_p->pid_str, 64, "%u", ctx_p->pid);
+									ctx_p->pid_str_len = strlen(ctx_p->pid_str);
+								}
+								variable_value     = ctx_p->pid_str;
+								variable_value_len = ctx_p->pid_str_len;
+							} else
+							if (*variable_name >= 'A' && *variable_name <= 'Z' && (exceptionflags&4)) {	// Lazy substitution, preserving the value
 								variable_value     =  ptr;
 								variable_value_len = (ptr_nest - ptr + 1);
-								*ptr_nest = 0;
-								variable_name  = &ptr[1];
 								parameter_get(variable_name, parameter_get_arg);
-								*ptr_nest = '%';
-							} else {							// Substituting
-								*ptr_nest = 0;
-								variable_name  = &ptr[1];
+							} else {									// Substituting
 								variable_value = parameter_get(variable_name, parameter_get_arg);
 								if (variable_value == NULL) {
 									if (!(exceptionflags&2))
@@ -382,12 +387,12 @@ char *parameter_expand(
 									errno = 0;
 									break;
 								}
-								*ptr_nest = '%';
 								variable_value_len = strlen(variable_value);
 
 								if (expand_count_p != NULL)
 									(*expand_count_p)++;
 							}
+							*ptr_nest = '%';
 							if (ret_len+variable_value_len+1 >= ret_size) {
 								ret_size = ret_len+variable_value_len+1 + ALLOC_PORTION;
 								ret      = xrealloc(ret, ret_size);
@@ -2045,6 +2050,7 @@ int main(int argc, char *argv[]) {
 	ctx_p->config_block			 = DEFAULT_CONFIG_BLOCK;
 	ctx_p->retries				 = DEFAULT_RETRIES;
 	ctx_p->flags[VERBOSE]			 = DEFAULT_VERBOSE;
+	ctx_p->pid				 = getpid();
 
 	error_init(&ctx_p->flags[OUTPUT_METHOD], &ctx_p->flags[QUIET], &ctx_p->flags[VERBOSE], &ctx_p->flags[DEBUG]);
 

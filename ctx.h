@@ -225,6 +225,9 @@ struct ctx {
 	state_t state;
 
 #ifndef LIBCLSYNC
+	pid_t  pid;
+	char   pid_str[65];
+	size_t pid_str_len;
 	uid_t uid;
 	gid_t gid;
 	pid_t child_pid[MAXCHILDREN];	// Used only for non-pthread mode
@@ -290,9 +293,6 @@ struct ctx {
 	unsigned int synctimeout;
 	sigset_t *sigset;
 	char isignoredexitcode[(1<<8)];
-#endif
-	void *indexes_p;
-	void *fsmondata;
 
 	char *chroot_dir;
 
@@ -303,6 +303,9 @@ struct ctx {
 
 	synchandler_args_t synchandler_args[SHARGS_MAX];
 	shflags_t synchandler_argf;
+#endif // ifndef LIBCLSYNC
+	void *indexes_p;
+	void *fsmondata;
 };
 typedef struct ctx ctx_t;
 
