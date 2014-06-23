@@ -2137,7 +2137,7 @@ int main(int argc, char *argv[]) {
 		FILE *f;
 
 		// Detaching from current FS namespace
-		unshare(CLONE_FS);
+		unshare(CLONE_NEWNS);
 
 		// Scanning mountpoints
 		f = setmntent("/proc/mounts", "r");
