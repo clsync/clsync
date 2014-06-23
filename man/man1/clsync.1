@@ -940,18 +940,18 @@ Possible values:
 .RS
 .IR inotify 
 .RS
-.BR inotify "(7) [Linux]"
+.BR inotify "(7) [Linux, (FreeBSD via libinotify)]"
 
 Native, fast, reliable and well tested Linux FS monitor subsystem.
 
 There's no performance profit to use "inotify" instead of "kevent" on FreeBSD
 using "libinotify". It backends to "kevent" anyway. However inotify support is
-well tested and may be useful even via "libinotify".
+well tested and recommended.
 
 .RE
 .IR kqueue
 .RS
-.BR kqueue "(2) [FreeBSD]"
+.BR kqueue "(2) [FreeBSD, (Linux via libkqueue)]"
 
 A *BSD kernel event notification mechanism (inc. timer, sockets, files etc).
 
@@ -1009,22 +1009,10 @@ policy:cnt
 filesz:1M
 .RE
 .RE
-.IR dtracepipe
-.RS
-.BR dtrace "(1) [FreeBSD]"
-
-.B clsync
-will run dtrace with special script (on "d") using
-.BR popen (3)
-and parse it's output.
-
-IMHO, this way is the best for FreeBSD.
-.RE
 .RE
 
-The default value on Linux is "inotify".
-.br
-The default value on FreeBSD is "kqueue".
+The default value is "inotify". If "inotify" is not supported then the default
+value is "kqueue".
 .RE
 
 .PP

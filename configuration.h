@@ -36,6 +36,7 @@
 #		define DEFAULT_NOTIFYENGINE	NE_INOTIFY
 #	elif KQUEUE_SUPPORT
 #		define DEFAULT_NOTIFYENGINE	NE_KQUEUE
+#		warning There is no inotify support, defaulting to kqueue (that is not well tested)
 #	else
 #		error No inotify/kqueue support, cannot compile working clsync
 #	endif
