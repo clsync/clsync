@@ -590,6 +590,7 @@ int exec_argv(char **argv, int *child_pid) {
 			return errno;
 	}
 //	debug(3, "After fork thread %p"")".", pthread_self() );
+	debug(3, "Child pid is %u", pid);
 
 	// Setting *child_pid value
 	if(child_pid)
@@ -3471,6 +3472,22 @@ l_sync_dump_end:
 
 /* === /DUMP === */
 
+static inline int sendkill(int child_pid, int signal) {
+	if (waitpid(child_pid, NULL, WNOHANG)>=0) {
+		debug(3, "Sending signal %u to child process with pid %u.",
+			signal, child_pid);
+		if (kill(child_pid, signal)) {
+			error("Got error while kill(%u, %u)", child_pid, signal);
+			return errno;
+		}
+
+		sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
+	} else
+		return ENOENT;
+
+	return 0;
+}
+
 int *sync_sighandler_exitcode_p = NULL;
 int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 	int signal, ret;
@@ -3533,37 +3550,17 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 				// bugfix of https://github.com/xaionaro/clsync/issues/44
 				while (ctx_p->children) { // Killing children if non-pthread mode or/and (mode=="so" or mode=="rsyncso")
 					pid_t child_pid = ctx_p->child_pid[--ctx_p->children];
-					if (waitpid(child_pid, NULL, WNOHANG)>=0) {
-						debug(3, "Sending signal %u to child process with pid %u.",
-							signal, child_pid);
-						kill(child_pid, signal);
-						sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
-					} else
+
+					if (sendkill(child_pid, signal) == ENOENT)
 						continue;
-
 					if (signal != SIGQUIT)
-						if (waitpid(child_pid, NULL, WNOHANG)>=0) {
-							debug(3, "Sending signal SIGQUIT to child process with pid %u.",
-								child_pid);
-							kill(child_pid, SIGQUIT);
-							sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
-						} else
+						if (sendkill(child_pid, SIGQUIT) == ENOENT)
 							continue;
-
 					if (signal != SIGTERM)
-						if (waitpid(child_pid, NULL, WNOHANG)>=0) {
-							debug(3, "Sending signal SIGTERM to child process with pid %u.",
-								child_pid);
-							kill(child_pid, SIGTERM);
-							sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
-						} else
+						if (sendkill(child_pid, SIGTERM) == ENOENT)
 							continue;
-
-					if (waitpid(child_pid, NULL, WNOHANG)>=0) {
-						debug(3, "Sending signal SIGKILL to child process with pid %u.",
-							child_pid);
-						kill(child_pid, SIGKILL);
-					}
+					if (sendkill(child_pid, SIGKILL) == ENOENT)
+						continue;
 				}
 				break;
 			case SIGHUP:

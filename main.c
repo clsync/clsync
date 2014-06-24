@@ -2127,6 +2127,8 @@ int main(int argc, char *argv[]) {
 #ifdef GETMNTENT_SUPPORT
 		struct mntent *ent;
 		FILE *ent_f;
+
+		ent_f = NULL;	// Anti-warning, gcc-4.8.2
 		if (ctx_p->mountpoints) {
 			// Openning the file with mount list
 			ent_f = setmntent("/proc/mounts", "r");
