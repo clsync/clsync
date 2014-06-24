@@ -2198,8 +2198,8 @@ int main(int argc, char *argv[]) {
 			}
 
 			free(to_umount);
+			endmntent(ent_f);
 		}
-		endmntent(ent_f);
 #endif
 		if (ctx_p->chroot_dir != NULL) {
 			debug(7, "chroot(\".\")");
