@@ -172,6 +172,7 @@ static char *const status_descr[] = {
 	[STATE_EXIT]		= "exiting",
 	[STATE_STARTING]	= "starting",
 	[STATE_RUNNING]		= "running",
+	[STATE_SYNCHANDLER_ERR]	= "synchandler error",
 	[STATE_REHASH]		= "rehashing",
 	[STATE_TERM]		= "terminating",
 	[STATE_THREAD_GC]	= "thread gc",

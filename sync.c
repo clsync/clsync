@@ -721,6 +721,7 @@ static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_ev
 	if (!SHOULD_THREAD(ctx_p)) {
 		int rc=0, ret=0, err=0;
 		int try_n=0, try_again;
+		state_t status = STATE_UNKNOWN;
 
 //		indexes_p->nonthreaded_syncing_fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
 		indexes_p->nonthreaded_syncing_fpath2ei_ht = indexes_p->fpath2ei_ht;
@@ -734,6 +735,12 @@ static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_ev
 			alarm(0);
 
 			if ((err=exitcode_process(ctx_p, rc))) {
+				if (try_n == 1) {
+					status = ctx_p->state;
+					ctx_p->state = STATE_SYNCHANDLER_ERR;
+					main_status_update(ctx_p);
+				}
+
 				try_again = ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
 				warning("Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
 				if (try_again) {
@@ -745,6 +752,10 @@ static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_ev
 		if (err && !ctx_p->flags[IGNOREFAILURES]) {
 			error("Bad exitcode %i (errcode %i)", rc, err);
 			ret = err;
+		} else
+		if (status != STATE_UNKNOWN) {
+			ctx_p->state = status;
+			main_status_update(ctx_p);
 		}
 
 //		g_hash_table_destroy(indexes_p->nonthreaded_syncing_fpath2ei_ht);
@@ -864,6 +875,7 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 
 		int rc=0, err=0;
 		int try_n=0, try_again;
+		state_t status = STATE_UNKNOWN;
 		do {
 			try_again = 0;
 			try_n++;
@@ -873,6 +885,11 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 			alarm(0);
 
 			if ((err=exitcode_process(ctx_p, rc))) {
+				if (try_n == 1) {
+					status = ctx_p->state;
+					ctx_p->state = STATE_SYNCHANDLER_ERR;
+					main_status_update(ctx_p);
+				}
 				try_again = ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
 				warning("Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
 				if (try_again) {
@@ -884,6 +901,10 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 		if (err && !ctx_p->flags[IGNOREFAILURES]) {
 			error("Bad exitcode %i (errcode %i)", rc, err);
 			rc = err;
+		} else
+		if (status != STATE_UNKNOWN) {
+			ctx_p->state = status;
+			main_status_update(ctx_p);
 		}
 
 //		g_hash_table_destroy(indexes_p->nonthreaded_syncing_fpath2ei_ht);
@@ -1069,6 +1090,7 @@ int sync_exec_argv(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t ca
 
 	int exitcode=0, ret=0, err=0;
 	int try_n=0, try_again;
+	state_t status = STATE_UNKNOWN;
 	do {
 		try_again = 0;
 		try_n++;
@@ -1081,6 +1103,11 @@ int sync_exec_argv(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t ca
 		alarm(0);
 
 		if ((err=exitcode_process(ctx_p, exitcode))) {
+			if (try_n == 1) {
+				status = ctx_p->state;
+				ctx_p->state = STATE_SYNCHANDLER_ERR;
+				main_status_update(ctx_p);
+			}
 			try_again = ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
 			warning("Bad exitcode %i (errcode %i). %s.", exitcode, err, try_again?"Retrying":"Give up");
 			if (try_again) {
@@ -1093,6 +1120,10 @@ int sync_exec_argv(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t ca
 	if (err && !ctx_p->flags[IGNOREFAILURES]) {
 		error("Bad exitcode %i (errcode %i)", exitcode, err);
 		ret = err;
+	} else
+	if (status != STATE_UNKNOWN) {
+		ctx_p->state = status;
+		main_status_update(ctx_p);
 	}
 
 	if (callback != NULL) {

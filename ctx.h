@@ -212,6 +212,7 @@ enum state_enum {
 	STATE_EXIT 	= 0,
 	STATE_STARTING,
 	STATE_RUNNING,
+	STATE_SYNCHANDLER_ERR,
 	STATE_REHASH,
 	STATE_PREEXIT,
 	STATE_TERM,
@@ -222,9 +223,8 @@ enum state_enum {
 typedef enum state_enum state_t;
 
 struct ctx {
-	state_t state;
-
 #ifndef LIBCLSYNC
+	state_t state;
 	pid_t  pid;
 	char   pid_str[65];
 	size_t pid_str_len;

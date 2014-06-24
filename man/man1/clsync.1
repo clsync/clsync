@@ -264,6 +264,12 @@ processing initial syncing
 .RS
 waiting for events or syncing
 .RE
+.IR "synchandler error"
+.RS
+waiting between synchandler execution tries (after a failure) [is used only
+while 
+.BR \-\-threading =off]
+.RE
 .IR rehashing
 .RS
 reloading configuration files
