@@ -3540,13 +3540,25 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 						sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
 					} else
 						continue;
-					if (waitpid(child_pid, NULL, WNOHANG)>=0) {
-						debug(3, "Sending signal SIGQUIT to child process with pid %u.",
-							child_pid);
-						kill(child_pid, SIGQUIT);
-						sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
-					} else
-						continue;
+
+					if (signal != SIGQUIT)
+						if (waitpid(child_pid, NULL, WNOHANG)>=0) {
+							debug(3, "Sending signal SIGQUIT to child process with pid %u.",
+								child_pid);
+							kill(child_pid, SIGQUIT);
+							sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
+						} else
+							continue;
+
+					if (signal != SIGTERM)
+						if (waitpid(child_pid, NULL, WNOHANG)>=0) {
+							debug(3, "Sending signal SIGTERM to child process with pid %u.",
+								child_pid);
+							kill(child_pid, SIGTERM);
+							sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
+						} else
+							continue;
+
 					if (waitpid(child_pid, NULL, WNOHANG)>=0) {
 						debug(3, "Sending signal SIGKILL to child process with pid %u.",
 							child_pid);
