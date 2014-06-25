@@ -78,7 +78,7 @@ want to sync big files (`>1GiB`) so often as ordinary files.
 Sorry, if I'm wrong. Let me know if it is, please :). "lsyncd" - is really
 interesting and useful utility, just it's not appropriate for us.
 
-UPD.: Also clsync was used to replace incron/csync2/etc in HPC-clusters for
+UPD.: Also clsync had been used to replace incron/csync2/etc in HPC-clusters for
 syncing /etc/{passwd,shadow,group,shells} files.
 
 3. inotify vs fanotify:
