@@ -49,7 +49,7 @@ This utility has been written for two purposes:
 To do a HA cluster I've tried a lot of different solutions, like "simple 
 rsync by cron", "glusterfs", "ocfs2 over drbd", "common mirrorable external 
 storage", "incron + perl + rsync", "inosync", "lsyncd" and so on. When I 
-started to write the utility we was using "lsyncd", "ceph" and
+started to write the utility we were using "lsyncd", "ceph" and
 "ocfs2 over drbd". However all of this solutions doesn't arrange me, so I
 was have to write own utility for this purpose.
 
