@@ -72,7 +72,7 @@ static const struct option long_options[] =
 	{"sync-handler-uid",	required_argument,	NULL,	SYNCHANDLERUID},
 	{"sync-handler-gid",	required_argument,	NULL,	SYNCHANDLERGID},
 	{"chroot",		required_argument,	NULL,	CHROOT},
-	{"no-thread-splitting",	optional_argument,	NULL,	NOTHREADSPLITTING},
+	{"thread-splitting",	optional_argument,	NULL,	THREADSPLITTING},
 #ifdef GETMNTENT_SUPPORT
 	{"mountpoints",		optional_argument,	NULL,	MOUNTPOINTS},
 #endif

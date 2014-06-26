@@ -408,7 +408,7 @@ int privileged_init(ctx_t *ctx_p)
 {
 
 #ifdef CAPABILITIES_SUPPORT
-	if (ctx_p->flags[NOTHREADSPLITTING]) {
+	if (!ctx_p->flags[THREADSPLITTING]) {
 #endif
 
 		privileged_fork_execvp		= _privileged_fork_execvp;

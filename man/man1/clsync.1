@@ -337,12 +337,6 @@ An user ID to be used for
 See
 .BR \-\-preserve\-capabilities .
 
-This option is ignored if the
-.B clsync
-instance have no CAP_SETUID capability (or analog) or if option
-.B --no-thread-splitting
-is enabled.
-
 The default value is "$UID".
 .PP
 .RE
@@ -355,12 +349,6 @@ A group ID to be used for
 
 See
 .BR \-\-preserve\-capabilities .
-
-This option is ignored if the
-.B clsync
-instance have no CAP_SETGID capability (or analog) or if option
-.B --no-thread-splitting
-is enabled.
 
 The default value is "$GID".
 .PP
@@ -466,14 +454,17 @@ Reset all capabilities
 The default value is "empty".
 .RE
 
-.B \-\-no\-thread\-splitting
+.B \-\-thread\-splitting
 .RS
 .B [Linux only, requires capabilities]
 
-Don't split the main thread to privileged and non-privileged. This may be used
-due to performance reasons. Performance vs security trade off.
-
-The thread splitting is used only on Linux systems.
+Split the main thread to privileged and non-privileged. This's an additional
+way to secure your system from any bug in
+.B clsync
+while running it with capabilities or root privileges. But
+.B clsync
+will utilize in ~6 times more CPU resources. So it's a performance vs
+security trade off.
 
 Is not set by default.
 .RE
