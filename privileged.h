@@ -19,9 +19,6 @@
 
 #ifdef CAPABILITIES_SUPPORT
 
-extern int privileged_init(struct ctx *ctx_p);
-extern int privileged_deinit(struct ctx *ctx_p);
-
 extern FTS *(*privileged_fts_open)		(
 		char * const *path_argv,
 		int options,
@@ -57,4 +54,7 @@ extern int (*privileged_inotify_rm_watch)	(
 #endif
 
 extern int (*privileged_fork_execvp)(const char *file, char *const argv[]);
+
+extern int privileged_init(struct ctx *ctx_p);
+extern int privileged_deinit(struct ctx *ctx_p);
 

@@ -17,6 +17,15 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <unistd.h>			// execvp()
+
+#include "common.h"			// ctx.h
+#include "ctx.h"			// ctx_t
+#include "error.h"			// debug()
+
+int (*privileged_fork_execvp)(const char *file, char *const argv[]);
+
+#ifdef CAPABILITIES_SUPPORT
 #include <pthread.h>			// pthread_create()
 #include <sys/inotify.h>		// inotify_init()
 #include <sys/types.h>			// fts_open()
@@ -24,11 +33,7 @@
 #include <fts.h>			// fts_open()
 #include <errno.h>			// errno
 #include <sys/capability.h>		// capset()
-#include <unistd.h>			// execvp()
 
-#include "common.h"			// ctx.h
-#include "ctx.h"			// ctx_t
-#include "error.h"			// debug()
 
 pthread_t	pthread_thread;
 pthread_mutex_t	pthread_mutex_privileged      = PTHREAD_MUTEX_INITIALIZER;
@@ -113,11 +118,9 @@ int (*privileged_inotify_rm_watch)	(
 		int wd
 	);
 
-int (*privileged_fork_execvp)(const char *file, char *const argv[]);
 
-
-int cap_drop(__u32 caps) {
-	debug(1, "Dropping all Linux capabilites but 0x%o", caps);
+int cap_drop(ctx_t *ctx_p, __u32 caps) {
+	debug(1, "Dropping all Linux capabilites but 0x%x", caps);
 
 	struct __user_cap_header_struct	cap_hdr = {0};
 	struct __user_cap_data_struct	cap_dat = {0};
@@ -127,12 +130,26 @@ int cap_drop(__u32 caps) {
 		error("Cannot get capabilites with capget()");
 		return errno;
 	}
+	debug(3, "old: cap.eff == 0x%04x; cap.prm == 0x%04x; cap.inh == 0x%04x.",
+		cap_dat.effective, cap_dat.permitted, cap_dat.inheritable);
 
-	cap_dat.effective    = caps;
-	cap_dat.permitted    = cap_dat.effective;
-	cap_dat.inheritable  = cap_dat.effective;
+	switch (ctx_p->flags[CAPS_INHERIT]) {
+		case CI_PERMITTED:
+			cap_dat.inheritable = cap_dat.permitted;
+			break;
+		case CI_DONTTOUCH:
+			break;
+		case CI_CLSYNC:
+			cap_dat.inheritable = caps;
+			break;
+		case CI_EMPTY:
+			cap_dat.inheritable = 0;
+			break;
+	}
+	cap_dat.effective  = caps;
+	cap_dat.permitted  = caps;
 
-	debug(3, "cap.eff == 0x%04x; cap.prm == 0x%04x; cap.inh == 0x%04x.",
+	debug(3, "new: cap.eff == 0x%04x; cap.prm == 0x%04x; cap.inh == 0x%04x.",
 		cap_dat.effective, cap_dat.permitted, cap_dat.inheritable);
 
 	if (capset(&cap_hdr, &cap_dat) < 0) {
@@ -150,7 +167,7 @@ void *privileged_handler(void *_ctx_p)
 	uid_t exec_uid = 65535;
 	gid_t exec_gid = 65535;
 
-	cap_drop(ctx_p->caps);
+	cap_drop(ctx_p, ctx_p->caps);
 
 	debug(2, "Syncing with the runner");
 	pthread_mutex_lock(&pthread_mutex_privileged);
@@ -364,6 +381,8 @@ int _privileged_fork_setuid_execvp(const char *file, char *const argv[])
 	return (long)ret;
 }
 
+#endif
+
 uid_t _privileged_fork_execvp_uid;
 gid_t _privileged_fork_execvp_gid;
 int _privileged_fork_execvp(const char *file, char *const argv[])
@@ -386,7 +405,16 @@ int _privileged_fork_execvp(const char *file, char *const argv[])
 int privileged_init(ctx_t *ctx_p)
 {
 
+#ifdef CAPABILITIES_SUPPORT
 	if (ctx_p->flags[NOTHREADSPLITTING]) {
+#endif
+
+		privileged_fork_execvp		= _privileged_fork_execvp;
+
+		_privileged_fork_execvp_uid	= ctx_p->synchandler_uid;
+		_privileged_fork_execvp_gid	= ctx_p->synchandler_gid;
+
+#ifdef CAPABILITIES_SUPPORT
 		privileged_fts_open		= fts_open;
 		privileged_fts_read		= fts_read;
 		privileged_fts_close		= fts_close;
@@ -394,13 +422,13 @@ int privileged_init(ctx_t *ctx_p)
 		privileged_inotify_init1	= inotify_init1;
 		privileged_inotify_add_watch	= inotify_add_watch;
 		privileged_inotify_rm_watch	= inotify_rm_watch;
-		privileged_fork_execvp		= _privileged_fork_execvp;
 
-		_privileged_fork_execvp_uid	= ctx_p->synchandler_uid;
-		_privileged_fork_execvp_gid	= ctx_p->synchandler_gid;
+		cap_drop(ctx_p, ctx_p->caps);
+#endif
 
-		cap_drop(ctx_p->caps);
 		return 0;
+
+#ifdef CAPABILITIES_SUPPORT
 	}
 
 	privileged_fts_open		= _privileged_fts_open;
@@ -451,7 +479,7 @@ int privileged_init(ctx_t *ctx_p)
 		error("Cannot pthread_create().");
 		return errno;
 	}
-	cap_drop(0);
+	cap_drop(ctx_p, 0);
 
 	debug(4, "Waiting for the privileged thread to get prepared");
 	pthread_cond_wait(&pthread_cond_runner, &pthread_mutex_runner);
@@ -476,12 +504,14 @@ int privileged_init(ctx_t *ctx_p)
 
 	debug(5, "Finish");
 	return 0;
+#endif
 }
 
 
 int privileged_deinit(ctx_t *ctx_p)
 {
 	int ret = 0;
+#ifdef CAPABILITIES_SUPPORT
 
 	if (ctx_p->flags[NOTHREADSPLITTING])
 		return 0;
@@ -514,6 +544,7 @@ int privileged_deinit(ctx_t *ctx_p)
 		ret = errno;
 	}
 
+#endif
 	return ret;
 }
 

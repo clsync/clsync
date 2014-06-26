@@ -78,6 +78,7 @@ static const struct option long_options[] =
 #endif
 #ifdef CAPABILITIES_SUPPORT
 	{"preserve-capabilities",required_argument,	NULL,	CAP_PRESERVE},
+	{"inherit-capabilities",optional_argument,	NULL,	CAPS_INHERIT},
 #endif
 	{"threading",		required_argument,	NULL,	THREADING},
 	{"retries",		optional_argument,	NULL,	RETRIES},
@@ -151,6 +152,14 @@ static char *const capabilities[] = {
 	NULL
 };
 #define XCAP_TO_CAP(x) (xcap_to_cap[x])
+
+static char *const capsinherits[] = {
+	[CI_PERMITTED]		= "permittied",
+	[CI_DONTTOUCH]		= "dont-touch",
+	[CI_CLSYNC]		= "clsync",
+	[CI_EMPTY]		= "empty",
+};
+
 #endif
 
 static char *const socketauth[] = {
@@ -612,7 +621,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 		ctx_p->flags_values_raw[param_id] = arg;
 	}
 
-	switch(param_id) {
+	switch (param_id) {
 		case '?':
 		case HELP:
 			syntax();
@@ -695,6 +704,24 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 				if (cap != X_CAP_RESET)
 					ctx_p->caps |= CAP_TO_MASK(XCAP_TO_CAP(cap));
 			}
+
+			break;
+		}
+		case CAPS_INHERIT: {
+			char *value, *arg_orig = arg;
+
+			if (!*arg) {
+				ctx_p->flags_set[param_id] = 0;
+				return 0;
+			}
+
+			capsinherit_t capsinherit = getsubopt(&arg, capsinherits, &value);
+			if((int)capsinherit == -1) {
+				errno = EINVAL;
+				error("Invalid capabilities inheriting mode entered: \"%s\"", arg_orig);
+				return EINVAL;
+			}
+			ctx_p->flags[CAPS_INHERIT] = capsinherit;
 
 			break;
 		}
@@ -1994,13 +2021,20 @@ int main(int argc, char *argv[]) {
 	ctx_p->flags[VERBOSE]			 = DEFAULT_VERBOSE;
 #ifdef CAPABILITIES_SUPPORT
 	ctx_p->caps				 = DEFAULT_PRESERVE_CAPABILITIES;
-	ctx_p->synchandler_uid			 = DEFAULT_SYNCHANDLER_UID;
-	ctx_p->synchandler_gid			 = DEFAULT_SYNCHANDLER_GID;
+	ctx_p->synchandler_uid			 = getuid();
+	ctx_p->synchandler_gid			 = getgid();
+	ctx_p->flags[CAPS_INHERIT]		 = DEFAULT_CAPS_INHERIT;
 
-	ctx_p->flags[UID]			 = -1;
-	ctx_p->flags[GID]			 = -1;
-	ctx_p->uid				 = DEFAULT_UID;
-	ctx_p->gid				 = DEFAULT_GID;
+	{
+		struct passwd *pwd = getpwnam(DEFAULT_USER);
+		ctx_p->uid = (pwd != NULL) ? pwd->pw_uid : DEFAULT_UID;
+		ctx_p->flags[UID]		 = -1;
+	}
+	{
+		struct group  *grp = getgrnam(DEFAULT_GROUP);
+		ctx_p->gid = (grp != NULL) ? grp->gr_gid : DEFAULT_GID;
+		ctx_p->flags[GID]		 = -1;
+	}
 #endif
 
 	ctx_p->pid				 = getpid();
@@ -2172,26 +2206,6 @@ int main(int argc, char *argv[]) {
 	}
 #endif
 
-	if (ctx_p->flags[GID]) {
-		int rc;
-		debug(3, "Trying to drop gid to %i", ctx_p->gid);
-		if ((rc=setgid(ctx_p->gid)) && (ctx_p->flags[GID] != -1)) {
-			error("Cannot setgid(%u)", ctx_p->gid);
-			ret = errno;
-		}
-		if (!rc) debug(4, "success");
-	}
-
-	if (ctx_p->flags[UID]) {
-		int rc;
-		debug(3, "Trying to drop uid to %i", ctx_p->uid);
-		if ((rc=setuid(ctx_p->uid)) && (ctx_p->flags[UID] != -1)) {
-			error("Cannot setuid(%u)", ctx_p->uid);
-			ret = errno;
-		}
-		if (!rc) debug(4, "success");
-	}
-
 	if (ctx_p->watchdir != NULL) {
 		char *rwatchdir = realpath(ctx_p->watchdir, NULL);
 		if (rwatchdir == NULL) {
@@ -2322,7 +2336,27 @@ int main(int argc, char *argv[]) {
 	} else
 	if (ctx_p->destproto != NULL)
 		ctx_p->destdirwslash = ctx_p->destdir;
+/*
+	if (ctx_p->flags[GID]) {
+		int rc;
+		debug(3, "Trying to drop gid to %i", ctx_p->gid);
+		if ((rc=setgid(ctx_p->gid)) && (ctx_p->flags[GID] != -1)) {
+			error("Cannot setgid(%u)", ctx_p->gid);
+			ret = errno;
+		}
+		if (!rc) debug(4, "success");
+	}
 
+	if (ctx_p->flags[UID]) {
+		int rc;
+		debug(3, "Trying to drop uid to %i", ctx_p->uid);
+		if ((rc=setuid(ctx_p->uid)) && (ctx_p->flags[UID] != -1)) {
+			error("Cannot setuid(%u)", ctx_p->uid);
+			ret = errno;
+		}
+		if (!rc) debug(4, "success");
+	}
+*/
 	debug(1, "%s [%s] (%p) -> %s [%s]", ctx_p->watchdir, ctx_p->watchdirwslash, ctx_p->watchdirwslash, ctx_p->destdir?ctx_p->destdir:"", ctx_p->destdirwslash?ctx_p->destdirwslash:"");
 
 	ret = ctx_check(ctx_p);

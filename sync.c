@@ -3664,10 +3664,8 @@ int sync_run(ctx_t *ctx_p) {
 		signal(SIGUSR_BLOPINT,	sync_sig_int);
 	}
 
-#ifdef CAPABILITIES_SUPPORT
 	if ((ret=privileged_init(ctx_p)))
 		return ret;
-#endif
 
 	// Creating hash tables
 	{
@@ -3860,9 +3858,7 @@ int sync_run(ctx_t *ctx_p) {
 	pthread_kill(pthread_sighandler, SIGINT);
 	pthread_join(pthread_sighandler, NULL);
 
-#ifdef CAPABILITIES_SUPPORT
 	ret |= privileged_deinit(ctx_p);
-#endif
 
 	// Killing children
 

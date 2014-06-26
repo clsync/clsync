@@ -5,9 +5,9 @@ if CLSYNC
 bin_PROGRAMS = clsync
 
 clsync_SOURCES = calc.c cluster.c error.c fileutils.c glibex.c		\
-	indexes.c main.c malloc.c stringex.c sync.c calc.h cluster.h	\
-	fileutils.h glibex.h main.h port-hacks.h stringex.h sync.h	\
-	common.h control.h privileged.h
+	indexes.c main.c malloc.c stringex.c sync.c privileged.c calc.h	\
+	cluster.h fileutils.h glibex.h main.h port-hacks.h stringex.h	\
+	sync.h common.h control.h privileged.h
 
 clsync_CFLAGS = $(AM_CFLAGS)
 
@@ -39,7 +39,6 @@ clsync_CFLAGS  += -DBACKTRACE_SUPPORT
 endif
 if HAVE_CAPABILITIES
 clsync_CFLAGS  += -DCAPABILITIES_SUPPORT
-clsync_SOURCES += privileged.c
 endif
 if HAVE_GETMNTENT
 clsync_CFLAGS  += -DGETMNTENT_SUPPORT
