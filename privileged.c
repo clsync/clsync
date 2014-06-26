@@ -515,7 +515,7 @@ int privileged_deinit(ctx_t *ctx_p)
 	int ret = 0;
 #ifdef CAPABILITIES_SUPPORT
 
-	if (ctx_p->flags[NOTHREADSPLITTING])
+	if (!ctx_p->flags[THREADSPLITTING])
 		return 0;
 
 	privileged_action(PA_DIE, NULL, NULL);
