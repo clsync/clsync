@@ -250,6 +250,8 @@ void *privileged_handler(void *_ctx_p)
 		}
 
 		debug(3, "Result: %p. Sending the signal to non-privileged thread.", cmd.ret);
+		pthread_mutex_lock(&pthread_mutex_action_signal);
+		pthread_mutex_unlock(&pthread_mutex_action_signal);
 		pthread_cond_signal(&pthread_cond_action);
 	}
 
