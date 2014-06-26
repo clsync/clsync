@@ -44,6 +44,7 @@
 #include "glibex.h"
 #include "control.h"
 #include "indexes.h"
+#include "privileged.h"
 
 #include <stdio.h>
 #include <dlfcn.h>
@@ -251,14 +252,14 @@ static inline ruleaction_t rules_getperm(const char *fpath, mode_t st_mode, rule
 
 threadsinfo_t *thread_info() {	// TODO: optimize this
 	static threadsinfo_t threadsinfo={{{{0}}},{{{0}}},0};
-	if(!threadsinfo.mutex_init) {
+	if (!threadsinfo.mutex_init) {
 		int i=0;
-		while(i < PTHREAD_MUTEX_MAX) {
-			if(pthread_mutex_init(&threadsinfo.mutex[i], NULL)) {
+		while (i < PTHREAD_MUTEX_MAX) {
+			if (pthread_mutex_init(&threadsinfo.mutex[i], NULL)) {
 				error("Cannot pthread_mutex_init().");
 				return NULL;
 			}
-			if(pthread_cond_init (&threadsinfo.cond [i], NULL)) {
+			if (pthread_cond_init (&threadsinfo.cond [i], NULL)) {
 				error("Cannot pthread_cond_init().");
 				return NULL;
 			}
@@ -580,15 +581,7 @@ int exec_argv(char **argv, int *child_pid) {
 	int status;
 
 	// Forking
-	pid = fork();
-	switch(pid) {
-		case -1: 
-			error("Cannot fork().");
-			return errno;
-		case  0:
-			execvp(argv[0], (char *const *)argv);
-			return errno;
-	}
+	pid = privileged_fork_execvp(argv[0], (char *const *)argv);
 //	debug(3, "After fork thread %p"")".", pthread_self() );
 	debug(3, "Child pid is %u", pid);
 
@@ -1332,7 +1325,7 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 			) && 
 			!ctx_p->flags[RSYNCPREFERINCLUDE];
 
-	if((!ctx_p->flags[RSYNCPREFERINCLUDE]) && skip_rules)
+	if ((!ctx_p->flags[RSYNCPREFERINCLUDE]) && skip_rules)
 		return 0;
 
 	char fts_no_stat = (initsync==INITSYNC_FULL) && !(ctx_p->flags[EXCLUDEMOUNTPOINTS]);
@@ -1343,10 +1336,10 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 
         debug(3, "fts_opts == %p", (void *)(long)fts_opts);
 
-	tree = fts_open((char *const *)&rootpaths, fts_opts, NULL);
+	tree = privileged_fts_open((char *const *)&rootpaths, fts_opts, NULL);
 
-	if(tree == NULL) {
-		error("Cannot fts_open() on \"%s\".", dirpath);
+	if (tree == NULL) {
+		error("Cannot privileged_fts_open() on \"%s\".", dirpath);
 		return errno;
 	}
 
@@ -1356,8 +1349,8 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 	char  *path_rel		= NULL;
 	size_t path_rel_len	= 0;
 
-	while((node = fts_read(tree))) {
-		switch(node->fts_info) {
+	while ((node = privileged_fts_read(tree))) {
+		switch (node->fts_info) {
 			// Duplicates:
 			case FTS_DP:
 				continue;
@@ -1375,17 +1368,17 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 			case FTS_ERR:
 			case FTS_NS:
 			case FTS_DNR:
-				if(node->fts_errno == ENOENT) {
-					debug(1, "Got error while fts_read(): %s (errno: %i; fts_info: %i).", strerror(node->fts_errno), node->fts_errno, node->fts_info);
+				if (node->fts_errno == ENOENT) {
+					debug(1, "Got error while privileged_fts_read(): %s (errno: %i; fts_info: %i).", strerror(node->fts_errno), node->fts_errno, node->fts_info);
 					continue;
 				} else {
-					error("Got error while fts_read(): %s (errno: %i; fts_info: %i).", strerror(node->fts_errno), node->fts_errno, node->fts_info);
+					error("Got error while privileged_fts_read(): %s (errno: %i; fts_info: %i).", strerror(node->fts_errno), node->fts_errno, node->fts_info);
 					ret = node->fts_errno;
 					goto l_sync_initialsync_walk_end;
 				}
 			default:
 
-				error("Got unknown fts_info vlaue while fts_read(): %i.", node->fts_info);
+				error("Got unknown fts_info vlaue while privileged_fts_read(): %i.", node->fts_info);
 				ret = EINVAL;
 				goto l_sync_initialsync_walk_end;
 		}
@@ -1393,12 +1386,12 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 
 		debug(3, "Pointing to \"%s\" (node->fts_info == %i)", path_rel, node->fts_info);
 
-		if(ctx_p->flags[EXCLUDEMOUNTPOINTS] && node->fts_info==FTS_D) {
-			if(rsync_and_prefer_excludes) {
-				if(node->fts_statp->st_dev != ctx_p->st_dev) {
-					if(queue_id == QUEUE_AUTO) {
+		if (ctx_p->flags[EXCLUDEMOUNTPOINTS] && node->fts_info==FTS_D) {
+			if (rsync_and_prefer_excludes) {
+				if (node->fts_statp->st_dev != ctx_p->st_dev) {
+					if (queue_id == QUEUE_AUTO) {
 						int i=0;
-						while(i<QUEUE_MAX)
+						while (i<QUEUE_MAX)
 							indexes_addexclude(indexes_p, strdup(path_rel), EVIF_CONTENTRECURSIVELY, i++);
 					} else
 						indexes_addexclude(indexes_p, strdup(path_rel), EVIF_CONTENTRECURSIVELY, queue_id);
@@ -1410,20 +1403,20 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 
 		mode_t st_mode = fts_no_stat ? (node->fts_info==FTS_D ? S_IFDIR : S_IFREG) : node->fts_statp->st_mode;
 
-		if(!skip_rules) {
+		if (!skip_rules) {
 			ruleaction_t perm = rules_getperm(path_rel, st_mode, rules_p, RA_WALK|RA_MONITOR);
 
-			if(!(perm&RA_WALK)) {
+			if (!(perm&RA_WALK)) {
 				debug(3, "Rejecting to walk into \"%s\".", path_rel);
 				fts_set(tree, node, FTS_SKIP);
 			}
 
-			if(!(perm&RA_MONITOR)) {
+			if (!(perm&RA_MONITOR)) {
 				debug(3, "Excluding \"%s\".", path_rel);
-				if(rsync_and_prefer_excludes) {
-					if(queue_id == QUEUE_AUTO) {
+				if (rsync_and_prefer_excludes) {
+					if (queue_id == QUEUE_AUTO) {
 						int i=0;
-						while(i<QUEUE_MAX)
+						while (i<QUEUE_MAX)
 							indexes_addexclude(indexes_p, strdup(path_rel), EVIF_NONE, i++);
 					} else
 						indexes_addexclude(indexes_p, strdup(path_rel), EVIF_NONE, queue_id);
@@ -1439,31 +1432,31 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 		evinfo.fsize        = fts_no_stat ? 0 : node->fts_statp->st_size;
 		evinfo_initialevmask(ctx_p, &evinfo, node->fts_info==FTS_D);
 
-		if(!rsync_and_prefer_excludes) {
+		if (!rsync_and_prefer_excludes) {
 			debug(3, "queueing \"%s\" (depth: %i) with int-flags %p", node->fts_path, node->fts_level, (void *)(unsigned long)evinfo.flags);
 			int _ret = sync_queuesync(path_rel, &evinfo, ctx_p, indexes_p, queue_id);
 
-			if(_ret) {
+			if (_ret) {
 				error("Got error while queueing \"%s\".", node->fts_path);
 				ret = errno;
 				goto l_sync_initialsync_walk_end;
 			}
 		}
 	}
-	if(errno) {
-		error("Got error while fts_read() and related routines.");
+	if (errno) {
+		error("Got error while privileged_fts_read() and related routines.");
 		ret = errno;
 		goto l_sync_initialsync_walk_end;
 	}
 
-	if(fts_close(tree)) {
-		error("Got error while fts_close().");
+	if (privileged_fts_close(tree)) {
+		error("Got error while privileged_fts_close().");
 		ret = errno;
 		goto l_sync_initialsync_walk_end;
 	}
 
 l_sync_initialsync_walk_end:
-	if(path_rel != NULL)
+	if (path_rel != NULL)
 		free(path_rel);
 	return ret;
 }
@@ -1744,10 +1737,10 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 	int fts_opts = FTS_NOCHDIR|FTS_PHYSICAL|FTS_NOSTAT|(ctx_p->flags[ONEFILESYSTEM]?FTS_XDEV:0);
 
         debug(3, "fts_opts == %p", (void *)(long)fts_opts);
-	tree = fts_open((char *const *)&rootpaths, fts_opts, NULL);
+	tree = privileged_fts_open((char *const *)&rootpaths, fts_opts, NULL);
 
-	if(tree == NULL) {
-		error_or_debug(STATE_STARTING(state_p)?-1:2, "Cannot fts_open() on \"%s\".", dirpath);
+	if (tree == NULL) {
+		error_or_debug(STATE_STARTING(state_p)?-1:2, "Cannot privileged_fts_open() on \"%s\".", dirpath);
 		return errno;
 	}
 
@@ -1755,7 +1748,7 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 	char  *path_rel		= NULL;
 	size_t path_rel_len	= 0;
 
-	while((node = fts_read(tree))) {
+	while ((node = privileged_fts_read(tree))) {
 #ifdef CLUSTER_SUPPORT
 		int ret;
 #endif
@@ -1772,7 +1765,7 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 			case FTS_F:
 			case FTS_NSOK:
 #ifdef CLUSTER_SUPPORT
-				if((ret=sync_mark_walk_cluster_modtime_update(ctx_p, node->fts_path, node->fts_level, S_IFREG)))
+				if ((ret=sync_mark_walk_cluster_modtime_update(ctx_p, node->fts_path, node->fts_level, S_IFREG)))
 					goto l_sync_mark_walk_end;
 #endif
 				continue;
@@ -1781,7 +1774,7 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 			case FTS_DC:    // TODO: think about case of FTS_DC
 			case FTS_DOT:
 #ifdef CLUSTER_SUPPORT
-				if((ret=sync_mark_walk_cluster_modtime_update(ctx_p, node->fts_path, node->fts_level, S_IFDIR)))
+				if ((ret=sync_mark_walk_cluster_modtime_update(ctx_p, node->fts_path, node->fts_level, S_IFDIR)))
 					goto l_sync_mark_walk_end;
 #endif
 				break;
@@ -1789,16 +1782,16 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 			case FTS_ERR:
 			case FTS_NS:
 			case FTS_DNR:
-				if(errno == ENOENT) {
-					debug(1, "Got error while fts_read(); fts_info: %i.", node->fts_info);
+				if (errno == ENOENT) {
+					debug(1, "Got error while privileged_fts_read(); fts_info: %i.", node->fts_info);
 					continue;
 				} else {
-					error_or_debug(STATE_STARTING(state_p)?-1:2, "Got error while fts_read(); fts_info: %i.", node->fts_info);
+					error_or_debug(STATE_STARTING(state_p)?-1:2, "Got error while privileged_fts_read(); fts_info: %i.", node->fts_info);
 					ret = errno;
 					goto l_sync_mark_walk_end;
 				}
 			default:
-				error_or_debug(STATE_STARTING(state_p)?-1:2, "Got unknown fts_info vlaue while fts_read(): %i.", node->fts_info);
+				error_or_debug(STATE_STARTING(state_p)?-1:2, "Got unknown fts_info vlaue while privileged_fts_read(): %i.", node->fts_info);
 				ret = EINVAL;
 				goto l_sync_mark_walk_end;
 		}
@@ -1806,34 +1799,34 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 		path_rel = sync_path_abs2rel(ctx_p, node->fts_path, -1, &path_rel_len, path_rel);
 		ruleaction_t perm = rules_search_getperm(path_rel, S_IFDIR, rules_p, RA_WALK, NULL);
 
-		if(!(perm&RA_WALK)) {
+		if (!(perm&RA_WALK)) {
 			fts_set(tree, node, FTS_SKIP);
 			continue;
 		}
 
 		debug(2, "marking \"%s\" (depth %u)", node->fts_path, node->fts_level);
 		int wd = sync_notify_mark(ctx_p, node->fts_accpath, node->fts_path, node->fts_pathlen, indexes_p);
-		if(wd == -1) {
+		if (wd == -1) {
 			error_or_debug(STATE_STARTING(state_p)?-1:2, "Got error while notify-marking \"%s\".", node->fts_path);
 			ret = errno;
 			goto l_sync_mark_walk_end;
 		}
 		debug(2, "watching descriptor is %i.", wd);
 	}
-	if(errno) {
-		error_or_debug(STATE_STARTING(state_p)?-1:2, "Got error while fts_read() and related routines.");
+	if (errno) {
+		error_or_debug(STATE_STARTING(state_p)?-1:2, "Got error while privileged_fts_read() and related routines.");
 		ret = errno;
 		goto l_sync_mark_walk_end;
 	}
 
-	if(fts_close(tree)) {
-		error_or_debug(STATE_STARTING(state_p)?-1:2, "Got error while fts_close().");
+	if (privileged_fts_close(tree)) {
+		error_or_debug(STATE_STARTING(state_p)?-1:2, "Got error while privileged_fts_close().");
 		ret = errno;
 		goto l_sync_mark_walk_end;
 	}
 
 l_sync_mark_walk_end:
-	if(path_rel != NULL)
+	if (path_rel != NULL)
 		free(path_rel);
 	return ret;
 }
@@ -3623,6 +3616,7 @@ int sync_term(int exitcode) {
 	return pthread_kill(pthread_sighandler, SIGTERM);
 }
 
+
 int sync_run(ctx_t *ctx_p) {
 	int ret;
 	sighandler_arg_t sighandler_arg = {0};
@@ -3669,6 +3663,11 @@ int sync_run(ctx_t *ctx_p) {
 
 		signal(SIGUSR_BLOPINT,	sync_sig_int);
 	}
+
+#ifdef CAPABILITIES_SUPPORT
+	if ((ret=privileged_init(ctx_p)))
+		return ret;
+#endif
 
 	// Creating hash tables
 	{
@@ -3847,12 +3846,12 @@ int sync_run(ctx_t *ctx_p) {
 
 	// "Infinite" loop of processling the events
 	ret = sync_loop(ctx_p, &indexes);
-	if(ret) return ret;
+	if (ret) return ret;
 	debug(1, "sync_loop() ended");
 
 #ifdef ENABLE_SOCKET
 	// Removing control socket
-	if(ctx_p->socketpath != NULL)
+	if (ctx_p->socketpath != NULL)
 		control_cleanup(ctx_p);
 #endif
 
@@ -3860,6 +3859,10 @@ int sync_run(ctx_t *ctx_p) {
 	// TODO: Do cleanup of watching points
 	pthread_kill(pthread_sighandler, SIGINT);
 	pthread_join(pthread_sighandler, NULL);
+
+#ifdef CAPABILITIES_SUPPORT
+	ret |= privileged_deinit(ctx_p);
+#endif
 
 	// Killing children
 

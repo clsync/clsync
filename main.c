@@ -69,12 +69,15 @@ static const struct option long_options[] =
 	{"pid-file",		required_argument,	NULL,	PIDFILE},
 	{"uid",			required_argument,	NULL,	UID},
 	{"gid",			required_argument,	NULL,	GID},
+	{"sync-handler-uid",	required_argument,	NULL,	SYNCHANDLERUID},
+	{"sync-handler-gid",	required_argument,	NULL,	SYNCHANDLERGID},
 	{"chroot",		required_argument,	NULL,	CHROOT},
+	{"no-thread-splitting",	optional_argument,	NULL,	NOTHREADSPLITTING},
 #ifdef GETMNTENT_SUPPORT
 	{"mountpoints",		optional_argument,	NULL,	MOUNTPOINTS},
 #endif
 #ifdef CAPABILITIES_SUPPORT
-	{"preserve-file-access",optional_argument,	NULL,	CAP_PRESERVE_FILEACCESS},
+	{"preserve-capabilities",required_argument,	NULL,	CAP_PRESERVE},
 #endif
 	{"threading",		required_argument,	NULL,	THREADING},
 	{"retries",		optional_argument,	NULL,	RETRIES},
@@ -124,6 +127,31 @@ static const struct option long_options[] =
 
 	{NULL,			0,			NULL,	0}
 };
+
+#ifdef CAPABILITIES_SUPPORT
+
+enum x_capabilities {
+	X_CAP_RESET = 0,
+	X_CAP_DAC_READ_SEARCH,
+	X_CAP_SETUID,
+	X_CAP_SETGID,
+
+	X_CAP_MAX
+};
+__u32 xcap_to_cap[] = {
+	[X_CAP_DAC_READ_SEARCH] = CAP_DAC_READ_SEARCH,
+	[X_CAP_SETUID] 		= CAP_SETUID,
+	[X_CAP_SETGID] 		= CAP_SETGID,
+};
+static char *const capabilities[] = {
+	[X_CAP_RESET]		= "",
+	[X_CAP_DAC_READ_SEARCH]	= "CAP_DAC_READ_SEARCH",
+	[X_CAP_SETUID]		= "CAP_SETUID",
+	[X_CAP_SETGID]		= "CAP_SETGID",
+	NULL
+};
+#define XCAP_TO_CAP(x) (xcap_to_cap[x])
+#endif
 
 static char *const socketauth[] = {
 	[SOCKAUTH_UNSET]	= "",
@@ -630,6 +658,47 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			ctx_p->gid = grp->gr_gid;
 			break;
 		}
+#ifdef CAPABILITIES_SUPPORT
+		case SYNCHANDLERUID: {
+			struct passwd *pwd = getpwnam(arg);
+			ctx_p->flags[param_id]++;
+
+			if (pwd == NULL) {
+				ctx_p->synchandler_uid = (unsigned int)atol(arg);
+				break;
+			}
+
+			ctx_p->synchandler_uid = pwd->pw_uid;
+			break;
+		}
+		case SYNCHANDLERGID: {
+			struct group *grp = getgrnam(arg);
+			ctx_p->flags[param_id]++;
+
+			if (grp == NULL) {
+				ctx_p->synchandler_gid = (unsigned int)atol(arg);
+				break;
+			}
+
+			ctx_p->synchandler_gid = grp->gr_gid;
+			break;
+		}
+		case CAP_PRESERVE: {
+			char *subopts = arg;
+
+			ctx_p->caps  = 0;
+
+			while (*subopts != 0) {
+				char *value;
+				__u32 cap = getsubopt(&subopts, capabilities, &value);
+				debug(4, "cap == 0x%x", cap);
+				if (cap != X_CAP_RESET)
+					ctx_p->caps |= CAP_TO_MASK(XCAP_TO_CAP(cap));
+			}
+
+			break;
+		}
+#endif
 		case CHROOT:
 			if (paramsource == PS_CONTROL) {
 				warning("Cannot change \"chroot\" in run-time. Ignoring.");
@@ -1353,139 +1422,6 @@ int ctx_check(ctx_t *ctx_p) {
 	}
 #endif // CLUSTER_SUPPORT
 
-	if (ctx_p->watchdir != NULL) {
-		char *rwatchdir = realpath(ctx_p->watchdir, NULL);
-		if (rwatchdir == NULL) {
-			error("Got error while realpath() on \"%s\" [#0].", ctx_p->watchdir);
-			ret = errno;
-		}
-
-		stat64_t stat64={0};
-		if (lstat64(ctx_p->watchdir, &stat64)) {
-			error("Cannot lstat64() on \"%s\"", ctx_p->watchdir);
-			if (!ret)
-				ret = errno;
-		} else {
-			if (ctx_p->flags[EXCLUDEMOUNTPOINTS])
-				ctx_p->st_dev = stat64.st_dev;
-			if ((stat64.st_mode & S_IFMT) == S_IFLNK) {
-				// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
-				// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
-				// it disables filters, because exclude-list will be empty.
-#ifdef VERYPARANOID
-				error("Watch dir cannot be symlink, but \"%s\" is a symlink.", ctx_p->watchdir);
-				ret = EINVAL;
-#else
-				char *watchdir_resolved_part = xcalloc(1, PATH_MAX+2);
-				ssize_t r = readlink(ctx_p->watchdir, watchdir_resolved_part, PATH_MAX+1);
-	
-				if (r>=PATH_MAX) {	// TODO: check if it's possible
-					ret = errno = EINVAL;
-					error("Too long file path resolved from symbolic link \"%s\"", ctx_p->watchdir);
-				} else
-				if (r<0) {
-					error("Cannot resolve symbolic link \"%s\": readlink() error", ctx_p->watchdir);
-					ret = EINVAL;
-				} else {
-					char *watchdir_resolved;
-#ifdef VERYPARANOID
-					if (ctx_p->watchdirsize)
-						if (ctx_p->watchdir != NULL)
-							free(ctx_p->watchdir);
-#endif
-
-					size_t watchdir_resolved_part_len = strlen(watchdir_resolved_part);
-					ctx_p->watchdirsize = watchdir_resolved_part_len+1;	// Not true for case of relative symlink
-					if (*watchdir_resolved_part == '/') {
-						// Absolute symlink
-						watchdir_resolved = malloc(ctx_p->watchdirsize);
-						memcpy(watchdir_resolved, watchdir_resolved_part, ctx_p->watchdirsize);
-					} else {
-						// Relative symlink :(
-						char *rslash = strrchr(ctx_p->watchdir, '/');
-
-						char *watchdir_resolved_rel  = xmalloc(PATH_MAX+2);
-						size_t watchdir_resolved_rel_len = rslash-ctx_p->watchdir + 1;
-						memcpy(watchdir_resolved_rel, ctx_p->watchdir, watchdir_resolved_rel_len);
-						memcpy(&watchdir_resolved_rel[watchdir_resolved_rel_len], watchdir_resolved_part, watchdir_resolved_part_len+1);
-
-						watchdir_resolved = realpath(watchdir_resolved_rel, NULL);
-
-						free(watchdir_resolved_rel);
-					}
-
-					
-					debug(1, "Symlink resolved: watchdir \"%s\" -> \"%s\"", ctx_p->watchdir, watchdir_resolved);
-					ctx_p->watchdir = watchdir_resolved;
-				}
-				free(watchdir_resolved_part);
-#endif // VERYPARANOID else
-			}
-		}
-
-		if (!ret) {
-			ctx_p->watchdir     = rwatchdir;
-			ctx_p->watchdirlen  = strlen(ctx_p->watchdir);
-			ctx_p->watchdirsize = ctx_p->watchdirlen;
-
-#ifdef VERYPARANOID
-			if (ctx_p->watchdirlen == 1) {
-				ret = errno = EINVAL;
-				error("Very-Paranoid: --watch-dir is supposed to be not \"/\".");
-			}
-#endif
-		}
-
-		if (!ret) {
-			if (ctx_p->watchdirlen == 1) {
-				ctx_p->watchdirwslash     = ctx_p->watchdir;
-				ctx_p->watchdirwslashsize = 0;
-				ctx_p->watchdir_dirlevel  = 0;
-			} else {
-				size_t size = ctx_p->watchdirlen + 2;
-				char *newwatchdir = xmalloc(size);
-				memcpy( newwatchdir, ctx_p->watchdir, ctx_p->watchdirlen);
-				ctx_p->watchdirwslash     = newwatchdir;
-				ctx_p->watchdirwslashsize = size;
-				memcpy(&ctx_p->watchdirwslash[ctx_p->watchdirlen], "/", 2);
-
-				ctx_p->watchdir_dirlevel  = fileutils_calcdirlevel(ctx_p->watchdirwslash);
-			}
-		}
-	}
-
-	if ((ctx_p->destdir != NULL) && (ctx_p->destproto == NULL)) {	// "ctx_p->destproto == NULL" means "no protocol"/"local directory"
-		char *rdestdir = realpath(ctx_p->destdir, NULL);
-		if(rdestdir == NULL) {
-			error("Got error while realpath() on \"%s\" [#1].", ctx_p->destdir);
-			ret = errno;
-		}
-
-		if (!ret) {
-			ctx_p->destdir     = rdestdir;
-			ctx_p->destdirlen  = strlen(ctx_p->destdir);
-			ctx_p->destdirsize = ctx_p->destdirlen;
-
-			if(ctx_p->destdirlen == 1) {
-				ret = errno = EINVAL;
-				error("destdir is supposed to be not \"/\".");
-			}
-		}
-
-		if (!ret) {
-			size_t size = ctx_p->destdirlen  + 2;
-			char *newdestdir  = xmalloc(size);
-			memcpy( newdestdir,  ctx_p->destdir,  ctx_p->destdirlen);
-			ctx_p->destdirwslash     = newdestdir;
-			ctx_p->destdirwslashsize = size;
-			memcpy(&ctx_p->destdirwslash[ctx_p->destdirlen], "/", 2);
-		}
-	} else
-	if (ctx_p->destproto != NULL)
-		ctx_p->destdirwslash = ctx_p->destdir;
-
-	debug(1, "%s [%s] (%p) -> %s [%s]", ctx_p->watchdir, ctx_p->watchdirwslash, ctx_p->watchdirwslash, ctx_p->destdir?ctx_p->destdir:"", ctx_p->destdirwslash?ctx_p->destdirwslash:"");
-
 	switch (ctx_p->flags[MODE]) {
 		case MODE_RSYNCSO:
 			ctx_p->synchandler_argf |= SHFL_EXCLUDE_LIST_PATH;
@@ -2056,6 +1992,17 @@ int main(int argc, char *argv[]) {
 	ctx_p->config_block			 = DEFAULT_CONFIG_BLOCK;
 	ctx_p->retries				 = DEFAULT_RETRIES;
 	ctx_p->flags[VERBOSE]			 = DEFAULT_VERBOSE;
+#ifdef CAPABILITIES_SUPPORT
+	ctx_p->caps				 = DEFAULT_PRESERVE_CAPABILITIES;
+	ctx_p->synchandler_uid			 = DEFAULT_SYNCHANDLER_UID;
+	ctx_p->synchandler_gid			 = DEFAULT_SYNCHANDLER_GID;
+
+	ctx_p->flags[UID]			 = -1;
+	ctx_p->flags[GID]			 = -1;
+	ctx_p->uid				 = DEFAULT_UID;
+	ctx_p->gid				 = DEFAULT_GID;
+#endif
+
 	ctx_p->pid				 = getpid();
 
 	error_init(&ctx_p->flags[OUTPUT_METHOD], &ctx_p->flags[QUIET], &ctx_p->flags[VERBOSE], &ctx_p->flags[DEBUG]);
@@ -2216,69 +2163,167 @@ int main(int argc, char *argv[]) {
 	main_status_update(ctx_p);
 
 #ifdef CAPABILITIES_SUPPORT
-	if (ctx_p->flags[CAP_PRESERVE_FILEACCESS]) {
-		debug(1, "Preserving Linux capabilites");
+	debug(1, "Preserving Linux capabilites");
 
-		// Tell kernel not clear capabilities when dropping root 
-		if (prctl(PR_SET_KEEPCAPS, 1) < 0) {
-			error("Cannot prctl(PR_SET_KEEPCAPS, 1) to preserve capabilities");
-			ret = errno;
-		}
+	// Tell kernel not clear capabilities when dropping root 
+	if (prctl(PR_SET_KEEPCAPS, 1) < 0) {
+		error("Cannot prctl(PR_SET_KEEPCAPS, 1) to preserve capabilities");
+		ret = errno;
 	}
 #endif
 
 	if (ctx_p->flags[GID]) {
-		debug(3, "Dropping gid to %i", ctx_p->gid);
-		if (setgid(ctx_p->gid)) {
+		int rc;
+		debug(3, "Trying to drop gid to %i", ctx_p->gid);
+		if ((rc=setgid(ctx_p->gid)) && (ctx_p->flags[GID] != -1)) {
 			error("Cannot setgid(%u)", ctx_p->gid);
 			ret = errno;
 		}
+		if (!rc) debug(4, "success");
 	}
 
 	if (ctx_p->flags[UID]) {
-		debug(3, "Dropping uid to %i", ctx_p->uid);
-		if (setuid(ctx_p->uid)) {
+		int rc;
+		debug(3, "Trying to drop uid to %i", ctx_p->uid);
+		if ((rc=setuid(ctx_p->uid)) && (ctx_p->flags[UID] != -1)) {
 			error("Cannot setuid(%u)", ctx_p->uid);
 			ret = errno;
 		}
+		if (!rc) debug(4, "success");
 	}
 
-#ifdef CAPABILITIES_SUPPORT
-	if (ctx_p->flags[CAP_PRESERVE_FILEACCESS]) {
-		// Doesn't work, yet :(
-		//
-		// Error: Cannot inotify_add_watch() on "/home/xaionaro/clsync/examples/testdir/from": Permission denied (errno: 13).
-		debug(1, "Dropping all Linux capabilites but CAP_DAC_READ_SEARCH");
-
-		struct __user_cap_header_struct	cap_hdr = {0};
-		struct __user_cap_data_struct	cap_dat = {0};
-
-		cap_hdr.version = _LINUX_CAPABILITY_VERSION;
-		if (capget(&cap_hdr, &cap_dat) < 0) {
-			error("Cannot get capabilites with capget()");
-			ret = errno;
-
-			goto preserve_fileaccess_end;
-		}
-
-		// From "man 7 capabilities":
-		// CAP_DAC_OVERRIDE    - Bypass file read, write, and execute permission checks. 
-		// CAP_DAC_READ_SEARCH - Bypass file read permission checks and directory read and execute permission checks.
-
-		cap_dat.effective    = CAP_TO_MASK(CAP_DAC_READ_SEARCH);
-		cap_dat.permitted    = cap_dat.effective;
-		cap_dat.inheritable  = cap_dat.effective;
-
-		debug(3, "cap.eff == 0x%04x; cap.prm == 0x%04x; cap.inh == 0x%04x.",
-			cap_dat.effective, cap_dat.permitted, cap_dat.inheritable);
-
-		if (capset(&cap_hdr, &cap_dat) < 0) {
-			error("Cannot set capabilities with capset().");
+	if (ctx_p->watchdir != NULL) {
+		char *rwatchdir = realpath(ctx_p->watchdir, NULL);
+		if (rwatchdir == NULL) {
+			error("Got error while realpath() on \"%s\" [#0].", ctx_p->watchdir);
 			ret = errno;
 		}
-	}
-preserve_fileaccess_end:
+
+		stat64_t stat64={0};
+		if (lstat64(ctx_p->watchdir, &stat64)) {
+			error("Cannot lstat64() on \"%s\"", ctx_p->watchdir);
+			if (!ret)
+				ret = errno;
+		} else {
+			if (ctx_p->flags[EXCLUDEMOUNTPOINTS])
+				ctx_p->st_dev = stat64.st_dev;
+			if ((stat64.st_mode & S_IFMT) == S_IFLNK) {
+				// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
+				// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
+				// it disables filters, because exclude-list will be empty.
+#ifdef VERYPARANOID
+				error("Watch dir cannot be symlink, but \"%s\" is a symlink.", ctx_p->watchdir);
+				ret = EINVAL;
+#else
+				char *watchdir_resolved_part = xcalloc(1, PATH_MAX+2);
+				ssize_t r = readlink(ctx_p->watchdir, watchdir_resolved_part, PATH_MAX+1);
+	
+				if (r>=PATH_MAX) {	// TODO: check if it's possible
+					ret = errno = EINVAL;
+					error("Too long file path resolved from symbolic link \"%s\"", ctx_p->watchdir);
+				} else
+				if (r<0) {
+					error("Cannot resolve symbolic link \"%s\": readlink() error", ctx_p->watchdir);
+					ret = EINVAL;
+				} else {
+					char *watchdir_resolved;
+#ifdef VERYPARANOID
+					if (ctx_p->watchdirsize)
+						if (ctx_p->watchdir != NULL)
+							free(ctx_p->watchdir);
 #endif
+
+					size_t watchdir_resolved_part_len = strlen(watchdir_resolved_part);
+					ctx_p->watchdirsize = watchdir_resolved_part_len+1;	// Not true for case of relative symlink
+					if (*watchdir_resolved_part == '/') {
+						// Absolute symlink
+						watchdir_resolved = malloc(ctx_p->watchdirsize);
+						memcpy(watchdir_resolved, watchdir_resolved_part, ctx_p->watchdirsize);
+					} else {
+						// Relative symlink :(
+						char *rslash = strrchr(ctx_p->watchdir, '/');
+
+						char *watchdir_resolved_rel  = xmalloc(PATH_MAX+2);
+						size_t watchdir_resolved_rel_len = rslash-ctx_p->watchdir + 1;
+						memcpy(watchdir_resolved_rel, ctx_p->watchdir, watchdir_resolved_rel_len);
+						memcpy(&watchdir_resolved_rel[watchdir_resolved_rel_len], watchdir_resolved_part, watchdir_resolved_part_len+1);
+
+						watchdir_resolved = realpath(watchdir_resolved_rel, NULL);
+
+						free(watchdir_resolved_rel);
+					}
+
+					
+					debug(1, "Symlink resolved: watchdir \"%s\" -> \"%s\"", ctx_p->watchdir, watchdir_resolved);
+					ctx_p->watchdir = watchdir_resolved;
+				}
+				free(watchdir_resolved_part);
+#endif // VERYPARANOID else
+			}
+		}
+
+		if (!ret) {
+			ctx_p->watchdir     = rwatchdir;
+			ctx_p->watchdirlen  = strlen(ctx_p->watchdir);
+			ctx_p->watchdirsize = ctx_p->watchdirlen;
+
+#ifdef VERYPARANOID
+			if (ctx_p->watchdirlen == 1) {
+				ret = errno = EINVAL;
+				error("Very-Paranoid: --watch-dir is supposed to be not \"/\".");
+			}
+#endif
+		}
+
+		if (!ret) {
+			if (ctx_p->watchdirlen == 1) {
+				ctx_p->watchdirwslash     = ctx_p->watchdir;
+				ctx_p->watchdirwslashsize = 0;
+				ctx_p->watchdir_dirlevel  = 0;
+			} else {
+				size_t size = ctx_p->watchdirlen + 2;
+				char *newwatchdir = xmalloc(size);
+				memcpy( newwatchdir, ctx_p->watchdir, ctx_p->watchdirlen);
+				ctx_p->watchdirwslash     = newwatchdir;
+				ctx_p->watchdirwslashsize = size;
+				memcpy(&ctx_p->watchdirwslash[ctx_p->watchdirlen], "/", 2);
+
+				ctx_p->watchdir_dirlevel  = fileutils_calcdirlevel(ctx_p->watchdirwslash);
+			}
+		}
+	}
+
+	if ((ctx_p->destdir != NULL) && (ctx_p->destproto == NULL)) {	// "ctx_p->destproto == NULL" means "no protocol"/"local directory"
+		char *rdestdir = realpath(ctx_p->destdir, NULL);
+		if(rdestdir == NULL) {
+			error("Got error while realpath() on \"%s\" [#1].", ctx_p->destdir);
+			ret = errno;
+		}
+
+		if (!ret) {
+			ctx_p->destdir     = rdestdir;
+			ctx_p->destdirlen  = strlen(ctx_p->destdir);
+			ctx_p->destdirsize = ctx_p->destdirlen;
+
+			if(ctx_p->destdirlen == 1) {
+				ret = errno = EINVAL;
+				error("destdir is supposed to be not \"/\".");
+			}
+		}
+
+		if (!ret) {
+			size_t size = ctx_p->destdirlen  + 2;
+			char *newdestdir  = xmalloc(size);
+			memcpy( newdestdir,  ctx_p->destdir,  ctx_p->destdirlen);
+			ctx_p->destdirwslash     = newdestdir;
+			ctx_p->destdirwslashsize = size;
+			memcpy(&ctx_p->destdirwslash[ctx_p->destdirlen], "/", 2);
+		}
+	} else
+	if (ctx_p->destproto != NULL)
+		ctx_p->destdirwslash = ctx_p->destdir;
+
+	debug(1, "%s [%s] (%p) -> %s [%s]", ctx_p->watchdir, ctx_p->watchdirwslash, ctx_p->watchdirwslash, ctx_p->destdir?ctx_p->destdir:"", ctx_p->destdirwslash?ctx_p->destdirwslash:"");
 
 	ret = ctx_check(ctx_p);
 

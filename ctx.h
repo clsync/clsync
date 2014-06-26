@@ -22,6 +22,9 @@
 #define __CLSYNC_CTX_H
 
 #include <regex.h>
+#ifdef CAPABILITIES_SUPPORT
+#	include <sys/capability.h>	// __u32
+#endif
 
 #define OPTION_FLAGS		(1<<10)
 #define OPTION_LONGOPTONLY	(1<<9)
@@ -40,7 +43,7 @@ enum flags_enum {
 	BACKGROUND	= 'b',
 	UID		= 'u',
 	GID		= 'g',
-	CAP_PRESERVE_FILEACCESS = 'C',
+	CAP_PRESERVE	= 'C',
 	THREADING	= 'p',
 	RETRIES		= 'r',
 	OUTPUT_METHOD	= 'Y',
@@ -108,6 +111,9 @@ enum flags_enum {
 #ifdef GETMNTENT_SUPPORT
 	MOUNTPOINTS		= 25|OPTION_LONGOPTONLY,
 #endif
+	NOTHREADSPLITTING	= 26|OPTION_LONGOPTONLY,
+	SYNCHANDLERUID		= 27|OPTION_LONGOPTONLY,
+	SYNCHANDLERGID		= 28|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -230,6 +236,11 @@ struct ctx {
 	size_t pid_str_len;
 	uid_t uid;
 	gid_t gid;
+#ifdef CAPABILITIES_SUPPORT
+	uid_t synchandler_uid;
+	gid_t synchandler_gid;
+	__u32 caps;
+#endif
 	pid_t child_pid[MAXCHILDREN];	// Used only for non-pthread mode
 	int   children;			// Used only for non-pthread mode
 	uint32_t iteration_num;

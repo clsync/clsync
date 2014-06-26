@@ -1,0 +1,520 @@
+/*
+    clsync - file tree sync utility based on inotify/kqueue
+    
+    Copyright (C) 2013-2014 Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
+    
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+    
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+    
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#include <pthread.h>			// pthread_create()
+#include <sys/inotify.h>		// inotify_init()
+#include <sys/types.h>			// fts_open()
+#include <sys/stat.h>			// fts_open()
+#include <fts.h>			// fts_open()
+#include <errno.h>			// errno
+#include <sys/capability.h>		// capset()
+#include <unistd.h>			// execvp()
+
+#include "common.h"			// ctx.h
+#include "ctx.h"			// ctx_t
+#include "error.h"			// debug()
+
+pthread_t	pthread_thread;
+pthread_mutex_t	pthread_mutex_privileged      = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t	pthread_mutex_action_signal   = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t	pthread_mutex_action_entrance = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t	pthread_mutex_runner          = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t	pthread_cond_privileged       = PTHREAD_COND_INITIALIZER;
+pthread_cond_t	pthread_cond_action           = PTHREAD_COND_INITIALIZER;
+pthread_cond_t	pthread_cond_runner           = PTHREAD_COND_INITIALIZER;
+
+enum privileged_action {
+	PA_UNKNOWN = 0,
+
+	PA_DIE,
+
+	PA_FTS_OPEN,
+	PA_FTS_READ,
+	PA_FTS_CLOSE,
+
+	PA_INOTIFY_INIT,
+	PA_INOTIFY_INIT1,
+	PA_INOTIFY_ADD_WATCH,
+	PA_INOTIFY_RM_WATCH,
+
+	PA_FORK_EXECVP,
+
+	PA_SETUP,
+};
+
+struct pa_fts_open_arg {
+	char * const *path_argv;
+	int options;
+	int (*compar)(const FTSENT **, const FTSENT **);
+};
+
+struct pa_inotify_add_watch_arg {
+	int fd;
+	const char *pathname;
+	uint32_t mask;
+};
+
+struct pa_inotify_rm_watch_arg {
+	int fd;
+	int wd;
+};
+
+struct pa_fork_execvp_arg {
+	const char *file;
+	char *const *argv;
+};
+
+struct pa_setup_arg {
+	uid_t exec_uid;
+	gid_t exec_gid;
+};
+
+struct {
+	enum privileged_action	 action;
+	void			*arg;
+	void			*ret;
+} cmd;
+
+FTS *(*privileged_fts_open)		(
+		char * const *path_argv,
+		int options,
+		int (*compar)(const FTSENT **, const FTSENT **)
+	);
+
+FTSENT *(*privileged_fts_read)		(FTS *ftsp);
+int (*privileged_fts_close)		(FTS *ftsp);
+int (*privileged_inotify_init)		();
+int (*privileged_inotify_init1)		(int flags);
+
+int (*privileged_inotify_add_watch)	(
+		int fd,
+		const char *pathname,
+		uint32_t mask
+	);
+
+int (*privileged_inotify_rm_watch)	(
+		int fd,
+		int wd
+	);
+
+int (*privileged_fork_execvp)(const char *file, char *const argv[]);
+
+
+int cap_drop(__u32 caps) {
+	debug(1, "Dropping all Linux capabilites but 0x%o", caps);
+
+	struct __user_cap_header_struct	cap_hdr = {0};
+	struct __user_cap_data_struct	cap_dat = {0};
+
+	cap_hdr.version = _LINUX_CAPABILITY_VERSION;
+	if (capget(&cap_hdr, &cap_dat) < 0) {
+		error("Cannot get capabilites with capget()");
+		return errno;
+	}
+
+	cap_dat.effective    = caps;
+	cap_dat.permitted    = cap_dat.effective;
+	cap_dat.inheritable  = cap_dat.effective;
+
+	debug(3, "cap.eff == 0x%04x; cap.prm == 0x%04x; cap.inh == 0x%04x.",
+		cap_dat.effective, cap_dat.permitted, cap_dat.inheritable);
+
+	if (capset(&cap_hdr, &cap_dat) < 0) {
+		error("Cannot set capabilities with capset().");
+		return errno;
+	}
+
+	return 0;
+}
+
+void *privileged_handler(void *_ctx_p)
+{
+	ctx_t *ctx_p = _ctx_p;
+	int running = 1;
+	uid_t exec_uid = 65535;
+	gid_t exec_gid = 65535;
+
+	cap_drop(ctx_p->caps);
+
+	debug(2, "Syncing with the runner");
+	pthread_mutex_lock(&pthread_mutex_privileged);
+
+	// Waiting for runner to get ready for signal
+	pthread_mutex_lock(&pthread_mutex_runner);
+	pthread_mutex_unlock(&pthread_mutex_runner);
+
+	// Sending the signal that we're ready
+	pthread_cond_signal(&pthread_cond_runner);
+
+	// The loop
+	debug(2, "Running the loop");
+	while (running) {
+		// Waiting for command
+		debug(3, "Waiting for command", cmd.action);
+		pthread_cond_wait(&pthread_cond_privileged, &pthread_mutex_privileged);
+
+		debug(3, "Got command %u", cmd.action);
+
+		switch (cmd.action) {
+			case PA_SETUP: {
+				struct pa_setup_arg *arg_p = cmd.arg;
+				exec_uid = arg_p->exec_uid;
+				exec_gid = arg_p->exec_gid;
+				break;
+			}
+			case PA_DIE:
+				running = 0;
+				break;
+			case PA_FTS_OPEN: {
+				struct pa_fts_open_arg *arg_p = cmd.arg;
+				if (arg_p->compar != NULL)
+					critical("\"arg_p->compar != NULL\" is forbidden because may be used to run an arbitrary code in the privileged thread.");
+
+				cmd.ret = fts_open(arg_p->path_argv, arg_p->options, NULL);
+				break;
+			}
+			case PA_FTS_READ:
+				cmd.ret = fts_read(cmd.arg);
+				break;
+			case PA_FTS_CLOSE:
+				cmd.ret = (void *)(long)fts_close(cmd.arg);
+				break;
+			case PA_INOTIFY_INIT:
+				cmd.ret = (void *)(long)inotify_init();
+				break;
+#ifndef INOTIFY_OLD
+			case PA_INOTIFY_INIT1:
+				cmd.ret = (void *)(long)inotify_init1((long)cmd.arg);
+				break;
+#endif
+			case PA_INOTIFY_ADD_WATCH: {
+				struct pa_inotify_add_watch_arg *arg_p = cmd.arg;
+				cmd.ret = (void *)(long)inotify_add_watch(arg_p->fd, arg_p->pathname, arg_p->mask);
+				break;
+			}
+			case PA_INOTIFY_RM_WATCH: {
+				struct pa_inotify_rm_watch_arg *arg_p = cmd.arg;
+				cmd.ret = (void *)(long)inotify_rm_watch(arg_p->fd, arg_p->wd);
+				break;
+			}
+			case PA_FORK_EXECVP: {
+				struct pa_fork_execvp_arg *arg_p = cmd.arg;
+				pid_t pid = fork();
+				switch (pid) {
+					case -1: 
+						error("Cannot fork().");
+						break;
+					case  0:
+						debug(4, "setgid(%u) == %i", exec_gid, setgid(exec_gid));
+						debug(4, "setuid(%u) == %i", exec_uid, setuid(exec_uid));
+						exit(execvp(arg_p->file, arg_p->argv));
+				}
+				cmd.ret = (void *)(long)pid;
+				break;
+			}
+			default:
+				critical("Unknown command type \"%u\". It's a buffer overflow (which means a security problem) or just an internal error.");
+		}
+
+		debug(3, "Result: %p. Sending the signal to non-privileged thread.", cmd.ret);
+		pthread_cond_signal(&pthread_cond_action);
+	}
+
+	pthread_mutex_unlock(&pthread_mutex_privileged);
+	debug(2, "Finished");
+	return 0;
+}
+
+int privileged_action(
+		enum privileged_action action,
+		void *arg,
+		void **ret_p
+	)
+{
+	debug(3, "(%u, %p, %p)", action, arg, ret_p);
+
+	pthread_mutex_lock(&pthread_mutex_action_entrance);
+	pthread_mutex_lock(&pthread_mutex_action_signal);
+
+	debug(4, "Waiting the privileged thread to get prepared for signal");
+	pthread_mutex_lock(&pthread_mutex_privileged);
+	pthread_mutex_unlock(&pthread_mutex_privileged);
+
+	debug(4, "Sending information to the privileged thread");
+	cmd.action = action;
+	cmd.arg    = arg;
+	pthread_cond_signal(&pthread_cond_privileged);
+
+	debug(4, "Waiting for the answer");
+	pthread_cond_wait  (&pthread_cond_action, &pthread_mutex_action_signal);
+	if (ret_p != NULL)
+		*ret_p = cmd.ret;
+
+	debug(4, "Unlocking pthread_mutex_action_*");
+	pthread_mutex_unlock(&pthread_mutex_action_signal);
+	pthread_mutex_unlock(&pthread_mutex_action_entrance);
+
+	return 0;
+}
+
+FTS *_privileged_fts_open(
+		char * const *path_argv,
+		int options,
+		int (*compar)(const FTSENT **, const FTSENT **)
+	)
+{
+	struct pa_fts_open_arg arg;
+	void *ret;
+
+	arg.path_argv	= path_argv;
+	arg.options	= options;
+	arg.compar	= compar;
+
+	privileged_action(PA_FTS_OPEN, &arg, &ret);
+
+	return ret;
+}
+
+FTSENT *_privileged_fts_read(FTS *ftsp)
+{
+	void *ret;
+	privileged_action(PA_FTS_READ, ftsp, &ret);
+	return ret;
+}
+
+int _privileged_fts_close(FTS *ftsp)
+{
+	void *ret;
+	privileged_action(PA_FTS_CLOSE, ftsp, &ret);
+	return (long)ret;
+}
+
+int _privileged_inotify_init() {
+	void *ret;
+	privileged_action(PA_INOTIFY_INIT, NULL, &ret);
+	return (long)ret;
+}
+
+int _privileged_inotify_init1(int flags) {
+	void *ret;
+	privileged_action(PA_INOTIFY_INIT1, (void *)(long)flags, &ret);
+	return (long)ret;
+}
+
+int _privileged_inotify_add_watch(
+		int fd,
+		const char *pathname,
+		uint32_t mask
+	)
+{
+	struct pa_inotify_add_watch_arg arg;
+	void *ret;
+
+	arg.fd		= fd;
+	arg.pathname	= pathname;
+	arg.mask	= mask;
+
+	privileged_action(PA_INOTIFY_ADD_WATCH, &arg, &ret);
+
+	return (long)ret;
+}
+
+int _privileged_inotify_rm_watch(
+		int fd,
+		int wd
+	)
+{
+	struct pa_inotify_rm_watch_arg arg;
+	void *ret;
+
+	arg.fd	= fd;
+	arg.wd	= wd;
+
+	privileged_action(PA_INOTIFY_RM_WATCH, &arg, &ret);
+
+	return (long)ret;
+}
+
+int _privileged_fork_setuid_execvp(const char *file, char *const argv[])
+{
+	struct pa_fork_execvp_arg arg;
+	void *ret;
+
+	arg.file = file;
+	arg.argv = argv;
+
+	privileged_action(PA_FORK_EXECVP, &arg, &ret);
+
+	return (long)ret;
+}
+
+uid_t _privileged_fork_execvp_uid;
+gid_t _privileged_fork_execvp_gid;
+int _privileged_fork_execvp(const char *file, char *const argv[])
+{
+	debug(4, "");
+	pid_t pid = fork();
+	switch (pid) {
+		case -1: 
+			error("Cannot fork().");
+			return -1;
+		case  0:
+			debug(4, "setgid(%u) == %i", _privileged_fork_execvp_gid, setgid(_privileged_fork_execvp_gid));
+			debug(4, "setuid(%u) == %i", _privileged_fork_execvp_uid, setuid(_privileged_fork_execvp_uid));
+			exit(execvp(file, argv));
+	}
+
+	return pid;
+}
+
+int privileged_init(ctx_t *ctx_p)
+{
+
+	if (ctx_p->flags[NOTHREADSPLITTING]) {
+		privileged_fts_open		= fts_open;
+		privileged_fts_read		= fts_read;
+		privileged_fts_close		= fts_close;
+		privileged_inotify_init		= inotify_init;
+		privileged_inotify_init1	= inotify_init1;
+		privileged_inotify_add_watch	= inotify_add_watch;
+		privileged_inotify_rm_watch	= inotify_rm_watch;
+		privileged_fork_execvp		= _privileged_fork_execvp;
+
+		_privileged_fork_execvp_uid	= ctx_p->synchandler_uid;
+		_privileged_fork_execvp_gid	= ctx_p->synchandler_gid;
+
+		cap_drop(ctx_p->caps);
+		return 0;
+	}
+
+	privileged_fts_open		= _privileged_fts_open;
+	privileged_fts_read		= _privileged_fts_read;
+	privileged_fts_close		= _privileged_fts_close;
+	privileged_inotify_init		= _privileged_inotify_init;
+	privileged_inotify_init1	= _privileged_inotify_init1;
+	privileged_inotify_add_watch	= _privileged_inotify_add_watch;
+	privileged_inotify_rm_watch	= _privileged_inotify_rm_watch;
+	privileged_fork_execvp		= _privileged_fork_setuid_execvp;
+
+	if (pthread_mutex_init(&pthread_mutex_privileged, NULL)) {
+		error("Cannot pthread_mutex_init(&pthread_mutex_privileged, NULL).");
+		return errno;
+	}
+	if (pthread_mutex_init(&pthread_mutex_action_entrance, NULL)) {
+		error("Cannot pthread_mutex_init(&pthread_mutex_action_entrance, NULL).");
+		return errno;
+	}
+	if (pthread_mutex_init(&pthread_mutex_action_signal, NULL)) {
+		error("Cannot pthread_mutex_init(&pthread_mutex_action_signal, NULL).");
+		return errno;
+	}
+	if (pthread_mutex_init(&pthread_mutex_action_signal, NULL)) {
+		error("Cannot pthread_mutex_init(&pthread_mutex_action_signal, NULL).");
+		return errno;
+	}
+	if (pthread_mutex_init(&pthread_mutex_runner, NULL)) {
+		error("Cannot pthread_mutex_init(&pthread_mutex_runner, NULL).");
+		return errno;
+	}
+	if (pthread_cond_init (&pthread_cond_privileged, NULL)) {
+		error("Cannot pthread_cond_init(&pthread_cond_privileged, NULL).");
+		return errno;
+	}
+	if (pthread_cond_init (&pthread_cond_action, NULL)) {
+		error("Cannot pthread_cond_init(&pthread_cond_action, NULL).");
+		return errno;
+	}
+
+	if (pthread_cond_init (&pthread_cond_runner, NULL)) {
+		error("Cannot pthread_cond_init(&pthread_cond_runner, NULL).");
+		return errno;
+	}
+
+	pthread_mutex_lock(&pthread_mutex_runner);
+	if (pthread_create(&pthread_thread, NULL, (void *(*)(void *))privileged_handler, ctx_p)) {
+		error("Cannot pthread_create().");
+		return errno;
+	}
+	cap_drop(0);
+
+	debug(4, "Waiting for the privileged thread to get prepared");
+	pthread_cond_wait(&pthread_cond_runner, &pthread_mutex_runner);
+	pthread_mutex_unlock(&pthread_mutex_runner);
+
+	debug(4, "Sending the settings (exec_uid == %u; exec_gid == %u)", ctx_p->synchandler_uid, ctx_p->synchandler_gid);
+	{
+		struct pa_setup_arg arg;
+		arg.exec_uid = ctx_p->synchandler_uid;
+		arg.exec_gid = ctx_p->synchandler_gid;
+		privileged_action(PA_SETUP, &arg, NULL);
+	}
+
+	if (pthread_mutex_destroy(&pthread_mutex_runner)) {
+		error("Cannot pthread_mutex_destroy(&pthread_mutex_runner).");
+		return errno;
+	}
+	if (pthread_cond_destroy(&pthread_cond_runner)) {
+		error("Cannot pthread_cond_destroy(&pthread_cond_action).");
+		return errno;
+	}
+
+	debug(5, "Finish");
+	return 0;
+}
+
+
+int privileged_deinit(ctx_t *ctx_p)
+{
+	int ret = 0;
+
+	if (ctx_p->flags[NOTHREADSPLITTING])
+		return 0;
+
+	privileged_action(PA_DIE, NULL, NULL);
+	if (pthread_join(pthread_thread, NULL)) {
+		error("Cannot pthread_join().");
+		ret = errno;
+	}
+
+	if (pthread_mutex_destroy(&pthread_mutex_privileged)) {
+		error("Cannot pthread_mutex_destroy(&pthread_mutex_privileged).");
+		ret = errno;
+	}
+	if (pthread_mutex_destroy(&pthread_mutex_action_entrance)) {
+		error("Cannot pthread_mutex_destroy(&pthread_mutex_action_entrance).");
+		ret = errno;
+	}
+	if (pthread_mutex_destroy(&pthread_mutex_action_signal)) {
+		error("Cannot pthread_mutex_destroy(&pthread_mutex_action_signal).");
+		ret = errno;
+	}
+
+	if (pthread_cond_destroy(&pthread_cond_privileged)) {
+		error("Cannot pthread_cond_destroy(&pthread_cond_privileged).");
+		ret = errno;
+	}
+	if (pthread_cond_destroy(&pthread_cond_action)) {
+		error("Cannot pthread_cond_destroy(&pthread_cond_action).");
+		ret = errno;
+	}
+
+	return ret;
+}
+
+

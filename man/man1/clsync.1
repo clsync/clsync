@@ -186,7 +186,7 @@ Use configuration block with name
 (see 
 .BR "CONFIGURATION FILE" ).
 
-Default value is "default".
+The default value is "default".
 .PP
 .RE
 
@@ -204,7 +204,7 @@ Options from
 will be inherited to
 .IR config\-block\-name .
 
-Default value is "default".
+The default value is "default".
 .PP
 .RE
 
@@ -229,7 +229,7 @@ And clsync will use options from config block "debug" on signal 29 and
 
 To reset all custom signals use the 0-th signal (e.g. "\-\-custom\-signals=0").
 
-Default value is "".
+The default value is "".
 .PP
 .RE
 
@@ -308,7 +308,9 @@ Drop user privileges to uid
 with
 .BR setuid (2)
 
-Is not set by default.
+If there's a
+.BR capabilities (7)
+support then the default value is "65535", otherwise the option is not set by default;
 .PP
 .RE
 
@@ -320,32 +322,133 @@ Drop group privileges to gid
 with
 .BR setgid (2)
 
-Is not set by default.
+If there's a
+.BR capabilities (7)
+support then the default value is "65535", otherwise the option is not set by default;
 .PP
 .RE
 
-.B \-C, \-\-preserve\-file\-access
+.B \-\-sync\-handler\-uid
+.I sync\-handler\-uid
 .RS
-.B [Linux only]
+.B [Linux only, requires capabilities]
+
+An user ID to be used for
+.IR sync\-handler .
+
+See
+.BR \-\-preserve\-capabilities .
+
+This option is ignored if the
+.B clsync
+instance have no CAP_SETUID capability or if option
+.B --no-thread-splitting
+is enabled.
+
+The default value is "0".
+.PP
+.RE
+
+.B \-\-sync\-handler\-gid
+.I sync\-handler\-gid
+.RS
+.B [Linux only, requires capabilities]
+
+A group ID to be used for
+.IR sync\-handler .
+
+See
+.BR \-\-preserve\-capabilities .
+
+This option is ignored if the
+.B clsync
+instance have no CAP_SETGID capability or if option
+.B --no-thread-splitting
+is enabled.
+
+The default value is "0".
+.PP
+.RE
+
+
+.B \-C, \-\-preserve\-capabilities
+.I capabilities\-list
+.RS
+.B [Linux only, requires capabilities]
 
 Use
 .BR capset (2)
 and
 .BR prctl (2)
-to preserve "CAP_DAC_READ_SEARCH" [see 
+to preserve "CAP_DAC_READ_SEARCH", "CAP_SETUID" or/and "CAP_SETGID" [see 
 .BR capabilities (7)]
-Linux capability. This allows to preserve full FS read access after dropping
-privilegies using
-.BR setuid (2)
+Linux capability for thread using
+.BR fts "(3), " inotify "(7) and " execve "(2)."
+This allows to preserve enough FS privileges to watch a file tree and execute
+the
+.I sync\-handler
+with required uid and gid [see 
+.B \-\-sync\-handler\-uid
 and
-.BR setgid (2)
+.BR \-\-sync\-handler\-gid ]
+after dropping privileges via
+.BR setuid "(2) and " setgid "(2)"
 [see
 .B \-\-uid
 and
 .BR \-\-gid ]
 
-Is not set by default.
+Possible values:
+.RS
+.B CAP_DAC_READ_SEARCH
+.RS
+To bypass FS read checks (for
+.BR fts " and " inotify ).
+.RE
+.B CAP_SETUID
+.RS
+To be able to use
+.BR setuid (2)
+before
+.BR execve (2)
+on the
+.BR sync\-handler .
+.RE
+.B CAP_SETGID
+.RS
+To be able to use
+.BR setgid (2)
+before
+.BR execve (2)
+on the
+.BR sync\-handler .
+.RE
+.br
+
+.br
+Any combinations of this values are also supported. The list may be presented
+as a comma separated values, like:
+.RS
+CAP_DAC_READ_SEARCH,CAP_SETUID,CAP_SETGID
+.RE
+.RE
+
+The default value is "CAP_DAC_READ_SEARCH,CAP_SETUID,CAP_SETGID" if the
+.B clsync
+runner have such privileges.
 .PP
+.RE
+
+.B \-\-no\-thread\-splitting
+.RS
+.B [Linux only, requires capabilities]
+
+Don't split the main thread to privileged and non-privileged. This may be used
+due to performance reasons. Performance vs security trade off.
+
+The thread splitting is used only on Linux systems.
+
+Is not set by default.
 .RE
 
 .B \-\-chroot
@@ -402,7 +505,7 @@ Delay between tries is equal to
 .I \-\-delay\-sync
 value.
 
-Default value is "1".
+The default value is "1".
 .RE
 
 .B \-\-ignore\-failures
@@ -475,7 +578,7 @@ you may catch a bug due to nonatomicity of rsync's file replace operation.
 (see
 .BR DIAGNOSTICS )
 
-Default value is "off".
+The default value is "off".
 .RE
 
 .B \-Y, \-\-output
@@ -492,7 +595,7 @@ Possible values:
 .I syslog
 .RE
 
-Default value is "stderr".
+The default value is "stderr".
 .RE
 
 .B \-\-one\-file\-system
@@ -565,7 +668,7 @@ This option can be used only in conjunction with
 
 Use IP-addresses from 224.0.0.0/4 for this option.
 
-Default value is "227.108.115.121". [(128+"c")."l"."s"."y"]
+The default value is "227.108.115.121". [(128+"c")."l"."s"."y"]
 .RE
 
 .PP
@@ -582,7 +685,7 @@ This option can be used only in conjunction with
 .I multicast\-port
 should be greater than 0 and less than 65535.
 
-Default value is "40079". [("n" << 8) + "c"]
+The default value is "40079". [("n" << 8) + "c"]
 .RE
 
 .PP
@@ -594,7 +697,7 @@ Default value is "40079". [("n" << 8) + "c"]
 Sets timeout (in milliseconds) of waiting answer from another nodes of the
 cluster. If there's no answer from some node, it will be excluded.
 
-Default value is "1000". [1 second]
+The default value is "1000". [1 second]
 .RE
 
 .PP
@@ -607,7 +710,7 @@ Sets the name of current node in the cluster. It will be used in action
 scripts of another nodes (see 
 .BR "SYNC HANDLER MODES" ).
 
-Default value is $(uname \-n).
+The default value is $(uname \-n).
 .RE
 
 .PP
@@ -617,7 +720,7 @@ Default value is $(uname \-n).
 Sets minimal directory level for ctime hashing (see
 .BR CLUSTERING ).
 
-Default value is "1".
+The default value is "1".
 .RE
 
 .PP
@@ -629,7 +732,7 @@ Default value is "1".
 Sets maximal directory level for ctime hashing (see
 .BR CLUSTERING ).
 
-Default value is "16".
+The default value is "16".
 .RE
 
 .PP
@@ -641,7 +744,7 @@ Default value is "16".
 Sets maximal directory level for ctime scanning (see
 .BR CLUSTERING ).
 
-Default value is "32".
+The default value is "32".
 .RE
 
 .PP
@@ -674,7 +777,7 @@ set to n means that only initial sync and (n-1) sync-ups after that will be done
 Hint: This option may be useful in conjunction with \-\-exit\-on\-no\-events
 to prevent infinite sync-up processes.
 
-Default value is "0".
+The default value is "0".
 .RE
 
 .PP
@@ -689,7 +792,7 @@ seconds.
 
 Set "0" to disable the timeout.
 
-Default value is "86400" ["24 hours"].
+The default value is "86400" ["24 hours"].
 .RE
 
 .PP
@@ -698,7 +801,7 @@ Default value is "86400" ["24 hours"].
 .RS
 Sets the minimal delay (in seconds) between syncs.
 
-Default value is "30".
+The default value is "30".
 .RE
 
 .PP
@@ -708,7 +811,7 @@ Default value is "30".
 Sets the delay (in seconds) to collect events about ordinary files and
 directories.
 
-Default value is "30".
+The default value is "30".
 .RE
 
 .PP
@@ -718,7 +821,7 @@ Default value is "30".
 Sets the delay (in seconds) to collect events about "big files" (see
 .IR \-\-threshold\-bigfile ).
 
-Default value is "1800".
+The default value is "1800".
 .RE
 
 .PP
@@ -730,7 +833,7 @@ Sets file size threshold (in bytes) that separates ordinary files from
 separate collecting delay. This is supposed to be used as a means of unloading
 IO resources.
 
-Default value is "134217728" ["128 MiB"].
+The default value is "134217728" ["128 MiB"].
 .RE
 
 .PP
@@ -792,7 +895,7 @@ splits that list with approximately
 lines per list if it's too big, and executes by one rsync instance per list
 part. Use value "0" to disable the limit.
 
-Default value is "20000".
+The default value is "20000".
 .RE
 
 .PP
@@ -1068,7 +1171,7 @@ will be passed to
 .I sync\-handler
 every execution.
 
-Default value is "nolabel".
+The default value is "nolabel".
 .RE
 
 .PP

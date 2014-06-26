@@ -22,6 +22,7 @@
 #include "error.h"
 #include "sync.h"
 #include "indexes.h"
+#include "privileged.h"
 #include "mon_inotify.h"
 
 enum event_bits {
@@ -67,7 +68,7 @@ static inline uint32_t recognize_event(uint32_t event) {
 
 int inotify_add_watch_dir(ctx_t *ctx_p, indexes_t *indexes_p, const char *const accpath) {
 	int inotify_d = (int)(long)ctx_p->fsmondata;
-	return inotify_add_watch(inotify_d, accpath, INOTIFY_MARKMASK);
+	return privileged_inotify_add_watch(inotify_d, accpath, INOTIFY_MARKMASK);
 }
 
 int inotify_wait(ctx_t *ctx_p, struct indexes *indexes_p, struct timeval *tv_p) {
