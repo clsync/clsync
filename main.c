@@ -79,7 +79,7 @@ static const struct option long_options[] =
 #ifdef PIVOTROOT_OPT_SUPPORT
 	{"pivot-root",		required_argument,	NULL,	PIVOT_ROOT},
 #endif
-#ifdef UNSHARE_SUPPRT
+#ifdef UNSHARE_SUPPORT
 	{"detach-network",	required_argument,	NULL,	DETACH_NETWORK},
 	{"detach-miscellanea",	optional_argument,	NULL,	DETACH_MISCELLANEA},
 #endif
@@ -143,7 +143,7 @@ static const struct option long_options[] =
 	{NULL,			0,			NULL,	0}
 };
 
-#ifdef UNSHARE_SUPPRT
+#ifdef UNSHARE_SUPPORT
 static char *const detachnetworkways[] = {
 	[DN_OFF]		= "off",
 	[DN_NONPRIVILEGED]	= "non-privileged",
@@ -789,8 +789,8 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			break;
 		}
 #endif
-#ifdef UNSHARE_SUPPRT
-		case DETACH_NETWORK:
+#ifdef UNSHARE_SUPPORT
+		case DETACH_NETWORK: {
 			char *value, *arg_orig = arg;
 
 			if (!*arg) {
@@ -807,6 +807,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			ctx_p->flags[DETACH_NETWORK] = detachnetwork_way;
 
 			break;
+		}
 #endif
 #ifdef GETMNTENT_SUPPORT
 		case MOUNTPOINTS: {
@@ -2236,45 +2237,38 @@ int main(int argc, char *argv[]) {
 					break;
 				case PW_AUTO:
 				case PW_AUTORO: {
-					char *template  = strdup(PIVOT_AUTO_DIR);
-					char *directory = mkdtemp(template);
-
-					if (directory == NULL) {
-						error("Got error from mkdtemp(\""PIVOT_AUTO_DIR"\")");
-						ret = errno;
-						break;
-					}
-
 					if (chdir(ctx_p->chroot_dir)) {
 						error("Got error while chdir(\"%s\")", ctx_p->chroot_dir);
 						ret = errno;
 					}
 
 					if (mkdir("old_root", 0700)) {
-						free(directory);
-						error("Got error from mkdir(\"old_root\", 0700)");
-						ret = errno;
-						break;
+						if (errno != EEXIST) {
+							error("Got error from mkdir(\"old_root\", 0700)");
+							ret = errno;
+							break;
+						}
 					}
 
-					if (mkdir(directory, 0700)) {
-						free(directory);
-						error("Got error from mkdir(\"%s\", 0700)", directory);
-						ret = errno;
-						break;
+					if (mkdir(PIVOT_AUTO_DIR, 0700)) {
+						if (errno != EEXIST) {
+							error("Got error from mkdir(\""PIVOT_AUTO_DIR"\", 0700)");
+							ret = errno;
+							break;
+						}
 					}
 
 					unsigned long mount_flags  =  MS_BIND | MS_REC |
-						(ctx_p->flags[PIVOT_ROOT] == PW_AUTORO) ? MS_RDONLY : 0;
+						((ctx_p->flags[PIVOT_ROOT] == PW_AUTORO) ? MS_RDONLY : 0);
 
-					if (mount(ctx_p->chroot_dir, directory, NULL, mount_flags, NULL)) {
+					if (mount(ctx_p->chroot_dir, PIVOT_AUTO_DIR, NULL, mount_flags, NULL)) {
 						error("Got error while mount(\"%s\", \"%s\", NULL, %o, NULL)",
-							ctx_p->chroot_dir, directory, mount_flags);
+							ctx_p->chroot_dir, PIVOT_AUTO_DIR, mount_flags);
 						ret = errno;
 						break;
 					}
 
-					ctx_p->chroot_dir = directory;
+					ctx_p->chroot_dir = PIVOT_AUTO_DIR;
 					break;
 				}
 			}
