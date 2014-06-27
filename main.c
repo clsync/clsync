@@ -2336,7 +2336,7 @@ int main(int argc, char *argv[]) {
 	} else
 	if (ctx_p->destproto != NULL)
 		ctx_p->destdirwslash = ctx_p->destdir;
-/*
+
 	if (ctx_p->flags[GID]) {
 		int rc;
 		debug(3, "Trying to drop gid to %i", ctx_p->gid);
@@ -2356,7 +2356,7 @@ int main(int argc, char *argv[]) {
 		}
 		if (!rc) debug(4, "success");
 	}
-*/
+
 	debug(1, "%s [%s] (%p) -> %s [%s]", ctx_p->watchdir, ctx_p->watchdirwslash, ctx_p->watchdirwslash, ctx_p->destdir?ctx_p->destdir:"", ctx_p->destdirwslash?ctx_p->destdirwslash:"");
 
 	ret = ctx_check(ctx_p);
