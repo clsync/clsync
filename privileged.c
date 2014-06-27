@@ -88,11 +88,6 @@ struct pa_fork_execvp_arg {
 	char *const *argv;
 };
 
-struct pa_setup_arg {
-	uid_t exec_uid;
-	gid_t exec_gid;
-};
-
 struct pa_kill_child_arg {
 	pid_t pid;
 	int   signal;
@@ -188,6 +183,139 @@ int _privileged_kill_child_itself(pid_t child_pid, int signal) {
 }
 #ifdef CAPABILITIES_SUPPORT
 
+int pa_strcmp(const char *s1, const char *s2, int isexpanded) {
+	if (isexpanded)
+		return strcmp(s1, s2);
+
+	{
+		const char *s1_start = NULL;
+		const char *s2_start = NULL;
+		while (1) {
+			while (1) {
+				if (!*s1 || !*s2) {
+					if (!*s1 && s1_start != NULL)
+						return 0;
+					return *s1 != *s2;
+				}
+
+				if (*s1 == '%') {
+					s1++;
+					while (*s1 && *s1 != '%') s1++;
+					s1++;
+					s1_start = s1;
+					s2_start = s2;
+					continue;
+				}
+
+				if (*s1 != *s2)
+					break;
+
+				s1++;
+				s2++;
+			}
+
+			if (s2_start == NULL)
+				break;
+
+			s2_start++;
+			s1 = s1_start;
+			s2 = s2_start;
+		}
+
+		return *s1 != *s2;
+	}
+}
+
+int privileged_execvp_check_arguments(synchandler_args_t args[], const char *u_file, char *const *u_argv) {
+	int a_i;
+	size_t u_argc;
+	debug(9, "");
+
+	// Counting the number of arguments
+	u_argc = 0;
+	while (u_argv[u_argc] != NULL) u_argc++;
+
+	a_i = 0;
+	do {
+		int i;
+		int    argc;
+		char **argv;
+		char  *isexpanded;
+
+		argc       = args[a_i].c;
+		argv       = args[a_i].v;
+		isexpanded = args[a_i].isexpanded;
+
+		// Checking the number of arguments
+		if (argc != u_argc)
+			continue;
+
+		// Checking the execution file
+		if (pa_strcmp(argv[0], u_file, isexpanded[0]))
+			continue;
+
+		// Checking arguments
+		i = 1;
+		while (i < argc) {
+			if (pa_strcmp(argv[i], u_argv[i], isexpanded[i]))
+				break;
+			i++;
+		}
+
+		// All arguments right?
+		if (i == argc)
+			break;
+
+		// No? Ok the next "shargs".
+	} while (++a_i < SHARGS_MAX);
+
+	if (a_i >= SHARGS_MAX)
+		critical("Arguments are wrong. This should happend only on hacking attack.");
+
+	return 0;
+}
+
+int pa_setup(synchandler_args_t args[], ctx_t *ctx_p, uid_t *exec_uid_p, gid_t *exec_gid_p) {
+	int a_i;
+
+	a_i = 0;
+	do {
+		int i, argc_s;
+		char **argv_s, **argv_d, *isex_s, *isex_d;
+
+		argc_s = ctx_p->synchandler_args[a_i].c;
+		argv_s = ctx_p->synchandler_args[a_i].v;
+		isex_s = ctx_p->synchandler_args[a_i].isexpanded;
+		argv_d = args[a_i].v;
+		isex_d = args[a_i].isexpanded;
+
+		if (argc_s >= MAXARGUMENTS)
+			critical("Too many arguments");
+
+		if (argc_s < 1)
+			critical("Not enough arguments");
+
+		argv_d[0] = strdup(ctx_p->handlerfpath);
+
+		i = 0;
+		while (i < argc_s) {
+			argv_d[i+1] = strdup(argv_s[i]);
+			isex_d[i+1] = isex_s[i];
+			i++;
+		}
+		i++;
+		argv_d[i] = NULL;
+		args[a_i].c = i;
+
+		a_i++;
+	} while (++a_i < SHARGS_MAX);
+
+	*exec_uid_p = ctx_p->synchandler_uid;
+	*exec_gid_p = ctx_p->synchandler_gid;
+
+	return 0;
+}
+
 static int privileged_handler_running = 1;
 void *privileged_handler(void *_ctx_p)
 {
@@ -195,6 +323,7 @@ void *privileged_handler(void *_ctx_p)
 	ctx_t *ctx_p = _ctx_p;
 	uid_t exec_uid = 65535;
 	gid_t exec_gid = 65535;
+	synchandler_args_t args[SHARGS_MAX];
 
 	cap_drop(ctx_p, ctx_p->caps);
 
@@ -217,15 +346,15 @@ void *privileged_handler(void *_ctx_p)
 
 		debug(3, "Got command %u", cmd.action);
 
+		if (!setup && cmd.action != PA_SETUP)
+			critical("A try to use commands before PA_SETUP");
+
 		switch (cmd.action) {
 			case PA_SETUP: {
-				struct pa_setup_arg *arg_p = cmd.arg;
-
 				if (setup)
 					critical("Double privileged_handler setuping. It can be if somebody is trying to hack the clsync.");
 
-				exec_uid = arg_p->exec_uid;
-				exec_gid = arg_p->exec_gid;
+				pa_setup(args, cmd.arg, &exec_uid, &exec_gid);
 				setup++;
 				break;
 			}
@@ -266,6 +395,7 @@ void *privileged_handler(void *_ctx_p)
 			}
 			case PA_FORK_EXECVP: {
 				struct pa_fork_execvp_arg *arg_p = cmd.arg;
+				privileged_execvp_check_arguments(args, arg_p->file, arg_p->argv);
 				pid_t pid = fork();
 				switch (pid) {
 					case -1: 
@@ -550,12 +680,7 @@ int privileged_init(ctx_t *ctx_p)
 	pthread_mutex_unlock(&pthread_mutex_runner);
 
 	debug(4, "Sending the settings (exec_uid == %u; exec_gid == %u)", ctx_p->synchandler_uid, ctx_p->synchandler_gid);
-	{
-		struct pa_setup_arg arg;
-		arg.exec_uid = ctx_p->synchandler_uid;
-		arg.exec_gid = ctx_p->synchandler_gid;
-		privileged_action(PA_SETUP, &arg, NULL);
-	}
+	privileged_action(PA_SETUP, ctx_p, NULL);
 
 	if (pthread_mutex_destroy(&pthread_mutex_runner)) {
 		error("Cannot pthread_mutex_destroy(&pthread_mutex_runner).");

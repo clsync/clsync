@@ -470,6 +470,9 @@ while running it with capabilities or root privileges. But
 will utilize in ~6 times more CPU resources. So it's a performance vs
 security trade off.
 
+Also this options enabled execvp() arguments recheck (in case of their
+substitution to any exploit-arguments).
+
 Is not set by default.
 .RE
 

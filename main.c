@@ -72,7 +72,9 @@ static const struct option long_options[] =
 	{"sync-handler-uid",	required_argument,	NULL,	SYNCHANDLERUID},
 	{"sync-handler-gid",	required_argument,	NULL,	SYNCHANDLERGID},
 	{"chroot",		required_argument,	NULL,	CHROOT},
+#ifdef CAPABILITIES_SUPPORT
 	{"thread-splitting",	optional_argument,	NULL,	THREADSPLITTING},
+#endif
 #ifdef GETMNTENT_SUPPORT
 	{"mountpoints",		optional_argument,	NULL,	MOUNTPOINTS},
 #endif
@@ -1979,17 +1981,21 @@ int main_status_update(ctx_t *ctx_p) {
 
 	int ret = 0;
 
-	ftruncate(fileno(main_statusfile_f), 0);
+	if (ftruncate(fileno(main_statusfile_f), 0)) {
+		error("Cannot ftruncate() the file \"%s\".",
+			ctx_p->statusfile);
+		return errno;
+	}
 	rewind(main_statusfile_f);
 	if (fprintf(main_statusfile_f, "%s", status_descr[state]) <= 0) {	// TODO: check output length
 		error("Cannot write to file \"%s\".",
 			ctx_p->statusfile);
-		ret = errno;
+		return errno;
 	}
 	if (fflush(main_statusfile_f)) {
 		error("Cannot fflush() on file \"%s\".",
 			ctx_p->statusfile);
-		ret = errno;
+		return errno;
 	}
 
 	return ret;
@@ -2200,7 +2206,9 @@ int main(int argc, char *argv[]) {
 			uid_t uid = ctx_p->flags[UID] ? ctx_p->uid : getuid();
 			gid_t gid = ctx_p->flags[GID] ? ctx_p->gid : getgid();
 			debug(1, "Changing owner of the status file to %u:%u", uid, gid);
-			fchown(fileno(main_statusfile_f), uid,gid);
+			if (fchown(fileno(main_statusfile_f), uid, gid))
+				warning("Cannot fchown(%u -> \"%s\", %u, %u)",
+					fileno(main_statusfile_f), ctx_p->statusfile, uid, gid);
 			main_status_update(ctx_p);
 		}
 	}
