@@ -104,8 +104,26 @@ enum flags_enum {
 	SYNCHANDLERGID		= 28|OPTION_LONGOPTONLY,
 	CAPS_INHERIT		= 29|OPTION_LONGOPTONLY,
 	CHECK_EXECVP_ARGS	= 30|OPTION_LONGOPTONLY,
+	PIVOT_ROOT		= 31|OPTION_LONGOPTONLY,
+	DETACH_NETWORK		= 32|OPTION_LONGOPTONLY,
+	DETACH_MISCELLANEA	= 33|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
+
+enum detachnetwork_way {
+	DN_OFF = 0,
+	DN_NONPRIVILEGED,
+	DN_EVERYWHERE,
+};
+typedef enum detachnetwork_way detachnetwork_way_t;
+
+enum pivotroot_way {
+	PW_OFF    = 0,
+	PW_DIRECT,
+	PW_AUTO,
+	PW_AUTORO,
+};
+typedef enum pivotroot_way pivotroot_way_t;
 
 enum capsinherit {
 	CI_DONTTOUCH = 0,

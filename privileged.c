@@ -17,25 +17,30 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include <unistd.h>			// execvp()
-
 #include "common.h"			// ctx.h
 #include "ctx.h"			// ctx_t
 #include "error.h"			// debug()
+
+#ifdef CAPABILITIES_SUPPORT
+#	include <pthread.h>		// pthread_create()
+#	include <sys/inotify.h>		// inotify_init()
+#	include <sys/types.h>		// fts_open()
+#	include <sys/stat.h>		// fts_open()
+#	include <fts.h>			// fts_open()
+#	include <errno.h>		// errno
+#	include <sys/capability.h>	// capset()
+#endif
+
+#include <unistd.h>			// execvp()
+
+#ifdef UNSHARE_SUPPORT
+#	include <sched.h>		// unshare()
+#endif
 
 int (*privileged_fork_execvp)(const char *file, char *const argv[]);
 int (*privileged_kill_child)(pid_t pid, int sig);
 
 #ifdef CAPABILITIES_SUPPORT
-#include <pthread.h>			// pthread_create()
-#include <sys/inotify.h>		// inotify_init()
-#include <sys/types.h>			// fts_open()
-#include <sys/stat.h>			// fts_open()
-#include <fts.h>			// fts_open()
-#include <errno.h>			// errno
-#include <sys/capability.h>		// capset()
-
-
 pthread_t	pthread_thread;
 pthread_mutex_t	pthread_mutex_privileged      = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t	pthread_mutex_action_signal   = PTHREAD_MUTEX_INITIALIZER;
@@ -707,6 +712,11 @@ int privileged_init(ctx_t *ctx_p)
 		error("Cannot pthread_create().");
 		return errno;
 	}
+	if (ctx_p->flags[DETACH_NETWORK] == DN_NONPRIVILEGED)
+		if (unshare(CLONE_NEWNET)) {
+			error("Got error from unshare(CLONE_NEWNET)");
+			return errno;
+		}
 	cap_drop(ctx_p, 0);
 
 	debug(4, "Waiting for the privileged thread to get prepared");

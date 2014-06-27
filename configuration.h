@@ -110,6 +110,7 @@ filesz:1M\n\
 
 #define DTRACE_PATH			"dtrace"
 
+#define PIVOT_AUTO_DIR			"/dev/shm/clsync-rootfs"
 #define	TMPDIR_TEMPLATE			"/tmp/clsync-XXXXXX"
 
 #define SYSLOG_BUFSIZ			(1<<16)

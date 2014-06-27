@@ -30,9 +30,12 @@
 #include <pwd.h>	// getpwnam()
 #include <grp.h>	// getgrnam()
 
+
+#ifdef UNSHARE_SUPPORT
+#	include <sched.h>	// unshare()
+#endif
 #ifdef GETMNTENT_SUPPORT
 #	include <mntent.h>	// getmntent()
-#	include <sched.h>	// unshare()
 #	include <sys/mount.h>	// umount2()
 #endif
 
@@ -43,6 +46,7 @@
 #include "cluster.h"
 #include "fileutils.h"
 #include "socket.h"
+#include "syscalls.h"
 
 //#include "revision.h"
 
@@ -72,6 +76,13 @@ static const struct option long_options[] =
 	{"sync-handler-uid",	required_argument,	NULL,	SYNCHANDLERUID},
 	{"sync-handler-gid",	required_argument,	NULL,	SYNCHANDLERGID},
 	{"chroot",		required_argument,	NULL,	CHROOT},
+#ifdef PIVOTROOT_OPT_SUPPORT
+	{"pivot-root",		required_argument,	NULL,	PIVOT_ROOT},
+#endif
+#ifdef UNSHARE_SUPPRT
+	{"detach-network",	required_argument,	NULL,	DETACH_NETWORK},
+	{"detach-miscellanea",	optional_argument,	NULL,	DETACH_MISCELLANEA},
+#endif
 #ifdef CAPABILITIES_SUPPORT
 	{"thread-splitting",	optional_argument,	NULL,	THREADSPLITTING},
 	{"check-execvp-args",	optional_argument,	NULL,	CHECK_EXECVP_ARGS},
@@ -131,6 +142,25 @@ static const struct option long_options[] =
 
 	{NULL,			0,			NULL,	0}
 };
+
+#ifdef UNSHARE_SUPPRT
+static char *const detachnetworkways[] = {
+	[DN_OFF]		= "off",
+	[DN_NONPRIVILEGED]	= "non-privileged",
+	[DN_EVERYWHERE]		= "everywhere",
+	NULL,
+};
+#endif
+
+#ifdef PIVOTROOT_OPT_SUPPORT
+static char *const pivotrootways[] = {
+	[PW_OFF]	= "off",
+	[PW_DIRECT]	= "direct",
+	[PW_AUTO]	= "auto",
+	[PW_AUTORO]	= "auto-ro",
+	NULL,
+};
+#endif
 
 #ifdef CAPABILITIES_SUPPORT
 
@@ -739,6 +769,45 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			}
 			ctx_p->chroot_dir	= arg;
 			break;
+#ifdef PIVOTROOT_OPT_SUPPORT
+		case PIVOT_ROOT: {
+			char *value, *arg_orig = arg;
+
+			if (!*arg) {
+				ctx_p->flags_set[param_id] = 0;
+				return 0;
+			}
+
+			pivotroot_way_t pivotway = getsubopt(&arg, pivotrootways, &value);
+			if((int)pivotway == -1) {
+				errno = EINVAL;
+				error("Invalid pivot_root use way entered: \"%s\"", arg_orig);
+				return EINVAL;
+			}
+			ctx_p->flags[PIVOT_ROOT] = pivotway;
+
+			break;
+		}
+#endif
+#ifdef UNSHARE_SUPPRT
+		case DETACH_NETWORK:
+			char *value, *arg_orig = arg;
+
+			if (!*arg) {
+				ctx_p->flags_set[param_id] = 0;
+				return 0;
+			}
+
+			detachnetwork_way_t detachnetwork_way = getsubopt(&arg, detachnetworkways, &value);
+			if((int)detachnetwork_way == -1) {
+				errno = EINVAL;
+				error("Invalid network detach way entered: \"%s\"", arg_orig);
+				return EINVAL;
+			}
+			ctx_p->flags[DETACH_NETWORK] = detachnetwork_way;
+
+			break;
+#endif
 #ifdef GETMNTENT_SUPPORT
 		case MOUNTPOINTS: {
 			char *ptr;
@@ -1313,6 +1382,16 @@ int ctx_check(ctx_t *ctx_p) {
 		ret = errno = EINVAL;
 		error("\"--socket-auth\" is useless without \"--socket\"");
 	}
+
+#ifdef PIVOTROOT_OPT_SUPPORT
+	if ((ctx_p->flags[PIVOT_ROOT] != PW_OFF) && (ctx_p->chroot_dir == NULL)) {
+		ret = errno = EINVAL;
+		error("\"--pivot-root\" cannot be used without \"--chroot\"");
+	}
+
+	if ((ctx_p->flags[PIVOT_ROOT] != PW_OFF) && (ctx_p->flags[MOUNTPOINTS]))
+		warning("\"--mountpoints\" is set while \"--pivot-root\" is set, too");
+#endif
 
 #ifdef VERYPARANOID
 	if ((ctx_p->retries != 1) && ctx_p->flags[THREADING]) {
@@ -2121,17 +2200,92 @@ int main(int argc, char *argv[]) {
 		if (ctx_p->mountpoints) {
 			// Openning the file with mount list
 			ent_f = setmntent("/proc/mounts", "r");
-			if (ent_f == NULL)
+			if (ent_f == NULL) {
 				error("Got error while setmntent(\"/proc/mounts\", \"r\")");
+				ret = errno;
+			}
 		}
 #endif
 
+#ifdef UNSHARE_SUPPORT
+#define unshare_wrapper(a) \
+		if (unshare(a)) {\
+			error("Got error from unshare("XTOSTR(a)")");\
+			ret = errno;\
+		}
+		if (ctx_p->flags[DETACH_MISCELLANEA]) {
+			unshare(CLONE_NEWIPC);
+			unshare(CLONE_NEWUTS);
+			unshare(CLONE_SYSVSEM);
+		}
+		if ((ctx_p->flags[PIVOT_ROOT] != PW_OFF) || ctx_p->flags[MOUNTPOINTS]) {
+			unshare_wrapper(CLONE_FILES);
+			unshare_wrapper(CLONE_FS);
+			unshare_wrapper(CLONE_NEWNS);
+		}
+		if (ctx_p->flags[DETACH_NETWORK] == DN_EVERYWHERE)
+			unshare_wrapper(CLONE_NEWNET);
+#undef unshare_wrapper
+#endif
+
 		if (ctx_p->chroot_dir != NULL) {
+#ifdef PIVOTROOT_OPT_SUPPORT
+			switch (ctx_p->flags[PIVOT_ROOT]) {
+				case PW_OFF:
+				case PW_DIRECT:
+					break;
+				case PW_AUTO:
+				case PW_AUTORO: {
+					char *template  = strdup(PIVOT_AUTO_DIR);
+					char *directory = mkdtemp(template);
+
+					if (directory == NULL) {
+						error("Got error from mkdtemp(\""PIVOT_AUTO_DIR"\")");
+						ret = errno;
+						break;
+					}
+
+					if (chdir(ctx_p->chroot_dir)) {
+						error("Got error while chdir(\"%s\")", ctx_p->chroot_dir);
+						ret = errno;
+					}
+
+					if (mkdir("old_root", 0700)) {
+						free(directory);
+						error("Got error from mkdir(\"old_root\", 0700)");
+						ret = errno;
+						break;
+					}
+
+					if (mkdir(directory, 0700)) {
+						free(directory);
+						error("Got error from mkdir(\"%s\", 0700)", directory);
+						ret = errno;
+						break;
+					}
+
+					unsigned long mount_flags  =  MS_BIND | MS_REC |
+						(ctx_p->flags[PIVOT_ROOT] == PW_AUTORO) ? MS_RDONLY : 0;
+
+					if (mount(ctx_p->chroot_dir, directory, NULL, mount_flags, NULL)) {
+						error("Got error while mount(\"%s\", \"%s\", NULL, %o, NULL)",
+							ctx_p->chroot_dir, directory, mount_flags);
+						ret = errno;
+						break;
+					}
+
+					ctx_p->chroot_dir = directory;
+					break;
+				}
+			}
+#endif
+
 			debug(7, "chdir(\"%s\")", ctx_p->chroot_dir);
 			if (chdir(ctx_p->chroot_dir)) {
 				error("Got error while chdir(\"%s\")", ctx_p->chroot_dir);
 				ret = errno;
 			}
+
 		}
 
 #ifdef GETMNTENT_SUPPORT
@@ -2139,9 +2293,6 @@ int main(int argc, char *argv[]) {
 			char **to_umount       = NULL;
 			size_t to_umount_count = 0;
 			size_t to_umount_size  = 0;
-
-			// Detaching from current FS namespace
-			unshare(CLONE_NEWNS);
 
 			// Getting mount-points to be umounted
 			while (NULL != (ent = getmntent(ent_f))) {
@@ -2193,11 +2344,43 @@ int main(int argc, char *argv[]) {
 		}
 #endif
 		if (ctx_p->chroot_dir != NULL) {
+#ifdef PIVOTROOT_OPT_SUPPORT
+			if (!ret) {
+				switch (ctx_p->flags[PIVOT_ROOT]) {
+					case PW_OFF:
+						break;
+					case PW_DIRECT:
+					case PW_AUTO:
+					case PW_AUTORO:
+						if (pivot_root(".", "old_root")) {
+							error("Got error while pivot_root(\".\", \"old_root\")");
+							ret = errno;
+						}
+						break;
+				}
+			}
+#endif
 			debug(7, "chroot(\".\")");
 			if (chroot(".")) {
 				error("Got error while chroot(\".\")");
 				ret = errno;
 			}
+#ifdef PIVOTROOT_OPT_SUPPORT
+			if (!ret) {
+				switch (ctx_p->flags[PIVOT_ROOT]) {
+					case PW_OFF:
+						break;
+					case PW_DIRECT:
+					case PW_AUTO:
+					case PW_AUTORO:
+						if (umount2("old_root", MNT_DETACH)) {
+							error("Got error while umount2(\"old_root\", MNT_DETACH)");
+							ret = errno;
+						}
+						break;
+				}
+			}
+#endif
 		}
 	}
 
@@ -2512,6 +2695,12 @@ int main(int argc, char *argv[]) {
 			free(ctx_p->listoutdir);
 	}
 
+/*
+	if (ctx_p->flags[PIVOT_ROOT] == PW_AUTO || ctx_p->flags[PIVOT_ROOT] == PW_AUTORO) {
+		umount2("/", MNT_DETACH);
+		// DELETE THE DIRECTORY
+	}
+*/
 	main_cleanup(ctx_p);
 
 	if (ctx_p->watchdirsize)

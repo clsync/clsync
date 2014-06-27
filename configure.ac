@@ -129,6 +129,12 @@ AC_SEARCH_LIBS([clock_getres], [rt], [],
 dnl searching for getmntent
 AC_CHECK_FUNC([getmntent], [HAVE_GETMNTENT=1])
 
+dnl searching for pivot_root
+AC_CHECK_FUNC([pivot_root], [HAVE_PIVOTROOT=1])
+
+dnl searching for unshare
+AC_CHECK_FUNC([unshare], [HAVE_UNSHARE=1])
+
 dnl capabilities check
 AC_ARG_WITH(capabilities,
 	AS_HELP_STRING(--with-capabilities,
@@ -309,6 +315,8 @@ AM_CONDITIONAL([HAVE_DTRACEPIPE],   [test "x$HAVE_DTRACEPIPE"   != "x"])
 AM_CONDITIONAL([HAVE_BACKTRACE],    [test "x$HAVE_BACKTRACE"    != "x"])
 AM_CONDITIONAL([HAVE_CAPABILITIES], [test "x$HAVE_CAPABILITIES" != "x"])
 AM_CONDITIONAL([HAVE_GETMNTENT],    [test "x$HAVE_GETMNTENT"    != "x"])
+AM_CONDITIONAL([HAVE_PIVOTROOT],    [test "x$HAVE_PIVOTROOT"    != "x"])
+AM_CONDITIONAL([HAVE_UNSHARE],      [test "x$HAVE_UNSHARE"    != "x"])
 
 AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' ], [AC_MSG_FAILURE([kqueue, inotify and bsm are not supported on this system])])
 
