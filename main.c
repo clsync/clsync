@@ -2489,11 +2489,12 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (ctx_p->statusfile != NULL) {
-		if (fclose(main_statusfile_f)) {
-			error("Cannot close file \"%s\".", 
-				ctx_p->statusfile);
-			ret = errno;
-		}
+		if (main_statusfile_f != NULL)
+			if (fclose(main_statusfile_f)) {
+				error("Cannot close file \"%s\".", 
+					ctx_p->statusfile);
+				ret = errno;
+			}
 		if (unlink(ctx_p->statusfile)) {
 			error("Cannot unlink status file \"%s\"",
 				ctx_p->statusfile);
