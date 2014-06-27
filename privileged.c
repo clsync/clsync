@@ -24,6 +24,7 @@
 #include "error.h"			// debug()
 
 int (*privileged_fork_execvp)(const char *file, char *const argv[]);
+int (*privileged_kill_child)(pid_t pid, int sig);
 
 #ifdef CAPABILITIES_SUPPORT
 #include <pthread.h>			// pthread_create()
@@ -126,8 +127,6 @@ int (*privileged_inotify_rm_watch)	(
 		int wd
 	);
 
-int (*privileged_kill_child)(pid_t pid, int sig);
-
 
 int cap_drop(ctx_t *ctx_p, __u32 caps) {
 	debug(1, "Dropping all Linux capabilites but 0x%x", caps);
@@ -170,6 +169,7 @@ int cap_drop(ctx_t *ctx_p, __u32 caps) {
 	return 0;
 }
 
+#endif
 int _privileged_kill_child_itself(pid_t child_pid, int signal) {
 	// Checking if it's a child
 	if (waitpid(child_pid, NULL, WNOHANG)>=0) {
@@ -186,6 +186,7 @@ int _privileged_kill_child_itself(pid_t child_pid, int signal) {
 
 	return 0;
 }
+#ifdef CAPABILITIES_SUPPORT
 
 static int privileged_handler_running = 1;
 void *privileged_handler(void *_ctx_p)
