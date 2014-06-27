@@ -586,7 +586,7 @@ int exec_argv(char **argv, int *child_pid) {
 	debug(3, "Child pid is %u", pid);
 
 	// Setting *child_pid value
-	if(child_pid)
+	if (child_pid)
 		*child_pid = pid;
 
 	// Waiting for process end
@@ -598,9 +598,15 @@ int exec_argv(char **argv, int *child_pid) {
 #endif
 
 //	debug(3, "Pre-wait thread %p"")".", pthread_self() );
-	if(waitpid(pid, &status, 0) != pid) {
-		error("Cannot waitid().");
-		return errno;
+	if (waitpid(pid, &status, 0) != pid) {
+		switch (errno) {
+			case ECHILD:
+				debug(2, "Child %u is already dead.", pid);
+				break;
+			default:
+				error("Cannot waitid().");
+				return errno;
+		}
 	}
 //	debug(3, "After-wait thread %p"")".", pthread_self() );
 
@@ -3499,22 +3505,6 @@ l_sync_dump_end:
 
 /* === /DUMP === */
 
-static inline int sendkill(int child_pid, int signal) {
-	if (waitpid(child_pid, NULL, WNOHANG)>=0) {
-		debug(3, "Sending signal %u to child process with pid %u.",
-			signal, child_pid);
-		if (kill(child_pid, signal)) {
-			error("Got error while kill(%u, %u)", child_pid, signal);
-			return errno;
-		}
-
-		sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
-	} else
-		return ENOENT;
-
-	return 0;
-}
-
 int *sync_sighandler_exitcode_p = NULL;
 int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 	int signal, ret;
@@ -3578,15 +3568,15 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 				while (ctx_p->children) { // Killing children if non-pthread mode or/and (mode=="so" or mode=="rsyncso")
 					pid_t child_pid = ctx_p->child_pid[--ctx_p->children];
 
-					if (sendkill(child_pid, signal) == ENOENT)
+					if (privileged_kill_child(child_pid, signal) == ENOENT)
 						continue;
 					if (signal != SIGQUIT)
-						if (sendkill(child_pid, SIGQUIT) == ENOENT)
+						if (privileged_kill_child(child_pid, SIGQUIT) == ENOENT)
 							continue;
 					if (signal != SIGTERM)
-						if (sendkill(child_pid, SIGTERM) == ENOENT)
+						if (privileged_kill_child(child_pid, SIGTERM) == ENOENT)
 							continue;
-					if (sendkill(child_pid, SIGKILL) == ENOENT)
+					if (privileged_kill_child(child_pid, SIGKILL) == ENOENT)
 						continue;
 				}
 				break;

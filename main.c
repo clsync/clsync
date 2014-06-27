@@ -136,6 +136,7 @@ enum x_capabilities {
 	X_CAP_DAC_READ_SEARCH,
 	X_CAP_SETUID,
 	X_CAP_SETGID,
+	X_CAP_KILL,
 
 	X_CAP_MAX
 };
@@ -143,12 +144,14 @@ __u32 xcap_to_cap[] = {
 	[X_CAP_DAC_READ_SEARCH] = CAP_DAC_READ_SEARCH,
 	[X_CAP_SETUID] 		= CAP_SETUID,
 	[X_CAP_SETGID] 		= CAP_SETGID,
+	[X_CAP_KILL] 		= CAP_KILL,
 };
 static char *const capabilities[] = {
 	[X_CAP_RESET]		= "",
 	[X_CAP_DAC_READ_SEARCH]	= "CAP_DAC_READ_SEARCH",
 	[X_CAP_SETUID]		= "CAP_SETUID",
 	[X_CAP_SETGID]		= "CAP_SETGID",
+	[X_CAP_KILL]		= "CAP_KILL",
 	NULL
 };
 #define XCAP_TO_CAP(x) (xcap_to_cap[x])
@@ -1947,19 +1950,20 @@ int main_rehash(ctx_t *ctx_p) {
 	return ret;
 }
 
+FILE *main_statusfile_f;
 int main_status_update(ctx_t *ctx_p) {
 	static state_t state_old = STATE_UNKNOWN;
 	state_t        state     = ctx_p->state;
 
 	debug(4, "%u", state);
 
-	if(state == state_old) {
+	if (state == state_old) {
 		debug(3, "State unchanged: %u == %u", state, state_old);
 		return 0;
 	}
 
 #ifdef VERYPARANOID
-	if(status_descr[state] == NULL) {
+	if (status_descr[state] == NULL) {
 		error("status_descr[%u] == NULL.", state);
 		return EINVAL;
 	}
@@ -1967,29 +1971,22 @@ int main_status_update(ctx_t *ctx_p) {
 
 	setenv("CLSYNC_STATUS", status_descr[state], 1);
 
-	if(ctx_p->statusfile == NULL)
+	if (ctx_p->statusfile == NULL)
 		return 0;
-
-	FILE *f = fopen(ctx_p->statusfile, "w");
-	if(f == NULL) {
-		error("Cannot open file \"%s\" for writing.", 
-			ctx_p->statusfile);
-		return errno;
-	}
 
 	debug(3, "Setting status to %i: %s.", state, status_descr[state]);
 	state_old=state;
 
 	int ret = 0;
 
-	if(fprintf(f, "%s", status_descr[state]) <= 0) {	// TODO: check output length
+	rewind(main_statusfile_f);
+	if (fprintf(main_statusfile_f, "%s", status_descr[state]) <= 0) {	// TODO: check output length
 		error("Cannot write to file \"%s\".",
 			ctx_p->statusfile);
 		ret = errno;
 	}
-
-	if(fclose(f)) {
-		error("Cannot close file \"%s\".", 
+	if (fflush(main_statusfile_f)) {
+		error("Cannot fflush() on file \"%s\".",
 			ctx_p->statusfile);
 		ret = errno;
 	}
@@ -2195,7 +2192,18 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
-	main_status_update(ctx_p);
+	if (ctx_p->statusfile != NULL) {
+		debug(1, "Trying to open the status file for writing.");
+		main_statusfile_f = fopen(ctx_p->statusfile, "w");
+		if (main_statusfile_f != NULL) {
+			uid_t uid = ctx_p->flags[UID] ? ctx_p->uid : getuid();
+			gid_t gid = ctx_p->flags[GID] ? ctx_p->gid : getgid();
+			debug(1, "Changing owner of the status file to %u:%u", uid, gid);
+			fchown(fileno(main_statusfile_f), uid,gid);
+			main_status_update(ctx_p);
+		}
+	}
+
 
 #ifdef CAPABILITIES_SUPPORT
 	debug(1, "Preserving Linux capabilites");
@@ -2362,9 +2370,22 @@ int main(int argc, char *argv[]) {
 		if (!rc) debug(4, "success");
 	}
 
+	if (main_statusfile_f == NULL && ctx_p->statusfile != NULL) {
+		debug(1, "Trying to open the status file for writing (after setuid()/setgid()).");
+		main_statusfile_f = fopen(ctx_p->statusfile, "w");
+		if (main_statusfile_f == NULL) {
+			error("Cannot open file \"%s\" for writing.", 
+				ctx_p->statusfile);
+			ret = errno;
+		} 
+	}
+
 	debug(1, "%s [%s] (%p) -> %s [%s]", ctx_p->watchdir, ctx_p->watchdirwslash, ctx_p->watchdirwslash, ctx_p->destdir?ctx_p->destdir:"", ctx_p->destdirwslash?ctx_p->destdirwslash:"");
 
-	ret = ctx_check(ctx_p);
+	{
+		int rc = ctx_check(ctx_p);
+		if (!ret) ret = rc;
+	}
 
 	if (
 		(ctx_p->listoutdir == NULL) && 
@@ -2458,6 +2479,11 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (ctx_p->statusfile != NULL) {
+		if (fclose(main_statusfile_f)) {
+			error("Cannot close file \"%s\".", 
+				ctx_p->statusfile);
+			ret = errno;
+		}
 		if (unlink(ctx_p->statusfile)) {
 			error("Cannot unlink status file \"%s\"",
 				ctx_p->statusfile);

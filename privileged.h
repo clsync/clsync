@@ -53,6 +53,7 @@ extern int (*privileged_inotify_rm_watch)	(
 
 #endif
 
+extern int (*privileged_kill_child)(pid_t pid, int sig);
 extern int (*privileged_fork_execvp)(const char *file, char *const argv[]);
 
 extern int privileged_init(struct ctx *ctx_p);

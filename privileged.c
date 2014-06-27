@@ -61,6 +61,8 @@ enum privileged_action {
 	PA_FORK_EXECVP,
 
 	PA_SETUP,
+
+	PA_KILL_CHILD,
 };
 
 struct pa_fts_open_arg {
@@ -88,6 +90,11 @@ struct pa_fork_execvp_arg {
 struct pa_setup_arg {
 	uid_t exec_uid;
 	gid_t exec_gid;
+};
+
+struct pa_kill_child_arg {
+	pid_t pid;
+	int   signal;
 };
 
 struct {
@@ -118,6 +125,8 @@ int (*privileged_inotify_rm_watch)	(
 		int fd,
 		int wd
 	);
+
+int (*privileged_kill_child)(pid_t pid, int sig);
 
 
 int cap_drop(ctx_t *ctx_p, __u32 caps) {
@@ -161,9 +170,27 @@ int cap_drop(ctx_t *ctx_p, __u32 caps) {
 	return 0;
 }
 
+int _privileged_kill_child_itself(pid_t child_pid, int signal) {
+	// Checking if it's a child
+	if (waitpid(child_pid, NULL, WNOHANG)>=0) {
+		debug(3, "Sending signal %u to child process with pid %u.",
+			signal, child_pid);
+		if (kill(child_pid, signal)) {
+			error("Got error while kill(%u, %u)", child_pid, signal);
+			return errno;
+		}
+
+		sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
+	} else
+		return ENOENT;
+
+	return 0;
+}
+
 static int privileged_handler_running = 1;
 void *privileged_handler(void *_ctx_p)
 {
+	int setup = 0;
 	ctx_t *ctx_p = _ctx_p;
 	uid_t exec_uid = 65535;
 	gid_t exec_gid = 65535;
@@ -192,8 +219,13 @@ void *privileged_handler(void *_ctx_p)
 		switch (cmd.action) {
 			case PA_SETUP: {
 				struct pa_setup_arg *arg_p = cmd.arg;
+
+				if (setup)
+					critical("Double privileged_handler setuping. It can be if somebody is trying to hack the clsync.");
+
 				exec_uid = arg_p->exec_uid;
 				exec_gid = arg_p->exec_gid;
+				setup++;
 				break;
 			}
 			case PA_DIE:
@@ -244,6 +276,11 @@ void *privileged_handler(void *_ctx_p)
 						exit(execvp(arg_p->file, arg_p->argv));
 				}
 				cmd.ret = (void *)(long)pid;
+				break;
+			}
+			case PA_KILL_CHILD: {
+				struct pa_kill_child_arg *arg_p = cmd.arg;
+				cmd.ret = (void *)(long)_privileged_kill_child_itself(arg_p->pid, arg_p->signal);
 				break;
 			}
 			default:
@@ -391,6 +428,19 @@ int _privileged_fork_setuid_execvp(const char *file, char *const argv[])
 	return (long)ret;
 }
 
+int _privileged_kill_child_wrapper(pid_t pid, int signal)
+{
+	struct pa_kill_child_arg arg;
+	void *ret;
+
+	arg.pid    = pid;
+	arg.signal = signal;
+
+	privileged_action(PA_KILL_CHILD, &arg, &ret);
+
+	return (long)ret;
+}
+
 #endif
 
 uid_t _privileged_fork_execvp_uid;
@@ -424,6 +474,8 @@ int privileged_init(ctx_t *ctx_p)
 		_privileged_fork_execvp_uid	= ctx_p->synchandler_uid;
 		_privileged_fork_execvp_gid	= ctx_p->synchandler_gid;
 
+		privileged_kill_child		= _privileged_kill_child_itself;
+
 #ifdef CAPABILITIES_SUPPORT
 		privileged_fts_open		= fts_open;
 		privileged_fts_read		= fts_read;
@@ -449,6 +501,7 @@ int privileged_init(ctx_t *ctx_p)
 	privileged_inotify_add_watch	= _privileged_inotify_add_watch;
 	privileged_inotify_rm_watch	= _privileged_inotify_rm_watch;
 	privileged_fork_execvp		= _privileged_fork_setuid_execvp;
+	privileged_kill_child		= _privileged_kill_child_wrapper;
 
 	if (pthread_mutex_init(&pthread_mutex_privileged, NULL)) {
 		error("Cannot pthread_mutex_init(&pthread_mutex_privileged, NULL).");
