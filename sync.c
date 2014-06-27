@@ -690,7 +690,7 @@ int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 		rc = ctx_p->handler_funct.sync(n, ei);
 
 		if ((err=exitcode_process(threadinfo_p->ctx_p, rc))) {
-			try_again = ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
+			try_again = ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (ctx_p->state != STATE_TERM) && (ctx_p->state != STATE_EXIT);
 			warning("Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
 			if (try_again) {
 				debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
@@ -698,7 +698,7 @@ int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 			}
 		}
 
-	} while (err && ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
+	} while (err && ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (ctx_p->state != STATE_TERM) && (ctx_p->state != STATE_EXIT));
 
 	if (err && !ctx_p->flags[IGNOREFAILURES]) {
 		error("Bad exitcode %i (errcode %i)", rc, err);
@@ -741,14 +741,14 @@ static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_ev
 					main_status_update(ctx_p);
 				}
 
-				try_again = ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
+				try_again = ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (ctx_p->state != STATE_TERM) && (ctx_p->state != STATE_EXIT);
 				warning("Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
 				if (try_again) {
 					debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
 					sleep(ctx_p->syncdelay);
 				}
 			}
-		} while (err && ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT));
+		} while (err && ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (ctx_p->state != STATE_TERM) && (ctx_p->state != STATE_EXIT));
 		if (err && !ctx_p->flags[IGNOREFAILURES]) {
 			error("Bad exitcode %i (errcode %i)", rc, err);
 			ret = err;
@@ -833,7 +833,7 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 
 		rc = ctx_p->handler_funct.rsync(argv[0], argv[1]);
 		if ((err=exitcode_process(threadinfo_p->ctx_p, rc))) {
-			try_again = ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
+			try_again = ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (ctx_p->state != STATE_TERM) && (ctx_p->state != STATE_EXIT);
 			warning("Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
 			if (try_again) {
 				debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
@@ -890,7 +890,7 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 					ctx_p->state = STATE_SYNCHANDLER_ERR;
 					main_status_update(ctx_p);
 				}
-				try_again = ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
+				try_again = ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (ctx_p->state != STATE_TERM) && (ctx_p->state != STATE_EXIT);
 				warning("Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
 				if (try_again) {
 					debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
@@ -1108,7 +1108,7 @@ int sync_exec_argv(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t ca
 				ctx_p->state = STATE_SYNCHANDLER_ERR;
 				main_status_update(ctx_p);
 			}
-			try_again = ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
+			try_again = ((!ctx_p->retries) || (try_n < ctx_p->retries)) && (ctx_p->state != STATE_TERM) && (ctx_p->state != STATE_EXIT);
 			warning("Bad exitcode %i (errcode %i). %s.", exitcode, err, try_again?"Retrying":"Give up");
 			if (try_again) {
 				debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
@@ -1168,7 +1168,7 @@ int __sync_exec_thread(threadinfo_t *threadinfo_p) {
 		exec_exitcode = exec_argv(argv, &threadinfo_p->child_pid );
 
 		if ((err=exitcode_process(threadinfo_p->ctx_p, exec_exitcode))) {
-			try_again = ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (*state_p != STATE_TERM) && (*state_p != STATE_EXIT);
+			try_again = ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (ctx_p->state != STATE_TERM) && (ctx_p->state != STATE_EXIT);
 			warning("__sync_exec_thread(): Bad exitcode %i (errcode %i). %s.", exec_exitcode, err, try_again?"Retrying":"Give up");
 			if (try_again) {
 				debug(2, "Sleeping for %u seconds before the retry.", ctx_p->syncdelay);
@@ -1749,7 +1749,7 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 	tree = privileged_fts_open((char *const *)&rootpaths, fts_opts, NULL);
 
 	if (tree == NULL) {
-		error_or_debug(STATE_STARTING(state_p)?-1:2, "Cannot privileged_fts_open() on \"%s\".", dirpath);
+		error_or_debug((ctx_p->state == STATE_STARTING) ?-1:2, "Cannot privileged_fts_open() on \"%s\".", dirpath);
 		return errno;
 	}
 
@@ -1795,12 +1795,12 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 					debug(1, "Got error while privileged_fts_read(); fts_info: %i.", node->fts_info);
 					continue;
 				} else {
-					error_or_debug(STATE_STARTING(state_p)?-1:2, "Got error while privileged_fts_read(); fts_info: %i.", node->fts_info);
+					error_or_debug((ctx_p->state == STATE_STARTING) ?-1:2, "Got error while privileged_fts_read(); fts_info: %i.", node->fts_info);
 					ret = errno;
 					goto l_sync_mark_walk_end;
 				}
 			default:
-				error_or_debug(STATE_STARTING(state_p)?-1:2, "Got unknown fts_info vlaue while privileged_fts_read(): %i.", node->fts_info);
+				error_or_debug((ctx_p->state == STATE_STARTING) ?-1:2, "Got unknown fts_info vlaue while privileged_fts_read(): %i.", node->fts_info);
 				ret = EINVAL;
 				goto l_sync_mark_walk_end;
 		}
@@ -1816,20 +1816,20 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 		debug(2, "marking \"%s\" (depth %u)", node->fts_path, node->fts_level);
 		int wd = sync_notify_mark(ctx_p, node->fts_accpath, node->fts_path, node->fts_pathlen, indexes_p);
 		if (wd == -1) {
-			error_or_debug(STATE_STARTING(state_p)?-1:2, "Got error while notify-marking \"%s\".", node->fts_path);
+			error_or_debug((ctx_p->state == STATE_STARTING) ?-1:2, "Got error while notify-marking \"%s\".", node->fts_path);
 			ret = errno;
 			goto l_sync_mark_walk_end;
 		}
 		debug(2, "watching descriptor is %i.", wd);
 	}
 	if (errno) {
-		error_or_debug(STATE_STARTING(state_p)?-1:2, "Got error while privileged_fts_read() and related routines.");
+		error_or_debug((ctx_p->state == STATE_STARTING) ?-1:2, "Got error while privileged_fts_read() and related routines.");
 		ret = errno;
 		goto l_sync_mark_walk_end;
 	}
 
 	if (privileged_fts_close(tree)) {
-		error_or_debug(STATE_STARTING(state_p)?-1:2, "Got error while privileged_fts_close().");
+		error_or_debug((ctx_p->state == STATE_STARTING) ?-1:2, "Got error while privileged_fts_close().");
 		ret = errno;
 		goto l_sync_mark_walk_end;
 	}
@@ -3016,7 +3016,7 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 		}
 	}
 
-	if ((!delay) || (*state_p != STATE_RUNNING))
+	if ((!delay) || (ctx_p->state != STATE_RUNNING))
 		return 0;
 
 	if (ctx_p->flags[EXITONNOEVENTS]) { // zero delay if "--exit-on-no-events" is set
@@ -3034,7 +3034,7 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 	debug(4, "pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
 	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
-	if (*state_p != STATE_RUNNING)
+	if (ctx_p->state != STATE_RUNNING)
 		return 0;
 
 	debug(4, "pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])");
@@ -3057,9 +3057,9 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 	if ((ctx_p->flags[EXITONNOEVENTS]) && (ret == 0)) {
 		// if not events and "--exit-on-no-events" is set
 		if (ctx_p->flags[PREEXITHOOK])
-			*state_p = STATE_PREEXIT;
+			ctx_p->state = STATE_PREEXIT;
 		else
-			*state_p = STATE_EXIT;
+			ctx_p->state = STATE_EXIT;
 	}
 
 	return ret;
@@ -3516,7 +3516,7 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 
 	sync_sighandler_exitcode_p = exitcode_p;
 
-	while (state_p == NULL || ((*state_p != STATE_TERM) && (*state_p != STATE_EXIT))) {
+	while (state_p == NULL || ((ctx_p->state != STATE_TERM) && (ctx_p->state != STATE_EXIT))) {
 		debug(3, "waiting for signal");
 		ret = sigwait(sigset_p, &signal);
 
@@ -3538,7 +3538,7 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 			continue;
 		}
 
-		debug(3, "got signal %i. *state_p == %i.", signal, *state_p);
+		debug(3, "got signal %i. ctx_p->state == %i.", signal, ctx_p->state);
 
 		if (ret) {
 			// TODO: handle an error here
