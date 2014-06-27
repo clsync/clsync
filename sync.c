@@ -735,7 +735,7 @@ static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_ev
 			alarm(0);
 
 			if ((err=exitcode_process(ctx_p, rc))) {
-				if (try_n == 1) {
+				if ((try_n == 1) && (ctx_p->state != STATE_TERM) && (ctx_p->state != STATE_EXIT)) {
 					status = ctx_p->state;
 					ctx_p->state = STATE_SYNCHANDLER_ERR;
 					main_status_update(ctx_p);
@@ -885,7 +885,7 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 			alarm(0);
 
 			if ((err=exitcode_process(ctx_p, rc))) {
-				if (try_n == 1) {
+				if ((try_n == 1) && (ctx_p->state != STATE_TERM) && (ctx_p->state != STATE_EXIT)) {
 					status = ctx_p->state;
 					ctx_p->state = STATE_SYNCHANDLER_ERR;
 					main_status_update(ctx_p);
@@ -1103,7 +1103,7 @@ int sync_exec_argv(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t ca
 		alarm(0);
 
 		if ((err=exitcode_process(ctx_p, exitcode))) {
-			if (try_n == 1) {
+			if ((try_n == 1) && (ctx_p->state != STATE_TERM) && (ctx_p->state != STATE_EXIT)) {
 				status = ctx_p->state;
 				ctx_p->state = STATE_SYNCHANDLER_ERR;
 				main_status_update(ctx_p);
