@@ -138,7 +138,8 @@ int cap_drop(ctx_t *ctx_p, __u32 caps) {
 
 	cap_hdr.version = _LINUX_CAPABILITY_VERSION;
 	if (capget(&cap_hdr, &cap_dat) < 0) {
-		error("Cannot get capabilites with capget()");
+		if (ctx_p->flags[CAP_PRESERVE] != CAP_PRESERVE_TRY)
+			error("Cannot get capabilites with capget()");
 		return errno;
 	}
 	debug(3, "old: cap.eff == 0x%04x; cap.prm == 0x%04x; cap.inh == 0x%04x.",
@@ -164,7 +165,8 @@ int cap_drop(ctx_t *ctx_p, __u32 caps) {
 		cap_dat.effective, cap_dat.permitted, cap_dat.inheritable);
 
 	if (capset(&cap_hdr, &cap_dat) < 0) {
-		error("Cannot set capabilities with capset().");
+		if (ctx_p->flags[CAP_PRESERVE] != CAP_PRESERVE_TRY)
+			error("Cannot set capabilities with capset().");
 		return errno;
 	}
 

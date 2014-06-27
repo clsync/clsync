@@ -2026,6 +2026,7 @@ int main(int argc, char *argv[]) {
 	ctx_p->retries				 = DEFAULT_RETRIES;
 	ctx_p->flags[VERBOSE]			 = DEFAULT_VERBOSE;
 #ifdef CAPABILITIES_SUPPORT
+	ctx_p->flags[CAP_PRESERVE]		 = CAP_PRESERVE_TRY;
 	ctx_p->caps				 = DEFAULT_PRESERVE_CAPABILITIES;
 	ctx_p->synchandler_uid			 = getuid();
 	ctx_p->synchandler_gid			 = getgid();

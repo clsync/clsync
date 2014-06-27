@@ -226,6 +226,8 @@ enum state_enum {
 };
 typedef enum state_enum state_t;
 
+#define CAP_PRESERVE_TRY (1<<16)
+
 struct ctx {
 #ifndef LIBCLSYNC
 	state_t state;
