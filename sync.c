@@ -3220,7 +3220,7 @@ void sync_sig_int(int signal) {
 int sync_tryforcecycle(pthread_t pthread_parent) {
 	debug(3, "sending signal to interrupt blocking operations like select()-s and so on");
 	pthread_kill(pthread_parent, SIGUSR_BLOPINT);
-#ifdef VERYPARANOID
+#ifdef PARANOID
 	int i=0;
 	if (++i > KILL_TIMEOUT) {
 		error("Seems we got a deadlock.");
@@ -3286,7 +3286,7 @@ int sync_switch_state(pthread_t pthread_parent, int newstate) {
 
 	*state_p = newstate;
 
-#ifdef VERYPARANOID
+#ifdef PARANOID
 	pthread_kill(pthread_parent, SIGUSR_BLOPINT);
 #endif
 
