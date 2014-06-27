@@ -2373,7 +2373,7 @@ int sync_idle_dosync_collectedevents_uniqfname(ctx_t *ctx_p, char *fpath, char *
 		snprintf(fpath, PATH_MAX, "%s/.clsync-%s.%u.%lu.%lu.%u", ctx_p->listoutdir, name, pid, (long)pthread_self(), (unsigned long)tm, rand());	// To be unique
 		lstat64(fpath, &stat64);
 		if(counter++ > COUNTER_LIMIT) {
-			error("Cannot file unused filename for list-file. The last try was \"%s\".", fpath);
+			error("Cannot find unused filename for list-file. The last try was \"%s\".", fpath);
 			return ENOENT;
 		}
 	} while(errno != ENOENT);	// TODO: find another way to check if the object exists

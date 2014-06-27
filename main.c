@@ -1997,6 +1997,7 @@ int main_status_update(ctx_t *ctx_p) {
 	return ret;
 }
 
+#define UGID_PRESERVE (1<<16)
 int main(int argc, char *argv[]) {
 	struct ctx *ctx_p = xcalloc(1, sizeof(*ctx_p));
 
@@ -2028,12 +2029,12 @@ int main(int argc, char *argv[]) {
 	{
 		struct passwd *pwd = getpwnam(DEFAULT_USER);
 		ctx_p->uid = (pwd != NULL) ? pwd->pw_uid : DEFAULT_UID;
-		ctx_p->flags[UID]		 = -1;
+		ctx_p->flags[UID]		 = UGID_PRESERVE;
 	}
 	{
 		struct group  *grp = getgrnam(DEFAULT_GROUP);
 		ctx_p->gid = (grp != NULL) ? grp->gr_gid : DEFAULT_GID;
-		ctx_p->flags[GID]		 = -1;
+		ctx_p->flags[GID]		 = UGID_PRESERVE;
 	}
 #endif
 
@@ -2340,7 +2341,9 @@ int main(int argc, char *argv[]) {
 	if (ctx_p->flags[GID]) {
 		int rc;
 		debug(3, "Trying to drop gid to %i", ctx_p->gid);
-		if ((rc=setgid(ctx_p->gid)) && (ctx_p->flags[GID] != -1)) {
+		rc = setgid(ctx_p->gid);
+
+		if (rc && (ctx_p->flags[GID] != UGID_PRESERVE)) {
 			error("Cannot setgid(%u)", ctx_p->gid);
 			ret = errno;
 		}
@@ -2350,7 +2353,9 @@ int main(int argc, char *argv[]) {
 	if (ctx_p->flags[UID]) {
 		int rc;
 		debug(3, "Trying to drop uid to %i", ctx_p->uid);
-		if ((rc=setuid(ctx_p->uid)) && (ctx_p->flags[UID] != -1)) {
+		rc = setuid(ctx_p->uid);
+
+		if (rc && (ctx_p->flags[UID] != UGID_PRESERVE)) {
 			error("Cannot setuid(%u)", ctx_p->uid);
 			ret = errno;
 		}
