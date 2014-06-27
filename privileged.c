@@ -94,7 +94,7 @@ struct {
 	enum privileged_action	 action;
 	void			*arg;
 	void			*ret;
-	int			 errno;
+	int			 _errno;
 } cmd;
 
 FTS *(*privileged_fts_open)		(
@@ -250,8 +250,8 @@ void *privileged_handler(void *_ctx_p)
 				critical("Unknown command type \"%u\". It's a buffer overflow (which means a security problem) or just an internal error.");
 		}
 
-		cmd.errno = errno;
-		debug(3, "Result: %p, errno: %u. Sending the signal to non-privileged thread.", cmd.ret, cmd.errno);
+		cmd._errno = errno;
+		debug(3, "Result: %p, errno: %u. Sending the signal to non-privileged thread.", cmd.ret, cmd._errno);
 		pthread_mutex_lock(&pthread_mutex_action_signal);
 		pthread_mutex_unlock(&pthread_mutex_action_signal);
 		pthread_cond_signal(&pthread_cond_action);
@@ -291,7 +291,7 @@ int privileged_action(
 	pthread_cond_wait  (&pthread_cond_action, &pthread_mutex_action_signal);
 	if (ret_p != NULL)
 		*ret_p = cmd.ret;
-	errno = cmd.errno;
+	errno = cmd._errno;
 
 	debug(4, "Unlocking pthread_mutex_action_*");
 	pthread_mutex_unlock(&pthread_mutex_action_signal);
