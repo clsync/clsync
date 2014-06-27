@@ -3851,8 +3851,6 @@ int sync_run(ctx_t *ctx_p) {
 	pthread_kill(pthread_sighandler, SIGINT);
 	pthread_join(pthread_sighandler, NULL);
 
-	ret |= privileged_deinit(ctx_p);
-
 	// Killing children
 
 	thread_cleanup(ctx_p);
@@ -3883,18 +3881,18 @@ int sync_run(ctx_t *ctx_p) {
 	}
 
 	// Closing shared libraries
-	if(ctx_p->flags[MODE] == MODE_SO) {
+	if (ctx_p->flags[MODE] == MODE_SO) {
 		int _ret;
-		if(ctx_p->handler_funct.deinit != NULL)
-			if((_ret = ctx_p->handler_funct.deinit())) {
+		if (ctx_p->handler_funct.deinit != NULL)
+			if ((_ret = ctx_p->handler_funct.deinit())) {
 				error("Cannot deinit sync-handler module.");
 				if(!ret) ret = _ret;
 			}
 
-		if(dlclose(ctx_p->handler_handle)) {
+		if (dlclose(ctx_p->handler_handle)) {
 			error("Cannot unload shared object file \"%s\": %s",
 				ctx_p->handlerfpath, dlerror());
-			if(!ret) ret = -1;
+			if (!ret) ret = -1;
 		}
 	}
 
@@ -3927,10 +3925,10 @@ int sync_run(ctx_t *ctx_p) {
 
 	// Deinitializing cluster subsystem
 #ifdef CLUSTER_SUPPORT
-	if(ctx_p->cluster_iface != NULL) {
+	if (ctx_p->cluster_iface != NULL) {
 		int _ret;
 		_ret = cluster_deinit();
-		if(_ret) {
+		if (_ret) {
 			error("Cannot deinitialize cluster subsystem.", strerror(_ret), _ret);
 			ret = _ret;
 		}
@@ -3942,10 +3940,13 @@ int sync_run(ctx_t *ctx_p) {
 	sleep(1);
 #endif
 
-	if(ctx_p->flags[EXITHOOK]) {
+	if (ctx_p->flags[EXITHOOK]) {
 		char *argv[] = { ctx_p->exithookfile, ctx_p->label, NULL};
 		exec_argv(argv, NULL);
 	}
+
+	ret |= privileged_deinit(ctx_p);
+
 	return ret;
 }
 
