@@ -2448,6 +2448,7 @@ int main(int argc, char *argv[]) {
 	}
 
 	if (ctx_p->pidfile != NULL) {
+		debug(2, "Trying to open the pidfile \"%s\"", ctx_p->pidfile);
 		pid_t pid = getpid();
 		FILE *pidfile = fopen(ctx_p->pidfile, "w");
 		if (pidfile == NULL) {
