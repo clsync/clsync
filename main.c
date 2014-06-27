@@ -2176,7 +2176,7 @@ int main(int argc, char *argv[]) {
 			debug(9, "Custom arguments %u count: %u", n-1, args_p->c);
 			int i = 0;
 			while (i < args_p->c) {
-				int macros_count, expanded;
+				int macros_count = -1, expanded = -1;
 
 				args_p->v[i] = parameter_expand(ctx_p, args_p->v[i], 4, &macros_count, &expanded, parameter_get_wmacro, ctx_p);
 
