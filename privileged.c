@@ -160,10 +160,10 @@ int cap_drop(ctx_t *ctx_p, __u32 caps) {
 	return 0;
 }
 
+static int privileged_handler_running = 1;
 void *privileged_handler(void *_ctx_p)
 {
 	ctx_t *ctx_p = _ctx_p;
-	int running = 1;
 	uid_t exec_uid = 65535;
 	gid_t exec_gid = 65535;
 
@@ -181,7 +181,7 @@ void *privileged_handler(void *_ctx_p)
 
 	// The loop
 	debug(2, "Running the loop");
-	while (running) {
+	while (privileged_handler_running) {
 		// Waiting for command
 		debug(3, "Waiting for command", cmd.action);
 		pthread_cond_wait(&pthread_cond_privileged, &pthread_mutex_privileged);
@@ -196,7 +196,7 @@ void *privileged_handler(void *_ctx_p)
 				break;
 			}
 			case PA_DIE:
-				running = 0;
+				privileged_handler_running = 0;
 				break;
 			case PA_FTS_OPEN: {
 				struct pa_fts_open_arg *arg_p = cmd.arg;
@@ -274,6 +274,11 @@ int privileged_action(
 	debug(4, "Waiting the privileged thread to get prepared for signal");
 	pthread_mutex_lock(&pthread_mutex_privileged);
 	pthread_mutex_unlock(&pthread_mutex_privileged);
+
+	if (!privileged_handler_running) {
+		debug(1, "The privileged thread is dead. Ignoring the command.");
+		return ENOENT;
+	}
 
 	debug(4, "Sending information to the privileged thread");
 	cmd.action = action;
