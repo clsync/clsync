@@ -1367,15 +1367,18 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 			// Error cases:
 			case FTS_ERR:
 			case FTS_NS:
-			case FTS_DNR:
-				if (node->fts_errno == ENOENT) {
-					debug(1, "Got error while privileged_fts_read(): %s (errno: %i; fts_info: %i).", strerror(node->fts_errno), node->fts_errno, node->fts_info);
+			case FTS_DNR: {
+				int fts_errno = node->fts_errno;
+
+				if (fts_errno == ENOENT) {
+					debug(1, "Got error while privileged_fts_read(): %s (errno: %i; fts_info: %i).", strerror(fts_errno), fts_errno, node->fts_info);
 					continue;
 				} else {
-					error("Got error while privileged_fts_read(): %s (errno: %i; fts_info: %i).", strerror(node->fts_errno), node->fts_errno, node->fts_info);
+					error("Got error while privileged_fts_read(): %s (errno: %i; fts_info: %i).", strerror(fts_errno), fts_errno, node->fts_info);
 					ret = node->fts_errno;
 					goto l_sync_initialsync_walk_end;
 				}
+			}
 			default:
 
 				error("Got unknown fts_info vlaue while privileged_fts_read(): %i.", node->fts_info);
