@@ -1979,6 +1979,7 @@ int main_status_update(ctx_t *ctx_p) {
 
 	int ret = 0;
 
+	ftruncate(fileno(main_statusfile_f), 0);
 	rewind(main_statusfile_f);
 	if (fprintf(main_statusfile_f, "%s", status_descr[state]) <= 0) {	// TODO: check output length
 		error("Cannot write to file \"%s\".",
