@@ -467,11 +467,32 @@ way to secure your system from any bug in
 .B clsync
 while running it with capabilities or root privileges. But
 .B clsync
-will utilize in ~6 times more CPU resources. So it's a performance vs
+will utilize in few times more CPU resources. So it's a performance vs
 security trade off.
 
-Also this options enabled execvp() arguments recheck (in case of their
-substitution to any exploit-arguments).
+If you're using this option and running the
+.I sync\-handler
+with the root user then it's highly recommended to enable
+.BR \-\-check\-execvp\-arguments ,
+too. Otherwise in case of
+.B clsync
+security bug a hacker will be able to use execvp() with any arguments
+with root privileges.
+
+Is not set by default.
+.RE
+
+.B \-\-check\-execvp\-arguments
+.RS
+.B [Requires \-\-thread\-splitting]
+
+Enables execvp() arguments recheck in the privileged thread (in case of their
+substitution to any exploit-given arguments).
+
+This option doesn't utilize a lot of CPU resources but forbids run-time
+changing of
+.I sync\-handler\-arguments
+and hook file paths.
 
 Is not set by default.
 .RE

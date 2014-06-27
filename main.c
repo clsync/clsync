@@ -74,6 +74,7 @@ static const struct option long_options[] =
 	{"chroot",		required_argument,	NULL,	CHROOT},
 #ifdef CAPABILITIES_SUPPORT
 	{"thread-splitting",	optional_argument,	NULL,	THREADSPLITTING},
+	{"check-execvp-args",	optional_argument,	NULL,	CHECK_EXECVP_ARGS},
 #endif
 #ifdef GETMNTENT_SUPPORT
 	{"mountpoints",		optional_argument,	NULL,	MOUNTPOINTS},

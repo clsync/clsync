@@ -100,6 +100,13 @@ struct {
 	int			 _errno;
 } cmd;
 
+struct pa_options {
+	synchandler_args_t args[SHARGS_MAX];
+	char *label;
+	char *exithookfile;
+	char *preexithookfile;
+};
+
 FTS *(*privileged_fts_open)		(
 		char * const *path_argv,
 		int options,
@@ -226,9 +233,11 @@ int pa_strcmp(const char *s1, const char *s2, int isexpanded) {
 	}
 }
 
-int privileged_execvp_check_arguments(synchandler_args_t args[], const char *u_file, char *const *u_argv) {
+int privileged_execvp_check_arguments(struct pa_options *opts, const char *u_file, char *const *u_argv) {
 	int a_i;
 	size_t u_argc;
+	synchandler_args_t *args = opts->args;
+	
 	debug(9, "");
 
 	// Counting the number of arguments
@@ -269,13 +278,27 @@ int privileged_execvp_check_arguments(synchandler_args_t args[], const char *u_f
 		// No? Ok the next "shargs".
 	} while (++a_i < SHARGS_MAX);
 
-	if (a_i >= SHARGS_MAX)
-		critical("Arguments are wrong. This should happend only on hacking attack.");
+	if (a_i < SHARGS_MAX)
+		return 0;
 
-	return 0;
+	if ((opts->exithookfile != NULL) || (opts->preexithookfile != NULL))
+		if (u_argc == 2) {
+			if (!strcmp(opts->label, u_argv[1])) {
+				if (opts->exithookfile != NULL)
+					if (!strcmp(opts->exithookfile,    u_file))
+						return 0;
+				if (opts->preexithookfile != NULL)
+					if (!strcmp(opts->preexithookfile, u_file))
+						return 0;
+			}
+		}
+
+	critical("Arguments are wrong. This should happend only on hacking attack.");
+	return EPERM;
 }
 
-int pa_setup(synchandler_args_t args[], ctx_t *ctx_p, uid_t *exec_uid_p, gid_t *exec_gid_p) {
+int pa_setup(struct pa_options *opts, ctx_t *ctx_p, uid_t *exec_uid_p, gid_t *exec_gid_p) {
+	synchandler_args_t *args = opts->args;
 	int a_i;
 
 	a_i = 0;
@@ -313,6 +336,12 @@ int pa_setup(synchandler_args_t args[], ctx_t *ctx_p, uid_t *exec_uid_p, gid_t *
 	*exec_uid_p = ctx_p->synchandler_uid;
 	*exec_gid_p = ctx_p->synchandler_gid;
 
+	opts->label = strdup(ctx_p->label);
+	if (ctx_p->exithookfile != NULL)
+		opts->exithookfile = strdup(ctx_p->exithookfile);
+	if (ctx_p->preexithookfile != NULL)
+		opts->preexithookfile = strdup(ctx_p->preexithookfile);
+
 	return 0;
 }
 
@@ -323,7 +352,8 @@ void *privileged_handler(void *_ctx_p)
 	ctx_t *ctx_p = _ctx_p;
 	uid_t exec_uid = 65535;
 	gid_t exec_gid = 65535;
-	synchandler_args_t args[SHARGS_MAX];
+	struct pa_options opts = {{{{0}}}};
+	int use_args_check = 0;
 
 	cap_drop(ctx_p, ctx_p->caps);
 
@@ -354,7 +384,8 @@ void *privileged_handler(void *_ctx_p)
 				if (setup)
 					critical("Double privileged_handler setuping. It can be if somebody is trying to hack the clsync.");
 
-				pa_setup(args, cmd.arg, &exec_uid, &exec_gid);
+				pa_setup(&opts, cmd.arg, &exec_uid, &exec_gid);
+				use_args_check = ((ctx_t *)cmd.arg)->flags[CHECK_EXECVP_ARGS];
 				setup++;
 				break;
 			}
@@ -395,7 +426,8 @@ void *privileged_handler(void *_ctx_p)
 			}
 			case PA_FORK_EXECVP: {
 				struct pa_fork_execvp_arg *arg_p = cmd.arg;
-				privileged_execvp_check_arguments(args, arg_p->file, arg_p->argv);
+				if (use_args_check)
+					privileged_execvp_check_arguments(&opts, arg_p->file, arg_p->argv);
 				pid_t pid = fork();
 				switch (pid) {
 					case -1: 
