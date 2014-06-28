@@ -3081,7 +3081,7 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 }
 
 void hook_preexit(ctx_t *ctx_p) {
-	debug(2, "");
+	debug(2, "\"%s\" \"%s\"", ctx_p->preexithookfile, ctx_p->label);
 
 #ifdef VERYPARANOID
 	if (ctx_p->preexithookfile == NULL)
@@ -3507,7 +3507,7 @@ l_sync_dump_end:
 
 int *sync_sighandler_exitcode_p = NULL;
 int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
-	int signal, ret;
+	int signal = 0, ret;
 	ctx_t *ctx_p		 = sighandler_arg_p->ctx_p;
 //	indexes_t *indexes_p	 = sighandler_arg_p->indexes_p;
 	pthread_t pthread_parent = sighandler_arg_p->pthread_parent;

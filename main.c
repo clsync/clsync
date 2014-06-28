@@ -748,7 +748,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			char *value, *arg_orig = arg;
 
 			if (!*arg) {
-				ctx_p->flags_set[param_id] = 0;
+				ctx_p->flags[param_id] = 0;
 				return 0;
 			}
 
@@ -769,7 +769,8 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 				return 0;
 			}
 			if (!*arg) {
-				ctx_p->flags_set[param_id] = 0;
+				free(ctx_p->chroot_dir);
+				ctx_p->chroot_dir = NULL;
 				return 0;
 			}
 
@@ -780,7 +781,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			char *value, *arg_orig = arg;
 
 			if (!*arg) {
-				ctx_p->flags_set[param_id] = 0;
+				ctx_p->flags[PIVOT_ROOT] = DEFAULT_PIVOT_MODE;
 				return 0;
 			}
 
@@ -800,7 +801,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			char *value, *arg_orig = arg;
 
 			if (!*arg) {
-				ctx_p->flags_set[param_id] = 0;
+				ctx_p->flags[param_id] = 0;
 				return 0;
 			}
 
@@ -917,7 +918,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			char *value, *arg_orig = arg;
 
 			if (!*arg) {
-				ctx_p->flags_set[param_id] = 0;
+				ctx_p->flags[param_id] = 0;
 				return 0;
 			}
 
@@ -935,7 +936,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			char *value, *arg_orig = arg;
 
 			if (!*arg) {
-				ctx_p->flags_set[param_id] = 0;
+				ctx_p->flags[param_id] = 0;
 				return 0;
 			}
 
@@ -2155,6 +2156,9 @@ int main(int argc, char *argv[]) {
 	ctx_p->config_block			 = DEFAULT_CONFIG_BLOCK;
 	ctx_p->retries				 = DEFAULT_RETRIES;
 	ctx_p->flags[VERBOSE]			 = DEFAULT_VERBOSE;
+#ifdef PIVOTROOT_OPT_SUPPORT
+	ctx_p->flags[PIVOT_ROOT]		 = DEFAULT_PIVOT_MODE;
+#endif
 #ifdef CAPABILITIES_SUPPORT
 	ctx_p->flags[CAP_PRESERVE]		 = CAP_PRESERVE_TRY;
 	ctx_p->caps				 = DEFAULT_PRESERVE_CAPABILITIES;

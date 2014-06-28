@@ -506,6 +506,7 @@ void *privileged_handler(void *_ctx_p)
 					case  0:
 						debug(4, "setgid(%u) == %i", exec_gid, setgid(exec_gid));
 						debug(4, "setuid(%u) == %i", exec_uid, setuid(exec_uid));
+						debug(3, "execvp(\"%s\", arg_p->argv)", arg_p->file);
 						exit(execvp(arg_p->file, arg_p->argv));
 				}
 				cmd.ret = (void *)(long)pid;
