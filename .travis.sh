@@ -147,3 +147,5 @@ if true; then
 	#run_example cluster
 
 fi
+
+exit 0
