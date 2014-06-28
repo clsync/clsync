@@ -677,6 +677,7 @@ int _privileged_fork_execvp(const char *file, char *const argv[])
 
 int privileged_init(ctx_t *ctx_p)
 {
+	int pipefds[2];
 
 #ifdef CAPABILITIES_SUPPORT
 	if (!ctx_p->flags[THREADSPLITTING]) {
@@ -716,51 +717,23 @@ int privileged_init(ctx_t *ctx_p)
 	privileged_fork_execvp		= _privileged_fork_setuid_execvp;
 	privileged_kill_child		= _privileged_kill_child_wrapper;
 
-	if (pthread_mutex_init(&pthread_mutex_privileged, NULL)) {
-		error("Cannot pthread_mutex_init(&pthread_mutex_privileged, NULL).");
-		return errno;
-	}
-	if (pthread_mutex_init(&pthread_mutex_action_entrance, NULL)) {
-		error("Cannot pthread_mutex_init(&pthread_mutex_action_entrance, NULL).");
-		return errno;
-	}
-	if (pthread_mutex_init(&pthread_mutex_action_signal, NULL)) {
-		error("Cannot pthread_mutex_init(&pthread_mutex_action_signal, NULL).");
-		return errno;
-	}
-	if (pthread_mutex_init(&pthread_mutex_action_signal, NULL)) {
-		error("Cannot pthread_mutex_init(&pthread_mutex_action_signal, NULL).");
-		return errno;
-	}
-	if (pthread_mutex_init(&pthread_mutex_runner, NULL)) {
-		error("Cannot pthread_mutex_init(&pthread_mutex_runner, NULL).");
-		return errno;
-	}
-	if (pthread_cond_init (&pthread_cond_privileged, NULL)) {
-		error("Cannot pthread_cond_init(&pthread_cond_privileged, NULL).");
-		return errno;
-	}
-	if (pthread_cond_init (&pthread_cond_action, NULL)) {
-		error("Cannot pthread_cond_init(&pthread_cond_action, NULL).");
-		return errno;
-	}
+	SAFE ( pthread_mutex_init(&pthread_mutex_privileged,	NULL),	return errno;);
+	SAFE ( pthread_mutex_init(&pthread_mutex_action_entrance,NULL),	return errno;);
+	SAFE ( pthread_mutex_init(&pthread_mutex_action_signal,	NULL),	return errno;);
+	SAFE ( pthread_mutex_init(&pthread_mutex_runner,	NULL),	return errno;);
+	SAFE ( pthread_cond_init (&pthread_cond_privileged,	NULL),	return errno;);
+	SAFE ( pthread_cond_init (&pthread_cond_action,		NULL),	return errno;);
+	SAFE ( pthread_cond_init (&pthread_cond_runner,		NULL),	return errno;);
 
-	if (pthread_cond_init (&pthread_cond_runner, NULL)) {
-		error("Cannot pthread_cond_init(&pthread_cond_runner, NULL).");
-		return errno;
-	}
+	SAFE ( pipe2(pipefds, O_CLOEXEC), 				return errno;);
 
-	pthread_mutex_lock(&pthread_mutex_runner);
-	if (pthread_create(&pthread_thread, NULL, (void *(*)(void *))privileged_handler, ctx_p)) {
-		error("Cannot pthread_create().");
-		return errno;
-	}
+	SAFE ( pthread_mutex_lock(&pthread_mutex_runner),		return errno;);
+
+	SAFE ( pthread_create(&pthread_thread, NULL, (void *(*)(void *))privileged_handler, ctx_p), return errno);
+
 	if (ctx_p->flags[DETACH_NETWORK] == DN_NONPRIVILEGED) {
 		cap_enable(CAP_TO_MASK(CAP_SYS_ADMIN));
-		if (unshare(CLONE_NEWNET)) {
-			error("Got error from unshare(CLONE_NEWNET)");
-			return errno;
-		}
+		SAFE (unshare(CLONE_NEWNET), return errno);
 	}
 	cap_drop(ctx_p, 0);
 
@@ -771,14 +744,8 @@ int privileged_init(ctx_t *ctx_p)
 	debug(4, "Sending the settings (exec_uid == %u; exec_gid == %u)", ctx_p->synchandler_uid, ctx_p->synchandler_gid);
 	privileged_action(PA_SETUP, ctx_p, NULL);
 
-	if (pthread_mutex_destroy(&pthread_mutex_runner)) {
-		error("Cannot pthread_mutex_destroy(&pthread_mutex_runner).");
-		return errno;
-	}
-	if (pthread_cond_destroy(&pthread_cond_runner)) {
-		error("Cannot pthread_cond_destroy(&pthread_cond_action).");
-		return errno;
-	}
+	SAFE (pthread_mutex_destroy(&pthread_mutex_runner),	return errno;);
+	SAFE (pthread_cond_destroy(&pthread_cond_runner),	return errno;);
 
 	debug(5, "Finish");
 	return 0;
@@ -794,33 +761,14 @@ int privileged_deinit(ctx_t *ctx_p)
 	if (!ctx_p->flags[THREADSPLITTING])
 		return 0;
 
-	privileged_action(PA_DIE, NULL, NULL);
-	if (pthread_join(pthread_thread, NULL)) {
-		error("Cannot pthread_join().");
-		ret = errno;
-	}
+	SAFE ( privileged_action(PA_DIE, NULL, NULL),			ret = errno );
+	SAFE ( pthread_join(pthread_thread, NULL),			ret = errno );
 
-	if (pthread_mutex_destroy(&pthread_mutex_privileged)) {
-		error("Cannot pthread_mutex_destroy(&pthread_mutex_privileged).");
-		ret = errno;
-	}
-	if (pthread_mutex_destroy(&pthread_mutex_action_entrance)) {
-		error("Cannot pthread_mutex_destroy(&pthread_mutex_action_entrance).");
-		ret = errno;
-	}
-	if (pthread_mutex_destroy(&pthread_mutex_action_signal)) {
-		error("Cannot pthread_mutex_destroy(&pthread_mutex_action_signal).");
-		ret = errno;
-	}
-
-	if (pthread_cond_destroy(&pthread_cond_privileged)) {
-		error("Cannot pthread_cond_destroy(&pthread_cond_privileged).");
-		ret = errno;
-	}
-	if (pthread_cond_destroy(&pthread_cond_action)) {
-		error("Cannot pthread_cond_destroy(&pthread_cond_action).");
-		ret = errno;
-	}
+	SAFE ( pthread_mutex_destroy(&pthread_mutex_privileged),	ret = errno );
+	SAFE ( pthread_mutex_destroy(&pthread_mutex_action_entrance),	ret = errno );
+	SAFE ( pthread_mutex_destroy(&pthread_mutex_action_signal),	ret = errno );
+	SAFE ( pthread_cond_destroy(&pthread_cond_privileged),		ret = errno );
+	SAFE ( pthread_cond_destroy(&pthread_cond_action),		ret = errno );
 
 #endif
 	return ret;
