@@ -107,6 +107,7 @@ enum flags_enum {
 	PIVOT_ROOT		= 31|OPTION_LONGOPTONLY,
 	DETACH_NETWORK		= 32|OPTION_LONGOPTONLY,
 	DETACH_MISCELLANEA	= 33|OPTION_LONGOPTONLY,
+	ADDPERMITTEDHOOKFILES	= 34|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -324,6 +325,11 @@ struct ctx {
 	char isignoredexitcode[(1<<8)];
 
 	char *chroot_dir;
+
+#ifdef CAPABILITIES_SUPPORT
+	char *permitted_hookfile[MAXPERMITTEDHOOKFILES+1];
+	int   permitted_hookfiles;
+#endif
 
 #ifdef GETMNTENT_SUPPORT
 	char *mountpoint[MAXMOUNTPOINTS+1];

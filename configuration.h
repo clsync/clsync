@@ -32,6 +32,7 @@
 #define MAXCHILDREN			(1<<8)
 
 #define MAXMOUNTPOINTS			(1<<8)
+#define MAXPERMITTEDHOOKFILES		(1<<8)
 
 #ifdef __CLSYNC_COMMON_H
 #	if INOTIFY_SUPPORT

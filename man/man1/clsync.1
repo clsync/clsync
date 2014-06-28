@@ -441,8 +441,34 @@ syscalls on every dir and can reduce performance.
 Is not set by default.
 .RE
 
+.B \-\-socket
+.I socket\-path
+.RS
+Create a control socket by path
+.IR socket\-path .
 
-.PP
+This's very experimental feature.
+
+Is not set by default.
+.RE
+
+.B \-\-socket\-own
+.I socket\-owner\-user[:socket\-owner\-group]
+.RS
+Sets the control socket owner user (and group).
+
+Is not set by default
+.RE
+
+.B \-\-socket\-mod
+.I socket\-mode
+.RS
+Sets the control socket mode [see 
+.BR chmod (2)].
+
+Is not set by default.
+.RE
+
 .B \-c, \-\-cluster\-iface
 .I interface\-ip
 .RS
@@ -1197,6 +1223,22 @@ This option doesn't utilize a lot of CPU resources but forbids run-time
 changing of
 .I sync\-handler\-arguments
 and hook file paths.
+
+Is not set by default.
+.RE
+
+.B \-\-add\-permitted\-hook\-files
+.I [hook\-path0,[hook\-path1[,...]]]
+.RS
+.B [Requires \-\-add\-permitted\-hook\-files]
+
+Adds paths to the list of permitted hook paths to bypass
+.B \-\-check\-execvp\-arguments
+checks. It may be required if you're going to change the hooks in run-time
+using
+.B \-\-custom\-signals
+or
+.BR \-\-socket .
 
 Is not set by default.
 .RE

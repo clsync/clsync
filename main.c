@@ -86,6 +86,7 @@ static const struct option long_options[] =
 #ifdef CAPABILITIES_SUPPORT
 	{"thread-splitting",	optional_argument,	NULL,	THREADSPLITTING},
 	{"check-execvp-args",	optional_argument,	NULL,	CHECK_EXECVP_ARGS},
+	{"add-permitted-hook-files",required_argument,	NULL,	ADDPERMITTEDHOOKFILES},
 #endif
 #ifdef GETMNTENT_SUPPORT
 	{"mountpoints",		optional_argument,	NULL,	MOUNTPOINTS},
@@ -806,6 +807,50 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			}
 			ctx_p->flags[DETACH_NETWORK] = detachnetwork_way;
 
+			break;
+		}
+#endif
+#ifdef CAPABILITIES_SUPPORT
+		case ADDPERMITTEDHOOKFILES: {
+			char *ptr;
+			if (paramsource == PS_CONTROL) {
+				warning("Cannot change \"add-permitted-hook-files\" in run-time. Ignoring.");
+				return 0;
+			}
+
+			while (ctx_p->permitted_hookfiles)
+				free(ctx_p->permitted_hookfile[--ctx_p->permitted_hookfiles]);
+
+			ptr = arg;
+			while (1) {
+				char *end = strchr(ptr, ',');
+
+				if (end != NULL)
+					*end =  0;
+
+				if (!*ptr) {
+					while (ctx_p->permitted_hookfiles)
+						free(ctx_p->permitted_hookfile[--ctx_p->permitted_hookfiles]);
+
+					if (end != NULL)
+						ptr = &end[1];
+					continue;
+				}
+
+				if (ctx_p->permitted_hookfiles >= MAXPERMITTEDHOOKFILES) {
+					errno = EINVAL;
+					error("Too many permitted hook files");
+					return errno;
+				}
+
+				ctx_p->permitted_hookfile[ctx_p->permitted_hookfiles++] = strdup(ptr);
+
+				if (end == NULL)
+					break;
+
+				*end = ',';
+				ptr = &end[1];
+			}
 			break;
 		}
 #endif
@@ -2197,7 +2242,7 @@ int main(int argc, char *argv[]) {
 		struct mntent *ent;
 		FILE *ent_f;
 
-		ent_f = NULL;	// Anti-warning, gcc-4.8.2
+		ent_f = NULL;
 		if (ctx_p->mountpoints) {
 			// Openning the file with mount list
 			ent_f = setmntent("/proc/mounts", "r");

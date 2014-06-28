@@ -110,6 +110,8 @@ struct pa_options {
 	char *label;
 	char *exithookfile;
 	char *preexithookfile;
+	char *permitted_hookfile[MAXPERMITTEDHOOKFILES+1];
+	int   permitted_hookfiles;
 };
 
 FTS *(*privileged_fts_open)		(
@@ -288,8 +290,10 @@ int privileged_execvp_check_arguments(struct pa_options *opts, const char *u_fil
 	if (a_i < SHARGS_MAX)
 		return 0;
 
-	if ((opts->exithookfile != NULL) || (opts->preexithookfile != NULL))
-		if (u_argc == 2) {
+	if (u_argc == 2) {
+		int i;
+
+		if ((opts->exithookfile != NULL) || (opts->preexithookfile != NULL)) {
 			if (!strcmp(opts->label, u_argv[1])) {
 				if (opts->exithookfile != NULL)
 					if (!strcmp(opts->exithookfile,    u_file))
@@ -299,6 +303,13 @@ int privileged_execvp_check_arguments(struct pa_options *opts, const char *u_fil
 						return 0;
 			}
 		}
+
+		while (i < opts->permitted_hookfiles) {
+			if (!strcmp(opts->permitted_hookfile[i], u_file))
+				return 0;
+			i++;
+		}
+	}
 
 	critical("Arguments are wrong. This should happend only on hacking attack.");
 	return EPERM;
@@ -349,6 +360,16 @@ int pa_setup(struct pa_options *opts, ctx_t *ctx_p, uid_t *exec_uid_p, gid_t *ex
 	if (ctx_p->preexithookfile != NULL)
 		opts->preexithookfile = strdup(ctx_p->preexithookfile);
 
+	{
+		int i = 0;
+
+		while (i < ctx_p->permitted_hookfiles) {
+			opts->permitted_hookfile[i] = strdup(ctx_p->permitted_hookfile[i]);
+			i++;
+		}
+		opts->permitted_hookfile[i] = NULL;
+		opts->permitted_hookfiles   = i;
+	}
 	return 0;
 }
 
