@@ -19,3 +19,25 @@
 
 extern int pivot_root(const char *new_root, const char *old_root);
 
+static inline ssize_t read_inf(int fd, void *buf, size_t count) {
+	ssize_t ret;
+
+	errno = 0;
+	do {
+		ret = read(fd, buf, count);
+	} while ((ret == -1) && (errno == EINTR));
+
+	return ret;
+}
+
+static inline ssize_t write_inf(int fd, const void *buf, size_t count) {
+	ssize_t ret;
+
+	errno = 0;
+	do {
+		ret = write(fd, buf, count);
+	} while ((ret == -1) && (errno == EINTR));
+
+	return ret;
+}
+

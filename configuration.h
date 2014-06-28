@@ -155,3 +155,5 @@ filesz:1M\n\
 #define DEFAULT_GID			65534
 #define DEFAULT_CAPS_INHERIT		CI_EMPTY
 
+//#define READWRITE_SIGNALLING
+

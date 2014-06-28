@@ -20,6 +20,7 @@
 #include "common.h"			// ctx.h
 #include "ctx.h"			// ctx_t
 #include "error.h"			// debug()
+#include "syscalls.h"			// read_inf()/write_inf()
 
 #ifdef CAPABILITIES_SUPPORT
 #	include <pthread.h>		// pthread_create()
@@ -49,6 +50,13 @@ pthread_mutex_t	pthread_mutex_runner          = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t	pthread_cond_privileged       = PTHREAD_COND_INITIALIZER;
 pthread_cond_t	pthread_cond_action           = PTHREAD_COND_INITIALIZER;
 pthread_cond_t	pthread_cond_runner           = PTHREAD_COND_INITIALIZER;
+
+#ifdef READWRITE_SIGNALLING
+int priv_read_fd;
+int priv_write_fd;
+int nonp_read_fd;
+int nonp_write_fd;
+#endif
 
 enum privileged_action {
 	PA_UNKNOWN = 0,
@@ -326,6 +334,7 @@ int privileged_execvp_check_arguments(struct pa_options *opts, const char *u_fil
 			}
 		}
 
+		i = 0;
 		while (i < opts->permitted_hookfiles) {
 			if (!strcmp(opts->permitted_hookfile[i], u_file))
 				return 0;
@@ -398,6 +407,9 @@ int pa_setup(struct pa_options *opts, ctx_t *ctx_p, uid_t *exec_uid_p, gid_t *ex
 static int privileged_handler_running = 1;
 void *privileged_handler(void *_ctx_p)
 {
+#ifdef READWRITE_SIGNALLING
+	char buf[1] = {0};
+#endif
 	int setup = 0;
 	ctx_t *ctx_p = _ctx_p;
 	uid_t exec_uid = 65535;
@@ -421,10 +433,18 @@ void *privileged_handler(void *_ctx_p)
 	debug(2, "Running the loop");
 	while (privileged_handler_running) {
 		// Waiting for command
+#ifdef _DEBUG_FORCE
 		debug(3, "Waiting for command", cmd.action);
+#endif
+#ifdef READWRITE_SIGNALLING
+		read_inf(priv_read_fd, buf, 1);
+#else
 		pthread_cond_wait(&pthread_cond_privileged, &pthread_mutex_privileged);
+#endif
 
+#ifdef _DEBUG_FORCE
 		debug(3, "Got command %u", cmd.action);
+#endif
 
 		if (!setup && cmd.action != PA_SETUP)
 			critical("A try to use commands before PA_SETUP");
@@ -501,10 +521,16 @@ void *privileged_handler(void *_ctx_p)
 		}
 
 		cmd._errno = errno;
+#ifdef _DEBUG_FORCE
 		debug(3, "Result: %p, errno: %u. Sending the signal to non-privileged thread.", cmd.ret, cmd._errno);
+#endif
+#ifdef READWRITE_SIGNALLING
+		write_inf(nonp_write_fd, buf, 1);
+#else
 		pthread_mutex_lock(&pthread_mutex_action_signal);
 		pthread_mutex_unlock(&pthread_mutex_action_signal);
 		pthread_cond_signal(&pthread_cond_action);
+#endif
 	}
 
 	pthread_mutex_unlock(&pthread_mutex_privileged);
@@ -512,39 +538,62 @@ void *privileged_handler(void *_ctx_p)
 	return 0;
 }
 
-int privileged_action(
+static inline int privileged_action(
 		enum privileged_action action,
 		void *arg,
 		void **ret_p
 	)
 {
+#ifdef READWRITE_SIGNALLING
+	char buf[1] = {0};
+#endif
+#ifdef _DEBUG_FORCE
 	debug(3, "(%u, %p, %p)", action, arg, ret_p);
+#endif
 
 	pthread_mutex_lock(&pthread_mutex_action_entrance);
+#ifndef READWRITE_SIGNALLING
 	pthread_mutex_lock(&pthread_mutex_action_signal);
 
 	debug(4, "Waiting the privileged thread to get prepared for signal");
 	pthread_mutex_lock(&pthread_mutex_privileged);
 	pthread_mutex_unlock(&pthread_mutex_privileged);
-
+#endif
 	if (!privileged_handler_running) {
 		debug(1, "The privileged thread is dead. Ignoring the command.");
 		return ENOENT;
 	}
 
+#ifdef _DEBUG_FORCE
 	debug(4, "Sending information to the privileged thread");
+#endif
 	cmd.action = action;
 	cmd.arg    = arg;
+#ifdef READWRITE_SIGNALLING
+	write_inf(priv_write_fd, buf, 1);
+#else
 	pthread_cond_signal(&pthread_cond_privileged);
+#endif
 
+#ifdef _DEBUG_FORCE
 	debug(4, "Waiting for the answer");
+#endif
+#ifdef READWRITE_SIGNALLING
+	read_inf(nonp_read_fd, buf, 1);
+#else
 	pthread_cond_wait  (&pthread_cond_action, &pthread_mutex_action_signal);
+#endif
+
 	if (ret_p != NULL)
 		*ret_p = cmd.ret;
 	errno = cmd._errno;
 
+#ifdef _DEBUG_FORCE
 	debug(4, "Unlocking pthread_mutex_action_*");
+#endif
+#ifndef READWRITE_SIGNALLING
 	pthread_mutex_unlock(&pthread_mutex_action_signal);
+#endif
 	pthread_mutex_unlock(&pthread_mutex_action_entrance);
 
 	return 0;
@@ -677,7 +726,9 @@ int _privileged_fork_execvp(const char *file, char *const argv[])
 
 int privileged_init(ctx_t *ctx_p)
 {
+#ifdef READWRITE_SIGNALLING
 	int pipefds[2];
+#endif
 
 #ifdef CAPABILITIES_SUPPORT
 	if (!ctx_p->flags[THREADSPLITTING]) {
@@ -725,17 +776,25 @@ int privileged_init(ctx_t *ctx_p)
 	SAFE ( pthread_cond_init (&pthread_cond_action,		NULL),	return errno;);
 	SAFE ( pthread_cond_init (&pthread_cond_runner,		NULL),	return errno;);
 
+#ifdef READWRITE_SIGNALLING
 	SAFE ( pipe2(pipefds, O_CLOEXEC), 				return errno;);
+	priv_read_fd  = pipefds[0];
+	priv_write_fd = pipefds[1];
+
+	SAFE ( pipe2(pipefds, O_CLOEXEC), 				return errno;);
+	nonp_read_fd  = pipefds[0];
+	nonp_write_fd = pipefds[1];
+#endif
 
 	SAFE ( pthread_mutex_lock(&pthread_mutex_runner),		return errno;);
 
 	SAFE ( pthread_create(&pthread_thread, NULL, (void *(*)(void *))privileged_handler, ctx_p), return errno);
 
 	if (ctx_p->flags[DETACH_NETWORK] == DN_NONPRIVILEGED) {
-		cap_enable(CAP_TO_MASK(CAP_SYS_ADMIN));
-		SAFE (unshare(CLONE_NEWNET), return errno);
+		SAFE ( cap_enable(CAP_TO_MASK(CAP_SYS_ADMIN)),	return errno; );
+		SAFE ( unshare(CLONE_NEWNET),			return errno; );
 	}
-	cap_drop(ctx_p, 0);
+	SAFE ( cap_drop(ctx_p, 0),				return errno; );
 
 	debug(4, "Waiting for the privileged thread to get prepared");
 	pthread_cond_wait(&pthread_cond_runner, &pthread_mutex_runner);
