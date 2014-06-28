@@ -137,6 +137,28 @@ int (*privileged_inotify_rm_watch)	(
 	);
 
 
+int cap_enable(__u32 caps) {
+	debug(1, "Enabling Linux capabilities 0x%x", caps);
+	struct __user_cap_header_struct	cap_hdr = {0};
+	struct __user_cap_data_struct	cap_dat = {0};
+
+	cap_hdr.version = _LINUX_CAPABILITY_VERSION;
+	if (capget(&cap_hdr, &cap_dat) < 0) {
+		error("Cannot get capabilites with capget()");
+		return errno;
+	}
+
+	debug(3, "old: cap.eff == 0x%04x; new: cap.eff == 0x%04x", cap_dat.effective, cap_dat.effective|caps);
+	cap_dat.effective |= caps;
+
+	if (capset(&cap_hdr, &cap_dat) < 0) {
+		error("Cannot set capabilities with capset().");
+		return errno;
+	}
+
+	return 0;
+}
+
 int cap_drop(ctx_t *ctx_p, __u32 caps) {
 	debug(1, "Dropping all Linux capabilites but 0x%x", caps);
 
@@ -733,11 +755,13 @@ int privileged_init(ctx_t *ctx_p)
 		error("Cannot pthread_create().");
 		return errno;
 	}
-	if (ctx_p->flags[DETACH_NETWORK] == DN_NONPRIVILEGED)
+	if (ctx_p->flags[DETACH_NETWORK] == DN_NONPRIVILEGED) {
+		cap_enable(CAP_TO_MASK(CAP_SYS_ADMIN));
 		if (unshare(CLONE_NEWNET)) {
 			error("Got error from unshare(CLONE_NEWNET)");
 			return errno;
 		}
+	}
 	cap_drop(ctx_p, 0);
 
 	debug(4, "Waiting for the privileged thread to get prepared");

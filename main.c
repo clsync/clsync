@@ -2256,7 +2256,7 @@ int main(int argc, char *argv[]) {
 #ifdef UNSHARE_SUPPORT
 #define unshare_wrapper(a) \
 		if (unshare(a)) {\
-			error("Got error from unshare("XTOSTR(a)")");\
+			error("Got error from unshare("TOSTR(a)")");\
 			ret = errno;\
 		}
 		if (ctx_p->flags[DETACH_MISCELLANEA]) {
