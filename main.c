@@ -768,6 +768,11 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 				warning("Cannot change \"chroot\" in run-time. Ignoring.");
 				return 0;
 			}
+			if (!*arg) {
+				ctx_p->flags_set[param_id] = 0;
+				return 0;
+			}
+
 			ctx_p->chroot_dir	= arg;
 			break;
 #ifdef PIVOTROOT_OPT_SUPPORT
