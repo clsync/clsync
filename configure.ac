@@ -87,10 +87,20 @@ AM_CONDITIONAL([LIBCLSYNC], [test "x$enable_socket_library" = "xyes"])
 dnl --enable-debug
 AC_ARG_ENABLE(debug,
 AS_HELP_STRING(--enable-debug,
-[enable debugging, default: no]))
+[enable debugging support, default: yes; value: no, yes, force]),
+[case "${enableval}" in
+	(0|"no")    debug=0 ;;
+	(1|"yes")   debug=1 ;;
+	(2|"force") debug=2 ;;
+	(*)         AC_MSG_ERROR([bad value ${enableval} for --enable-debug]) ;;
+esac],
+[debug=1])
 
-AS_IF([test "x$enable_debug" = "xyes"],
-[CFLAGS="${CFLAGS} -pipe -Wall -O0 -ggdb3" CPPFLAGS="${CPPFLAGS} -D_DEBUG"])
+AS_IF([ test "$debug" -ge 1 ],
+[CFLAGS="${CFLAGS} -pipe -Wall -O0 -ggdb3" CPPFLAGS="${CPPFLAGS} -D_DEBUG_SUPPORT"])
+
+AS_IF([ test "$debug" -ge 2 ],
+[CPPFLAGS="${CPPFLAGS} -D_DEBUG_FORCE"])
 
 dnl --paranoid
 AC_ARG_ENABLE(paranoid,
@@ -100,7 +110,7 @@ AS_HELP_STRING([--enable-paranoid],
 	(0|"no")    paranoid=0 ;;
 	(1|"yes")   paranoid=1 ;;
 	(2)         paranoid=2 ;;
-	(*)         AC_MSG_ERROR([bad value ${enableval} for --paranoid]) ;;
+	(*)         AC_MSG_ERROR([bad value ${enableval} for --enable-paranoid]) ;;
 esac],
 [paranoid=1])
 

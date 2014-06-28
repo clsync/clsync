@@ -167,7 +167,7 @@ ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rul
 	rule_t *rule_p = rules_p;
 	mode_t ftype = st_mode & S_IFMT;
 
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 	debug(3, "Rules (p == %p):", rules_p);
 	i=0;
 	do {
@@ -625,7 +625,7 @@ static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode ) {
 	int err=0;
 	threadinfo_p->exitcode = exitcode;
 
-#if _DEBUG | VERYPARANOID
+#if _DEBUG_FORCE | VERYPARANOID
 	if (threadinfo_p->pthread != pthread_self()) {
 		error("pthread id mismatch! (i_p->p) %p != (p) %p""", threadinfo_p->pthread, pthread_self() );
 		return EINVAL;
@@ -953,7 +953,7 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 		argv_dump(level, argv)
 
 static inline void argv_dump(int debug_level, char **argv) {
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 	debug(19, "(%u, %p)", debug_level, argv);
 #endif
 	char **argv_p = argv;
@@ -1474,7 +1474,7 @@ const char *sync_parameter_get(const char *variable_name, void *_dosync_arg_p) {
 	struct dosync_arg *dosync_arg_p = _dosync_arg_p;
 	ctx_t *ctx_p = dosync_arg_p->ctx_p;
 
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 	debug(15, "(\"%s\", %p): 0x%x", variable_name, _dosync_arg_p, ctx_p == NULL ? 0 : ctx_p->synchandler_argf);
 #endif
 
@@ -1505,12 +1505,12 @@ static char **sync_customargv(ctx_t *ctx_p, struct dosync_arg *dosync_arg_p, syn
 		char *arg        = args_p->v[s];
 		char  isexpanded = args_p->isexpanded[s];
 		s++;
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 		debug(30, "\"%s\" [%p]", arg, arg);
 #endif
 
 		if (isexpanded) {
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 			debug(19, "\"%s\" [%p] is already expanded, just strdup()-ing it", arg, arg);
 #endif
 			argv[d++] = strdup(arg);
@@ -1520,7 +1520,7 @@ static char **sync_customargv(ctx_t *ctx_p, struct dosync_arg *dosync_arg_p, syn
 		if (!strcmp(arg, "%INCLUDE-LIST%")) {
 			int i = 0,              e = dosync_arg_p->include_list_count;
 			const char **include_list = dosync_arg_p->include_list;
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 			debug(19, "INCLUDE-LIST: e == %u; d,s: %u,%u", e, d, s);
 #endif
 			while (i < e) {
@@ -1531,7 +1531,7 @@ static char **sync_customargv(ctx_t *ctx_p, struct dosync_arg *dosync_arg_p, syn
 				}
 #endif
 				argv[d++] = parameter_expand(ctx_p, strdup(include_list[i++]), 0, NULL, NULL, sync_parameter_get, dosync_arg_p);
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 				debug(19, "include-list: argv[%u] == %p", d-1, argv[d-1]);
 #endif
 			}
@@ -1546,14 +1546,14 @@ static char **sync_customargv(ctx_t *ctx_p, struct dosync_arg *dosync_arg_p, syn
 #endif
 
 		argv[d] = parameter_expand(ctx_p, strdup(arg), 0, NULL, NULL, sync_parameter_get, dosync_arg_p);
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 		debug(19, "argv[%u] == %p \"%s\"", d, argv[d], argv[d]);
 #endif
 		d++;
 	}
 	argv[d]   = NULL;
 
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 	debug(18, "return %p", argv);
 #endif
 	return argv;
@@ -1561,7 +1561,7 @@ static char **sync_customargv(ctx_t *ctx_p, struct dosync_arg *dosync_arg_p, syn
 
 static void argv_free(char **argv) {
 	char **argv_p;
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 	debug(18, "(%p)", argv);
 #endif
 #ifdef VERYPARANOID
@@ -1570,7 +1570,7 @@ static void argv_free(char **argv) {
 #endif
 	argv_p = argv;
 	while (*argv_p != NULL) {
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 		debug(25, "free(%p)", *argv_p);
 #endif
 		free(*(argv_p++));

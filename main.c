@@ -527,7 +527,7 @@ static inline int synchandler_arg(char *arg, size_t arg_len, void *_ctx_p, enum 
 		return errno;
 	}
 
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 	debug(14, "ctx_p->synchandler_args[%u].v[%u] = %p", shargsid, ctx_p->synchandler_args[shargsid].c, arg);
 #endif
 	ctx_p->synchandler_args[shargsid].v[ctx_p->synchandler_args[shargsid].c++] = arg;
@@ -562,7 +562,7 @@ int parse_customsignals(ctx_t *ctx_p, char *arg) {
 						}
 						i++;
 					}
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 					fprintf(stderr, "Force-Debug: parse_parameter(): Reset custom signals.\n");
 #endif
 				} else {
@@ -598,7 +598,7 @@ int parse_customsignals(ctx_t *ctx_p, char *arg) {
 						ch = *end; *end = 0;
 						ctx_p->customsignal[signal] = strdup(ptr);
 						*end = ch;
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 						fprintf(stderr, "Force-Debug: parse_parameter(): Adding custom signal %u.\n", signal);
 #endif
 						ptr = end;
@@ -619,7 +619,7 @@ int parse_customsignals(ctx_t *ctx_p, char *arg) {
 }
 
 int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t paramsource) {
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 	fprintf(stderr, "Force-Debug: parse_parameter(): %i: %i = \"%s\"\n", paramsource, param_id, arg);
 #endif
 	switch (paramsource) {
@@ -1080,12 +1080,12 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 							int i = 0;
 							while (i < 256)
 								ctx_p->isignoredexitcode[i++] = 0;
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 							fprintf(stderr, "Force-Debug: parse_parameter(): Reset ignored exitcodes.\n");
 #endif
 						} else {
 							ctx_p->isignoredexitcode[exitcode] = 1;
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 							fprintf(stderr, "Force-Debug: parse_parameter(): Adding ignored exitcode %u.\n", exitcode);
 #endif
 						}
@@ -1243,7 +1243,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 				ctx_p->flags[param_id]++;
 			else
 				ctx_p->flags[param_id] = atoi(arg);
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 			fprintf(stderr, "Force-Debug: flag %i is set to %i\n", param_id&0xff, ctx_p->flags[param_id]);
 #endif
 			break;
@@ -1275,7 +1275,7 @@ int arguments_parse(int argc, char *argv[], struct ctx *ctx_p) {
 		lo_ptr++;
 	}
 	*optstring_ptr = 0;
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 	fprintf(stderr, "Force-Debug: %s\n", optstring);
 #endif
 
@@ -1560,7 +1560,7 @@ int ctx_check(ctx_t *ctx_p) {
 		ctx_p->cluster_mcastipaddr = DEFAULT_CLUSTERIPADDR;
 
 	if (ctx_p->cluster_iface != NULL) {
-#ifndef _DEBUG
+#ifndef _DEBUG_FORCE
 		ret = errno = EINVAL;
 		error("Cluster subsystem is not implemented, yet. Sorry.");
 #endif
@@ -1765,7 +1765,7 @@ void ctx_cleanup(ctx_t *ctx_p) {
 		while (n < SHARGS_MAX) {
 			int i = 0,  e = ctx_p->synchandler_args[n].c;
 			while (i < e) {
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 				debug(14, "synchandler args: %u, %u: free(%p)", n, i, ctx_p->synchandler_args[n].v[i]);
 #endif
 				free(ctx_p->synchandler_args[n].v[i]);
@@ -2021,7 +2021,7 @@ l_parse_rules_fromfile_end:
 	rules[i].perm   = DEFAULT_RULES_PERM;
 
 	g_hash_table_destroy(autowrules_ht);
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 	debug(3, "Total (p == %p):", rules);
 	i=0;
 	do {
