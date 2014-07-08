@@ -34,10 +34,15 @@ extern void _warning(const char *const function_name, const char *fmt, ...);
 extern void _info(const char *const function_name, const char *fmt, ...);
 #define info(...) 				_info(__FUNCTION__, __VA_ARGS__)
 
-extern void _debug(int debug_level, const char *const function_name, const char *fmt, ...);
-#define debug(debug_level, ...)			_debug(debug_level, __FUNCTION__, __VA_ARGS__)
+#ifdef _DEBUG_SUPPORT
+	extern void _debug(int debug_level, const char *const function_name, const char *fmt, ...);
+#	define debug(debug_level, ...)			_debug(debug_level, __FUNCTION__, __VA_ARGS__)
+#	define error_or_debug(debug_level, ...)		((debug_level)<0 ? _error(__FUNCTION__, __VA_ARGS__) : _debug(debug_level, __FUNCTION__, __VA_ARGS__))
+#else
+#	define debug(debug_level, ...)			{}
+#	define error_or_debug(debug_level, ...)		((debug_level)<0 ? _error(__FUNCTION__, __VA_ARGS__) : (void)0)
+#endif
 
-#define error_or_debug(debug_level, ...)	((debug_level)<0 ? _error(__FUNCTION__, __VA_ARGS__) : _debug(debug_level, __FUNCTION__, __VA_ARGS__))
 
 extern void error_init(void *_outputmethod, int *_quiet, int *_verbose, int *_debug);
 

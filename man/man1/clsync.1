@@ -186,7 +186,7 @@ Use configuration block with name
 (see 
 .BR "CONFIGURATION FILE" ).
 
-Default value is "default".
+The default value is "default".
 .PP
 .RE
 
@@ -204,7 +204,7 @@ Options from
 will be inherited to
 .IR config\-block\-name .
 
-Default value is "default".
+The default value is "default".
 .PP
 .RE
 
@@ -229,7 +229,7 @@ And clsync will use options from config block "debug" on signal 29 and
 
 To reset all custom signals use the 0-th signal (e.g. "\-\-custom\-signals=0").
 
-Default value is "".
+The default value is "".
 .PP
 .RE
 
@@ -264,6 +264,12 @@ processing initial syncing
 .RS
 waiting for events or syncing
 .RE
+.IR "synchandler error"
+.RS
+waiting between synchandler execution tries (after a failure) [is used only
+while 
+.BR \-\-threading =off]
+.RE
 .IR rehashing
 .RS
 reloading configuration files
@@ -294,54 +300,6 @@ Is not set by default.
 .PP
 .RE
 
-.B \-u, \-\-uid
-.I uid
-.RS
-Drop user privileges to uid
-.I uid
-with
-.BR setuid (2)
-
-Is not set by default.
-.PP
-.RE
-
-.B \-g, \-\-gid
-.I gid
-.RS
-Drop group privileges to gid
-.I gid
-with
-.BR setgid (2)
-
-Is not set by default.
-.PP
-.RE
-
-.B \-C, \-\-preserve\-file\-access
-.RS
-.B [Linux only]
-
-Use
-.BR capset (2)
-and
-.BR prctl (2)
-to preserve "CAP_DAC_READ_SEARCH" [see 
-.BR capabilities (7)]
-Linux capability. This allows to preserve full FS read access after dropping
-privilegies using
-.BR setuid (2)
-and
-.BR setgid (2)
-[see
-.B \-\-uid
-and
-.BR \-\-gid ]
-
-Is not set by default.
-.PP
-.RE
-
 .B \-r, \-\-retries
 .I "number-of-tries"
 .RS
@@ -359,7 +317,7 @@ Delay between tries is equal to
 .I \-\-delay\-sync
 value.
 
-Default value is "1".
+The default value is "1".
 .RE
 
 .B \-\-ignore\-failures
@@ -432,7 +390,7 @@ you may catch a bug due to nonatomicity of rsync's file replace operation.
 (see
 .BR DIAGNOSTICS )
 
-Default value is "off".
+The default value is "off".
 .RE
 
 .B \-Y, \-\-output
@@ -449,7 +407,7 @@ Possible values:
 .I syslog
 .RE
 
-Default value is "stderr".
+The default value is "stderr".
 .RE
 
 .B \-\-one\-file\-system
@@ -483,8 +441,34 @@ syscalls on every dir and can reduce performance.
 Is not set by default.
 .RE
 
+.B \-\-socket
+.I socket\-path
+.RS
+Create a control socket by path
+.IR socket\-path .
 
-.PP
+This's very experimental feature.
+
+Is not set by default.
+.RE
+
+.B \-\-socket\-own
+.I socket\-owner\-user[:socket\-owner\-group]
+.RS
+Sets the control socket owner user (and group).
+
+Is not set by default
+.RE
+
+.B \-\-socket\-mod
+.I socket\-mode
+.RS
+Sets the control socket mode [see 
+.BR chmod (2)].
+
+Is not set by default.
+.RE
+
 .B \-c, \-\-cluster\-iface
 .I interface\-ip
 .RS
@@ -522,7 +506,7 @@ This option can be used only in conjunction with
 
 Use IP-addresses from 224.0.0.0/4 for this option.
 
-Default value is "227.108.115.121". [(128+"c")."l"."s"."y"]
+The default value is "227.108.115.121". [(128+"c")."l"."s"."y"]
 .RE
 
 .PP
@@ -539,7 +523,7 @@ This option can be used only in conjunction with
 .I multicast\-port
 should be greater than 0 and less than 65535.
 
-Default value is "40079". [("n" << 8) + "c"]
+The default value is "40079". [("n" << 8) + "c"]
 .RE
 
 .PP
@@ -551,7 +535,7 @@ Default value is "40079". [("n" << 8) + "c"]
 Sets timeout (in milliseconds) of waiting answer from another nodes of the
 cluster. If there's no answer from some node, it will be excluded.
 
-Default value is "1000". [1 second]
+The default value is "1000". [1 second]
 .RE
 
 .PP
@@ -564,7 +548,7 @@ Sets the name of current node in the cluster. It will be used in action
 scripts of another nodes (see 
 .BR "SYNC HANDLER MODES" ).
 
-Default value is $(uname \-n).
+The default value is $(uname \-n).
 .RE
 
 .PP
@@ -574,7 +558,7 @@ Default value is $(uname \-n).
 Sets minimal directory level for ctime hashing (see
 .BR CLUSTERING ).
 
-Default value is "1".
+The default value is "1".
 .RE
 
 .PP
@@ -586,7 +570,7 @@ Default value is "1".
 Sets maximal directory level for ctime hashing (see
 .BR CLUSTERING ).
 
-Default value is "16".
+The default value is "16".
 .RE
 
 .PP
@@ -598,7 +582,7 @@ Default value is "16".
 Sets maximal directory level for ctime scanning (see
 .BR CLUSTERING ).
 
-Default value is "32".
+The default value is "32".
 .RE
 
 .PP
@@ -631,7 +615,7 @@ set to n means that only initial sync and (n-1) sync-ups after that will be done
 Hint: This option may be useful in conjunction with \-\-exit\-on\-no\-events
 to prevent infinite sync-up processes.
 
-Default value is "0".
+The default value is "0".
 .RE
 
 .PP
@@ -646,7 +630,7 @@ seconds.
 
 Set "0" to disable the timeout.
 
-Default value is "86400" ["24 hours"].
+The default value is "86400" ["24 hours"].
 .RE
 
 .PP
@@ -655,7 +639,7 @@ Default value is "86400" ["24 hours"].
 .RS
 Sets the minimal delay (in seconds) between syncs.
 
-Default value is "30".
+The default value is "30".
 .RE
 
 .PP
@@ -665,7 +649,7 @@ Default value is "30".
 Sets the delay (in seconds) to collect events about ordinary files and
 directories.
 
-Default value is "30".
+The default value is "30".
 .RE
 
 .PP
@@ -675,7 +659,7 @@ Default value is "30".
 Sets the delay (in seconds) to collect events about "big files" (see
 .IR \-\-threshold\-bigfile ).
 
-Default value is "1800".
+The default value is "1800".
 .RE
 
 .PP
@@ -687,7 +671,7 @@ Sets file size threshold (in bytes) that separates ordinary files from
 separate collecting delay. This is supposed to be used as a means of unloading
 IO resources.
 
-Default value is "134217728" ["128 MiB"].
+The default value is "134217728" ["128 MiB"].
 .RE
 
 .PP
@@ -749,7 +733,7 @@ splits that list with approximately
 lines per list if it's too big, and executes by one rsync instance per list
 part. Use value "0" to disable the limit.
 
-Default value is "20000".
+The default value is "20000".
 .RE
 
 .PP
@@ -1025,7 +1009,7 @@ will be passed to
 .I sync\-handler
 every execution.
 
-Default value is "nolabel".
+The default value is "nolabel".
 .RE
 
 .PP
@@ -1040,6 +1024,354 @@ Is not set by default.
 .B \-V, \-\-version
 .RS
 Outputs clsync version and exits with exitcode "0".
+
+Is not set by default.
+.RE
+
+.SH SECURITY OPTIONS
+
+.B \-u, \-\-uid
+.I uid
+.RS
+Drop user privileges to uid
+.I uid
+with
+.BR setuid (2)
+
+If there's a
+.BR capabilities (7)
+support then the default value is "nobody" (or "65534" if "nobody" not found), otherwise the option is not set by default;
+.PP
+.RE
+
+.B \-g, \-\-gid
+.I gid
+.RS
+Drop group privileges to gid
+.I gid
+with
+.BR setgid (2)
+
+If there's a
+.BR capabilities (7)
+support then the default value is "nogroup" (or "65534" if "nogroup" not found), otherwise the option is not set by default;
+.PP
+.RE
+
+.B \-\-sync\-handler\-uid
+.I sync\-handler\-uid
+.RS
+An user ID to be used for
+.IR sync\-handler .
+
+See
+.BR \-\-preserve\-capabilities .
+
+The default value is "$UID".
+.PP
+.RE
+
+.B \-\-sync\-handler\-gid
+.I sync\-handler\-gid
+.RS
+A group ID to be used for
+.IR sync\-handler .
+
+See
+.BR \-\-preserve\-capabilities .
+
+The default value is "$GID".
+.PP
+.RE
+
+
+.B \-C, \-\-preserve\-capabilities
+.I capabilities\-list
+.RS
+.B [Linux only, requires capabilities]
+
+Use
+.BR capset (2)
+and
+.BR prctl (2)
+to preserve "CAP_DAC_READ_SEARCH", "CAP_SETUID" or/and "CAP_SETGID" [see 
+.BR capabilities (7)]
+Linux capability for thread using
+.BR fts "(3), " inotify "(7) and " execve "(2)."
+This allows to preserve enough FS privileges to watch a file tree and execute
+the
+.I sync\-handler
+with required uid and gid [see 
+.B \-\-sync\-handler\-uid
+and
+.BR \-\-sync\-handler\-gid ]
+after dropping privileges via
+.BR setuid "(2) and " setgid "(2)"
+[see
+.B \-\-uid
+and
+.BR \-\-gid ]
+
+Possible values:
+.RS
+.B CAP_DAC_READ_SEARCH
+.RS
+To bypass FS read checks (for
+.BR fts " and " inotify ).
+.RE
+.B CAP_SETUID
+.RS
+To be able to use
+.BR setuid (2)
+before
+.BR execve (2)
+on the
+.BR sync\-handler .
+.RE
+.B CAP_SETGID
+.RS
+To be able to use
+.BR setgid (2)
+before
+.BR execve (2)
+on the
+.BR sync\-handler .
+.RE
+.B CAP_KILL
+.RS
+To be able to kill setuid()-ed processes
+.RE
+.br
+
+.br
+Any combinations of this values are also supported. The list may be presented
+as a comma separated values, like:
+.RS
+CAP_DAC_READ_SEARCH,CAP_SETUID,CAP_SETGID
+.RE
+.RE
+
+The default value is "CAP_DAC_READ_SEARCH,CAP_SETUID,CAP_SETGID,CAP_KILL" if the
+.B clsync
+runner have such privileges.
+.PP
+.RE
+
+.B \-\-inherit\-capabilities
+.RS
+.B [Linux only, requires capabilities]
+
+Sets a mode for capabilities inheriting.
+
+Possible values:
+.RS
+.B permitted
+.RS
+Inherits all permitted capabilities
+.RE
+.B dont-touch
+.RS
+Don't change inheritable capabilities set
+.RE
+.B clsync
+.RS
+Use
+.BR clsync 's
+effective capabilities set
+.RE
+.B empty
+.RS
+Reset all capabilities
+.RE
+.RE
+
+The default value is "empty".
+.RE
+
+.B \-\-thread\-splitting
+.RS
+.B [Linux only, requires capabilities]
+
+Split the main thread to privileged and non-privileged. This's an additional
+way to secure your system from any bug in
+.B clsync
+while running it with capabilities or root privileges. But
+.B clsync
+will utilize in few times more CPU resources. So it's a performance vs
+security trade off.
+
+If you're using this option and running the
+.I sync\-handler
+with the root user then it's highly recommended to enable
+.BR \-\-check\-execvp\-arguments ,
+too. Otherwise in case of
+.B clsync
+security bug a hacker will be able to use execvp() with any arguments
+with root privileges.
+
+Is not set by default.
+.RE
+
+.B \-\-check\-execvp\-arguments
+.RS
+.B [Requires \-\-thread\-splitting]
+
+Enables execvp() arguments recheck in the privileged thread (in case of their
+substitution to any exploit-given arguments).
+
+This option doesn't utilize a lot of CPU resources but forbids run-time
+changing of
+.I sync\-handler\-arguments
+and hook file paths.
+
+Is not set by default.
+.RE
+
+.B \-\-add\-permitted\-hook\-files
+.I [hook\-path0,[hook\-path1[,...]]]
+.RS
+.B [Requires \-\-add\-permitted\-hook\-files]
+
+Adds paths to the list of permitted hook paths to bypass
+.B \-\-check\-execvp\-arguments
+checks. It may be required if you're going to change the hooks in run-time
+using
+.B \-\-custom\-signals
+or
+.BR \-\-socket .
+
+Is not set by default.
+.RE
+
+.B \-\-chroot
+.I chroot\-directory
+.RS
+clsync chroot()\-s [see
+.BR chroot (2)]
+to directory
+.I chroot\-directory
+before any syncing processes.
+
+This option may be used in conjunction with
+.BR \-\-uid ", " \-\-gid
+or/and
+.B \-\-pivot\-root
+for security reasons.
+
+Remember! If you're chroot()\-ing somewhere, the
+.I sync\-handler
+will be limited by the chroot\-environment, too. If you're using rsync then
+you may want to "mount \-\-bind" some directories to the
+.IR chroot\-directory .
+
+Is not set by default.
+.PP
+.RE
+
+.B \-\-pivot\-root
+.I pivot\-root\-way
+.RS
+.B [Linux only, requires \-\-chroot]
+
+Sets a way of using
+.BR pivot_root (2)
+syscall to the
+.I chroot\-directory
+(to
+.BR umount (2)
+old rootfs).
+
+Possible values:
+.RS
+.B auto
+.RS
+Creates a directory "/dev/shm/clsync-rootfs",
+.BR unshare "(2)-ing the mount namespace, " mount (2)-s
+the
+.I chroot\-directory
+to the directory and then
+.BR pivot_root "(2)-ing, " chroot "(2)-ing and " umount (2)-ing
+old rootfs. Directory "/dev/shm/clsync-rootfs" won't be deleted after
+.B clsync
+finish.
+.RE
+.B auto-ro
+.RS
+The same as
+.B auto
+but mounts the directory with read-only option (MS_RDONLY).
+.RE
+.B direct
+.RS
+.BR unshare "(2)-ing the mount namespace, " pivot_root "(2)-ing, " chroot "(2)-ing and " umount (2)-ing
+old rootfs. Directory "old_root" should be created in
+.I chroot\-directory
+before running
+.B clsync
+in this mode.
+.RE
+.B off
+.RS
+Don't
+.BR pivot_root (2).
+.RE
+.RE
+
+The default value is "off". If
+.B \-\-chroot
+is used then recommended value is "auto-ro".
+.RE
+
+.B \-\-mountpoints
+.I [mountpoint[,mountpoint[,mountpoint]]]
+.RS
+.B [Linux only]
+
+Umount (with MNT_DETACH) everything except listed mountpoints.
+
+Supposed to be used for security reasons as an alternative to
+.BR \-\-pivot\-root
+option.
+
+Is not set by default.
+.RE
+
+.B \-\-detach\-network
+.I detach\-network\-mode
+.RS
+.B [Linux only]
+
+Removes network in
+.B clsync
+instance.
+
+Possible values:
+.RS
+.B everywhere
+.RS
+Removes network for all threads.
+.RE
+.B non\-privileged
+.RS
+Removes network from non\-privileged threads if option
+.B \-\-thread\-splitting
+is enabled, otherwise doesn't do anything.
+.RE
+.B off
+.RS
+Don't do anything.
+.RE
+.RE
+
+The default value is "non\-privileged".
+.RE
+
+.B \-\-detach\-miscellanea
+.RS
+.B [Linux only]
+
+.BR unshare (2)
+on everything not listed above.
 
 Is not set by default.
 .RE

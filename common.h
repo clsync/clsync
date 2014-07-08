@@ -125,6 +125,8 @@
 	if (strlen(str) >= limit)\
 		critical("length of "TOSTR(str)" (\"%s\") >= "TOSTR(limit));\
 
+#define SAFE(code, onfail) {if (code) {error("Got error while "TOSTR(code)); onfail;}}
+
 enum paramsource_enum {
 	PS_UNKNOWN	 = 0,
 	PS_ARGUMENT,

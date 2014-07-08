@@ -287,6 +287,7 @@ void _warning(const char *const function_name, const char *fmt, ...) {
 	return;
 }
 
+#ifdef _DEBUG_SUPPORT
 void _debug(int debug_level, const char *const function_name, const char *fmt, ...) {
 	va_list args;
 
@@ -310,6 +311,7 @@ void _debug(int debug_level, const char *const function_name, const char *fmt, .
 	pthread_mutex_unlock(&error_mutex);
 	return;
 }
+#endif
 
 void error_init(void *_outputmethod, int *_quiet, int *_verbose, int *_debug) {
 	outputmethod 	= _outputmethod;
@@ -318,6 +320,7 @@ void error_init(void *_outputmethod, int *_quiet, int *_verbose, int *_debug) {
 	debug		= _debug;
 
 	pthread_mutex_init(&error_mutex, NULL);
+	openlog(NULL, SYSLOG_FLAGS, SYSLOG_FACILITY);
 
 	return;
 }

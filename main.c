@@ -27,8 +27,17 @@
 
 #include "port-hacks.h"
 
-#include <pwd.h>	// For getpwnam()
-#include <grp.h>	// For getgrnam()
+#include <pwd.h>	// getpwnam()
+#include <grp.h>	// getgrnam()
+
+
+#ifdef UNSHARE_SUPPORT
+#	include <sched.h>	// unshare()
+#endif
+#ifdef GETMNTENT_SUPPORT
+#	include <mntent.h>	// getmntent()
+#	include <sys/mount.h>	// umount2()
+#endif
 
 #include "error.h"
 #include "stringex.h"
@@ -37,6 +46,7 @@
 #include "cluster.h"
 #include "fileutils.h"
 #include "socket.h"
+#include "syscalls.h"
 
 //#include "revision.h"
 
@@ -63,8 +73,27 @@ static const struct option long_options[] =
 	{"pid-file",		required_argument,	NULL,	PIDFILE},
 	{"uid",			required_argument,	NULL,	UID},
 	{"gid",			required_argument,	NULL,	GID},
+	{"sync-handler-uid",	required_argument,	NULL,	SYNCHANDLERUID},
+	{"sync-handler-gid",	required_argument,	NULL,	SYNCHANDLERGID},
+	{"chroot",		required_argument,	NULL,	CHROOT},
+#ifdef PIVOTROOT_OPT_SUPPORT
+	{"pivot-root",		required_argument,	NULL,	PIVOT_ROOT},
+#endif
+#ifdef UNSHARE_SUPPORT
+	{"detach-network",	required_argument,	NULL,	DETACH_NETWORK},
+	{"detach-miscellanea",	optional_argument,	NULL,	DETACH_MISCELLANEA},
+#endif
 #ifdef CAPABILITIES_SUPPORT
-	{"preserve-file-access",optional_argument,	NULL,	CAP_PRESERVE_FILEACCESS},
+	{"thread-splitting",	optional_argument,	NULL,	THREADSPLITTING},
+	{"check-execvp-args",	optional_argument,	NULL,	CHECK_EXECVP_ARGS},
+	{"add-permitted-hook-files",required_argument,	NULL,	ADDPERMITTEDHOOKFILES},
+#endif
+#ifdef GETMNTENT_SUPPORT
+	{"mountpoints",		optional_argument,	NULL,	MOUNTPOINTS},
+#endif
+#ifdef CAPABILITIES_SUPPORT
+	{"preserve-capabilities",required_argument,	NULL,	CAP_PRESERVE},
+	{"inherit-capabilities",optional_argument,	NULL,	CAPS_INHERIT},
 #endif
 	{"threading",		required_argument,	NULL,	THREADING},
 	{"retries",		optional_argument,	NULL,	RETRIES},
@@ -115,6 +144,61 @@ static const struct option long_options[] =
 	{NULL,			0,			NULL,	0}
 };
 
+#ifdef UNSHARE_SUPPORT
+static char *const detachnetworkways[] = {
+	[DN_OFF]		= "off",
+	[DN_NONPRIVILEGED]	= "non-privileged",
+	[DN_EVERYWHERE]		= "everywhere",
+	NULL,
+};
+#endif
+
+#ifdef PIVOTROOT_OPT_SUPPORT
+static char *const pivotrootways[] = {
+	[PW_OFF]	= "off",
+	[PW_DIRECT]	= "direct",
+	[PW_AUTO]	= "auto",
+	[PW_AUTORO]	= "auto-ro",
+	NULL,
+};
+#endif
+
+#ifdef CAPABILITIES_SUPPORT
+
+enum x_capabilities {
+	X_CAP_RESET = 0,
+	X_CAP_DAC_READ_SEARCH,
+	X_CAP_SETUID,
+	X_CAP_SETGID,
+	X_CAP_KILL,
+
+	X_CAP_MAX
+};
+__u32 xcap_to_cap[] = {
+	[X_CAP_DAC_READ_SEARCH] = CAP_DAC_READ_SEARCH,
+	[X_CAP_SETUID] 		= CAP_SETUID,
+	[X_CAP_SETGID] 		= CAP_SETGID,
+	[X_CAP_KILL] 		= CAP_KILL,
+};
+static char *const capabilities[] = {
+	[X_CAP_RESET]		= "",
+	[X_CAP_DAC_READ_SEARCH]	= "CAP_DAC_READ_SEARCH",
+	[X_CAP_SETUID]		= "CAP_SETUID",
+	[X_CAP_SETGID]		= "CAP_SETGID",
+	[X_CAP_KILL]		= "CAP_KILL",
+	NULL
+};
+#define XCAP_TO_CAP(x) (xcap_to_cap[x])
+
+static char *const capsinherits[] = {
+	[CI_PERMITTED]		= "permittied",
+	[CI_DONTTOUCH]		= "dont-touch",
+	[CI_CLSYNC]		= "clsync",
+	[CI_EMPTY]		= "empty",
+};
+
+#endif
+
 static char *const socketauth[] = {
 	[SOCKAUTH_UNSET]	= "",
 	[SOCKAUTH_NULL]		= "null",
@@ -162,6 +246,7 @@ static char *const status_descr[] = {
 	[STATE_EXIT]		= "exiting",
 	[STATE_STARTING]	= "starting",
 	[STATE_RUNNING]		= "running",
+	[STATE_SYNCHANDLER_ERR]	= "synchandler error",
 	[STATE_REHASH]		= "rehashing",
 	[STATE_TERM]		= "terminating",
 	[STATE_THREAD_GC]	= "thread gc",
@@ -354,16 +439,21 @@ char *parameter_expand(
 								(*macro_count_p)++;
 
 							nest_searching = 0;
-							if (ptr[1] >= 'A' && ptr[1] <= 'Z' && (exceptionflags&4)) {	// Lazy substitution, preserving the value
+							*ptr_nest = 0;
+							variable_name  = &ptr[1];
+							if (!strcmp(variable_name, "PID")) {
+								if (!*ctx_p->pid_str) {
+									snprintf(ctx_p->pid_str, 64, "%u", ctx_p->pid);
+									ctx_p->pid_str_len = strlen(ctx_p->pid_str);
+								}
+								variable_value     = ctx_p->pid_str;
+								variable_value_len = ctx_p->pid_str_len;
+							} else
+							if (*variable_name >= 'A' && *variable_name <= 'Z' && (exceptionflags&4)) {	// Lazy substitution, preserving the value
 								variable_value     =  ptr;
 								variable_value_len = (ptr_nest - ptr + 1);
-								*ptr_nest = 0;
-								variable_name  = &ptr[1];
 								parameter_get(variable_name, parameter_get_arg);
-								*ptr_nest = '%';
-							} else {							// Substituting
-								*ptr_nest = 0;
-								variable_name  = &ptr[1];
+							} else {									// Substituting
 								variable_value = parameter_get(variable_name, parameter_get_arg);
 								if (variable_value == NULL) {
 									if (!(exceptionflags&2))
@@ -372,12 +462,12 @@ char *parameter_expand(
 									errno = 0;
 									break;
 								}
-								*ptr_nest = '%';
 								variable_value_len = strlen(variable_value);
 
 								if (expand_count_p != NULL)
 									(*expand_count_p)++;
 							}
+							*ptr_nest = '%';
 							if (ret_len+variable_value_len+1 >= ret_size) {
 								ret_size = ret_len+variable_value_len+1 + ALLOC_PORTION;
 								ret      = xrealloc(ret, ret_size);
@@ -437,7 +527,7 @@ static inline int synchandler_arg(char *arg, size_t arg_len, void *_ctx_p, enum 
 		return errno;
 	}
 
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 	debug(14, "ctx_p->synchandler_args[%u].v[%u] = %p", shargsid, ctx_p->synchandler_args[shargsid].c, arg);
 #endif
 	ctx_p->synchandler_args[shargsid].v[ctx_p->synchandler_args[shargsid].c++] = arg;
@@ -472,7 +562,7 @@ int parse_customsignals(ctx_t *ctx_p, char *arg) {
 						}
 						i++;
 					}
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 					fprintf(stderr, "Force-Debug: parse_parameter(): Reset custom signals.\n");
 #endif
 				} else {
@@ -508,7 +598,7 @@ int parse_customsignals(ctx_t *ctx_p, char *arg) {
 						ch = *end; *end = 0;
 						ctx_p->customsignal[signal] = strdup(ptr);
 						*end = ch;
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 						fprintf(stderr, "Force-Debug: parse_parameter(): Adding custom signal %u.\n", signal);
 #endif
 						ptr = end;
@@ -529,7 +619,7 @@ int parse_customsignals(ctx_t *ctx_p, char *arg) {
 }
 
 int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t paramsource) {
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 	fprintf(stderr, "Force-Debug: parse_parameter(): %i: %i = \"%s\"\n", paramsource, param_id, arg);
 #endif
 	switch (paramsource) {
@@ -555,7 +645,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 #endif
 			break;
 		default:
-			error("Warning: Unknown parameter #%i source (value \"%s\").", param_id, arg!=NULL ? arg : "");
+			error("Unknown parameter #%i source (value \"%s\").", param_id, arg!=NULL ? arg : "");
 			break;
 	}
 
@@ -568,7 +658,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 		ctx_p->flags_values_raw[param_id] = arg;
 	}
 
-	switch(param_id) {
+	switch (param_id) {
 		case '?':
 		case HELP:
 			syntax();
@@ -614,7 +704,211 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			ctx_p->gid = grp->gr_gid;
 			break;
 		}
+#ifdef CAPABILITIES_SUPPORT
+		case SYNCHANDLERUID: {
+			struct passwd *pwd = getpwnam(arg);
+			ctx_p->flags[param_id]++;
+
+			if (pwd == NULL) {
+				ctx_p->synchandler_uid = (unsigned int)atol(arg);
+				break;
+			}
+
+			ctx_p->synchandler_uid = pwd->pw_uid;
+			break;
+		}
+		case SYNCHANDLERGID: {
+			struct group *grp = getgrnam(arg);
+			ctx_p->flags[param_id]++;
+
+			if (grp == NULL) {
+				ctx_p->synchandler_gid = (unsigned int)atol(arg);
+				break;
+			}
+
+			ctx_p->synchandler_gid = grp->gr_gid;
+			break;
+		}
+		case CAP_PRESERVE: {
+			char *subopts = arg;
+
+			ctx_p->caps  = 0;
+
+			while (*subopts != 0) {
+				char *value;
+				__u32 cap = getsubopt(&subopts, capabilities, &value);
+				debug(4, "cap == 0x%x", cap);
+				if (cap != X_CAP_RESET)
+					ctx_p->caps |= CAP_TO_MASK(XCAP_TO_CAP(cap));
+			}
+
+			break;
+		}
+		case CAPS_INHERIT: {
+			char *value, *arg_orig = arg;
+
+			if (!*arg) {
+				ctx_p->flags[param_id] = 0;
+				return 0;
+			}
+
+			capsinherit_t capsinherit = getsubopt(&arg, capsinherits, &value);
+			if((int)capsinherit == -1) {
+				errno = EINVAL;
+				error("Invalid capabilities inheriting mode entered: \"%s\"", arg_orig);
+				return EINVAL;
+			}
+			ctx_p->flags[CAPS_INHERIT] = capsinherit;
+
+			break;
+		}
+#endif
+		case CHROOT:
+			if (paramsource == PS_CONTROL) {
+				warning("Cannot change \"chroot\" in run-time. Ignoring.");
+				return 0;
+			}
+			if (!*arg) {
+				free(ctx_p->chroot_dir);
+				ctx_p->chroot_dir = NULL;
+				return 0;
+			}
+
+			ctx_p->chroot_dir	= arg;
+			break;
+#ifdef PIVOTROOT_OPT_SUPPORT
+		case PIVOT_ROOT: {
+			char *value, *arg_orig = arg;
+
+			if (!*arg) {
+				ctx_p->flags[PIVOT_ROOT] = DEFAULT_PIVOT_MODE;
+				return 0;
+			}
+
+			pivotroot_way_t pivotway = getsubopt(&arg, pivotrootways, &value);
+			if((int)pivotway == -1) {
+				errno = EINVAL;
+				error("Invalid pivot_root use way entered: \"%s\"", arg_orig);
+				return EINVAL;
+			}
+			ctx_p->flags[PIVOT_ROOT] = pivotway;
+
+			break;
+		}
+#endif
+#ifdef UNSHARE_SUPPORT
+		case DETACH_NETWORK: {
+			char *value, *arg_orig = arg;
+
+			if (!*arg) {
+				ctx_p->flags[param_id] = 0;
+				return 0;
+			}
+
+			detachnetwork_way_t detachnetwork_way = getsubopt(&arg, detachnetworkways, &value);
+			if((int)detachnetwork_way == -1) {
+				errno = EINVAL;
+				error("Invalid network detach way entered: \"%s\"", arg_orig);
+				return EINVAL;
+			}
+			ctx_p->flags[DETACH_NETWORK] = detachnetwork_way;
+
+			break;
+		}
+#endif
+#ifdef CAPABILITIES_SUPPORT
+		case ADDPERMITTEDHOOKFILES: {
+			char *ptr;
+			if (paramsource == PS_CONTROL) {
+				warning("Cannot change \"add-permitted-hook-files\" in run-time. Ignoring.");
+				return 0;
+			}
+
+			while (ctx_p->permitted_hookfiles)
+				free(ctx_p->permitted_hookfile[--ctx_p->permitted_hookfiles]);
+
+			ptr = arg;
+			while (1) {
+				char *end = strchr(ptr, ',');
+
+				if (end != NULL)
+					*end =  0;
+
+				if (!*ptr) {
+					while (ctx_p->permitted_hookfiles)
+						free(ctx_p->permitted_hookfile[--ctx_p->permitted_hookfiles]);
+
+					if (end != NULL)
+						ptr = &end[1];
+					continue;
+				}
+
+				if (ctx_p->permitted_hookfiles >= MAXPERMITTEDHOOKFILES) {
+					errno = EINVAL;
+					error("Too many permitted hook files");
+					return errno;
+				}
+
+				ctx_p->permitted_hookfile[ctx_p->permitted_hookfiles++] = strdup(ptr);
+
+				if (end == NULL)
+					break;
+
+				*end = ',';
+				ptr = &end[1];
+			}
+			break;
+		}
+#endif
+#ifdef GETMNTENT_SUPPORT
+		case MOUNTPOINTS: {
+			char *ptr;
+			if (paramsource == PS_CONTROL) {
+				warning("Cannot change \"mountpoints\" in run-time. Ignoring.");
+				return 0;
+			}
+
+			while (ctx_p->mountpoints)
+				free(ctx_p->mountpoint[--ctx_p->mountpoints]);
+
+			ptr = arg;
+			while (1) {
+				char *end = strchr(ptr, ',');
+
+				if (end != NULL)
+					*end =  0;
+
+				if (!*ptr) {
+					while (ctx_p->mountpoints)
+						free(ctx_p->mountpoint[--ctx_p->mountpoints]);
+
+					if (end != NULL)
+						ptr = &end[1];
+					continue;
+				}
+
+				if (ctx_p->mountpoints >= MAXMOUNTPOINTS) {
+					errno = EINVAL;
+					error("Too many mountpoints");
+					return errno;
+				}
+
+				ctx_p->mountpoint[ctx_p->mountpoints++] = strdup(ptr);
+
+				if (end == NULL)
+					break;
+
+				*end = ',';
+				ptr = &end[1];
+			}
+			break;
+		}
+#endif
 		case PIDFILE:
+			if (paramsource == PS_CONTROL) {
+				warning("Cannot change \"pid-file\" in run-time. Ignoring.");
+				return 0;
+			}
 			ctx_p->pidfile		= arg;
 			break;
 		case RETRIES:
@@ -624,7 +918,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			char *value, *arg_orig = arg;
 
 			if (!*arg) {
-				ctx_p->flags_set[param_id] = 0;
+				ctx_p->flags[param_id] = 0;
 				return 0;
 			}
 
@@ -642,7 +936,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			char *value, *arg_orig = arg;
 
 			if (!*arg) {
-				ctx_p->flags_set[param_id] = 0;
+				ctx_p->flags[param_id] = 0;
 				return 0;
 			}
 
@@ -711,6 +1005,10 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			break;
 		case MONITOR: {
 			char *value, *arg_orig = arg;
+			if (paramsource == PS_CONTROL) {
+				warning("Cannot change \"monitor\" in run-time. Ignoring.");
+				return 0;
+			}
 
 			if (!*arg) {
 				ctx_p->flags_set[param_id] = 0;
@@ -788,12 +1086,12 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 							int i = 0;
 							while (i < 256)
 								ctx_p->isignoredexitcode[i++] = 0;
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 							fprintf(stderr, "Force-Debug: parse_parameter(): Reset ignored exitcodes.\n");
 #endif
 						} else {
 							ctx_p->isignoredexitcode[exitcode] = 1;
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 							fprintf(stderr, "Force-Debug: parse_parameter(): Adding ignored exitcode %u.\n", exitcode);
 #endif
 						}
@@ -813,6 +1111,10 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			version();
 			break;
 		case WATCHDIR:
+			if (paramsource == PS_CONTROL) {
+				warning("Cannot change \"watch-dir\" in run-time. Ignoring.");
+				return 0;
+			}
 			ctx_p->watchdir		= arg;
 			break;
 		case SYNCHANDLER:
@@ -854,13 +1156,13 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			char *value;
 
 			ctx_p->flags[SOCKETAUTH] = getsubopt(&arg, socketauth, &value);
-			if(ctx_p->flags[SOCKETAUTH] == -1) {
+			if (ctx_p->flags[SOCKETAUTH] == -1) {
 				error("Wrong socket auth mech entered: \"%s\"", arg);
 				return EINVAL;
 			}
 		}
 		case SOCKETMOD:
-			if(!sscanf(arg, "%o", (unsigned int *)&ctx_p->socketmod)) {
+			if (!sscanf(arg, "%o", (unsigned int *)&ctx_p->socketmod)) {
 				error("Non octal value passed to --socket-mod: \"%s\"", arg);
 				return EINVAL;
 			}
@@ -871,7 +1173,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			uid_t uid;
 			gid_t gid;
 
-			if(colon == NULL) {
+			if (colon == NULL) {
 				struct passwd *pwent = getpwnam(arg);
 
 				if(pwent == NULL) {
@@ -930,7 +1232,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			char *value;
 
 			ctx_p->flags[MODE]  = getsubopt(&arg, modes, &value);
-			if(ctx_p->flags[MODE] == -1) {
+			if (ctx_p->flags[MODE] == -1) {
 				error("Wrong mode name entered: \"%s\"", arg);
 				return EINVAL;
 			}
@@ -943,11 +1245,11 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			str_splitargs(arg, synchandler_arg1, ctx_p);
 			break;
 		default:
-			if(arg == NULL)
+			if (arg == NULL)
 				ctx_p->flags[param_id]++;
 			else
 				ctx_p->flags[param_id] = atoi(arg);
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 			fprintf(stderr, "Force-Debug: flag %i is set to %i\n", param_id&0xff, ctx_p->flags[param_id]);
 #endif
 			break;
@@ -979,7 +1281,7 @@ int arguments_parse(int argc, char *argv[], struct ctx *ctx_p) {
 		lo_ptr++;
 	}
 	*optstring_ptr = 0;
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 	fprintf(stderr, "Force-Debug: %s\n", optstring);
 #endif
 
@@ -1133,6 +1435,16 @@ int ctx_check(ctx_t *ctx_p) {
 		error("\"--socket-auth\" is useless without \"--socket\"");
 	}
 
+#ifdef PIVOTROOT_OPT_SUPPORT
+	if ((ctx_p->flags[PIVOT_ROOT] != PW_OFF) && (ctx_p->chroot_dir == NULL)) {
+		ret = errno = EINVAL;
+		error("\"--pivot-root\" cannot be used without \"--chroot\"");
+	}
+
+	if ((ctx_p->flags[PIVOT_ROOT] != PW_OFF) && (ctx_p->flags[MOUNTPOINTS]))
+		warning("\"--mountpoints\" is set while \"--pivot-root\" is set, too");
+#endif
+
 #ifdef VERYPARANOID
 	if ((ctx_p->retries != 1) && ctx_p->flags[THREADING]) {
 		ret = errno = EINVAL;
@@ -1191,7 +1503,7 @@ int ctx_check(ctx_t *ctx_p) {
 
 	if (ctx_p->watchdir == NULL) {
 		ret = errno = EINVAL;
-		error("\"--watchdir\" is not set.");
+		error("\"--watch-dir\" is not set.");
 	}
 
 	if (ctx_p->handlerfpath == NULL) {
@@ -1222,7 +1534,7 @@ int ctx_check(ctx_t *ctx_p) {
 
 	if ((ctx_p->flags[MODE] == MODE_RSYNCDIRECT) && (ctx_p->destdir == NULL)) {
 		ret = errno = EINVAL;
-		error("Mode \"rsyncdirect\" cannot be used without specifying \"destination directory\".");
+		error("Mode \"rsyncdirect\" cannot be used without specifying \"--dest-dir\".");
 	}
 
 #ifdef CLUSTER_SUPPORT
@@ -1254,7 +1566,7 @@ int ctx_check(ctx_t *ctx_p) {
 		ctx_p->cluster_mcastipaddr = DEFAULT_CLUSTERIPADDR;
 
 	if (ctx_p->cluster_iface != NULL) {
-#ifndef _DEBUG
+#ifndef _DEBUG_FORCE
 		ret = errno = EINVAL;
 		error("Cluster subsystem is not implemented, yet. Sorry.");
 #endif
@@ -1273,139 +1585,6 @@ int ctx_check(ctx_t *ctx_p) {
 		}
 	}
 #endif // CLUSTER_SUPPORT
-
-	if (ctx_p->watchdir != NULL) {
-		char *rwatchdir = realpath(ctx_p->watchdir, NULL);
-		if (rwatchdir == NULL) {
-			error("Got error while realpath() on \"%s\" [#0].", ctx_p->watchdir);
-			ret = errno;
-		}
-
-		stat64_t stat64={0};
-		if (lstat64(ctx_p->watchdir, &stat64)) {
-			error("Cannot lstat64() on \"%s\"", ctx_p->watchdir);
-			if (!ret)
-				ret = errno;
-		} else {
-			if (ctx_p->flags[EXCLUDEMOUNTPOINTS])
-				ctx_p->st_dev = stat64.st_dev;
-			if ((stat64.st_mode & S_IFMT) == S_IFLNK) {
-				// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
-				// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
-				// it disables filters, because exclude-list will be empty.
-#ifdef VERYPARANOID
-				error("Watch dir cannot be symlink, but \"%s\" is a symlink.", ctx_p->watchdir);
-				ret = EINVAL;
-#else
-				char *watchdir_resolved_part = xcalloc(1, PATH_MAX+2);
-				ssize_t r = readlink(ctx_p->watchdir, watchdir_resolved_part, PATH_MAX+1);
-	
-				if (r>=PATH_MAX) {	// TODO: check if it's possible
-					ret = errno = EINVAL;
-					error("Too long file path resolved from symbolic link \"%s\"", ctx_p->watchdir);
-				} else
-				if (r<0) {
-					error("Cannot resolve symbolic link \"%s\": readlink() error", ctx_p->watchdir);
-					ret = EINVAL;
-				} else {
-					char *watchdir_resolved;
-#ifdef VERYPARANOID
-					if (ctx_p->watchdirsize)
-						if (ctx_p->watchdir != NULL)
-							free(ctx_p->watchdir);
-#endif
-
-					size_t watchdir_resolved_part_len = strlen(watchdir_resolved_part);
-					ctx_p->watchdirsize = watchdir_resolved_part_len+1;	// Not true for case of relative symlink
-					if (*watchdir_resolved_part == '/') {
-						// Absolute symlink
-						watchdir_resolved = malloc(ctx_p->watchdirsize);
-						memcpy(watchdir_resolved, watchdir_resolved_part, ctx_p->watchdirsize);
-					} else {
-						// Relative symlink :(
-						char *rslash = strrchr(ctx_p->watchdir, '/');
-
-						char *watchdir_resolved_rel  = xmalloc(PATH_MAX+2);
-						size_t watchdir_resolved_rel_len = rslash-ctx_p->watchdir + 1;
-						memcpy(watchdir_resolved_rel, ctx_p->watchdir, watchdir_resolved_rel_len);
-						memcpy(&watchdir_resolved_rel[watchdir_resolved_rel_len], watchdir_resolved_part, watchdir_resolved_part_len+1);
-
-						watchdir_resolved = realpath(watchdir_resolved_rel, NULL);
-
-						free(watchdir_resolved_rel);
-					}
-
-					
-					debug(1, "Symlink resolved: watchdir \"%s\" -> \"%s\"", ctx_p->watchdir, watchdir_resolved);
-					ctx_p->watchdir = watchdir_resolved;
-				}
-				free(watchdir_resolved_part);
-#endif // VERYPARANOID else
-			}
-		}
-
-		if (!ret) {
-			ctx_p->watchdir     = rwatchdir;
-			ctx_p->watchdirlen  = strlen(ctx_p->watchdir);
-			ctx_p->watchdirsize = ctx_p->watchdirlen;
-
-#ifdef VERYPARANOID
-			if (ctx_p->watchdirlen == 1) {
-				ret = errno = EINVAL;
-				error("Very-Paranoid: --watch-dir is supposed to be not \"/\".");
-			}
-#endif
-		}
-
-		if (!ret) {
-			if (ctx_p->watchdirlen == 1) {
-				ctx_p->watchdirwslash     = ctx_p->watchdir;
-				ctx_p->watchdirwslashsize = 0;
-				ctx_p->watchdir_dirlevel  = 0;
-			} else {
-				size_t size = ctx_p->watchdirlen + 2;
-				char *newwatchdir = xmalloc(size);
-				memcpy( newwatchdir, ctx_p->watchdir, ctx_p->watchdirlen);
-				ctx_p->watchdirwslash     = newwatchdir;
-				ctx_p->watchdirwslashsize = size;
-				memcpy(&ctx_p->watchdirwslash[ctx_p->watchdirlen], "/", 2);
-
-				ctx_p->watchdir_dirlevel  = fileutils_calcdirlevel(ctx_p->watchdirwslash);
-			}
-		}
-	}
-
-	if ((ctx_p->destdir != NULL) && (ctx_p->destproto == NULL)) {	// "ctx_p->destproto == NULL" means "no protocol"/"local directory"
-		char *rdestdir = realpath(ctx_p->destdir, NULL);
-		if(rdestdir == NULL) {
-			error("Got error while realpath() on \"%s\" [#1].", ctx_p->destdir);
-			ret = errno;
-		}
-
-		if (!ret) {
-			ctx_p->destdir     = rdestdir;
-			ctx_p->destdirlen  = strlen(ctx_p->destdir);
-			ctx_p->destdirsize = ctx_p->destdirlen;
-
-			if(ctx_p->destdirlen == 1) {
-				ret = errno = EINVAL;
-				error("destdir is supposed to be not \"/\".");
-			}
-		}
-
-		if (!ret) {
-			size_t size = ctx_p->destdirlen  + 2;
-			char *newdestdir  = xmalloc(size);
-			memcpy( newdestdir,  ctx_p->destdir,  ctx_p->destdirlen);
-			ctx_p->destdirwslash     = newdestdir;
-			ctx_p->destdirwslashsize = size;
-			memcpy(&ctx_p->destdirwslash[ctx_p->destdirlen], "/", 2);
-		}
-	} else
-	if (ctx_p->destproto != NULL)
-		ctx_p->destdirwslash = ctx_p->destdir;
-
-	debug(1, "%s [%s] (%p) -> %s [%s]", ctx_p->watchdir, ctx_p->watchdirwslash, ctx_p->watchdirwslash, ctx_p->destdir?ctx_p->destdir:"", ctx_p->destdirwslash?ctx_p->destdirwslash:"");
 
 	switch (ctx_p->flags[MODE]) {
 		case MODE_RSYNCSO:
@@ -1592,7 +1771,7 @@ void ctx_cleanup(ctx_t *ctx_p) {
 		while (n < SHARGS_MAX) {
 			int i = 0,  e = ctx_p->synchandler_args[n].c;
 			while (i < e) {
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 				debug(14, "synchandler args: %u, %u: free(%p)", n, i, ctx_p->synchandler_args[n].v[i]);
 #endif
 				free(ctx_p->synchandler_args[n].v[i]);
@@ -1848,7 +2027,7 @@ l_parse_rules_fromfile_end:
 	rules[i].perm   = DEFAULT_RULES_PERM;
 
 	g_hash_table_destroy(autowrules_ht);
-#ifdef _DEBUG
+#ifdef _DEBUG_FORCE
 	debug(3, "Total (p == %p):", rules);
 	i=0;
 	do {
@@ -1905,19 +2084,20 @@ int main_rehash(ctx_t *ctx_p) {
 	return ret;
 }
 
+FILE *main_statusfile_f;
 int main_status_update(ctx_t *ctx_p) {
 	static state_t state_old = STATE_UNKNOWN;
 	state_t        state     = ctx_p->state;
 
 	debug(4, "%u", state);
 
-	if(state == state_old) {
+	if (state == state_old) {
 		debug(3, "State unchanged: %u == %u", state, state_old);
 		return 0;
 	}
 
 #ifdef VERYPARANOID
-	if(status_descr[state] == NULL) {
+	if (status_descr[state] == NULL) {
 		error("status_descr[%u] == NULL.", state);
 		return EINVAL;
 	}
@@ -1925,36 +2105,35 @@ int main_status_update(ctx_t *ctx_p) {
 
 	setenv("CLSYNC_STATUS", status_descr[state], 1);
 
-	if(ctx_p->statusfile == NULL)
+	if (ctx_p->statusfile == NULL)
 		return 0;
-
-	FILE *f = fopen(ctx_p->statusfile, "w");
-	if(f == NULL) {
-		error("Cannot open file \"%s\" for writing.", 
-			ctx_p->statusfile);
-		return errno;
-	}
 
 	debug(3, "Setting status to %i: %s.", state, status_descr[state]);
 	state_old=state;
 
 	int ret = 0;
 
-	if(fprintf(f, "%s", status_descr[state]) <= 0) {	// TODO: check output length
+	if (ftruncate(fileno(main_statusfile_f), 0)) {
+		error("Cannot ftruncate() the file \"%s\".",
+			ctx_p->statusfile);
+		return errno;
+	}
+	rewind(main_statusfile_f);
+	if (fprintf(main_statusfile_f, "%s", status_descr[state]) <= 0) {	// TODO: check output length
 		error("Cannot write to file \"%s\".",
 			ctx_p->statusfile);
-		ret = errno;
+		return errno;
 	}
-
-	if(fclose(f)) {
-		error("Cannot close file \"%s\".", 
+	if (fflush(main_statusfile_f)) {
+		error("Cannot fflush() on file \"%s\".",
 			ctx_p->statusfile);
-		ret = errno;
+		return errno;
 	}
 
 	return ret;
 }
 
+#define UGID_PRESERVE (1<<16)
 int main(int argc, char *argv[]) {
 	struct ctx *ctx_p = xcalloc(1, sizeof(*ctx_p));
 
@@ -1977,6 +2156,29 @@ int main(int argc, char *argv[]) {
 	ctx_p->config_block			 = DEFAULT_CONFIG_BLOCK;
 	ctx_p->retries				 = DEFAULT_RETRIES;
 	ctx_p->flags[VERBOSE]			 = DEFAULT_VERBOSE;
+#ifdef PIVOTROOT_OPT_SUPPORT
+	ctx_p->flags[PIVOT_ROOT]		 = DEFAULT_PIVOT_MODE;
+#endif
+#ifdef CAPABILITIES_SUPPORT
+	ctx_p->flags[CAP_PRESERVE]		 = CAP_PRESERVE_TRY;
+	ctx_p->caps				 = DEFAULT_PRESERVE_CAPABILITIES;
+	ctx_p->synchandler_uid			 = getuid();
+	ctx_p->synchandler_gid			 = getgid();
+	ctx_p->flags[CAPS_INHERIT]		 = DEFAULT_CAPS_INHERIT;
+
+	{
+		struct passwd *pwd = getpwnam(DEFAULT_USER);
+		ctx_p->uid = (pwd != NULL) ? pwd->pw_uid : DEFAULT_UID;
+		ctx_p->flags[UID]		 = UGID_PRESERVE;
+	}
+	{
+		struct group  *grp = getgrnam(DEFAULT_GROUP);
+		ctx_p->gid = (grp != NULL) ? grp->gr_gid : DEFAULT_GID;
+		ctx_p->flags[GID]		 = UGID_PRESERVE;
+	}
+#endif
+
+	ctx_p->pid				 = getpid();
 
 	error_init(&ctx_p->flags[OUTPUT_METHOD], &ctx_p->flags[QUIET], &ctx_p->flags[VERBOSE], &ctx_p->flags[DEBUG]);
 
@@ -2028,7 +2230,7 @@ int main(int argc, char *argv[]) {
 			debug(9, "Custom arguments %u count: %u", n-1, args_p->c);
 			int i = 0;
 			while (i < args_p->c) {
-				int macros_count, expanded;
+				int macros_count = -1, expanded = -1;
 
 				args_p->v[i] = parameter_expand(ctx_p, args_p->v[i], 4, &macros_count, &expanded, parameter_get_wmacro, ctx_p);
 
@@ -2043,74 +2245,389 @@ int main(int argc, char *argv[]) {
 	debug(4, "debugging flags: %u %u %u %u", ctx_p->flags[OUTPUT_METHOD], ctx_p->flags[QUIET], ctx_p->flags[VERBOSE], ctx_p->flags[DEBUG]);
 
 	ctx_p->state = STATE_STARTING;
-	main_status_update(ctx_p);
+
+	{
+#ifdef GETMNTENT_SUPPORT
+		struct mntent *ent;
+		FILE *ent_f;
+
+		ent_f = NULL;
+		if (ctx_p->mountpoints) {
+			// Openning the file with mount list
+			ent_f = setmntent("/proc/mounts", "r");
+			if (ent_f == NULL) {
+				error("Got error while setmntent(\"/proc/mounts\", \"r\")");
+				ret = errno;
+			}
+		}
+#endif
+
+#ifdef UNSHARE_SUPPORT
+#define unshare_wrapper(a) \
+		if (unshare(a)) {\
+			error("Got error from unshare("TOSTR(a)")");\
+			ret = errno;\
+		}
+		if (ctx_p->flags[DETACH_MISCELLANEA]) {
+			unshare(CLONE_NEWIPC);
+			unshare(CLONE_NEWUTS);
+			unshare(CLONE_SYSVSEM);
+		}
+		if ((ctx_p->flags[PIVOT_ROOT] != PW_OFF) || ctx_p->flags[MOUNTPOINTS]) {
+			unshare_wrapper(CLONE_FILES);
+			unshare_wrapper(CLONE_FS);
+			unshare_wrapper(CLONE_NEWNS);
+		}
+		if (ctx_p->flags[DETACH_NETWORK] == DN_EVERYWHERE)
+			unshare_wrapper(CLONE_NEWNET);
+#undef unshare_wrapper
+#endif
+
+		if (ctx_p->chroot_dir != NULL) {
+#ifdef PIVOTROOT_OPT_SUPPORT
+			switch (ctx_p->flags[PIVOT_ROOT]) {
+				case PW_OFF:
+				case PW_DIRECT:
+					break;
+				case PW_AUTO:
+				case PW_AUTORO: {
+					if (chdir(ctx_p->chroot_dir)) {
+						error("Got error while chdir(\"%s\")", ctx_p->chroot_dir);
+						ret = errno;
+					}
+
+					if (mkdir("old_root", 0700)) {
+						if (errno != EEXIST) {
+							error("Got error from mkdir(\"old_root\", 0700)");
+							ret = errno;
+							break;
+						}
+					}
+
+					if (mkdir(PIVOT_AUTO_DIR, 0700)) {
+						if (errno != EEXIST) {
+							error("Got error from mkdir(\""PIVOT_AUTO_DIR"\", 0700)");
+							ret = errno;
+							break;
+						}
+					}
+
+					unsigned long mount_flags  =  MS_BIND | MS_REC |
+						((ctx_p->flags[PIVOT_ROOT] == PW_AUTORO) ? MS_RDONLY : 0);
+
+					if (mount(ctx_p->chroot_dir, PIVOT_AUTO_DIR, NULL, mount_flags, NULL)) {
+						error("Got error while mount(\"%s\", \"%s\", NULL, %o, NULL)",
+							ctx_p->chroot_dir, PIVOT_AUTO_DIR, mount_flags);
+						ret = errno;
+						break;
+					}
+
+					ctx_p->chroot_dir = PIVOT_AUTO_DIR;
+					break;
+				}
+			}
+#endif
+
+			debug(7, "chdir(\"%s\")", ctx_p->chroot_dir);
+			if (chdir(ctx_p->chroot_dir)) {
+				error("Got error while chdir(\"%s\")", ctx_p->chroot_dir);
+				ret = errno;
+			}
+
+		}
+
+#ifdef GETMNTENT_SUPPORT
+		if (ctx_p->mountpoints && (ent_f != NULL)) {
+			char **to_umount       = NULL;
+			size_t to_umount_count = 0;
+			size_t to_umount_size  = 0;
+
+			// Getting mount-points to be umounted
+			while (NULL != (ent = getmntent(ent_f))) {
+				int i;
+				debug(8, "Checking should \"%s\" be umount or not", ent->mnt_dir);
+
+				i=0;
+				while (i < ctx_p->mountpoints) {
+					debug(9, "\"%s\" <?> \"%s\"", ent->mnt_dir, ctx_p->mountpoint[i]);
+					if (!strcmp(ent->mnt_dir, ctx_p->mountpoint[i])) {
+						debug(9, "found");
+						break;
+					}
+
+					i++;
+				}
+
+				if (i >= ctx_p->mountpoints) {
+					debug(9, "queue umount \"%s\"", ent->mnt_dir);
+					if (to_umount_count >= to_umount_size) {
+						to_umount_size += ALLOC_PORTION;
+						to_umount       = xrealloc(to_umount, sizeof(*to_umount)*to_umount_size);
+					}
+
+					to_umount[to_umount_count++] = strdup(ent->mnt_dir);
+				}
+			}
+
+			// Umounting
+			int umount_root = 0;
+			while (to_umount_count) {
+				char *mp = to_umount[--to_umount_count];
+				debug(1, "umount2(\"%s\", MNT_DETACH)", mp);
+
+				if (!strcmp(mp, "/"))
+					umount_root = 1;
+				else
+					umount2(mp, MNT_DETACH);
+				free(mp);
+			}
+
+			if (umount_root) {
+				debug(1, "umount2(\"/\", MNT_DETACH)");
+				umount2("/", MNT_DETACH);
+			}
+
+			free(to_umount);
+			endmntent(ent_f);
+		}
+#endif
+		if (ctx_p->chroot_dir != NULL) {
+#ifdef PIVOTROOT_OPT_SUPPORT
+			if (!ret) {
+				switch (ctx_p->flags[PIVOT_ROOT]) {
+					case PW_OFF:
+						break;
+					case PW_DIRECT:
+					case PW_AUTO:
+					case PW_AUTORO:
+						if (pivot_root(".", "old_root")) {
+							error("Got error while pivot_root(\".\", \"old_root\")");
+							ret = errno;
+						}
+						break;
+				}
+			}
+#endif
+			debug(7, "chroot(\".\")");
+			if (chroot(".")) {
+				error("Got error while chroot(\".\")");
+				ret = errno;
+			}
+#ifdef PIVOTROOT_OPT_SUPPORT
+			if (!ret) {
+				switch (ctx_p->flags[PIVOT_ROOT]) {
+					case PW_OFF:
+						break;
+					case PW_DIRECT:
+					case PW_AUTO:
+					case PW_AUTORO:
+						if (umount2("old_root", MNT_DETACH)) {
+							error("Got error while umount2(\"old_root\", MNT_DETACH)");
+							ret = errno;
+						}
+						break;
+				}
+			}
+#endif
+		}
+	}
+
+	if (ctx_p->statusfile != NULL) {
+		debug(1, "Trying to open the status file for writing.");
+		main_statusfile_f = fopen(ctx_p->statusfile, "w");
+		if (main_statusfile_f != NULL) {
+			uid_t uid = ctx_p->flags[UID] ? ctx_p->uid : getuid();
+			gid_t gid = ctx_p->flags[GID] ? ctx_p->gid : getgid();
+			debug(1, "Changing owner of the status file to %u:%u", uid, gid);
+			if (fchown(fileno(main_statusfile_f), uid, gid))
+				warning("Cannot fchown(%u -> \"%s\", %u, %u)",
+					fileno(main_statusfile_f), ctx_p->statusfile, uid, gid);
+			main_status_update(ctx_p);
+		}
+	}
+
 
 #ifdef CAPABILITIES_SUPPORT
-	if (ctx_p->flags[CAP_PRESERVE_FILEACCESS]) {
-		debug(1, "Preserving Linux capabilites");
+	debug(1, "Preserving Linux capabilites");
 
-		// Tell kernel not clear capabilities when dropping root 
-		if (prctl(PR_SET_KEEPCAPS, 1) < 0) {
-			error("Cannot prctl(PR_SET_KEEPCAPS, 1) to preserve capabilities");
-			ret = errno;
-		}
+	// Tell kernel not clear capabilities when dropping root 
+	if (prctl(PR_SET_KEEPCAPS, 1) < 0) {
+		error("Cannot prctl(PR_SET_KEEPCAPS, 1) to preserve capabilities");
+		ret = errno;
 	}
 #endif
 
+	if (ctx_p->watchdir != NULL) {
+		char *rwatchdir = realpath(ctx_p->watchdir, NULL);
+		if (rwatchdir == NULL) {
+			error("Got error while realpath() on \"%s\" [#0].", ctx_p->watchdir);
+			ret = errno;
+		}
+
+		stat64_t stat64={0};
+		if (lstat64(ctx_p->watchdir, &stat64)) {
+			error("Cannot lstat64() on \"%s\"", ctx_p->watchdir);
+			if (!ret)
+				ret = errno;
+		} else {
+			if (ctx_p->flags[EXCLUDEMOUNTPOINTS])
+				ctx_p->st_dev = stat64.st_dev;
+			if ((stat64.st_mode & S_IFMT) == S_IFLNK) {
+				// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
+				// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
+				// it disables filters, because exclude-list will be empty.
+#ifdef VERYPARANOID
+				error("Watch dir cannot be symlink, but \"%s\" is a symlink.", ctx_p->watchdir);
+				ret = EINVAL;
+#else
+				char *watchdir_resolved_part = xcalloc(1, PATH_MAX+2);
+				ssize_t r = readlink(ctx_p->watchdir, watchdir_resolved_part, PATH_MAX+1);
+	
+				if (r>=PATH_MAX) {	// TODO: check if it's possible
+					ret = errno = EINVAL;
+					error("Too long file path resolved from symbolic link \"%s\"", ctx_p->watchdir);
+				} else
+				if (r<0) {
+					error("Cannot resolve symbolic link \"%s\": readlink() error", ctx_p->watchdir);
+					ret = EINVAL;
+				} else {
+					char *watchdir_resolved;
+#ifdef VERYPARANOID
+					if (ctx_p->watchdirsize)
+						if (ctx_p->watchdir != NULL)
+							free(ctx_p->watchdir);
+#endif
+
+					size_t watchdir_resolved_part_len = strlen(watchdir_resolved_part);
+					ctx_p->watchdirsize = watchdir_resolved_part_len+1;	// Not true for case of relative symlink
+					if (*watchdir_resolved_part == '/') {
+						// Absolute symlink
+						watchdir_resolved = malloc(ctx_p->watchdirsize);
+						memcpy(watchdir_resolved, watchdir_resolved_part, ctx_p->watchdirsize);
+					} else {
+						// Relative symlink :(
+						char *rslash = strrchr(ctx_p->watchdir, '/');
+
+						char *watchdir_resolved_rel  = xmalloc(PATH_MAX+2);
+						size_t watchdir_resolved_rel_len = rslash-ctx_p->watchdir + 1;
+						memcpy(watchdir_resolved_rel, ctx_p->watchdir, watchdir_resolved_rel_len);
+						memcpy(&watchdir_resolved_rel[watchdir_resolved_rel_len], watchdir_resolved_part, watchdir_resolved_part_len+1);
+
+						watchdir_resolved = realpath(watchdir_resolved_rel, NULL);
+
+						free(watchdir_resolved_rel);
+					}
+
+					
+					debug(1, "Symlink resolved: watchdir \"%s\" -> \"%s\"", ctx_p->watchdir, watchdir_resolved);
+					ctx_p->watchdir = watchdir_resolved;
+				}
+				free(watchdir_resolved_part);
+#endif // VERYPARANOID else
+			}
+		}
+
+		if (!ret) {
+			ctx_p->watchdir     = rwatchdir;
+			ctx_p->watchdirlen  = strlen(ctx_p->watchdir);
+			ctx_p->watchdirsize = ctx_p->watchdirlen;
+
+#ifdef VERYPARANOID
+			if (ctx_p->watchdirlen == 1) {
+				ret = errno = EINVAL;
+				error("Very-Paranoid: --watch-dir is supposed to be not \"/\".");
+			}
+#endif
+		}
+
+		if (!ret) {
+			if (ctx_p->watchdirlen == 1) {
+				ctx_p->watchdirwslash     = ctx_p->watchdir;
+				ctx_p->watchdirwslashsize = 0;
+				ctx_p->watchdir_dirlevel  = 0;
+			} else {
+				size_t size = ctx_p->watchdirlen + 2;
+				char *newwatchdir = xmalloc(size);
+				memcpy( newwatchdir, ctx_p->watchdir, ctx_p->watchdirlen);
+				ctx_p->watchdirwslash     = newwatchdir;
+				ctx_p->watchdirwslashsize = size;
+				memcpy(&ctx_p->watchdirwslash[ctx_p->watchdirlen], "/", 2);
+
+				ctx_p->watchdir_dirlevel  = fileutils_calcdirlevel(ctx_p->watchdirwslash);
+			}
+		}
+	}
+
+	if ((ctx_p->destdir != NULL) && (ctx_p->destproto == NULL)) {	// "ctx_p->destproto == NULL" means "no protocol"/"local directory"
+		char *rdestdir = realpath(ctx_p->destdir, NULL);
+		if(rdestdir == NULL) {
+			error("Got error while realpath() on \"%s\" [#1].", ctx_p->destdir);
+			ret = errno;
+		}
+
+		if (!ret) {
+			ctx_p->destdir     = rdestdir;
+			ctx_p->destdirlen  = strlen(ctx_p->destdir);
+			ctx_p->destdirsize = ctx_p->destdirlen;
+
+			if(ctx_p->destdirlen == 1) {
+				ret = errno = EINVAL;
+				error("destdir is supposed to be not \"/\".");
+			}
+		}
+
+		if (!ret) {
+			size_t size = ctx_p->destdirlen  + 2;
+			char *newdestdir  = xmalloc(size);
+			memcpy( newdestdir,  ctx_p->destdir,  ctx_p->destdirlen);
+			ctx_p->destdirwslash     = newdestdir;
+			ctx_p->destdirwslashsize = size;
+			memcpy(&ctx_p->destdirwslash[ctx_p->destdirlen], "/", 2);
+		}
+	} else
+	if (ctx_p->destproto != NULL)
+		ctx_p->destdirwslash = ctx_p->destdir;
+
 	if (ctx_p->flags[GID]) {
-		debug(3, "Dropping gid to %i", ctx_p->gid);
-		if (setgid(ctx_p->gid)) {
+		int rc;
+		debug(3, "Trying to drop gid to %i", ctx_p->gid);
+		rc = setgid(ctx_p->gid);
+
+		if (rc && (ctx_p->flags[GID] != UGID_PRESERVE)) {
 			error("Cannot setgid(%u)", ctx_p->gid);
 			ret = errno;
 		}
+		if (!rc) debug(4, "success");
 	}
 
 	if (ctx_p->flags[UID]) {
-		debug(3, "Dropping uid to %i", ctx_p->uid);
-		if (setuid(ctx_p->uid)) {
+		int rc;
+		debug(3, "Trying to drop uid to %i", ctx_p->uid);
+		rc = setuid(ctx_p->uid);
+
+		if (rc && (ctx_p->flags[UID] != UGID_PRESERVE)) {
 			error("Cannot setuid(%u)", ctx_p->uid);
 			ret = errno;
 		}
+		if (!rc) debug(4, "success");
 	}
 
-#ifdef CAPABILITIES_SUPPORT
-	if (ctx_p->flags[CAP_PRESERVE_FILEACCESS]) {
-		// Doesn't work, yet :(
-		//
-		// Error: Cannot inotify_add_watch() on "/home/xaionaro/clsync/examples/testdir/from": Permission denied (errno: 13).
-		debug(1, "Dropping all Linux capabilites but CAP_DAC_READ_SEARCH");
-
-		struct __user_cap_header_struct	cap_hdr = {0};
-		struct __user_cap_data_struct	cap_dat = {0};
-
-		cap_hdr.version = _LINUX_CAPABILITY_VERSION;
-		if (capget(&cap_hdr, &cap_dat) < 0) {
-			error("Cannot get capabilites with capget()");
+	if (main_statusfile_f == NULL && ctx_p->statusfile != NULL) {
+		debug(1, "Trying to open the status file for writing (after setuid()/setgid()).");
+		main_statusfile_f = fopen(ctx_p->statusfile, "w");
+		if (main_statusfile_f == NULL) {
+			error("Cannot open file \"%s\" for writing.", 
+				ctx_p->statusfile);
 			ret = errno;
-
-			goto preserve_fileaccess_end;
-		}
-
-		// From "man 7 capabilities":
-		// CAP_DAC_OVERRIDE    - Bypass file read, write, and execute permission checks. 
-		// CAP_DAC_READ_SEARCH - Bypass file read permission checks and directory read and execute permission checks.
-
-		cap_dat.effective    = CAP_TO_MASK(CAP_DAC_READ_SEARCH);
-		cap_dat.permitted    = cap_dat.effective;
-		cap_dat.inheritable  = cap_dat.effective;
-
-		debug(3, "cap.eff == 0x%04x; cap.prm == 0x%04x; cap.inh == 0x%04x.",
-			cap_dat.effective, cap_dat.permitted, cap_dat.inheritable);
-
-		if (capset(&cap_hdr, &cap_dat) < 0) {
-			error("Cannot set capabilities with capset().");
-			ret = errno;
-		}
+		} 
 	}
-preserve_fileaccess_end:
-#endif
 
-	ret = ctx_check(ctx_p);
+	debug(1, "%s [%s] (%p) -> %s [%s]", ctx_p->watchdir, ctx_p->watchdirwslash, ctx_p->watchdirwslash, ctx_p->destdir?ctx_p->destdir:"", ctx_p->destdirwslash?ctx_p->destdirwslash:"");
+
+	{
+		int rc = ctx_check(ctx_p);
+		if (!ret) ret = rc;
+	}
 
 	if (
 		(ctx_p->listoutdir == NULL) && 
@@ -2172,6 +2689,7 @@ preserve_fileaccess_end:
 	}
 
 	if (ctx_p->pidfile != NULL) {
+		debug(2, "Trying to open the pidfile \"%s\"", ctx_p->pidfile);
 		pid_t pid = getpid();
 		FILE *pidfile = fopen(ctx_p->pidfile, "w");
 		if (pidfile == NULL) {
@@ -2204,6 +2722,12 @@ preserve_fileaccess_end:
 	}
 
 	if (ctx_p->statusfile != NULL) {
+		if (main_statusfile_f != NULL)
+			if (fclose(main_statusfile_f)) {
+				error("Cannot close file \"%s\".", 
+					ctx_p->statusfile);
+				ret = errno;
+			}
 		if (unlink(ctx_p->statusfile)) {
 			error("Cannot unlink status file \"%s\"",
 				ctx_p->statusfile);
@@ -2219,6 +2743,12 @@ preserve_fileaccess_end:
 			free(ctx_p->listoutdir);
 	}
 
+/*
+	if (ctx_p->flags[PIVOT_ROOT] == PW_AUTO || ctx_p->flags[PIVOT_ROOT] == PW_AUTORO) {
+		umount2("/", MNT_DETACH);
+		// DELETE THE DIRECTORY
+	}
+*/
 	main_cleanup(ctx_p);
 
 	if (ctx_p->watchdirsize)

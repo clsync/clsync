@@ -22,6 +22,9 @@
 #define __CLSYNC_CTX_H
 
 #include <regex.h>
+#ifdef CAPABILITIES_SUPPORT
+#	include <sys/capability.h>	// __u32
+#endif
 
 #define OPTION_FLAGS		(1<<10)
 #define OPTION_LONGOPTONLY	(1<<9)
@@ -40,13 +43,12 @@ enum flags_enum {
 	BACKGROUND	= 'b',
 	UID		= 'u',
 	GID		= 'g',
-	CAP_PRESERVE_FILEACCESS = 'C',
+	CAP_PRESERVE	= 'C',
 	THREADING	= 'p',
 	RETRIES		= 'r',
 	OUTPUT_METHOD	= 'Y',
 	EXCLUDEMOUNTPOINTS= 'X',
 	PIDFILE		= 'z',
-#ifdef CLUSTER_SUPPORT
 	CLUSTERIFACE	= 'c',
 	CLUSTERMCASTIPADDR='m',
 	CLUSTERMCASTIPPORT='P',
@@ -54,8 +56,6 @@ enum flags_enum {
 	CLUSTERNODENAME = 'n',
 	CLUSTERHDLMIN	= 'o',
 	CLUSTERHDLMAX	= 'O',
-	CLUSTERSDLMAX	= 11|OPTION_LONGOPTONLY,
-#endif
 	DELAY		= 't',
 	BFILEDELAY	= 'T',
 	SYNCDELAY	= 'w',
@@ -84,28 +84,55 @@ enum flags_enum {
 	EXITONNOEVENTS		=  8|OPTION_LONGOPTONLY,
 	STANDBYFILE		=  9|OPTION_LONGOPTONLY,
 	EXITHOOK		= 10|OPTION_LONGOPTONLY,
+	CLUSTERSDLMAX		= 11|OPTION_LONGOPTONLY,
 	PREEXITHOOK		= 12|OPTION_LONGOPTONLY,
-
 	SOCKETAUTH		= 13|OPTION_LONGOPTONLY,
 	SOCKETMOD		= 14|OPTION_LONGOPTONLY,
 	SOCKETOWN		= 15|OPTION_LONGOPTONLY,
-
 	MAXITERATIONS		= 16|OPTION_LONGOPTONLY,
-
 	IGNOREFAILURES		= 17|OPTION_LONGOPTONLY,
-
 	DUMPDIR			= 18|OPTION_LONGOPTONLY,
-
 	CONFIGBLOCKINHERITS	= 19|OPTION_LONGOPTONLY,
-
 	MONITOR			= 20|OPTION_LONGOPTONLY,
-
 	SYNCHANDLERARGS0	= 21|OPTION_LONGOPTONLY,
 	SYNCHANDLERARGS1	= 22|OPTION_LONGOPTONLY,
-
 	CUSTOMSIGNALS		= 23|OPTION_LONGOPTONLY,
+	CHROOT			= 24|OPTION_LONGOPTONLY,
+	MOUNTPOINTS		= 25|OPTION_LONGOPTONLY,
+	THREADSPLITTING		= 26|OPTION_LONGOPTONLY,
+	SYNCHANDLERUID		= 27|OPTION_LONGOPTONLY,
+	SYNCHANDLERGID		= 28|OPTION_LONGOPTONLY,
+	CAPS_INHERIT		= 29|OPTION_LONGOPTONLY,
+	CHECK_EXECVP_ARGS	= 30|OPTION_LONGOPTONLY,
+	PIVOT_ROOT		= 31|OPTION_LONGOPTONLY,
+	DETACH_NETWORK		= 32|OPTION_LONGOPTONLY,
+	DETACH_MISCELLANEA	= 33|OPTION_LONGOPTONLY,
+	ADDPERMITTEDHOOKFILES	= 34|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
+
+enum detachnetwork_way {
+	DN_OFF = 0,
+	DN_NONPRIVILEGED,
+	DN_EVERYWHERE,
+};
+typedef enum detachnetwork_way detachnetwork_way_t;
+
+enum pivotroot_way {
+	PW_OFF    = 0,
+	PW_DIRECT,
+	PW_AUTO,
+	PW_AUTORO,
+};
+typedef enum pivotroot_way pivotroot_way_t;
+
+enum capsinherit {
+	CI_DONTTOUCH = 0,
+	CI_PERMITTED,
+	CI_CLSYNC,
+	CI_EMPTY,
+};
+typedef enum capsinherit capsinherit_t;
 
 enum mode_id {
 	MODE_UNSET	= 0,
@@ -208,6 +235,7 @@ enum state_enum {
 	STATE_EXIT 	= 0,
 	STATE_STARTING,
 	STATE_RUNNING,
+	STATE_SYNCHANDLER_ERR,
 	STATE_REHASH,
 	STATE_PREEXIT,
 	STATE_TERM,
@@ -217,12 +245,21 @@ enum state_enum {
 };
 typedef enum state_enum state_t;
 
-struct ctx {
-	state_t state;
+#define CAP_PRESERVE_TRY (1<<16)
 
+struct ctx {
 #ifndef LIBCLSYNC
+	state_t state;
+	pid_t  pid;
+	char   pid_str[65];
+	size_t pid_str_len;
 	uid_t uid;
 	gid_t gid;
+	uid_t synchandler_uid;
+	gid_t synchandler_gid;
+#ifdef CAPABILITIES_SUPPORT
+	__u32 caps;
+#endif
 	pid_t child_pid[MAXCHILDREN];	// Used only for non-pthread mode
 	int   children;			// Used only for non-pthread mode
 	uint32_t iteration_num;
@@ -286,12 +323,24 @@ struct ctx {
 	unsigned int synctimeout;
 	sigset_t *sigset;
 	char isignoredexitcode[(1<<8)];
+
+	char *chroot_dir;
+
+#ifdef CAPABILITIES_SUPPORT
+	char *permitted_hookfile[MAXPERMITTEDHOOKFILES+1];
+	int   permitted_hookfiles;
 #endif
-	void *indexes_p;
-	void *fsmondata;
+
+#ifdef GETMNTENT_SUPPORT
+	char *mountpoint[MAXMOUNTPOINTS+1];
+	int   mountpoints;
+#endif
 
 	synchandler_args_t synchandler_args[SHARGS_MAX];
 	shflags_t synchandler_argf;
+#endif // ifndef LIBCLSYNC
+	void *indexes_p;
+	void *fsmondata;
 };
 typedef struct ctx ctx_t;
 

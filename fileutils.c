@@ -185,3 +185,25 @@ int mkdirat_open(const char *const dir_path, int dirfd_parent, mode_t dir_mode) 
 	return dirfd;
 }
 
+/**
+ * @brief 			Opens a directory with open()
+ * 
+ * @param[out]	fd_p		Pointer to the result file descriptor
+ @ @param[in]	dir_path	Path to the directory
+ * 
+ * @retval	*fd_p		On success
+ * @retval	-1		On error
+ * 
+ * /
+int open_dir(int *fd_p, const char *const dir_path) {
+	int fd = open(dir_path, O_RDONLY|O_DIRECTORY|O_PATH);
+	if (fd == -1) {
+		error("Got error while open(\"%s\", O_RDWR|O_DIRECTORY|O_PATH)", dir_path);
+		return fd;
+	}
+
+	*fd_p = fd;
+	return fd;
+}
+*/
+

@@ -22,7 +22,7 @@ build_test() {
 	$MAKE clean
 	echo ">>> Testing with \"$@\""
 	# make sure we test paralled build as they tend to fail when single works
-	./configure -C $@ || rm -f config.cache && ./configure -C $@ && $MAKE -j5 || {
+	./configure -C $@ >/dev/null || rm -f config.cache && ./configure -C $@ >/dev/null && $MAKE -j5 >/dev/null || {
 		echo "!!! test with \"$@\" configure options failed"
 		exit 1
 	}
@@ -41,7 +41,7 @@ run_example_cleanup_failure() {
 
 # Run example script
 run_example() {
-	MODE="$1"
+	MODE="$1"; shift;
 
 	export CLSYNC_PIDFILE="/tmp/clsync-example-$MODE.pid"
 
@@ -50,7 +50,7 @@ run_example() {
 
 	trap run_example_cleanup_failure INT TERM
 	cd examples
-	bash -x clsync-start-"$MODE".sh --background --pid-file "$CLSYNC_PIDFILE" --config-file '/NULL/' -w1 -t1 -d9
+	bash -x clsync-start-"$MODE".sh --background --pid-file "$CLSYNC_PIDFILE" --config-file '/NULL/' -w1 -t1 -d9 $@
 	cd -
 
 	sleep 1
@@ -108,7 +108,7 @@ if true; then
 	for a3 in "--enable-paranoid=0" "--enable-paranoid=1" "--enable-paranoid=2" ; do
 	for a4 in "--with-capabilities" "--without-capabilities"; do
 	for a5 in "--enable-socket" "--disable-socket"; do
-	for a6 in "--enable-libclsync" "--disable-libclsync"; do
+	for a6 in "--enable-socket-library" "--disable-socket-library"; do
 		arg="$a0 $a1 $a2 $a3 $a4 $a5 $a6"
 		build_test "$arg"
 	done
@@ -119,7 +119,7 @@ if true; then
 	done
 
 	# clsync disabled, libclsync enabled
-	a0="--disable-clsync --enable-libclsync"
+	a0="--disable-clsync --enable-socket-library"
 	for a2 in "--enable-debug" "--disable-debug"; do
 	for a3 in "--enable-paranoid=0" "--enable-paranoid=1" "--enable-paranoid=2" ; do
 		arg="$a0 $a1 $a2"
@@ -128,7 +128,7 @@ if true; then
 	done
 
 	# clsync disabled, libclsync disabled
-	build_test "--disable-clsync --disable-libclsync"
+	build_test "--disable-clsync --disable-socket-library"
 
 fi
 
@@ -139,6 +139,7 @@ if true; then
 	export CFLAGS="$CFLAGS --coverage -O0"
 	export PATH="$(pwd):$PATH"
 	build_test --enable-cluster --enable-debug --enable-paranoid=2 --with-capabilities --without-mhash
+	run_example rsyncdirect --thread-splitting
 	run_example rsyncdirect
 	run_example rsyncshell
 #	run_example rsyncso

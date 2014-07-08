@@ -87,10 +87,20 @@ AM_CONDITIONAL([LIBCLSYNC], [test "x$enable_socket_library" = "xyes"])
 dnl --enable-debug
 AC_ARG_ENABLE(debug,
 AS_HELP_STRING(--enable-debug,
-[enable debugging, default: no]))
+[enable debugging support, default: yes; value: no, yes, force]),
+[case "${enableval}" in
+	(0|"no")    debug=0 ;;
+	(1|"yes")   debug=1 ;;
+	(2|"force") debug=2 ;;
+	(*)         AC_MSG_ERROR([bad value ${enableval} for --enable-debug]) ;;
+esac],
+[debug=1])
 
-AS_IF([test "x$enable_debug" = "xyes"],
-[CFLAGS="${CFLAGS} -pipe -Wall -O0 -ggdb3" CPPFLAGS="${CPPFLAGS} -D_DEBUG"])
+AS_IF([ test "$debug" -ge 1 ],
+[CFLAGS="${CFLAGS} -pipe -Wall -O0 -ggdb3" CPPFLAGS="${CPPFLAGS} -D_DEBUG_SUPPORT"])
+
+AS_IF([ test "$debug" -ge 2 ],
+[CPPFLAGS="${CPPFLAGS} -D_DEBUG_FORCE"])
 
 dnl --paranoid
 AC_ARG_ENABLE(paranoid,
@@ -100,7 +110,7 @@ AS_HELP_STRING([--enable-paranoid],
 	(0|"no")    paranoid=0 ;;
 	(1|"yes")   paranoid=1 ;;
 	(2)         paranoid=2 ;;
-	(*)         AC_MSG_ERROR([bad value ${enableval} for --paranoid]) ;;
+	(*)         AC_MSG_ERROR([bad value ${enableval} for --enable-paranoid]) ;;
 esac],
 [paranoid=1])
 
@@ -125,6 +135,15 @@ AC_SEARCH_LIBS([dlopen], [dl], [LDFLAGS="${LDFLAGS} -rdynamic"],
 dnl -lrt is needed on < glibc-2.17
 AC_SEARCH_LIBS([clock_getres], [rt], [],
     [AC_MSG_ERROR("Unable to find librt; clock_getres() is needed")])
+
+dnl searching for getmntent
+AC_CHECK_FUNC([getmntent], [HAVE_GETMNTENT=1])
+
+dnl searching for pivot_root
+AC_CHECK_FUNC([pivot_root], [HAVE_PIVOTROOT=1])
+
+dnl searching for unshare
+AC_CHECK_FUNC([unshare], [HAVE_UNSHARE=1])
 
 dnl capabilities check
 AC_ARG_WITH(capabilities,
@@ -305,6 +324,9 @@ AM_CONDITIONAL([HAVE_BSM],          [test "x$HAVE_BSM"          != "x"])
 AM_CONDITIONAL([HAVE_DTRACEPIPE],   [test "x$HAVE_DTRACEPIPE"   != "x"])
 AM_CONDITIONAL([HAVE_BACKTRACE],    [test "x$HAVE_BACKTRACE"    != "x"])
 AM_CONDITIONAL([HAVE_CAPABILITIES], [test "x$HAVE_CAPABILITIES" != "x"])
+AM_CONDITIONAL([HAVE_GETMNTENT],    [test "x$HAVE_GETMNTENT"    != "x"])
+AM_CONDITIONAL([HAVE_PIVOTROOT],    [test "x$HAVE_PIVOTROOT"    != "x"])
+AM_CONDITIONAL([HAVE_UNSHARE],      [test "x$HAVE_UNSHARE"    != "x"])
 
 AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' ], [AC_MSG_FAILURE([kqueue, inotify and bsm are not supported on this system])])
 

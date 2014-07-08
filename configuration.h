@@ -31,6 +31,9 @@
 // children count limit
 #define MAXCHILDREN			(1<<8)
 
+#define MAXMOUNTPOINTS			(1<<8)
+#define MAXPERMITTEDHOOKFILES		(1<<8)
+
 #ifdef __CLSYNC_COMMON_H
 #	if INOTIFY_SUPPORT
 #		define DEFAULT_NOTIFYENGINE	NE_INOTIFY
@@ -108,9 +111,12 @@ filesz:1M\n\
 
 #define DTRACE_PATH			"dtrace"
 
+#define PIVOT_AUTO_DIR			"/dev/shm/clsync-rootfs"
 #define	TMPDIR_TEMPLATE			"/tmp/clsync-XXXXXX"
 
 #define SYSLOG_BUFSIZ			(1<<16)
+#define SYSLOG_FLAGS			(LOG_PID|LOG_CONS)
+#define SYSLOG_FACILITY			LOG_DAEMON
 
 #define CLSYNCSOCK_WINDOW		(1<<8)
 
@@ -140,4 +146,15 @@ filesz:1M\n\
 		"\%INCLUDE-LIST-PATH\%",\
 		"--exclude=*",		\
 		NULL }
+
+#define DEFAULT_PRESERVE_CAPABILITIES	( CAP_TO_MASK(CAP_DAC_READ_SEARCH) | CAP_TO_MASK(CAP_SETUID) | CAP_TO_MASK(CAP_SETGID) | CAP_TO_MASK(CAP_KILL) )
+
+#define DEFAULT_USER			"nobody"
+#define DEFAULT_GROUP			"nogroup"
+#define DEFAULT_UID			65534
+#define DEFAULT_GID			65534
+#define DEFAULT_CAPS_INHERIT		CI_EMPTY
+#define DEFAULT_PIVOT_MODE		(PW_OFF)
+
+//#define READWRITE_SIGNALLING
 
