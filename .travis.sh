@@ -110,7 +110,7 @@ if true; then
 	for a5 in "--enable-socket" "--disable-socket"; do
 	for a6 in "--enable-socket-library" "--disable-socket-library"; do
 	for a7 in "--enable-highload-locks" ""; do
-		arg="$a0 $a1 $a2 $a3 $a4 $a5 $a6 $7"
+		arg="$a0 $a1 $a2 $a3 $a4 $a5 $a6 $a7"
 		build_test "$arg"
 	done
 	done
