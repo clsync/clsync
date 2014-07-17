@@ -156,5 +156,7 @@ filesz:1M\n\
 #define DEFAULT_CAPS_INHERIT		CI_EMPTY
 #define DEFAULT_PIVOT_MODE		(PW_OFF)
 
+//#define HL_LOCK_TRYES			(1<<4)
+
 //#define READWRITE_SIGNALLING
 

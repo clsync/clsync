@@ -50,6 +50,10 @@ clsync_CFLAGS  += -DPIVOTROOT_OPT_SUPPORT
 endif
 endif
 
+if HLLOCKS
+clsync_CFLAGS  += -DHL_LOCKS
+endif
+
 if SOCKET
 clsync_SOURCES += socket.c control.c program.h
 endif

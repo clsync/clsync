@@ -1197,8 +1197,11 @@ way to secure your system from any bug in
 .B clsync
 while running it with capabilities or root privileges. But
 .B clsync
-will utilize in few times more CPU resources. So it's a performance vs
-security trade off.
+may utilize in few times more CPU resources. So it's a performance vs security
+trade off.
+
+You can essentialy reduce the overhead with using "high load locks"
+("\-\-enable\-highload\-locks" of "./configure" file).
 
 If you're using this option and running the
 .I sync\-handler

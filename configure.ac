@@ -84,6 +84,12 @@ AS_HELP_STRING(--enable-socket-library,
 [build libclsync socket library, default: no]))
 AM_CONDITIONAL([LIBCLSYNC], [test "x$enable_socket_library" = "xyes"])
 
+dnl --enable-highload-locks
+AC_ARG_ENABLE(highload-locks,
+AS_HELP_STRING(--enable-highload-locks,
+[enable locks for high loaded instances (it requires more CPU, but it's faster) for --thread-splitting [not well tested, can cause deadlocks with 100% CPU utilization], default: no]))
+AM_CONDITIONAL([HLLOCKS], [test "x$enable_highload_locks" = "xyes"])
+
 dnl --enable-debug
 AC_ARG_ENABLE(debug,
 AS_HELP_STRING(--enable-debug,

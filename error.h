@@ -22,6 +22,12 @@
 
 #define BACKTRACE_LENGTH	256
 
+#ifdef _DEBUG_FORCE
+#	define DEBUGLEVEL_LIMIT 255
+#else
+#	define DEBUGLEVEL_LIMIT 9
+#endif
+
 extern void _critical( const char *const function_name, const char *fmt, ...);
 #define critical(...) 				_critical(__FUNCTION__, __VA_ARGS__)
 
@@ -36,7 +42,7 @@ extern void _info(const char *const function_name, const char *fmt, ...);
 
 #ifdef _DEBUG_SUPPORT
 	extern void _debug(int debug_level, const char *const function_name, const char *fmt, ...);
-#	define debug(debug_level, ...)			_debug(debug_level, __FUNCTION__, __VA_ARGS__)
+#	define debug(debug_level, ...)			{if (debug_level < DEBUGLEVEL_LIMIT) _debug(debug_level, __FUNCTION__, __VA_ARGS__);}
 #	define error_or_debug(debug_level, ...)		((debug_level)<0 ? _error(__FUNCTION__, __VA_ARGS__) : _debug(debug_level, __FUNCTION__, __VA_ARGS__))
 #else
 #	define debug(debug_level, ...)			{}

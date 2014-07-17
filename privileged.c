@@ -61,6 +61,8 @@ int nonp_write_fd;
 enum privileged_action {
 	PA_UNKNOWN = 0,
 
+	PA_SETUP,
+
 	PA_DIE,
 
 	PA_FTS_OPEN,
@@ -74,10 +76,27 @@ enum privileged_action {
 
 	PA_FORK_EXECVP,
 
-	PA_SETUP,
-
 	PA_KILL_CHILD,
 };
+
+#ifdef HL_LOCKS
+enum highload_lock_id {
+	HLLOCK_HANDLER = 0,
+
+	HLLOCK_MAX
+};
+typedef enum highlock_lock_id hllockid_t;
+
+enum highlock_lock_state {
+	HLLS_UNREADY	= 0x00,
+	HLLS_READY	= 0x01,
+	HLLS_FALLBACK	= 0x02,
+	HLLS_SIGNAL	= 0x04,
+	HLLS_GOTSIGNAL	= 0x08,
+	HLLS_WORKING	= 0x10,
+};
+typedef enum highlock_lock_state hllock_state_t;
+#endif
 
 struct pa_fts_open_arg {
 	char * const *path_argv;
@@ -404,6 +423,89 @@ int pa_setup(struct pa_options *opts, ctx_t *ctx_p, uid_t *exec_uid_p, gid_t *ex
 	return 0;
 }
 
+#ifdef HL_LOCKS
+static int            hl_count_wait  [HLLOCK_MAX] = {0};
+static int            hl_count_signal[HLLOCK_MAX] = {0};
+static hllock_state_t hl_state[HLLOCK_MAX]        = {0};
+
+static inline int hl_isanswered(int lockid) {
+	return hl_count_wait[lockid] == hl_count_signal[lockid]+1;
+}
+
+static inline int hl_isready(int lockid) {
+	return hl_count_wait[lockid] == hl_count_signal[lockid];
+}
+
+static inline void hl_setstate(int lockid, hllock_state_t stateid) {
+	hl_state[lockid] = stateid;
+}
+
+int hl_setstate_ifstate(int lockid, hllock_state_t stateid_new, hllock_state_t stateid_old_mask) {
+	static int local_lock = 0;
+
+	if (local_lock)
+		return 0;
+
+	g_atomic_int_inc(&local_lock);
+	if (local_lock != 1) {
+		g_atomic_int_dec_and_test(&local_lock);
+		return 0;
+	}
+
+	if (!(hl_state[lockid]&stateid_old_mask)) {
+		g_atomic_int_dec_and_test(&local_lock);
+		return 0;
+	}
+
+	hl_state[lockid] = stateid_new;
+
+	g_atomic_int_dec_and_test(&local_lock);
+	return 1;
+}
+
+static inline int hl_wait(int lockid) {
+	volatile long try = 0;
+
+	debug(15, "");
+
+	while (hl_state[lockid] == HLLS_GOTSIGNAL);
+	while (!hl_isready(lockid));
+	hl_setstate(lockid, HLLS_READY);
+	hl_count_wait[lockid]++;
+
+	while (try++ < HL_LOCK_TRYES)
+		if (hl_state[lockid] == HLLS_SIGNAL) {
+			hl_setstate(lockid, HLLS_GOTSIGNAL);
+			debug(15, "got signal");
+			return 1;
+		}
+
+	while (!hl_setstate_ifstate(lockid, HLLS_FALLBACK, HLLS_READY|HLLS_SIGNAL));
+	debug(14, "fallback: hl_count_wait[%u] == %u; hl_count_signal[%u] = %u", lockid, hl_count_wait[lockid], lockid, hl_count_signal[lockid]);
+	return 0;
+}
+
+static inline int hl_signal(int lockid) {
+	debug(15, "%u", lockid);
+	hl_count_signal[lockid]++;
+
+	if (hl_setstate_ifstate(lockid, HLLS_SIGNAL, HLLS_READY)) {
+		while (hl_state[lockid] != HLLS_GOTSIGNAL)
+			if (hl_state[lockid] == HLLS_FALLBACK) {
+				debug(15, "fallback");
+				return 0;
+			}
+		debug(15, "the signal is sent");
+		hl_setstate(lockid, HLLS_WORKING);
+		return 1;
+	}
+
+	debug(15, "not ready");
+	return 0;
+}
+
+#endif
+
 static int privileged_handler_running = 1;
 void *privileged_handler(void *_ctx_p)
 {
@@ -433,18 +535,21 @@ void *privileged_handler(void *_ctx_p)
 	debug(2, "Running the loop");
 	while (privileged_handler_running) {
 		// Waiting for command
-#ifdef _DEBUG_FORCE
-		debug(3, "Waiting for command", cmd.action);
+		debug(10, "Waiting for command", cmd.action);
+#ifdef HL_LOCKS
+		if (!hl_wait(HLLOCK_HANDLER)) {
 #endif
 #ifdef READWRITE_SIGNALLING
-		read_inf(priv_read_fd, buf, 1);
+			read_inf(priv_read_fd, buf, 1);
 #else
-		pthread_cond_wait(&pthread_cond_privileged, &pthread_mutex_privileged);
+			pthread_cond_wait(&pthread_cond_privileged, &pthread_mutex_privileged);
+#endif
+#ifdef HL_LOCKS
+			hl_setstate(HLLOCK_HANDLER, HLLS_WORKING);
+		}
 #endif
 
-#ifdef _DEBUG_FORCE
-		debug(3, "Got command %u", cmd.action);
-#endif
+		debug(10, "Got command %u", cmd.action);
 
 		if (!setup && cmd.action != PA_SETUP)
 			critical("A try to use commands before PA_SETUP");
@@ -522,15 +627,15 @@ void *privileged_handler(void *_ctx_p)
 		}
 
 		cmd._errno = errno;
-#ifdef _DEBUG_FORCE
-		debug(3, "Result: %p, errno: %u. Sending the signal to non-privileged thread.", cmd.ret, cmd._errno);
-#endif
-#ifdef READWRITE_SIGNALLING
+		debug(10, "Result: %p, errno: %u. Sending the signal to non-privileged thread.", cmd.ret, cmd._errno);
+#ifndef HL_LOCKS
+# ifdef READWRITE_SIGNALLING
 		write_inf(nonp_write_fd, buf, 1);
-#else
+# else
 		pthread_mutex_lock(&pthread_mutex_action_signal);
 		pthread_mutex_unlock(&pthread_mutex_action_signal);
 		pthread_cond_signal(&pthread_cond_action);
+# endif
 #endif
 	}
 
@@ -548,51 +653,63 @@ static inline int privileged_action(
 #ifdef READWRITE_SIGNALLING
 	char buf[1] = {0};
 #endif
-#ifdef _DEBUG_FORCE
-	debug(3, "(%u, %p, %p)", action, arg, ret_p);
-#endif
+	debug(10, "(%u, %p, %p)", action, arg, ret_p);
 
 	pthread_mutex_lock(&pthread_mutex_action_entrance);
-#ifndef READWRITE_SIGNALLING
-	pthread_mutex_lock(&pthread_mutex_action_signal);
-
-	debug(4, "Waiting the privileged thread to get prepared for signal");
+#if !READWRITE_SIGNALLING
+	debug(10, "Waiting the privileged thread to get prepared for signal");
+# ifdef HL_LOCKS
+	while (!hl_isanswered(HLLOCK_HANDLER));
+# else
 	pthread_mutex_lock(&pthread_mutex_privileged);
 	pthread_mutex_unlock(&pthread_mutex_privileged);
+# endif
 #endif
 	if (!privileged_handler_running) {
 		debug(1, "The privileged thread is dead. Ignoring the command.");
 		return ENOENT;
 	}
 
-#ifdef _DEBUG_FORCE
-	debug(4, "Sending information to the privileged thread");
-#endif
+	debug(10, "Sending information to the privileged thread");
 	cmd.action = action;
 	cmd.arg    = arg;
+#ifdef HL_LOCKS
+	if (!hl_signal(HLLOCK_HANDLER)) {
+#endif
 #ifdef READWRITE_SIGNALLING
-	write_inf(priv_write_fd, buf, 1);
+		write_inf(priv_write_fd, buf, 1);
 #else
-	pthread_cond_signal(&pthread_cond_privileged);
+# ifdef HL_LOCKS
+		debug(10, "Waiting the privileged thread to get prepared for signal (by fallback)");
+		pthread_mutex_lock(&pthread_mutex_privileged);
+		pthread_mutex_unlock(&pthread_mutex_privileged);
+# else
+		pthread_mutex_lock(&pthread_mutex_action_signal);
+# endif
+		debug(10, "pthread_cond_signal(&pthread_cond_privileged)");
+		pthread_cond_signal(&pthread_cond_privileged);
+#endif
+#ifdef HL_LOCKS
+	}
 #endif
 
-#ifdef _DEBUG_FORCE
-	debug(4, "Waiting for the answer");
-#endif
-#ifdef READWRITE_SIGNALLING
-	read_inf(nonp_read_fd, buf, 1);
+	debug(10, "Waiting for the answer");
+#ifdef HL_LOCKS
+	while (!hl_isanswered(HLLOCK_HANDLER) && privileged_handler_running);
 #else
-	pthread_cond_wait  (&pthread_cond_action, &pthread_mutex_action_signal);
+# ifdef READWRITE_SIGNALLING
+	read_inf(nonp_read_fd, buf, 1);
+# else
+	pthread_cond_wait(&pthread_cond_action, &pthread_mutex_action_signal);
+# endif
 #endif
 
 	if (ret_p != NULL)
 		*ret_p = cmd.ret;
 	errno = cmd._errno;
 
-#ifdef _DEBUG_FORCE
-	debug(4, "Unlocking pthread_mutex_action_*");
-#endif
-#ifndef READWRITE_SIGNALLING
+	debug(10, "Unlocking pthread_mutex_action_*");
+#if READWRITE_SIGNALLING | !HL_LOCKS
 	pthread_mutex_unlock(&pthread_mutex_action_signal);
 #endif
 	pthread_mutex_unlock(&pthread_mutex_action_entrance);
