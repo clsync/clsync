@@ -118,6 +118,7 @@ if true; then
 	done
 	done
 	done
+	done
 
 	# clsync disabled, libclsync enabled
 	a0="--disable-clsync --enable-socket-library"
