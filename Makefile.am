@@ -120,5 +120,5 @@ CLEANFILES = revision.h
 if CLSYNC
 CLEANFILES += examples/rules
 clean-local:
-	-rm -rf examples/testdir examples/*.o examples/*.so examples/*.xz doc
+	-rm -rf examples/testdir examples/*.o examples/*.so examples/*.xz doc/doxygen
 endif
