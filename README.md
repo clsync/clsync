@@ -191,13 +191,11 @@ For really dummies or/and lazy users, there's a video demonstration:
 7. Other uses
 -------------
 
-Also, clsync may be used to do nearly atomic directory recursive copy.
-
 For example, command
 
     ionice -c 3 clsync -L /dev/shm/clsync --exit-on-no-events -x 23 -x 24 -M rsyncdirect -S $(which rsync) -W /path/from -D /path/to -d1
 
-may be used to copy "/path/from" into "/path/to" with sync up of changes made (in "/path/from") while the copying. It will copy new changes over and over until there will be no changes, and then clsync will exit.
+may be used to copy "/path/from" into "/path/to" with sync up of changes made (in "/path/from") while the copying. It will copy new changes over and over until there will be no changes, and then clsync will exit. It may be used as atomicity-like recursive copy.
 
 
 
@@ -205,7 +203,7 @@ Or command
 
     clsync -w5 -t5 -T5 -x1 -W /var/www/site.example.org/root -Mdirect -Schown --uid 0 --gid 0 -Ysyslog -b1 -- --from=root www-data:www-data %INCLUDE-LIST%
 
-may be used to fix files owner in runtime.
+may be used to fix files owner in runtime. This may be used as a temporary solution for fixing file privileges of misconfigured web-servers (it's well-known problem of apache users).
 
 8. Clustering
 -------------
