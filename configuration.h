@@ -158,7 +158,7 @@ filesz:1M\n\
 
 // How long to wait on highloaded locks before fallback to mutexes
 // See: doc/devel/thread-splitting/highload-locks/clsync-graph-comma.odc
-#define HL_LOCK_TRYES			(1<<18)
+#define HL_LOCK_TRYES			(1<<13)
 
 //#define READWRITE_SIGNALLING
 
