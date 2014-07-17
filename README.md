@@ -200,6 +200,13 @@ For example, command
 may be used to copy "/path/from" into "/path/to" with sync up of changes made (in "/path/from") while the copying. It will copy new changes over and over until there will be no changes, and then clsync will exit.
 
 
+
+Or command
+
+    clsync -w5 -t5 -T5 -x1 -W /var/www/site.example.org/root -Mdirect -Schown --uid 0 --gid 0 -Ysyslog -b1 -- --from=root www-data:www-data %INCLUDE-LIST%
+
+may be used to fix files owner in runtime.
+
 8. Clustering
 -------------
 
