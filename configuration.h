@@ -156,6 +156,8 @@ filesz:1M\n\
 #define DEFAULT_CAPS_INHERIT		CI_EMPTY
 #define DEFAULT_PIVOT_MODE		(PW_OFF)
 
+// How long to wait on highloaded locks before fallback to mutexes
+// See: doc/devel/thread-splitting/highload-locks/clsync-graph-comma.odc
 #define HL_LOCK_TRYES			(1<<13)
 
 //#define READWRITE_SIGNALLING
