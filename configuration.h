@@ -158,7 +158,23 @@ filesz:1M\n\
 
 // How long to wait on highloaded locks before fallback to mutexes
 // See: doc/devel/thread-splitting/highload-locks/clsync-graph-comma.odc
-#define HL_LOCK_TRYES			(1<<13)
+// But optimal value can be very different on different systems
+#define HL_LOCK_TRIES_INITIAL		(1<<13)
+
+// Enable run-time auto-adjustment
+#define HL_LOCK_TRIES_AUTO
+// Iterations delay between adjustments (power of 2; 2^x)
+#define HL_LOCK_AUTO_INTERVAL		10	/* 1024 */
+// Initial adjustment factor
+#define HL_LOCK_AUTO_K			1.1
+// Delay detection error threshold
+#define HL_LOCK_AUTO_THREADHOLD		0.2
+// Adjustment factor denominator
+#define HL_LOCK_AUTO_DECELERATION	1.1
+// Don't adjust if the factor is less than
+#define HL_LOCK_AUTO_K_FINISH		1.001
+// Upper limit
+#define HL_LOCK_AUTO_LIMIT_HIGH		(1<<20)
 
 //#define READWRITE_SIGNALLING
 

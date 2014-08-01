@@ -1342,7 +1342,7 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 
         debug(3, "fts_opts == %p", (void *)(long)fts_opts);
 
-	tree = privileged_fts_open((char *const *)&rootpaths, fts_opts, NULL);
+	tree = privileged_fts_open((char *const *)&rootpaths, fts_opts, NULL, PC_SYNC_INIIALSYNC_WALK_FTS_OPEN);
 
 	if (tree == NULL) {
 		error("Cannot privileged_fts_open() on \"%s\".", dirpath);
@@ -1355,7 +1355,7 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 	char  *path_rel		= NULL;
 	size_t path_rel_len	= 0;
 
-	while ((node = privileged_fts_read(tree))) {
+	while ((node = privileged_fts_read(tree, PC_SYNC_INIIALSYNC_WALK_FTS_READ))) {
 		switch (node->fts_info) {
 			// Duplicates:
 			case FTS_DP:
@@ -1458,7 +1458,7 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 		goto l_sync_initialsync_walk_end;
 	}
 
-	if (privileged_fts_close(tree)) {
+	if (privileged_fts_close(tree, PC_SYNC_INIIALSYNC_WALK_FTS_CLOSE)) {
 		error("Got error while privileged_fts_close().");
 		ret = errno;
 		goto l_sync_initialsync_walk_end;
@@ -1746,7 +1746,7 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 	int fts_opts = FTS_NOCHDIR|FTS_PHYSICAL|FTS_NOSTAT|(ctx_p->flags[ONEFILESYSTEM]?FTS_XDEV:0);
 
         debug(3, "fts_opts == %p", (void *)(long)fts_opts);
-	tree = privileged_fts_open((char *const *)&rootpaths, fts_opts, NULL);
+	tree = privileged_fts_open((char *const *)&rootpaths, fts_opts, NULL, PC_SYNC_MARK_WALK_FTS_OPEN);
 
 	if (tree == NULL) {
 		error_or_debug((ctx_p->state == STATE_STARTING) ?-1:2, "Cannot privileged_fts_open() on \"%s\".", dirpath);
@@ -1757,7 +1757,7 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 	char  *path_rel		= NULL;
 	size_t path_rel_len	= 0;
 
-	while ((node = privileged_fts_read(tree))) {
+	while ((node = privileged_fts_read(tree, PC_SYNC_MARK_WALK_FTS_READ))) {
 #ifdef CLUSTER_SUPPORT
 		int ret;
 #endif
@@ -1828,7 +1828,7 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 		goto l_sync_mark_walk_end;
 	}
 
-	if (privileged_fts_close(tree)) {
+	if (privileged_fts_close(tree, PC_SYNC_MARK_WALK_FTS_CLOSE)) {
 		error_or_debug((ctx_p->state == STATE_STARTING) ?-1:2, "Got error while privileged_fts_close().");
 		ret = errno;
 		goto l_sync_mark_walk_end;

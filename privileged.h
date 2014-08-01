@@ -17,44 +17,107 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifdef HL_LOCK_TRIES_AUTO
+# define IF_HL_LOCK_TRIES_AUTO(a) a
+#else
+# define IF_HL_LOCK_TRIES_AUTO(a) {}
+#endif
+
 #ifdef CAPABILITIES_SUPPORT
 
-extern FTS *(*privileged_fts_open)		(
+enum priv_callid {
+	PC_DEFAULT = 0,
+	PC_SYNC_INIIALSYNC_WALK_FTS_OPEN,
+	PC_SYNC_INIIALSYNC_WALK_FTS_READ,
+	PC_SYNC_INIIALSYNC_WALK_FTS_CLOSE,
+	PC_SYNC_MARK_WALK_FTS_OPEN,
+	PC_SYNC_MARK_WALK_FTS_READ,
+	PC_SYNC_MARK_WALK_FTS_CLOSE,
+	PC_INOTIFY_ADD_WATCH_DIR,
+
+	PC_MAX
+};
+
+extern FTS *(*_privileged_fts_open)		(
 		char * const *path_argv,
 		int options,
 		int (*compar)(const FTSENT **, const FTSENT **)
+# ifdef HL_LOCK_TRIES_AUTO
+		, int callid
+# endif
 	);
 
-extern FTSENT *(*privileged_fts_read)		(FTS *ftsp);
-extern int (*privileged_fts_close)		(FTS *ftsp);
-extern int (*privileged_inotify_init)		();
-extern int (*privileged_inotify_init1)		(int flags);
+extern FTSENT *(*_privileged_fts_read)		(
+		FTS *ftsp
+# ifdef HL_LOCK_TRIES_AUTO
+		, int callid
+# endif
+	);
 
-extern int (*privileged_inotify_add_watch)	(
+extern int (*_privileged_fts_close)		(
+		FTS *ftsp
+# ifdef HL_LOCK_TRIES_AUTO
+		, int callid
+# endif
+	);
+
+extern int (*_privileged_inotify_init)		();
+extern int (*_privileged_inotify_init1)		(int flags);
+
+extern int (*_privileged_inotify_add_watch)	(
 		int fd,
 		const char *pathname,
 		uint32_t mask
+# ifdef HL_LOCK_TRIES_AUTO
+		, int callid
+# endif
 	);
 
-extern int (*privileged_inotify_rm_watch)	(
+extern int (*_privileged_inotify_rm_watch)	(
 		int fd,
 		int wd
 	);
 
+# ifdef HL_LOCK_TRIES_AUTO
+#  define privileged_fts_open(a,b,c,d)		_privileged_fts_open(a,b,c,d)
+#  define privileged_fts_read(a,b)		_privileged_fts_read(a,b)
+#  define privileged_fts_close(a,b)		_privileged_fts_close(a,b)
+#  define privileged_inotify_add_watch(a,b,c,d)	_privileged_inotify_add_watch(a,b,c,d)
+# else
+#  define privileged_fts_open(a,b,c,d)		_privileged_fts_open(a,b,c)
+#  define privileged_fts_read(a,b)		_privileged_fts_read(a)
+#  define privileged_fts_close(a,b)		_privileged_fts_close(a)
+#  define privileged_inotify_add_watch(a,b,c,d)	_privileged_inotify_add_watch(a,b,c)
+# endif
+
+# define privileged_inotify_init		_privileged_inotify_init
+# define privileged_inotify_init1		_privileged_inotify_init1
+# define privileged_inotify_rm_watch		_privileged_inotify_rm_watch
+
 #else
 
-#define privileged_fts_open		fts_open
-#define privileged_fts_read		fts_read
-#define privileged_fts_close		fts_close
-#define privileged_inotify_init		inotify_init
-#define privileged_inotify_init1	inotify_init1
-#define privileged_inotify_add_watch	inotify_add_watch
-#define privileged_inotify_rm_watch	inotify_rm_watch
+# define privileged_fts_open(a,b,c,d)		fts_open(a,b,c)
+# define privileged_fts_read(a,b)		fts_read(a)
+# define privileged_fts_close(a,b)		fts_close(a)
+# define privileged_inotify_init		inotify_init
+# define privileged_inotify_init1		inotify_init1
+# define privileged_inotify_add_watch(a,b,c,d)	inotify_add_watch(a,b,c)
+# define privileged_inotify_rm_watch		inotify_rm_watch
 
 #endif
 
-extern int (*privileged_kill_child)(pid_t pid, int sig);
-extern int (*privileged_fork_execvp)(const char *file, char *const argv[]);
+extern int (*_privileged_kill_child)(
+		pid_t pid,
+		int sig
+	);
+
+extern int (*_privileged_fork_execvp)(
+		const char *file,
+		char *const argv[]
+	);
+
+#define privileged_kill_child			_privileged_kill_child
+#define privileged_fork_execvp			_privileged_fork_execvp
 
 extern int privileged_init(struct ctx *ctx_p);
 extern int privileged_deinit(struct ctx *ctx_p);
