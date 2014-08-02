@@ -172,7 +172,7 @@ filesz:1M\n\
 // Adjustment factor denominator
 #define HL_LOCK_AUTO_DECELERATION	1.1
 // Don't adjust if the factor is less than
-#define HL_LOCK_AUTO_K_FINISH		1.001
+#define HL_LOCK_AUTO_K_FINISH		0.001
 // Upper limit
 #define HL_LOCK_AUTO_LIMIT_HIGH		(1<<20)
 

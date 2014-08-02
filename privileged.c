@@ -740,7 +740,7 @@ static inline int privileged_action(
 #ifdef HL_LOCK_TRIES_AUTO
 	cmd.hl_lock_tries = hl_lock_tries[callid];
 
-	isadjusting = ((double)fabs(hl_lock_tries_step[callid]) > (double)HL_LOCK_AUTO_K_FINISH);
+	isadjusting = ((double)fabs(hl_lock_tries_step[callid]-1) > (double)HL_LOCK_AUTO_K_FINISH);
 
 	if (isadjusting)
 		isadjusting = !((++hl_lock_count[callid]) << (sizeof(hl_lock_count[callid])*CHAR_BIT - HL_LOCK_AUTO_INTERVAL));
@@ -784,7 +784,7 @@ static inline int privileged_action(
 		if (diff && ((unsigned long)labs(diff) > (unsigned long)delay*HL_LOCK_AUTO_THREADHOLD)) {
 
 			if (diff > 0)
-				hl_lock_tries_step[callid] = (hl_lock_tries_step[callid]-1)/HL_LOCK_AUTO_DECELERATION+1;
+				hl_lock_tries_step[callid] = 1/((hl_lock_tries_step[callid]-1)/HL_LOCK_AUTO_DECELERATION+1);
 
 			hl_lock_delay[callid]  = delay;
 
