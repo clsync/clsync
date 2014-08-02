@@ -21,6 +21,7 @@
 #include "ctx.h"			// ctx_t
 #include "error.h"			// debug()
 #include "syscalls.h"			// read_inf()/write_inf()
+#include "main.h"			// ncpus
 
 #ifdef CAPABILITIES_SUPPORT
 #	include <pthread.h>		// pthread_create()
@@ -93,11 +94,17 @@ enum privileged_action {
 };
 
 #ifdef HL_LOCKS
+int		hl_lock_enabled;
 # ifdef HL_LOCK_TRIES_AUTO
 unsigned long	hl_lock_tries[PC_MAX]		= {[0 ... PC_MAX-1] = HL_LOCK_TRIES_INITIAL};
 unsigned long	hl_lock_count[PC_MAX]		= {[0 ... PC_MAX-1] = 0};
 unsigned long	hl_lock_delay[PC_MAX]		= {[0 ... PC_MAX-1] = ((unsigned long)~0)>>2};
 double		hl_lock_tries_step[PC_MAX]	= {[0 ... PC_MAX-1] = HL_LOCK_AUTO_K};
+
+#  define	hl_lock_tries_cur hl_lock_tries[callid]
+# else
+unsigned long	hl_lock_tries	= HL_LOCK_TRIES_INITIAL;
+#  define	hl_lock_tries_cur hl_lock_tries
 # endif
 
 enum highload_lock_id {
@@ -508,8 +515,6 @@ static inline int hl_wait(
 		int lockid
 #ifdef HL_LOCK_TRIES_AUTO
 		, unsigned long hl_lock_tries
-#else
-#define	hl_lock_tries HL_LOCK_TRIES_INITIAL
 #endif
 ) {
 	volatile long try = 0;
@@ -532,9 +537,6 @@ static inline int hl_wait(
 	debug(14, "fallback: hl_count_wait[%u] == %u; hl_count_signal[%u] = %u", lockid, hl_count_wait[lockid], lockid, hl_count_signal[lockid]);
 	return 0;
 }
-#ifndef HL_LOCK_TRIES_AUTO
-#undef hl_lock_tries
-#endif
 
 static inline int hl_signal(int lockid) {
 	debug(15, "%u", lockid);
@@ -588,7 +590,7 @@ void *privileged_handler(void *_ctx_p)
 		// Waiting for command
 		debug(10, "Waiting for command");
 #ifdef HL_LOCKS
-		if (!hl_wait(
+		if (!hl_lock_enabled || !hl_wait(
 			HLLOCK_HANDLER
 # ifdef HL_LOCK_TRIES_AUTO
 			, cmd.hl_lock_tries
@@ -601,7 +603,8 @@ void *privileged_handler(void *_ctx_p)
 			pthread_cond_wait(&pthread_cond_privileged, &pthread_mutex_privileged);
 #endif
 #ifdef HL_LOCKS
-			hl_setstate(HLLOCK_HANDLER, HLLS_WORKING);
+			if (hl_lock_enabled)
+				hl_setstate(HLLOCK_HANDLER, HLLS_WORKING);
 		}
 #endif
 
@@ -684,14 +687,18 @@ void *privileged_handler(void *_ctx_p)
 
 		cmd._errno = errno;
 		debug(10, "Result: %p, errno: %u. Sending the signal to non-privileged thread.", cmd.ret, cmd._errno);
-#ifndef HL_LOCKS
-# ifdef READWRITE_SIGNALLING
-		write_inf(nonp_write_fd, buf, 1);
-# else
-		pthread_mutex_lock(&pthread_mutex_action_signal);
-		pthread_mutex_unlock(&pthread_mutex_action_signal);
-		pthread_cond_signal(&pthread_cond_action);
-# endif
+#ifdef HL_LOCKS
+		if (!hl_lock_enabled) {
+#endif
+#ifdef READWRITE_SIGNALLING
+			write_inf(nonp_write_fd, buf, 1);
+#else
+			pthread_mutex_lock(&pthread_mutex_action_signal);
+			pthread_mutex_unlock(&pthread_mutex_action_signal);
+			pthread_cond_signal(&pthread_cond_action);
+#endif
+#ifdef HL_LOCKS
+		}
 #endif
 	}
 
@@ -723,10 +730,14 @@ static inline int privileged_action(
 #if !READWRITE_SIGNALLING
 	debug(10, "Waiting the privileged thread to get prepared for signal");
 # ifdef HL_LOCKS
-	while (!hl_isanswered(HLLOCK_HANDLER));
-# else
-	pthread_mutex_lock(&pthread_mutex_privileged);
-	pthread_mutex_unlock(&pthread_mutex_privileged);
+	if (hl_lock_enabled) {
+		while (!hl_isanswered(HLLOCK_HANDLER));
+	} else {
+# endif
+		pthread_mutex_lock(&pthread_mutex_privileged);
+		pthread_mutex_unlock(&pthread_mutex_privileged);
+# ifdef HL_LOCKS
+	}
 # endif
 #endif
 	if (!privileged_handler_running) {
@@ -740,29 +751,34 @@ static inline int privileged_action(
 #ifdef HL_LOCK_TRIES_AUTO
 	cmd.hl_lock_tries = hl_lock_tries[callid];
 
-	isadjusting = ((double)fabs(hl_lock_tries_step[callid]-1) > (double)HL_LOCK_AUTO_K_FINISH);
+	if ((isadjusting = hl_lock_enabled)) {
+		isadjusting = hl_lock_tries[callid];
+		if (isadjusting) {
+			isadjusting = ((double)fabs(hl_lock_tries_step[callid]-1) > (double)HL_LOCK_AUTO_K_FINISH);
+			if (isadjusting) {
+				isadjusting = !((++hl_lock_count[callid]) << (sizeof(hl_lock_count[callid])*CHAR_BIT - HL_LOCK_AUTO_INTERVAL));
+				debug(11, "isadjusting == %u; hl_lock_tries_step[%i] == %lf; hl_lock_count[%i] == %lu", isadjusting, callid, hl_lock_tries_step[callid], callid, hl_lock_count[callid]);
+				if (isadjusting)
+					start_ticks = clock();
+			}
+		}
+	}
 
-	if (isadjusting)
-		isadjusting = !((++hl_lock_count[callid]) << (sizeof(hl_lock_count[callid])*CHAR_BIT - HL_LOCK_AUTO_INTERVAL));
-
-	debug(11, "isadjusting == %u; hl_lock_tries_step[%i] == %lf; hl_lock_count[%i] == %lu", isadjusting, callid, hl_lock_tries_step[callid], callid, hl_lock_count[callid]);
-
-	if (isadjusting)
-		start_ticks = clock();
 #endif
 #ifdef HL_LOCKS
-	if (!hl_signal(HLLOCK_HANDLER)) {
+	if (!hl_lock_enabled || !hl_signal(HLLOCK_HANDLER)) {
 #endif
 #ifdef READWRITE_SIGNALLING
 		write_inf(priv_write_fd, buf, 1);
 #else
 # ifdef HL_LOCKS
-		debug(10, "Waiting the privileged thread to get prepared for signal (by fallback)");
-		pthread_mutex_lock(&pthread_mutex_privileged);
-		pthread_mutex_unlock(&pthread_mutex_privileged);
-# else
-		pthread_mutex_lock(&pthread_mutex_action_signal);
+		if (hl_lock_enabled) {
+			debug(10, "Waiting the privileged thread to get prepared for signal (by fallback)");
+			pthread_mutex_lock(&pthread_mutex_privileged);
+			pthread_mutex_unlock(&pthread_mutex_privileged);
+		} else
 # endif
+		pthread_mutex_lock(&pthread_mutex_action_signal);
 		debug(10, "pthread_cond_signal(&pthread_cond_privileged)");
 		pthread_cond_signal(&pthread_cond_privileged);
 #endif
@@ -772,38 +788,42 @@ static inline int privileged_action(
 
 	debug(10, "Waiting for the answer");
 #ifdef HL_LOCKS
-	while (!hl_isanswered(HLLOCK_HANDLER) && privileged_handler_running);
+	if (hl_lock_enabled) {
+		while (!hl_isanswered(HLLOCK_HANDLER) && privileged_handler_running);
 
 # ifdef HL_LOCK_TRIES_AUTO
-	if (isadjusting) {
-		unsigned long delay = (long)clock() - (long)start_ticks;
-		long diff  = delay - hl_lock_delay[callid];
+		if (isadjusting) {
+			unsigned long delay = (long)clock() - (long)start_ticks;
+			long diff  = delay - hl_lock_delay[callid];
 
-		debug(13, "diff == %li; hl_lock_delay[%i] == %lu; delay == %lu; delay*HL_LOCK_AUTO_THREADHOLD == %lu", diff, callid, hl_lock_delay[callid], delay, delay*HL_LOCK_AUTO_THREADHOLD)
+			debug(13, "diff == %li; hl_lock_delay[%i] == %lu; delay == %lu; delay*HL_LOCK_AUTO_THREADHOLD == %lu", diff, callid, hl_lock_delay[callid], delay, delay*HL_LOCK_AUTO_THREADHOLD)
 
-		if (diff && ((unsigned long)labs(diff) > (unsigned long)delay*HL_LOCK_AUTO_THREADHOLD)) {
+			if (diff && ((unsigned long)labs(diff) > (unsigned long)delay*HL_LOCK_AUTO_THREADHOLD)) {
 
-			if (diff > 0)
-				hl_lock_tries_step[callid] = 1/((hl_lock_tries_step[callid]-1)/HL_LOCK_AUTO_DECELERATION+1);
+				if (diff > 0)
+					hl_lock_tries_step[callid] = 1/((hl_lock_tries_step[callid]-1)/HL_LOCK_AUTO_DECELERATION+1);
 
-			hl_lock_delay[callid]  = delay;
+				hl_lock_delay[callid]  = delay;
 
-			debug(12, "diff == %li; hl_lock_tries_step[%i] == %lf; hl_lock_delay[%i] == %lu", diff, callid, hl_lock_tries_step[callid], callid, hl_lock_delay[callid]);
+				debug(12, "diff == %li; hl_lock_tries_step[%i] == %lf; hl_lock_delay[%i] == %lu", diff, callid, hl_lock_tries_step[callid], callid, hl_lock_delay[callid]);
+			}
+			hl_lock_tries[callid] *= hl_lock_tries_step[callid];
+
+			if (hl_lock_tries[callid] > HL_LOCK_AUTO_LIMIT_HIGH)
+				hl_lock_tries[callid] = HL_LOCK_AUTO_LIMIT_HIGH;
+
+			debug(14, "hl_lock_tries[%i] == %lu", callid, hl_lock_tries[callid]);
 		}
-		hl_lock_tries[callid] *= hl_lock_tries_step[callid];
-
-		if (hl_lock_tries[callid] > HL_LOCK_AUTO_LIMIT_HIGH)
-			hl_lock_tries[callid] = HL_LOCK_AUTO_LIMIT_HIGH;
-
-		debug(14, "hl_lock_tries[%i] == %lu", callid, hl_lock_tries[callid]);
-	}
 # endif
+	} else {
+#endif
+#ifdef READWRITE_SIGNALLING
+		read_inf(nonp_read_fd, buf, 1);
 #else
-# ifdef READWRITE_SIGNALLING
-	read_inf(nonp_read_fd, buf, 1);
-# else
-	pthread_cond_wait(&pthread_cond_action, &pthread_mutex_action_signal);
-# endif
+		pthread_cond_wait(&pthread_cond_action, &pthread_mutex_action_signal);
+#endif
+#ifdef HL_LOCKS
+	}
 #endif
 
 	if (ret_p != NULL)
@@ -811,9 +831,12 @@ static inline int privileged_action(
 	errno = cmd._errno;
 
 	debug(10, "Unlocking pthread_mutex_action_*");
-#if READWRITE_SIGNALLING | !HL_LOCKS
-	pthread_mutex_unlock(&pthread_mutex_action_signal);
+#ifdef HL_LOCKS
+# ifndef READWRITE_SIGNALLING
+	if (!hl_lock_enabled)
+# endif
 #endif
+		pthread_mutex_unlock(&pthread_mutex_action_signal);
 	pthread_mutex_unlock(&pthread_mutex_action_entrance);
 
 	return 0;
@@ -1032,6 +1055,21 @@ int privileged_init(ctx_t *ctx_p)
 #endif
 
 #ifdef CAPABILITIES_SUPPORT
+# ifdef PARANOID
+#  ifdef HL_LOCKS
+	if (ncpus == 1) {
+#   ifdef HL_LOCK_TRIES_AUTO
+		memset(hl_lock_tries, 0, sizeof(hl_lock_tries));
+#   else
+		hl_lock_tries = 0;
+#   endif
+	}
+#  endif
+# endif
+# ifdef HL_LOCKS
+	hl_lock_enabled = (ncpus != 1);
+# endif
+
 	if (!ctx_p->flags[THREADSPLITTING]) {
 #endif
 

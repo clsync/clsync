@@ -17,6 +17,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+extern int ncpus;
+
 extern int main_rehash(ctx_t *ctx_p);
 extern int main_status_update(ctx_t *ctx_p);
 extern int ctx_set(ctx_t *ctx_p, const char *const parameter_name, const char *const parameter_value);

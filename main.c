@@ -274,6 +274,8 @@ int syntax() {
 	exit(EINVAL);
 }
 
+int ncpus;
+
 int version() {
 	info(PROGRAM" v%i.%i"REVISION"\n\t"AUTHOR"", VERSION_MAJ, VERSION_MIN);
 	exit(0);
@@ -2165,6 +2167,8 @@ int main(int argc, char *argv[]) {
 	ctx_p->synchandler_uid			 = getuid();
 	ctx_p->synchandler_gid			 = getgid();
 	ctx_p->flags[CAPS_INHERIT]		 = DEFAULT_CAPS_INHERIT;
+
+	ncpus					 = sysconf(_SC_NPROCESSORS_ONLN); // Get number of available logical CPUs
 
 	{
 		struct passwd *pwd = getpwnam(DEFAULT_USER);
