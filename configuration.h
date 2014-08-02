@@ -164,7 +164,7 @@ filesz:1M\n\
 // Enable run-time auto-adjustment
 #define HL_LOCK_TRIES_AUTO
 // Iterations delay between adjustments (power of 2; 2^x)
-#define HL_LOCK_AUTO_INTERVAL		10	/* 1024 */
+#define HL_LOCK_AUTO_INTERVAL		7	/* 128 */
 // Initial adjustment factor
 #define HL_LOCK_AUTO_K			1.1
 // Delay detection error threshold
