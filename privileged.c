@@ -93,6 +93,11 @@
 	SECCOMP_ALLOW_ACCUM_SYSCALL(wait4),			\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(rmdir),			\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(exit_group),		\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(select),			\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(read),			\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(rt_sigprocmask),		\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(rt_sigaction),		\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(nanosleep),			\
 
 /* Syscalls allowed to non-privileged thread */
 static struct sock_filter filter_table[] = {
