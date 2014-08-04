@@ -1246,6 +1246,37 @@ or
 Is not set by default.
 .RE
 
+.B \-\-seccomp\-filter
+.RS
+Use
+.B seccomp
+filter to forbid syscalls that shouldn't be used by clsync.
+
+Forbid all syscalls for non-privileged thread, but
+.RS
+futex
+inotify_init1
+alarm
+lstat
+open
+write
+close
+wait4
+unlink
+tgkill
+clock_gettime
+rt_sigreturn
+brk
+mmap
+munmap
+wait4
+rmdir
+exit_group
+.RE
+
+Is not set by default.
+.RE
+
 .B \-\-chroot
 .I chroot\-directory
 .RS
@@ -1995,6 +2026,14 @@ To confirm the problem, you can try to add "return 0" or "exit 0" into
 your
 .IR sync\-handler .
 
+.RE
+
+.B "Bad system call"
+.RS
+If \-\-use\-seccomp option is enabled then the error is probably caused
+by using of forbidden syscall. It's a
+.B clsync
+bug or hack attack attempt.
 .RE
 
 To get support see

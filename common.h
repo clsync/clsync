@@ -112,6 +112,9 @@
 #	endif
 #endif
 
+#ifndef offsetof
+#	define offsetof(a, b) __builtin_offsetof(a, b)
+#endif
 
 #define TOSTR(a) # a
 #define XTOSTR(a) TOSTR(a)

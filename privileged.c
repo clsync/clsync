@@ -24,19 +24,19 @@
 #include "main.h"			// ncpus
 
 #ifdef CAPABILITIES_SUPPORT
-#	include <pthread.h>		// pthread_create()
-#	include <sys/inotify.h>		// inotify_init()
-#	include <sys/types.h>		// fts_open()
-#	include <sys/stat.h>		// fts_open()
-#	include <fts.h>			// fts_open()
-#	include <errno.h>		// errno
-#	include <sys/capability.h>	// capset()
+# include <pthread.h>			// pthread_create()
+# include <sys/inotify.h>		// inotify_init()
+# include <sys/types.h>			// fts_open()
+# include <sys/stat.h>			// fts_open()
+# include <fts.h>			// fts_open()
+# include <errno.h>			// errno
+# include <sys/capability.h>		// capset()
 #endif
 
 #include <unistd.h>			// execvp()
 
 #ifdef UNSHARE_SUPPORT
-#	include <sched.h>		// unshare()
+# include <sched.h>			// unshare()
 #endif
 
 #ifndef HL_LOCKS
@@ -46,11 +46,73 @@
 #endif
 
 #ifdef HL_LOCK_TRIES_AUTO
-#	include <time.h>		// time()
-#	include <math.h>		// fabs()
+# include <time.h>			// time()
+# include <math.h>			// fabs()
 #endif
 
 #include "privileged.h"
+
+#ifdef SECCOMP_SUPPORT
+# include <seccomp.h>			// __NR_*
+# include <sys/prctl.h>			// prctl()
+# include <linux/filter.h>		// struct sock_filter
+# include <linux/seccomp.h>		// SECCOMP_RET_*
+
+#define syscall_nr (offsetof(struct seccomp_data, nr))
+
+/* Read: http://www.rawether.net/support/bpfhelp.htm */
+# define SECCOMP_COPY_SYSCALL_TO_ACCUM				\
+	BPF_STMT(BPF_LD+BPF_W+BPF_ABS, syscall_nr)
+
+# define SECCOMP_ALLOW						\
+	BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_ALLOW)
+
+# define SECCOMP_DENY						\
+	BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_TRAP)
+
+# define SECCOMP_ALLOW_ACCUM_SYSCALL(syscall)			\
+	BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, __NR_##syscall, 0, 1),	\
+	SECCOMP_ALLOW
+
+# define FILTER_TABLE_NONPRIV					\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(futex),			\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(inotify_init1),		\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(alarm),			\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(lstat),			\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(open),			\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(write),			\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(close),			\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(wait4),			\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(unlink),			\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(tgkill),			\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(clock_gettime),		\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(rt_sigreturn),		\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(brk),			\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(mmap),			\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(munmap),			\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(wait4),			\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(rmdir),			\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(exit_group),		\
+
+/* Syscalls allowed to non-privileged thread */
+static struct sock_filter filter_table[] = {
+	SECCOMP_COPY_SYSCALL_TO_ACCUM,
+	FILTER_TABLE_NONPRIV
+	SECCOMP_DENY,
+};
+
+int nonprivileged_seccomp_init() {
+	static struct sock_fprog filter = {
+		.len = (unsigned short)(sizeof(filter_table)/sizeof(filter_table[0])),
+		.filter = filter_table,
+	};
+
+	SAFE (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0),			return -1);
+	SAFE (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &filter),	return -1);
+
+	return 0;
+}
+#endif
 
 int (*privileged_fork_execvp)(const char *file, char *const argv[]);
 int (*privileged_kill_child)(pid_t pid, int sig);
@@ -65,12 +127,12 @@ pthread_cond_t	pthread_cond_privileged       = PTHREAD_COND_INITIALIZER;
 pthread_cond_t	pthread_cond_action           = PTHREAD_COND_INITIALIZER;
 pthread_cond_t	pthread_cond_runner           = PTHREAD_COND_INITIALIZER;
 
-#ifdef READWRITE_SIGNALLING
+# ifdef READWRITE_SIGNALLING
 int priv_read_fd;
 int priv_write_fd;
 int nonp_read_fd;
 int nonp_write_fd;
-#endif
+# endif
 
 enum privileged_action {
 	PA_UNKNOWN = 0,
@@ -93,19 +155,19 @@ enum privileged_action {
 	PA_KILL_CHILD,
 };
 
-#ifdef HL_LOCKS
+# ifdef HL_LOCKS
 int		hl_lock_enabled;
-# ifdef HL_LOCK_TRIES_AUTO
+#  ifdef HL_LOCK_TRIES_AUTO
 unsigned long	hl_lock_tries[PC_MAX]		= {[0 ... PC_MAX-1] = HL_LOCK_TRIES_INITIAL};
 unsigned long	hl_lock_count[PC_MAX]		= {[0 ... PC_MAX-1] = 0};
 unsigned long	hl_lock_delay[PC_MAX]		= {[0 ... PC_MAX-1] = ((unsigned long)~0)>>2};
 double		hl_lock_tries_step[PC_MAX]	= {[0 ... PC_MAX-1] = HL_LOCK_AUTO_K};
 
-#  define	hl_lock_tries_cur hl_lock_tries[callid]
-# else
+#   define	hl_lock_tries_cur hl_lock_tries[callid]
+#  else
 unsigned long	hl_lock_tries	= HL_LOCK_TRIES_INITIAL;
-#  define	hl_lock_tries_cur hl_lock_tries
-# endif
+#   define	hl_lock_tries_cur hl_lock_tries
+#  endif
 
 enum highload_lock_id {
 	HLLOCK_HANDLER = 0,
@@ -123,7 +185,7 @@ enum highlock_lock_state {
 	HLLS_WORKING	= 0x10,
 };
 typedef enum highlock_lock_state hllock_state_t;
-#endif
+# endif
 
 struct pa_fts_open_arg {
 	char * const *path_argv;
@@ -157,9 +219,9 @@ struct {
 	void			*arg;
 	void			*ret;
 	int			 _errno;
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 	unsigned long		 hl_lock_tries;
-#endif
+# endif
 } cmd;
 
 struct pa_options {
@@ -175,23 +237,23 @@ FTS *(*_privileged_fts_open)		(
 		char * const *path_argv,
 		int options,
 		int (*compar)(const FTSENT **, const FTSENT **)
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 		, int callid
-#endif
+# endif
 	);
 
 FTSENT *(*_privileged_fts_read)		(
 		FTS *ftsp
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 		, int callid
-#endif
+# endif
 	);
 
 int (*_privileged_fts_close)		(
 		FTS *ftsp
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 		, int callid
-#endif
+# endif
 	);
 
 int (*_privileged_inotify_init)		();
@@ -201,9 +263,9 @@ int (*_privileged_inotify_add_watch)	(
 		int fd,
 		const char *pathname,
 		uint32_t mask
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 		, int callid
-#endif
+# endif
 	);
 
 int (*_privileged_inotify_rm_watch)	(
@@ -471,7 +533,7 @@ int pa_setup(struct pa_options *opts, ctx_t *ctx_p, uid_t *exec_uid_p, gid_t *ex
 	return 0;
 }
 
-#ifdef HL_LOCKS
+# ifdef HL_LOCKS
 static int            hl_count_wait  [HLLOCK_MAX] = {0};
 static int            hl_count_signal[HLLOCK_MAX] = {0};
 static hllock_state_t hl_state[HLLOCK_MAX]        = {0};
@@ -513,9 +575,9 @@ int hl_setstate_ifstate(int lockid, hllock_state_t stateid_new, hllock_state_t s
 
 static inline int hl_wait(
 		int lockid
-#ifdef HL_LOCK_TRIES_AUTO
+#  ifdef HL_LOCK_TRIES_AUTO
 		, unsigned long hl_lock_tries
-#endif
+#  endif
 ) {
 	volatile long try = 0;
 
@@ -557,14 +619,14 @@ static inline int hl_signal(int lockid) {
 	return 0;
 }
 
-#endif
+# endif
 
 static int privileged_handler_running = 1;
 void *privileged_handler(void *_ctx_p)
 {
-#ifdef READWRITE_SIGNALLING
+# ifdef READWRITE_SIGNALLING
 	char buf[1] = {0};
-#endif
+# endif
 	int setup = 0;
 	ctx_t *ctx_p = _ctx_p;
 	uid_t exec_uid = 65535;
@@ -589,24 +651,24 @@ void *privileged_handler(void *_ctx_p)
 	while (privileged_handler_running) {
 		// Waiting for command
 		debug(10, "Waiting for command");
-#ifdef HL_LOCKS
+# ifdef HL_LOCKS
 		if (!hl_lock_enabled || !hl_wait(
 			HLLOCK_HANDLER
-# ifdef HL_LOCK_TRIES_AUTO
+#  ifdef HL_LOCK_TRIES_AUTO
 			, cmd.hl_lock_tries
-# endif
+#  endif
 		)) {
-#endif
-#ifdef READWRITE_SIGNALLING
+# endif
+# ifdef READWRITE_SIGNALLING
 			read_inf(priv_read_fd, buf, 1);
-#else
+# else
 			pthread_cond_wait(&pthread_cond_privileged, &pthread_mutex_privileged);
-#endif
-#ifdef HL_LOCKS
+# endif
+# ifdef HL_LOCKS
 			if (hl_lock_enabled)
 				hl_setstate(HLLOCK_HANDLER, HLLS_WORKING);
 		}
-#endif
+# endif
 
 		debug(10, "Got command %u", cmd.action);
 
@@ -643,11 +705,11 @@ void *privileged_handler(void *_ctx_p)
 			case PA_INOTIFY_INIT:
 				cmd.ret = (void *)(long)inotify_init();
 				break;
-#ifndef INOTIFY_OLD
+# ifndef INOTIFY_OLD
 			case PA_INOTIFY_INIT1:
 				cmd.ret = (void *)(long)inotify_init1((long)cmd.arg);
 				break;
-#endif
+# endif
 			case PA_INOTIFY_ADD_WATCH: {
 				struct pa_inotify_add_watch_arg *arg_p = cmd.arg;
 				cmd.ret = (void *)(long)inotify_add_watch(arg_p->fd, arg_p->pathname, arg_p->mask);
@@ -687,19 +749,19 @@ void *privileged_handler(void *_ctx_p)
 
 		cmd._errno = errno;
 		debug(10, "Result: %p, errno: %u. Sending the signal to non-privileged thread.", cmd.ret, cmd._errno);
-#ifdef HL_LOCKS
+# ifdef HL_LOCKS
 		if (!hl_lock_enabled) {
-#endif
-#ifdef READWRITE_SIGNALLING
+# endif
+# ifdef READWRITE_SIGNALLING
 			write_inf(nonp_write_fd, buf, 1);
-#else
+# else
 			pthread_mutex_lock(&pthread_mutex_action_signal);
 			pthread_mutex_unlock(&pthread_mutex_action_signal);
 			pthread_cond_signal(&pthread_cond_action);
-#endif
-#ifdef HL_LOCKS
+# endif
+# ifdef HL_LOCKS
 		}
-#endif
+# endif
 	}
 
 	pthread_mutex_unlock(&pthread_mutex_privileged);
@@ -708,38 +770,38 @@ void *privileged_handler(void *_ctx_p)
 }
 
 static inline int privileged_action(
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 		int callid,
-#endif
+# endif
 		enum privileged_action action,
 		void *arg,
 		void **ret_p
 	)
 {
-#ifdef READWRITE_SIGNALLING
+# ifdef READWRITE_SIGNALLING
 	char buf[1] = {0};
-#endif
-#ifdef HL_LOCK_TRIES_AUTO
+# endif
+# ifdef HL_LOCK_TRIES_AUTO
 	clock_t start_ticks;
 
 	int isadjusting;
-#endif
+# endif
 	debug(10, "(%u, %p, %p)", action, arg, ret_p);
 
 	pthread_mutex_lock(&pthread_mutex_action_entrance);
-#if !READWRITE_SIGNALLING
+# if !READWRITE_SIGNALLING
 	debug(10, "Waiting the privileged thread to get prepared for signal");
-# ifdef HL_LOCKS
+#  ifdef HL_LOCKS
 	if (hl_lock_enabled) {
 		while (!hl_isanswered(HLLOCK_HANDLER));
 	} else {
-# endif
+#  endif
 		pthread_mutex_lock(&pthread_mutex_privileged);
 		pthread_mutex_unlock(&pthread_mutex_privileged);
-# ifdef HL_LOCKS
+#  ifdef HL_LOCKS
 	}
+#  endif
 # endif
-#endif
 	if (!privileged_handler_running) {
 		debug(1, "The privileged thread is dead. Ignoring the command.");
 		return ENOENT;
@@ -748,7 +810,7 @@ static inline int privileged_action(
 	debug(10, "Sending information to the privileged thread");
 	cmd.action        = action;
 	cmd.arg           = arg;
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 	cmd.hl_lock_tries = hl_lock_tries[callid];
 
 	if ((isadjusting = hl_lock_enabled)) {
@@ -764,34 +826,34 @@ static inline int privileged_action(
 		}
 	}
 
-#endif
-#ifdef HL_LOCKS
-	if (!hl_lock_enabled || !hl_signal(HLLOCK_HANDLER)) {
-#endif
-#ifdef READWRITE_SIGNALLING
-		write_inf(priv_write_fd, buf, 1);
-#else
+# endif
 # ifdef HL_LOCKS
+	if (!hl_lock_enabled || !hl_signal(HLLOCK_HANDLER)) {
+# endif
+# ifdef READWRITE_SIGNALLING
+		write_inf(priv_write_fd, buf, 1);
+# else
+#  ifdef HL_LOCKS
 		if (hl_lock_enabled) {
 			debug(10, "Waiting the privileged thread to get prepared for signal (by fallback)");
 			pthread_mutex_lock(&pthread_mutex_privileged);
 			pthread_mutex_unlock(&pthread_mutex_privileged);
 		} else
-# endif
+#  endif
 		pthread_mutex_lock(&pthread_mutex_action_signal);
 		debug(10, "pthread_cond_signal(&pthread_cond_privileged)");
 		pthread_cond_signal(&pthread_cond_privileged);
-#endif
-#ifdef HL_LOCKS
+# endif
+# ifdef HL_LOCKS
 	}
-#endif
+# endif
 
 	debug(10, "Waiting for the answer");
-#ifdef HL_LOCKS
+# ifdef HL_LOCKS
 	if (hl_lock_enabled) {
 		while (!hl_isanswered(HLLOCK_HANDLER) && privileged_handler_running);
 
-# ifdef HL_LOCK_TRIES_AUTO
+#  ifdef HL_LOCK_TRIES_AUTO
 		if (isadjusting) {
 			unsigned long delay = (long)clock() - (long)start_ticks;
 			long diff  = delay - hl_lock_delay[callid];
@@ -814,28 +876,28 @@ static inline int privileged_action(
 
 			debug(14, "hl_lock_tries[%i] == %lu", callid, hl_lock_tries[callid]);
 		}
-# endif
+#  endif
 	} else {
-#endif
-#ifdef READWRITE_SIGNALLING
+# endif
+# ifdef READWRITE_SIGNALLING
 		read_inf(nonp_read_fd, buf, 1);
-#else
+# else
 		pthread_cond_wait(&pthread_cond_action, &pthread_mutex_action_signal);
-#endif
-#ifdef HL_LOCKS
+# endif
+# ifdef HL_LOCKS
 	}
-#endif
+# endif
 
 	if (ret_p != NULL)
 		*ret_p = cmd.ret;
 	errno = cmd._errno;
 
 	debug(10, "Unlocking pthread_mutex_action_*");
-#ifdef HL_LOCKS
-# ifndef READWRITE_SIGNALLING
+# ifdef HL_LOCKS
+#  ifndef READWRITE_SIGNALLING
 	if (!hl_lock_enabled)
+#  endif
 # endif
-#endif
 		pthread_mutex_unlock(&pthread_mutex_action_signal);
 	pthread_mutex_unlock(&pthread_mutex_action_entrance);
 
@@ -846,9 +908,9 @@ FTS *__privileged_fts_open(
 		char * const *path_argv,
 		int options,
 		int (*compar)(const FTSENT **, const FTSENT **)
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 		, int callid
-#endif
+# endif
 	)
 {
 	struct pa_fts_open_arg arg;
@@ -859,9 +921,9 @@ FTS *__privileged_fts_open(
 	arg.compar	= compar;
 
 	privileged_action(
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 			callid,
-#endif
+# endif
 			PA_FTS_OPEN,
 			&arg,
 			&ret
@@ -872,16 +934,16 @@ FTS *__privileged_fts_open(
 
 FTSENT *__privileged_fts_read(
 		FTS *ftsp
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 		, int callid
-#endif
+# endif
 	)
 {
 	void *ret;
 	privileged_action(
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 			callid,
-#endif
+# endif
 			PA_FTS_READ,
 			ftsp,
 			&ret
@@ -891,16 +953,16 @@ FTSENT *__privileged_fts_read(
 
 int __privileged_fts_close(
 		FTS *ftsp
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 		, int callid
-#endif
+# endif
 	)
 {
 	void *ret;
 	privileged_action(
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 			callid,
-#endif
+# endif
 			PA_FTS_CLOSE,
 			ftsp,
 			&ret
@@ -911,9 +973,9 @@ int __privileged_fts_close(
 int __privileged_inotify_init() {
 	void *ret;
 	privileged_action(
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 			PC_DEFAULT,
-#endif
+# endif
 			PA_INOTIFY_INIT,
 			NULL,
 			&ret
@@ -924,9 +986,9 @@ int __privileged_inotify_init() {
 int __privileged_inotify_init1(int flags) {
 	void *ret;
 	privileged_action(
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 			PC_DEFAULT,
-#endif
+# endif
 			PA_INOTIFY_INIT1,
 			(void *)(long)flags,
 			&ret
@@ -938,9 +1000,9 @@ int __privileged_inotify_add_watch(
 		int fd,
 		const char *pathname,
 		uint32_t mask
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 		, int callid
-#endif
+# endif
 	)
 {
 	struct pa_inotify_add_watch_arg arg;
@@ -951,9 +1013,9 @@ int __privileged_inotify_add_watch(
 	arg.mask	= mask;
 
 	privileged_action(
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 			callid,
-#endif
+# endif
 			PA_INOTIFY_ADD_WATCH,
 			&arg,
 			&ret
@@ -974,9 +1036,9 @@ int __privileged_inotify_rm_watch(
 	arg.wd	= wd;
 
 	privileged_action(
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 			PC_DEFAULT,
-#endif
+# endif
 			PA_INOTIFY_RM_WATCH,
 			&arg,
 			&ret
@@ -997,9 +1059,9 @@ int __privileged_fork_setuid_execvp(
 	arg.argv = argv;
 
 	privileged_action(
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 			PC_DEFAULT,
-#endif
+# endif
 			PA_FORK_EXECVP,
 			&arg,
 			&ret
@@ -1017,9 +1079,9 @@ int __privileged_kill_child_wrapper(pid_t pid, int signal)
 	arg.signal = signal;
 
 	privileged_action(
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 			PC_DEFAULT,
-#endif
+# endif
 			PA_KILL_CHILD,
 			&arg,
 			&ret);
@@ -1115,7 +1177,7 @@ int privileged_init(ctx_t *ctx_p)
 	SAFE ( pthread_cond_init (&pthread_cond_action,		NULL),	return errno;);
 	SAFE ( pthread_cond_init (&pthread_cond_runner,		NULL),	return errno;);
 
-#ifdef READWRITE_SIGNALLING
+# ifdef READWRITE_SIGNALLING
 	SAFE ( pipe2(pipefds, O_CLOEXEC), 				return errno;);
 	priv_read_fd  = pipefds[0];
 	priv_write_fd = pipefds[1];
@@ -1123,7 +1185,7 @@ int privileged_init(ctx_t *ctx_p)
 	SAFE ( pipe2(pipefds, O_CLOEXEC), 				return errno;);
 	nonp_read_fd  = pipefds[0];
 	nonp_write_fd = pipefds[1];
-#endif
+# endif
 
 	SAFE ( pthread_mutex_lock(&pthread_mutex_runner),		return errno;);
 
@@ -1141,9 +1203,9 @@ int privileged_init(ctx_t *ctx_p)
 
 	debug(4, "Sending the settings (exec_uid == %u; exec_gid == %u)", ctx_p->synchandler_uid, ctx_p->synchandler_gid);
 	privileged_action(
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 			PC_DEFAULT,
-#endif
+# endif
 			PA_SETUP,
 			ctx_p,
 			NULL
@@ -1151,6 +1213,11 @@ int privileged_init(ctx_t *ctx_p)
 
 	SAFE (pthread_mutex_destroy(&pthread_mutex_runner),	return errno;);
 	SAFE (pthread_cond_destroy(&pthread_cond_runner),	return errno;);
+
+# ifdef SECCOMP_SUPPORT
+	if (ctx_p->flags[SECCOMP_FILTER])
+		nonprivileged_seccomp_init();
+# endif
 
 	debug(5, "Finish");
 	return 0;
@@ -1167,9 +1234,9 @@ int privileged_deinit(ctx_t *ctx_p)
 		return 0;
 
 	SAFE ( privileged_action(
-#ifdef HL_LOCK_TRIES_AUTO
+# ifdef HL_LOCK_TRIES_AUTO
 			PC_DEFAULT,
-#endif
+# endif
 			PA_DIE,
 			NULL,
 			NULL
