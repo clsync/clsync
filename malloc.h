@@ -26,5 +26,10 @@ extern void *xrealloc(void *oldptr, size_t size);
 extern void *malloc_align(size_t size);
 extern void *calloc_align(size_t nmemb, size_t size);
 extern char *strdup_protect(const char *src, int prot);
+# ifdef SECCOMP_SUPPORT
+extern int is_protected(void *addr);
+# endif
 #endif
+
+extern int memory_init();
 

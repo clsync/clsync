@@ -22,10 +22,22 @@
 #ifdef CAPABILITIES_SUPPORT
 # include <unistd.h>
 # include <sys/mman.h>
+# ifdef SECCOMP_SUPPORT
+#  include <sys/stat.h>
+#  include <fcntl.h>
+# endif
 #endif
 
 #include "malloc.h"
 #include "error.h"
+#include "configuration.h"
+
+#ifdef CAPABILITIES_SUPPORT
+long pagesize;
+# ifdef SECCOMP_SUPPORT
+int  devzero_fd;
+# endif
+#endif
 
 void *xmalloc(size_t size) {
 #ifdef _DEBUG
@@ -82,7 +94,6 @@ void *xrealloc(void *oldptr, size_t size) {
 
 #ifdef CAPABILITIES_SUPPORT
 void *malloc_align(size_t size) {
-	long pagesize = sysconf(_SC_PAGE_SIZE);
 	size_t total_size;
 	void *ret;
 # ifdef _DEBUG
@@ -91,9 +102,6 @@ void *malloc_align(size_t size) {
 # ifdef PARANOID
 	size++;	 // Just in case
 # endif
-
-	if (pagesize == -1)
-		critical("(%li): Got error from sysconf(_SC_PAGE_SIZE)");
 
 	total_size  = size;
 # ifdef PARANOID
@@ -141,5 +149,39 @@ char *strdup_protect(const char *src, int prot) {
 
 	return dst;
 }
+
+# ifdef SECCOMP_SUPPORT
+int is_protected(void *addr) {
+	char *_addr = addr, t;
+	int is_protected;
+	t = *_addr;
+
+	is_protected = (read(devzero_fd, addr, 1) == -1);
+
+	if (!is_protected)
+		*_addr = t;
+
+	return is_protected;
+}
+# endif
+
 #endif
+
+int memory_init() {
+#ifdef CAPABILITIES_SUPPORT
+	pagesize   = sysconf(_SC_PAGE_SIZE);
+
+	if (pagesize == -1)
+		critical("Got error from sysconf(_SC_PAGE_SIZE)");
+
+# ifdef SECCOMP_SUPPORT
+	devzero_fd = open(DEVZERO, O_RDONLY);
+
+	if (devzero_fd == -1)
+		critical("Got error while open(\""DEVZERO"\", O_RDONLY)");
+# endif
+#endif
+
+	return 0;
+}
 

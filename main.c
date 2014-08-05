@@ -2190,6 +2190,8 @@ int main(int argc, char *argv[]) {
 
 	ncpus					 = sysconf(_SC_NPROCESSORS_ONLN); // Get number of available logical CPUs
 
+	memory_init();
+
 	{
 		struct passwd *pwd = getpwnam(DEFAULT_USER);
 		ctx_p->uid = (pwd != NULL) ? pwd->pw_uid : DEFAULT_UID;
