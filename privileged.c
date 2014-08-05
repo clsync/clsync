@@ -31,6 +31,7 @@
 # include <fts.h>			// fts_open()
 # include <errno.h>			// errno
 # include <sys/capability.h>		// capset()
+# include "malloc.h"			// strdup_protect();
 #endif
 
 #include <unistd.h>			// execvp()
@@ -501,11 +502,11 @@ int pa_setup(struct pa_options *opts, ctx_t *ctx_p, uid_t *exec_uid_p, gid_t *ex
 		if (argc_s < 1)
 			critical("Not enough arguments");
 
-		argv_d[0] = strdup(ctx_p->handlerfpath);
+		argv_d[0] = strdup_protect(ctx_p->handlerfpath, PROT_READ);
 
 		i = 0;
 		while (i < argc_s) {
-			argv_d[i+1] = strdup(argv_s[i]);
+			argv_d[i+1] = strdup_protect(argv_s[i], PROT_READ);
 			isex_d[i+1] = isex_s[i];
 			i++;
 		}
@@ -519,22 +520,51 @@ int pa_setup(struct pa_options *opts, ctx_t *ctx_p, uid_t *exec_uid_p, gid_t *ex
 	*exec_uid_p = ctx_p->synchandler_uid;
 	*exec_gid_p = ctx_p->synchandler_gid;
 
-	opts->label = strdup(ctx_p->label);
+	opts->label = strdup_protect(ctx_p->label, PROT_READ);
 	if (ctx_p->exithookfile != NULL)
-		opts->exithookfile = strdup(ctx_p->exithookfile);
+		opts->exithookfile = strdup_protect(ctx_p->exithookfile, PROT_READ);
 	if (ctx_p->preexithookfile != NULL)
-		opts->preexithookfile = strdup(ctx_p->preexithookfile);
+		opts->preexithookfile = strdup_protect(ctx_p->preexithookfile, PROT_READ);
 
 	{
 		int i = 0;
 
 		while (i < ctx_p->permitted_hookfiles) {
-			opts->permitted_hookfile[i] = strdup(ctx_p->permitted_hookfile[i]);
+			opts->permitted_hookfile[i] = strdup_protect(ctx_p->permitted_hookfile[i], PROT_READ);
 			i++;
 		}
 		opts->permitted_hookfile[i] = NULL;
 		opts->permitted_hookfiles   = i;
 	}
+	return 0;
+}
+
+int pa_unsetup(struct pa_options *opts) {
+	free(opts->exithookfile);
+	free(opts->preexithookfile);
+	free(opts->label);
+
+	{
+		int a_i = 0;
+		do {
+			int i;
+
+			i = 0;
+			while (i < opts->args[a_i].c) {
+				free(opts->args[a_i].v[i]);
+				i++;
+			}
+		} while(++a_i < SHARGS_MAX);
+	}
+
+	{
+		int i = 0;
+		while (i < opts->permitted_hookfiles) {
+			free(opts->permitted_hookfile[i]);
+			i++;
+		}
+	}
+
 	return 0;
 }
 
@@ -636,8 +666,11 @@ void *privileged_handler(void *_ctx_p)
 	ctx_t *ctx_p = _ctx_p;
 	uid_t exec_uid = 65535;
 	gid_t exec_gid = 65535;
-	struct pa_options opts = {{{{0}}}};
+	
+	struct pa_options *opts;
 	int use_args_check = 0;
+
+	opts = calloc_align(1, sizeof(*opts));
 
 	cap_drop(ctx_p, ctx_p->caps);
 
@@ -685,7 +718,8 @@ void *privileged_handler(void *_ctx_p)
 				if (setup)
 					critical("Double privileged_handler setuping. It can be if somebody is trying to hack the clsync.");
 
-				pa_setup(&opts, cmd.arg, &exec_uid, &exec_gid);
+				pa_setup(opts, cmd.arg, &exec_uid, &exec_gid);
+				mprotect(opts, sizeof(*opts), PROT_READ);
 				use_args_check = ((ctx_t *)cmd.arg)->flags[CHECK_EXECVP_ARGS];
 				setup++;
 				break;
@@ -728,7 +762,7 @@ void *privileged_handler(void *_ctx_p)
 			case PA_FORK_EXECVP: {
 				struct pa_fork_execvp_arg *arg_p = cmd.arg;
 				if (use_args_check)
-					privileged_execvp_check_arguments(&opts, arg_p->file, arg_p->argv);
+					privileged_execvp_check_arguments(opts, arg_p->file, arg_p->argv);
 				pid_t pid = fork();
 				switch (pid) {
 					case -1: 
@@ -769,6 +803,7 @@ void *privileged_handler(void *_ctx_p)
 # endif
 	}
 
+	pa_unsetup(opts);
 	pthread_mutex_unlock(&pthread_mutex_privileged);
 	debug(2, "Finished");
 	return 0;

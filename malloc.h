@@ -19,7 +19,12 @@
 
 #include <sys/types.h>
 
-void *xmalloc(size_t size);
-void *xcalloc(size_t nmemb, size_t size);
-void *xrealloc(void *oldptr, size_t size);
+extern void *xmalloc(size_t size);
+extern void *xcalloc(size_t nmemb, size_t size);
+extern void *xrealloc(void *oldptr, size_t size);
+#ifdef CAPABILITIES_SUPPORT
+extern void *malloc_align(size_t size);
+extern void *calloc_align(size_t nmemb, size_t size);
+extern char *strdup_protect(const char *src, int prot);
+#endif
 
