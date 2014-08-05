@@ -1030,6 +1030,12 @@ Is not set by default.
 
 .SH SECURITY OPTIONS
 
+.B \-\-secure\-thread\-splitting
+.RS
+Implies "\-\-thread\-splitting \-\-check\-execvp\-arguments \-\-seccomp\-filter
+\-\-forget\-privthread\-info".
+.RE
+
 .B \-u, \-\-uid
 .I uid
 .RS
@@ -1212,6 +1218,14 @@ too. Otherwise in case of
 security bug a hacker will be able to use execvp() with any arguments
 with root privileges.
 
+But there's an ability to change a code of the privileged thread from
+non\-privileged. To prevent it use
+.B \-\-seccomp\-filter
+option. It will forbid call of
+.BR mprotect (2)
+syscall, so the non\-privileged will be unable to drop protection from memory
+ages.
+
 Is not set by default.
 .RE
 
@@ -1279,7 +1293,23 @@ rt_sigaction
 nanosleep
 .RE
 
+This option requires
+.BR \-\-threading =off
+due to forbidding
+.BR mprotect (2)
+syscall that is required by
+.BR pthread_create (3)
+function.
+
 Is not set by default.
+.RE
+
+.B \-\-forget\-privthread\-info
+.RS
+Just sets pthread_t variable for the privileged thread to zero. It complicates
+attack on the privileged thread, but makes call of
+.BR pthread_join (3)
+on a privileged thread end impossible.
 .RE
 
 .B \-\-chroot

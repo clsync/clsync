@@ -1196,6 +1196,9 @@ int privileged_init(ctx_t *ctx_p)
 
 	SAFE ( pthread_create(&pthread_thread, NULL, (void *(*)(void *))privileged_handler, ctx_p), return errno);
 
+	if (ctx_p->flags[FORGET_PRIVTHREAD_INFO])
+		pthread_thread = 0;
+
 	if (ctx_p->flags[DETACH_NETWORK] == DN_NONPRIVILEGED) {
 		SAFE ( cap_enable(CAP_TO_MASK(CAP_SYS_ADMIN)),	return errno; );
 		SAFE ( unshare(CLONE_NEWNET),			return errno; );
@@ -1248,7 +1251,13 @@ int privileged_deinit(ctx_t *ctx_p)
 		),
 		ret = errno
 	);
-	SAFE ( pthread_join(pthread_thread, NULL),			ret = errno );
+
+	if (ctx_p->flags[FORGET_PRIVTHREAD_INFO]) {
+		pthread_mutex_lock(&pthread_mutex_privileged);
+		pthread_mutex_unlock(&pthread_mutex_privileged);
+	} else {
+		SAFE ( pthread_join(pthread_thread, NULL),		ret = errno );
+	}
 
 	SAFE ( pthread_mutex_destroy(&pthread_mutex_privileged),	ret = errno );
 	SAFE ( pthread_mutex_destroy(&pthread_mutex_action_entrance),	ret = errno );

@@ -84,12 +84,16 @@ static const struct option long_options[] =
 	{"detach-miscellanea",	optional_argument,	NULL,	DETACH_MISCELLANEA},
 #endif
 #ifdef CAPABILITIES_SUPPORT
+# ifdef SECCOMP_SUPPORT
+	{"secure-thread-splitting",optional_argument,	NULL,	SECURETHREADSPLITTING},
+# endif
 	{"thread-splitting",	optional_argument,	NULL,	THREADSPLITTING},
 	{"check-execvp-args",	optional_argument,	NULL,	CHECK_EXECVP_ARGS},
 	{"add-permitted-hook-files",required_argument,	NULL,	ADDPERMITTEDHOOKFILES},
 # ifdef SECCOMP_SUPPORT
 	{"seccomp-filter",	optional_argument,	NULL,	SECCOMP_FILTER},
 # endif
+	{"forget-privthread-info",optional_argument,	NULL,	FORGET_PRIVTHREAD_INFO},
 #endif
 #ifdef GETMNTENT_SUPPORT
 	{"mountpoints",		optional_argument,	NULL,	MOUNTPOINTS},
@@ -710,6 +714,15 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			break;
 		}
 #ifdef CAPABILITIES_SUPPORT
+# ifdef SECCOMP_SUPPORT
+		case SECURETHREADSPLITTING: {
+			ctx_p->flags[THREADSPLITTING]++;
+			ctx_p->flags[CHECK_EXECVP_ARGS]++;
+			ctx_p->flags[SECCOMP_FILTER]++;
+			ctx_p->flags[FORGET_PRIVTHREAD_INFO]++;
+			break;
+		}
+# endif
 		case SYNCHANDLERUID: {
 			struct passwd *pwd = getpwnam(arg);
 			ctx_p->flags[param_id]++;
@@ -1478,6 +1491,10 @@ int ctx_check(ctx_t *ctx_p) {
 	if (ctx_p->flags[THREADING] && ctx_p->flags[PREEXITHOOK]) {
 		ret = errno = EINVAL;
 		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--pre-exit-hook\".");
+	}
+	if (ctx_p->flags[THREADING] && ctx_p->flags[SECCOMP_FILTER]) {
+		ret = errno = EINVAL;
+		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--seccomp-filter\".");
 	}
 	if (ctx_p->flags[SKIPINITSYNC] && ctx_p->flags[EXITONNOEVENTS]) {
 		ret = errno = EINVAL;
