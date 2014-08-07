@@ -792,6 +792,18 @@ Is not set by default.
 .RE
 
 .PP
+.B \-\-fts\-experimental\-optimization
+.RS
+Enable experimental features to optimize file tree scanning while using
+.BR fts "(3)."
+
+At the moment it will try force to skip scanning for excludes of
+directories if their content doesn't fit to any MONITOR deny rule.
+
+Is not set by default.
+.RE
+
+.PP
 .B \-F, \-\-full\-initialsync
 .RS
 Ignore filter rules from

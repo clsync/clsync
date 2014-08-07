@@ -111,6 +111,7 @@ enum flags_enum {
 	SECCOMP_FILTER		= 35|OPTION_LONGOPTONLY,
 	FORGET_PRIVTHREAD_INFO	= 36|OPTION_LONGOPTONLY,
 	SECURETHREADSPLITTING	= 37|OPTION_LONGOPTONLY,
+	FTS_EXPERIMENTAL_OPTIMIZATION = 38|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -167,10 +168,11 @@ enum ruleactionsign_enum {
 typedef enum ruleactionsign_enum ruleactionsign_t;
 
 enum ruleaction_enum {
-	RA_NONE		 = 0x00,
-	RA_MONITOR	 = 0x01,
-	RA_WALK		 = 0x02,
-	RA_ALL		 = 0xff
+	RA_NONE			 = 0x00,
+	RA_MONITOR		 = 0x01,
+	RA_WALK			 = 0x02,
+	RA_ALL			 = 0x0f,
+	RA_INITSYNC_STARTDENY	 = 0x10,
 };
 typedef enum ruleaction_enum ruleaction_t;
 
@@ -185,6 +187,7 @@ enum sigusr_enum {
 struct rule {
 	int		num;
 	regex_t		expr;
+	regex_t		expr_start;	/* To optimize FTS scanning */
 	mode_t		objtype;
 	ruleaction_t	perm;
 	ruleaction_t	mask;

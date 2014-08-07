@@ -30,6 +30,7 @@
 
 extern void _critical( const char *const function_name, const char *fmt, ...);
 #define critical(...) 				_critical(__FUNCTION__, __VA_ARGS__)
+#define critical_on(cond) {if (cond) {critical("Assert: "TOSTR(cond))}}
 
 extern void _error(const char *const function_name, const char *fmt, ...);
 #define error(...) 				_error(__FUNCTION__, __VA_ARGS__)

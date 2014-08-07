@@ -156,7 +156,7 @@ int exitcode_process(ctx_t *ctx_p, int exitcode) {
 // Checks file path by rules' expressions (parsed from file)
 // Return: RS_PERMIT or RS_REJECT for the "file path" and specified ruleaction
 
-ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rules_p, ruleaction_t ruleaction, rule_t **rule_pp) {
+ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rules_p, const ruleaction_t ruleaction, rule_t **rule_pp) {
 	debug(3, "rules_search_getperm(\"%s\", %p, %p, %p, %p)", 
 			fpath, (void *)(unsigned long)st_mode, rules_p,
 			(void *)(long)ruleaction, (void *)(long)rule_pp
@@ -166,6 +166,7 @@ ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rul
 	i = 0;
 	rule_t *rule_p = rules_p;
 	mode_t ftype = st_mode & S_IFMT;
+	ruleaction_t ruleaction_eff;
 
 #ifdef _DEBUG_FORCE
 	debug(3, "Rules (p == %p):", rules_p);
@@ -176,11 +177,13 @@ ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rul
 	} while(rules_p[i].mask != RA_NONE);
 #endif
 
+	ruleaction_eff = (ruleaction & ~RA_ALL ? RA_MONITOR : ruleaction);
+
         i=0;
-	if(rule_pp != NULL)
-		if(*rule_pp != NULL) {
+	if (rule_pp != NULL)
+		if (*rule_pp != NULL) {
 			debug(3, "Previous position is set.");
-			if(rule_p->mask == RA_NONE)
+			if (rule_p->mask == RA_NONE)
 				return rule_p->perm;
 
 			rule_p = ++(*rule_pp);
@@ -188,7 +191,7 @@ ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rul
 		}
 
 	debug(3, "Starting from position %i", i);
-	while(rule_p->mask != RA_NONE) {
+	while (rule_p->mask != RA_NONE) {
 		debug(3, "%i -> %p/%p: type compare: %p, %p -> %i", 
 				i,
 				(void *)(long)rule_p->perm, (void *)(long)rule_p->mask,
@@ -196,20 +199,25 @@ ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rul
 				(unsigned char)!(rule_p->objtype && (rule_p->objtype != ftype))
 			);
 
-		if(!(rule_p->mask & ruleaction)) {	// Checking wrong operation type
+		if (!(rule_p->mask & ruleaction_eff)) {	// Checking wrong operation type
 			debug(3, "action-mask mismatch. Skipping.");
 			rule_p++;i++;// = &rules_p[++i];
 			continue;
 		}
 
-		if(rule_p->objtype && (rule_p->objtype != ftype)) {
+		if (rule_p->objtype && (rule_p->objtype != ftype)) {
 			debug(3, "objtype mismatch. Skipping.");
 			rule_p++;i++;// = &rules_p[++i];
 			continue;
 		}
 
-		if(!regexec(&rule_p->expr, fpath, 0, NULL, 0))
-			break;
+		if (!regexec((ruleaction & ~RA_ALL ? &rule_p->expr_start : &rule_p->expr), fpath, 0, NULL, 0)) {
+			if (!(ruleaction & ~RA_ALL))
+				break;
+
+			if (!(rule_p->perm & ruleaction_eff))
+				break;
+		}
 
 		debug(3, "doesn't match regex. Skipping.");
 		rule_p++;i++;// = &rules_p[++i];
@@ -221,7 +229,7 @@ ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rul
 			(void *)(long)ruleaction
 		);
 
-	if(rule_pp != NULL)
+	if (rule_pp != NULL)
 		*rule_pp = rule_p;
 
 	return rule_p->perm;
@@ -1337,7 +1345,7 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 	char fts_no_stat = (initsync==INITSYNC_FULL) && !(ctx_p->flags[EXCLUDEMOUNTPOINTS]);
 
 	int fts_opts =  FTS_NOCHDIR | FTS_PHYSICAL | 
-			(fts_no_stat				? FTS_NOSTAT	: 0) | 
+			(fts_no_stat			? FTS_NOSTAT	: 0) | 
 			(ctx_p->flags[ONEFILESYSTEM] 	? FTS_XDEV	: 0); 
 
         debug(3, "fts_opts == %p", (void *)(long)fts_opts);
@@ -1405,9 +1413,9 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 					} else
 						indexes_addexclude(indexes_p, strdup(path_rel), EVIF_CONTENTRECURSIVELY, queue_id);
 				}
-			} else {
+			} else
+			if (!ctx_p->flags[RSYNCPREFERINCLUDE])
 				error("Excluding mount points is not implentemted for non \"rsync*\" modes.");
-			}
 		}
 
 		mode_t st_mode = fts_no_stat ? (node->fts_info==FTS_D ? S_IFDIR : S_IFREG) : node->fts_statp->st_mode;
@@ -1418,6 +1426,22 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 			if (!(perm&RA_WALK)) {
 				debug(3, "Rejecting to walk into \"%s\".", path_rel);
 				fts_set(tree, node, FTS_SKIP);
+			} else
+			/* "FTS optimization" */
+			if (
+				ctx_p->flags[FTS_EXPERIMENTAL_OPTIMIZATION]	&&
+				node->fts_info == FTS_D				&&
+				!ctx_p->flags[EXCLUDEMOUNTPOINTS]
+			) {
+				debug(4, "\"FTS optimizator\"");
+				ruleaction_t perm = rules_getperm(path_rel, st_mode, rules_p, RA_INITSYNC_STARTDENY);
+
+				int result = ((perm&RA_MONITOR) != 0) ^ (ctx_p->flags[RSYNCPREFERINCLUDE] != 0);
+
+				if (result) {
+					debug(3, "\"FTS optimizator\": Rejecting to walk into \"%s\".", path_rel);
+					fts_set(tree, node, FTS_SKIP);
+				}
 			}
 
 			if (!(perm&RA_MONITOR)) {
@@ -1434,14 +1458,14 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 			}
 		}
 
-		evinfo.seqid_min    = sync_seqid();
-		evinfo.seqid_max    = evinfo.seqid_min;
-		evinfo.objtype_old  = EOT_DOESNTEXIST;
-		evinfo.objtype_new  = node->fts_info==FTS_D ? EOT_DIR : EOT_FILE;
-		evinfo.fsize        = fts_no_stat ? 0 : node->fts_statp->st_size;
-		evinfo_initialevmask(ctx_p, &evinfo, node->fts_info==FTS_D);
-
 		if (!rsync_and_prefer_excludes) {
+			evinfo.seqid_min    = sync_seqid();
+			evinfo.seqid_max    = evinfo.seqid_min;
+			evinfo.objtype_old  = EOT_DOESNTEXIST;
+			evinfo.objtype_new  = node->fts_info==FTS_D ? EOT_DIR : EOT_FILE;
+			evinfo.fsize        = fts_no_stat ? 0 : node->fts_statp->st_size;
+
+			evinfo_initialevmask(ctx_p, &evinfo, node->fts_info==FTS_D);
 			debug(3, "queueing \"%s\" (depth: %i) with int-flags %p", node->fts_path, node->fts_level, (void *)(unsigned long)evinfo.flags);
 			int _ret = sync_queuesync(path_rel, &evinfo, ctx_p, indexes_p, queue_id);
 
@@ -2397,14 +2421,14 @@ int sync_idle_dosync_collectedevents_listcreate(struct dosync_arg *dosync_arg_p,
 	ctx_t *ctx_p = dosync_arg_p->ctx_p;
 
 	int ret;
-	if((ret=sync_idle_dosync_collectedevents_uniqfname(ctx_p, fpath, name))) {
+	if ((ret=sync_idle_dosync_collectedevents_uniqfname(ctx_p, fpath, name))) {
 		error("sync_idle_dosync_collectedevents_listcreate: Cannot get unique file name.");
 		return ret;
 	}
 
 	dosync_arg_p->outf = fopen(fpath, "w");
 
-	if(dosync_arg_p->outf == NULL) {
+	if (dosync_arg_p->outf == NULL) {
 		error("Cannot open \"%s\" as file for writing.", fpath);
 		return errno;
 	}
@@ -2474,11 +2498,15 @@ l_rsync_escape_loop0_end:
 }
 
 static inline int rsync_outline(FILE *outf, char *outline, eventinfo_flags_t flags) {
-	if(flags & EVIF_RECURSIVELY) {
+#ifdef VERYPARANOID
+	critical_on(outf == NULL);
+#endif
+
+	if (flags & EVIF_RECURSIVELY) {
 		debug(3, "Recursively \"%s\": Writing to rsynclist: \"%s/***\".", outline, outline);
 		fprintf(outf, "%s/***\n", outline);
 	} else
-	if(flags & EVIF_CONTENTRECURSIVELY) {
+	if (flags & EVIF_CONTENTRECURSIVELY) {
 		debug(3, "Content-recursively \"%s\": Writing to rsynclist: \"%s/**\".", outline, outline);
 		fprintf(outf, "%s/**\n", outline);
 	} else {
@@ -2685,7 +2713,7 @@ void sync_inclist_rotate(ctx_t *ctx_p, struct dosync_arg *dosync_arg_p) {
 		exit(ret);	// TODO: replace with kill(0, ...);
 	}
 
-	if (ctx_p->synchandler_argf & SHFL_EXCLUDE_LIST_PATH) {
+	if (ctx_p->synchandler_argf & SHFL_INCLUDE_LIST_PATH) {
 #ifdef VERYPARANOID
 		require_strlen_le(newexc_path, PATH_MAX);
 #endif

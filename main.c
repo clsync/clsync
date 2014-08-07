@@ -133,6 +133,7 @@ static const struct option long_options[] =
 	{"rsync-prefer-include",optional_argument,	NULL,	RSYNCPREFERINCLUDE},
 	{"ignore-exitcode",	required_argument,	NULL,	IGNOREEXITCODE},
 	{"dont-unlink-lists",	optional_argument,	NULL,	DONTUNLINK},
+	{"fts-experimental-optimization", optional_argument,	NULL,	FTS_EXPERIMENTAL_OPTIMIZATION},
 	{"full-initialsync",	optional_argument,	NULL,	INITFULL},
 	{"only-initialsync",	optional_argument,	NULL,	ONLYINITSYNC},
 	{"skip-initialsync",	optional_argument,	NULL,	SKIPINITSYNC},
@@ -1808,10 +1809,11 @@ void ctx_cleanup(ctx_t *ctx_p) {
 	return;
 }
 
-int rule_complete(rule_t *rule_p, const char *expr) {
+int rule_complete(rule_t *rule_p, char *expr) {
+	char *end_of_start;
 	debug(3, "<%s>.", expr);
 #ifdef VERYPARANOID
-	if(rule_p->mask == RA_NONE) {
+	if (rule_p->mask == RA_NONE) {
 		error("Received a rule with rule_p->mask == 0x00. Exit.");
 		return EINVAL;
 	}
@@ -1819,15 +1821,25 @@ int rule_complete(rule_t *rule_p, const char *expr) {
 
 	char buf[BUFSIZ];
 	int ret = 0;
-	if(rule_p->num >= MAXRULES) {
+	if (rule_p->num >= MAXRULES) {
 		error("Too many rules (%i >= %i).", rule_p->num, MAXRULES);
 		return ENOMEM;
 	}
-	if((ret = regcomp(&rule_p->expr, expr, REG_EXTENDED | REG_NOSUB))) {
+	if ((ret = regcomp(&rule_p->expr,       expr, REG_EXTENDED | REG_NOSUB))) {
 		regerror(ret, &rule_p->expr, buf, BUFSIZ);
 		error("Invalid regexp pattern <%s>: %s (regex-errno: %i).", expr, buf, ret);
 		return ret;
 	}
+	end_of_start = strstr(expr, ".*");
+	if (end_of_start != NULL)
+		*end_of_start = 0;
+	if ((ret = regcomp(&rule_p->expr_start, expr, REG_EXTENDED | REG_NOSUB))) {
+		regerror(ret, &rule_p->expr, buf, BUFSIZ);
+		error("Invalid regexp pattern <%s> (shorted): %s (regex-errno: %i).", expr, buf, ret);
+		return ret;
+	}
+	if (end_of_start != NULL)
+		*end_of_start = '.';
 
 	return ret;
 }
