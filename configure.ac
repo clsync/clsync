@@ -55,7 +55,6 @@ AS_HELP_STRING(--enable-cluster,
 [enable clustering support (not yet implemented), default: no]))
 
 AS_IF([test "x$enable_cluster" = "xyes"], [CPPFLAGS="${CPPFLAGS} -DCLUSTER_SUPPORT"
-
 	dnl mhash check
 	AC_ARG_WITH(mhash,
 	AS_HELP_STRING(--with-mhash,
@@ -67,6 +66,7 @@ AS_IF([test "x$enable_cluster" = "xyes"], [CPPFLAGS="${CPPFLAGS} -DCLUSTER_SUPPO
 		[AC_MSG_ERROR("Unable to find libmhash")])
 	])
 ])
+
 
 dnl --enable-socket
 AC_ARG_ENABLE(socket,
@@ -174,6 +174,35 @@ case "$with_capabilities" in
 		AC_CHECK_FUNC([capset],
 			[
 				AC_CHECK_HEADER(sys/capability.h, [HAVE_CAPABILITIES=2])
+			]
+		)
+		;;
+esac
+
+dnl tre check
+
+AC_ARG_WITH(tre,
+	AS_HELP_STRING(--with-tre,
+		[Enable tre support be able to predict which directories should be scanned for excludes; values: no, check, yes; default: check])
+	[],
+	[with_capabilities=check]
+)
+
+case "$with_tre" in
+	yes)
+		AC_CHECK_FUNC([regaexec],
+			[
+				AC_CHECK_HEADER(tre/tre.h, [HAVE_TRE=2], [AC_MSG_FAILURE([Cannot find tre/tre.h])])
+			],
+			[
+				AC_MSG_FAILURE([Cannot call function regaexec from libtre])
+			]
+		)
+		;;
+	check)
+		AC_CHECK_FUNC([regaexec],
+			[
+				AC_CHECK_HEADER(tre/tre.h, [HAVE_TRE=2])
 			]
 		)
 		;;
@@ -341,6 +370,7 @@ AM_CONDITIONAL([HAVE_GETMNTENT],    [test "x$HAVE_GETMNTENT"    != "x"])
 AM_CONDITIONAL([HAVE_PIVOTROOT],    [test "x$HAVE_PIVOTROOT"    != "x"])
 AM_CONDITIONAL([HAVE_UNSHARE],      [test "x$HAVE_UNSHARE"      != "x"])
 AM_CONDITIONAL([HAVE_SECCOMP],      [test "x$HAVE_SECCOMP"      != "x"])
+AM_CONDITIONAL([HAVE_TRE],          [test "x$HAVE_TRE"          != "x"])
 
 AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' ], [AC_MSG_FAILURE([kqueue, inotify and bsm are not supported on this system])])
 

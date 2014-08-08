@@ -172,7 +172,6 @@ enum ruleaction_enum {
 	RA_MONITOR		 = 0x01,
 	RA_WALK			 = 0x02,
 	RA_ALL			 = 0x0f,
-	RA_INITSYNC_STARTDENY	 = 0x10,
 };
 typedef enum ruleaction_enum ruleaction_t;
 
@@ -187,7 +186,6 @@ enum sigusr_enum {
 struct rule {
 	int		num;
 	regex_t		expr;
-	regex_t		expr_start;	/* To optimize FTS scanning */
 	mode_t		objtype;
 	ruleaction_t	perm;
 	ruleaction_t	mask;
@@ -270,6 +268,7 @@ struct ctx {
 	int   children;			// Used only for non-pthread mode
 	uint32_t iteration_num;
 	rule_t rules[MAXRULES];
+	size_t rules_count;
 	dev_t st_dev;
 #endif
 	char *flags_values_raw[OPTION_FLAGS];

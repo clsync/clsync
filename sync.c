@@ -45,6 +45,7 @@
 #include "control.h"
 #include "indexes.h"
 #include "privileged.h"
+#include "rules.h"
 
 #include <stdio.h>
 #include <dlfcn.h>
@@ -141,122 +142,6 @@ int exitcode_process(ctx_t *ctx_p, int exitcode) {
 	return err;
 }
 
-/**
- * @brief 			Checks file path by rules' expressions (parsed from file)
- * 
- * @param[in] 	fpath		Path to file of directory
- * @param[in] 	st_mode		st_mode received via *stat() functions
- * @param[in] 	rules_p		Pointer to start of rules array
- * @param[in] 	ruleaction	Operaton ID (see ruleaction_t)
- * @param[i/o] 	rule_pp		Pointer to pointer to rule, where the last search ended. Next search will be started from the specified rule. Can be "NULL" to disable this feature.
- *
- * @retval	perm		Permission bitmask
- * 
- */
-// Checks file path by rules' expressions (parsed from file)
-// Return: RS_PERMIT or RS_REJECT for the "file path" and specified ruleaction
-
-ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rules_p, const ruleaction_t ruleaction, rule_t **rule_pp) {
-	debug(3, "rules_search_getperm(\"%s\", %p, %p, %p, %p)", 
-			fpath, (void *)(unsigned long)st_mode, rules_p,
-			(void *)(long)ruleaction, (void *)(long)rule_pp
-		);
-
-	int i;
-	i = 0;
-	rule_t *rule_p = rules_p;
-	mode_t ftype = st_mode & S_IFMT;
-	ruleaction_t ruleaction_eff;
-
-#ifdef _DEBUG_FORCE
-	debug(3, "Rules (p == %p):", rules_p);
-	i=0;
-	do {
-		debug(3, "\t%i\t%i\t%p/%p", i, rules_p[i].objtype, (void *)(long)rules_p[i].perm, (void *)(long)rules_p[i].mask);
-		i++;
-	} while(rules_p[i].mask != RA_NONE);
-#endif
-
-	ruleaction_eff = (ruleaction & ~RA_ALL ? RA_MONITOR : ruleaction);
-
-        i=0;
-	if (rule_pp != NULL)
-		if (*rule_pp != NULL) {
-			debug(3, "Previous position is set.");
-			if (rule_p->mask == RA_NONE)
-				return rule_p->perm;
-
-			rule_p = ++(*rule_pp);
-			i = rule_p->num;
-		}
-
-	debug(3, "Starting from position %i", i);
-	while (rule_p->mask != RA_NONE) {
-		debug(3, "%i -> %p/%p: type compare: %p, %p -> %i", 
-				i,
-				(void *)(long)rule_p->perm, (void *)(long)rule_p->mask,
-				(void *)(unsigned long)ftype, (void *)(unsigned long)rule_p->objtype, 
-				(unsigned char)!(rule_p->objtype && (rule_p->objtype != ftype))
-			);
-
-		if (!(rule_p->mask & ruleaction_eff)) {	// Checking wrong operation type
-			debug(3, "action-mask mismatch. Skipping.");
-			rule_p++;i++;// = &rules_p[++i];
-			continue;
-		}
-
-		if (rule_p->objtype && (rule_p->objtype != ftype)) {
-			debug(3, "objtype mismatch. Skipping.");
-			rule_p++;i++;// = &rules_p[++i];
-			continue;
-		}
-
-		if (!regexec((ruleaction & ~RA_ALL ? &rule_p->expr_start : &rule_p->expr), fpath, 0, NULL, 0)) {
-			if (!(ruleaction & ~RA_ALL))
-				break;
-
-			if (!(rule_p->perm & ruleaction_eff))
-				break;
-		}
-
-		debug(3, "doesn't match regex. Skipping.");
-		rule_p++;i++;// = &rules_p[++i];
-
-	}
-
-	debug(2, "matched to rule #%u for \"%s\":\t%p/%p (queried: %p).", rule_p->mask==RA_NONE?-1:i, fpath, 
-			(void *)(long)rule_p->perm, (void *)(long)rule_p->mask,
-			(void *)(long)ruleaction
-		);
-
-	if (rule_pp != NULL)
-		*rule_pp = rule_p;
-
-	return rule_p->perm;
-}
-
-static inline ruleaction_t rules_getperm(const char *fpath, mode_t st_mode, rule_t *rules_p, ruleaction_t ruleactions) {
-	rule_t *rule_p = NULL;
-	ruleaction_t gotpermto  = 0;
-	ruleaction_t resultperm = 0;
-	debug(3, "rules_getperm(\"%s\", %p, %p (#%u), %p)", 
-		fpath, (void *)(long)st_mode, rules_p, rules_p->num, (void *)(long)ruleactions);
-
-	while((gotpermto&ruleactions) != ruleactions) {
-		rules_search_getperm(fpath, st_mode, rules_p, ruleactions, &rule_p);
-		if(rule_p->mask == RA_NONE) { // End of rules' list 
-			resultperm |= rule_p->perm & (gotpermto^RA_ALL);
-			break;
-		}
-		resultperm |= rule_p->perm & ((gotpermto^rule_p->mask)&rule_p->mask);	// Adding perm bitmask of operations that was unknown before
-		gotpermto  |= rule_p->mask;						// Adding the mask
-	}
-
-	debug(3, "rules_getperm(\"%s\", %p, rules_p, %p): result perm is %p",
-		fpath, (void *)(long)st_mode, (void *)(long)ruleactions, (void *)(long)resultperm);
-
-	return resultperm;
-}
 
 threadsinfo_t *thread_info() {	// TODO: optimize this
 	static threadsinfo_t threadsinfo={{{{0}}},{{{0}}},0};
@@ -1342,6 +1227,8 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 	if ((!ctx_p->flags[RSYNCPREFERINCLUDE]) && skip_rules)
 		return 0;
 
+	skip_rules |= (ctx_p->rules_count == 0);
+
 	char fts_no_stat = (initsync==INITSYNC_FULL) && !(ctx_p->flags[EXCLUDEMOUNTPOINTS]);
 
 	int fts_opts =  FTS_NOCHDIR | FTS_PHYSICAL | 
@@ -1427,22 +1314,6 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 				debug(3, "Rejecting to walk into \"%s\".", path_rel);
 				fts_set(tree, node, FTS_SKIP);
 			} else
-			/* "FTS optimization" */
-			if (
-				ctx_p->flags[FTS_EXPERIMENTAL_OPTIMIZATION]	&&
-				node->fts_info == FTS_D				&&
-				!ctx_p->flags[EXCLUDEMOUNTPOINTS]
-			) {
-				debug(4, "\"FTS optimizator\"");
-				ruleaction_t perm = rules_getperm(path_rel, st_mode, rules_p, RA_INITSYNC_STARTDENY);
-
-				int result = ((perm&RA_MONITOR) != 0) ^ (ctx_p->flags[RSYNCPREFERINCLUDE] != 0);
-
-				if (result) {
-					debug(3, "\"FTS optimizator\": Rejecting to walk into \"%s\".", path_rel);
-					fts_set(tree, node, FTS_SKIP);
-				}
-			}
 
 			if (!(perm&RA_MONITOR)) {
 				debug(3, "Excluding \"%s\".", path_rel);
@@ -1474,6 +1345,17 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 				ret = errno;
 				goto l_sync_initialsync_walk_end;
 			}
+			continue;
+		}
+
+		/* "FTS optimization" */
+		if (
+			skip_rules					&&
+			node->fts_info == FTS_D				&&
+			!ctx_p->flags[EXCLUDEMOUNTPOINTS]
+		) {
+			debug(4, "\"FTS optimizator\"");
+			fts_set(tree, node, FTS_SKIP);
 		}
 	}
 	if (errno) {

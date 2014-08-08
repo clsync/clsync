@@ -5,9 +5,10 @@ if CLSYNC
 bin_PROGRAMS = clsync
 
 clsync_SOURCES = calc.c cluster.c error.c fileutils.c glibex.c		\
-	indexes.c main.c malloc.c stringex.c sync.c privileged.c calc.h	\
-	cluster.h fileutils.h glibex.h main.h port-hacks.h stringex.h	\
-	sync.h common.h control.h privileged.h syscalls.h
+	indexes.c main.c malloc.c rules.c stringex.c sync.c privileged.c\
+	calc.h cluster.h fileutils.h glibex.h main.h port-hacks.h	\
+	stringex.h sync.h common.h control.h privileged.h rules.h	\
+	syscalls.h
 
 clsync_CFLAGS = $(AM_CFLAGS)
 
@@ -51,6 +52,9 @@ clsync_CFLAGS  += -DUNSHARE_SUPPORT
 if HAVE_PIVOTROOT
 clsync_CFLAGS  += -DPIVOTROOT_OPT_SUPPORT
 endif
+endif
+if HAVE_TRE
+clsync_CFLAGS  += -DTRE_SUPPORT
 endif
 
 if HLLOCKS
