@@ -287,6 +287,12 @@ int ncpus;
 
 int version() {
 	info(PROGRAM" v%i.%i"REVISION"\n\t"AUTHOR"\n\nCompiled with options"
+#ifdef _DEBUG_SUPPORT
+		" -D_DEBUG_SUPPORT"
+#endif
+#ifdef _DEBUG_FORCE
+		" -D_DEBUG_FORCE"
+#endif
 #ifdef KQUEUE_SUPPORT
 		" -DKQUEUE_SUPPORT"
 #endif
