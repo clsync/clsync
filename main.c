@@ -286,7 +286,50 @@ int syntax() {
 int ncpus;
 
 int version() {
-	info(PROGRAM" v%i.%i"REVISION"\n\t"AUTHOR"", VERSION_MAJ, VERSION_MIN);
+	info(PROGRAM" v%i.%i"REVISION"\n\t"AUTHOR"\n\nCompiled with options"
+#ifdef KQUEUE_SUPPORT
+		" -DKQUEUE_SUPPORT"
+#endif
+#ifdef INOTIFY_SUPPORT
+		" -DINOTIFY_SUPPORT"
+#endif
+#ifdef INOTIFY_OLD
+		" -DINOTIFY_OLD"
+#endif
+#ifdef FANOTIFY_SUPPORT
+		" -DFANOTIFY_SUPPORT"
+#endif
+#ifdef BSM_SUPPORT
+		" -DBSM_SUPPORT"
+#endif
+#ifdef DTRACEPIPE_SUPPORT
+		" -DDTRACEPIPE_SUPPORT"
+#endif
+#ifdef BACKTRACE_SUPPORT
+		" -DBACKTRACE_SUPPORT"
+#endif
+#ifdef CAPABILITIES_SUPPORT
+		" -DCAPABILITIES_SUPPORT"
+#endif
+#ifdef SECCOMP_SUPPORT
+		" -DSECCOMP_SUPPORT"
+#endif
+#ifdef GETMNTENT_SUPPORT
+		" -DGETMNTENT_SUPPORT"
+#endif
+#ifdef UNSHARE_SUPPORT
+		" -DUNSHARE_SUPPORT"
+#endif
+#ifdef PIVOTROOT_OPT_SUPPORT
+		" -DPIVOTROOT_OPT_SUPPORT"
+#endif
+#ifdef TRE_SUPPORT
+		" -DTRE_SUPPORT"
+#endif
+#ifdef HL_LOCKS
+		" -DHL_LOCKS"
+#endif
+		, VERSION_MAJ, VERSION_MIN);
 	exit(0);
 }
 
