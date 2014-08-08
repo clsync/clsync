@@ -1335,7 +1335,7 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 
 			switch (ctx_p->flags[MODE]) {
 				case MODE_SIMPLE:
-					sync_dosync(node->fts_path, evinfo.evmask, ctx_p, indexes_p);
+					SAFE(sync_dosync(node->fts_path, evinfo.evmask, ctx_p, indexes_p), critical("fpath == \"%s\"; evmask == 0x%o", node->fts_path, evinfo.evmask));
 					continue;
 				default:
 					break;
@@ -1957,6 +1957,13 @@ int sync_prequeue_loadmark
 		return 0;
 	}
 
+	switch (ctx_p->flags[MODE]) {
+		case MODE_SIMPLE:
+			return SAFE(sync_dosync(path_rel, event_mask, ctx_p, indexes_p), critical("fpath == \"%s\"; evmask == 0x%o", path_rel, event_mask));
+		default:
+			break;
+	}
+
 	// Locally queueing the event
 
 	int isnew = 0;
@@ -2104,16 +2111,15 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 			sync_queuesync(fpath, evinfo_dup, ctx_p, indexes_p, QUEUE_LOCKWAIT);
 			return;
 		}
-	
 
-	if ((ctx_p->listoutdir == NULL) && (!(ctx_p->synchandler_argf & SHFL_INCLUDE_LIST)) && (!(ctx_p->flags[MODE]==MODE_SO))) {
+
+#ifdef PARANOID
+	critical_on ((ctx_p->listoutdir == NULL) && (!(ctx_p->synchandler_argf & SHFL_INCLUDE_LIST)) && (!(ctx_p->flags[MODE]==MODE_SO)));
+/*	if ((ctx_p->listoutdir == NULL) && (!(ctx_p->synchandler_argf & SHFL_INCLUDE_LIST)) && (!(ctx_p->flags[MODE]==MODE_SO))) {
 		debug(3, "calling sync_dosync()");
-		int ret;
-		if((ret=sync_dosync(fpath, evinfo->evmask, ctx_p, indexes_p))) {
-			error("unable to sync \"%s\" (evmask %i).", fpath, evinfo->evmask);
-			exit(ret);	// TODO: remove this from here
-		}
-	}
+		return SAFE(sync_dosync(fpath, evinfo->evmask, ctx_p, indexes_p), critical("fpath == \"%s\"; evmask == 0x%o", fpath, evinfo->evmask));
+	}*/
+#endif
 
 	int isnew = 0;
 	eventinfo_t *evinfo_idx = indexes_fpath2ei(indexes_p, fpath);
