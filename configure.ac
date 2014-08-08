@@ -183,27 +183,33 @@ dnl tre check
 
 AC_ARG_WITH(tre,
 	AS_HELP_STRING(--with-tre,
-		[Enable tre support be able to predict which directories should be scanned for excludes; values: no, check, yes; default: check])
+		[Enable tre support be able to predict which directories should be scanned for excludes; values: no, check, yes; default: check]),
 	[],
-	[with_capabilities=check]
+	[with_tre=check]
 )
 
 case "$with_tre" in
 	yes)
-		AC_CHECK_FUNC([regaexec],
+		AC_CHECK_LIB([tre], [tre_regaexec],
 			[
-				AC_CHECK_HEADER(tre/tre.h, [HAVE_TRE=2], [AC_MSG_FAILURE([Cannot find tre/tre.h])])
+				AC_CHECK_HEADER(tre/tre.h, [], [AC_MSG_FAILURE([Cannot find tre/tre.h])])
+				LDFLAGS="${LDFLAGS} -ltre"
+				HAVE_TRE=1
 			],
 			[
-				AC_MSG_FAILURE([Cannot call function regaexec from libtre])
+				AC_MSG_FAILURE(
+					[Cannot find libtre])
 			]
 		)
 		;;
 	check)
-		AC_CHECK_FUNC([regaexec],
+		AC_CHECK_LIB([tre], [tre_regaexec],
 			[
-				AC_CHECK_HEADER(tre/tre.h, [HAVE_TRE=2])
-			]
+				AC_CHECK_HEADER(tre/tre.h, [], [AC_MSG_FAILURE([Cannot find tre/tre.h])])
+				LDFLAGS="${LDFLAGS} -ltre"
+				HAVE_TRE=1
+			],
+			[]
 		)
 		;;
 esac
