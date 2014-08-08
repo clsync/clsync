@@ -514,9 +514,10 @@ char *parameter_expand(
 								variable_value_len = (ptr_nest - ptr + 1);
 								parameter_get(variable_name, parameter_get_arg);
 							} else {									// Substituting
+								errno = 0;
 								variable_value = parameter_get(variable_name, parameter_get_arg);
 								if (variable_value == NULL) {
-									if (!(exceptionflags&2))
+									if (!(exceptionflags&2) && (errno != ENOENT))
 										warning("Variable \"%s\" is not set (%s)", variable_name, strerror(errno));
 									*ptr_nest = '%';
 									errno = 0;
@@ -1966,7 +1967,6 @@ int main(int argc, char *argv[]) {
 	ctx_p->_queues[QUEUE_INSTANT].collectdelay  = COLLECTDELAY_INSTANT;
 	ctx_p->_queues[QUEUE_LOCKWAIT].collectdelay = COLLECTDELAY_INSTANT;
 	ctx_p->bfilethreshold			 = DEFAULT_BFILETHRESHOLD;
-	ctx_p->label				 = DEFAULT_LABEL;
 	ctx_p->rsyncinclimit			 = DEFAULT_RSYNCINCLUDELINESLIMIT;
 	ctx_p->synctimeout			 = DEFAULT_SYNCTIMEOUT;
 #ifdef CLUSTER_SUPPORT
@@ -1986,6 +1986,7 @@ int main(int argc, char *argv[]) {
 	ctx_p->synchandler_uid			 = getuid();
 	ctx_p->synchandler_gid			 = getgid();
 	ctx_p->flags[CAPS_INHERIT]		 = DEFAULT_CAPS_INHERIT;
+	parse_parameter(ctx_p, LABEL, strdup(DEFAULT_LABEL), PS_DEFAULTS);
 
 	ncpus					 = sysconf(_SC_NPROCESSORS_ONLN); // Get number of available logical CPUs
 

@@ -1206,6 +1206,7 @@ static inline void api_evinfo_initialevmask(ctx_t *ctx_p, api_eventinfo_t *evinf
 	return;
 }
 
+int sync_dosync(const char *fpath, uint32_t evmask, ctx_t *ctx_p, indexes_t *indexes_p);
 int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p, queue_id_t queue_id, initsync_t initsync) {
 	int ret = 0;
 	const char *rootpaths[] = {dirpath, NULL};
@@ -1330,13 +1331,21 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 		}
 
 		if (!rsync_and_prefer_excludes) {
+			evinfo_initialevmask(ctx_p, &evinfo, node->fts_info==FTS_D);
+
+			switch (ctx_p->flags[MODE]) {
+				case MODE_SIMPLE:
+					sync_dosync(node->fts_path, evinfo.evmask, ctx_p, indexes_p);
+					continue;
+				default:
+					break;
+			}
+
 			evinfo.seqid_min    = sync_seqid();
 			evinfo.seqid_max    = evinfo.seqid_min;
 			evinfo.objtype_old  = EOT_DOESNTEXIST;
 			evinfo.objtype_new  = node->fts_info==FTS_D ? EOT_DIR : EOT_FILE;
 			evinfo.fsize        = fts_no_stat ? 0 : node->fts_statp->st_size;
-
-			evinfo_initialevmask(ctx_p, &evinfo, node->fts_info==FTS_D);
 			debug(3, "queueing \"%s\" (depth: %i) with int-flags %p", node->fts_path, node->fts_level, (void *)(unsigned long)evinfo.flags);
 			int _ret = sync_queuesync(path_rel, &evinfo, ctx_p, indexes_p, queue_id);
 
@@ -1381,7 +1390,7 @@ const char *sync_parameter_get(const char *variable_name, void *_dosync_arg_p) {
 	ctx_t *ctx_p = dosync_arg_p->ctx_p;
 
 #ifdef _DEBUG_FORCE
-	debug(15, "(\"%s\", %p): 0x%x", variable_name, _dosync_arg_p, ctx_p == NULL ? 0 : ctx_p->synchandler_argf);
+	debug(15, "(\"%s\", %p): 0x%x, \"%s\"", variable_name, _dosync_arg_p, ctx_p == NULL ? 0 : ctx_p->synchandler_argf, dosync_arg_p->evmask_str);
 #endif
 
 	if ((ctx_p == NULL || (ctx_p->synchandler_argf & SHFL_INCLUDE_LIST_PATH)) && !strcmp(variable_name, "INCLUDE-LIST-PATH"))
@@ -1805,6 +1814,7 @@ int sync_notify_init(ctx_t *ctx_p) {
 static inline int sync_dosync_exec(ctx_t *ctx_p, indexes_t *indexes_p, const char *evmask_str, const char *fpath) {
 	int rc;
 	struct dosync_arg dosync_arg;
+	debug(20, "(ctx_p, indexes_p, \"%s\", \"%s\")", evmask_str, fpath);
 
 	 dosync_arg.ctx_p	       = ctx_p;
 	*dosync_arg.include_list       = fpath;
@@ -1828,7 +1838,7 @@ static inline int sync_dosync_exec(ctx_t *ctx_p, indexes_t *indexes_p, const cha
 #endif
 }
 
-static int sync_dosync(const char *fpath, uint32_t evmask, ctx_t *ctx_p, indexes_t *indexes_p) {
+int sync_dosync(const char *fpath, uint32_t evmask, ctx_t *ctx_p, indexes_t *indexes_p) {
 	int ret;
 
 #ifdef CLUSTER_SUPPORT

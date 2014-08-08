@@ -344,6 +344,9 @@ ruleaction_t rules_search_getperm(const char *fpath, mode_t st_mode, rule_t *rul
 			continue;
 		}
 
+		if(!regexec(&rule_p->expr, fpath, 0, NULL, 0))
+			break;
+
 		debug(3, "doesn't match regex. Skipping.");
 		rule_p++;i++;// = &rules_p[++i];
 

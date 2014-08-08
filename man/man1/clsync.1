@@ -1890,7 +1890,59 @@ see \-\-max\-iterations option
 .RE
 
 .SH RULES
-Filter riles can be placed into
+Filter rules can be used to set which events clsync should monitor and which
+events it should ignore.
+
+.B Caution!
+This rules doesn't guarantee that filtered file/dir won't be synced. This can
+occur because file or directory can appear in the moment of
+.B sync\-handler
+running (or after it but before the 
+.B sync\-handler
+will reach the directory), so it'll be too late to add an exclusion. If you
+need a guarantee of file syncing preventing you can use internal filter rules
+of the
+.B sync\-handler
+program (for example, rsync has options "\-\-exclude", "\-\-exclude\-from" and
+"\-\-filter") or use disable any "recursive" syncs in
+.B clsync
+(and remove "-av" option of rsync if it's used). To disable recursive syncs
+you can use:
+.RS
+.B simple
+.RS
+Already non-recursive
+.RE
+.B direct
+.RS
+Already non-recursive
+.RE
+.B shell
+.RS
+Don't enable option \-\-have\-recursive\-sync.
+.RE
+.B rsyncdirect
+.RS
+Use option \-\-rsync\-prefer\-include and set
+.I sync\-handler\-arguments
+to
+\-lptgoD \-\-delete \-\-include\-from %INCLUDE\-LIST\-PATH% \-\-exclude='*' %watch\-dir%/ %destination\-dir%/
+.RE
+.B rsyncshell
+.RS
+Use option \-\-rsync\-prefer\-include.
+.RE
+.B rsyncso
+.RS
+Use option \-\-rsync\-prefer\-include.
+.RE
+.B so
+.RS
+Don't enable option \-\-have\-recursive\-sync.
+.RE
+.RE
+
+Filter rules can be placed into
 .I rules\-file
 with one rule per line.
 
