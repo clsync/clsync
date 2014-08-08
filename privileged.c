@@ -954,7 +954,7 @@ FTS *__privileged_fts_open(
 	)
 {
 	struct pa_fts_open_arg arg;
-	void *ret;
+	void *ret = NULL;
 
 	arg.path_argv	= path_argv;
 	arg.options	= options;
@@ -979,7 +979,7 @@ FTSENT *__privileged_fts_read(
 # endif
 	)
 {
-	void *ret;
+	void *ret = NULL;
 	privileged_action(
 # ifdef HL_LOCK_TRIES_AUTO
 			callid,
@@ -998,7 +998,7 @@ int __privileged_fts_close(
 # endif
 	)
 {
-	void *ret;
+	void *ret = (void *)(long)-1;
 	privileged_action(
 # ifdef HL_LOCK_TRIES_AUTO
 			callid,
@@ -1011,7 +1011,7 @@ int __privileged_fts_close(
 }
 
 int __privileged_inotify_init() {
-	void *ret;
+	void *ret = (void *)(long)-1;
 	privileged_action(
 # ifdef HL_LOCK_TRIES_AUTO
 			PC_DEFAULT,
@@ -1024,7 +1024,7 @@ int __privileged_inotify_init() {
 }
 
 int __privileged_inotify_init1(int flags) {
-	void *ret;
+	void *ret = (void *)(long)-1;
 	privileged_action(
 # ifdef HL_LOCK_TRIES_AUTO
 			PC_DEFAULT,
@@ -1046,7 +1046,7 @@ int __privileged_inotify_add_watch(
 	)
 {
 	struct pa_inotify_add_watch_arg arg;
-	void *ret;
+	void *ret = (void *)(long)-1;
 
 	arg.fd		= fd;
 	arg.pathname	= pathname;
@@ -1070,7 +1070,7 @@ int __privileged_inotify_rm_watch(
 	)
 {
 	struct pa_inotify_rm_watch_arg arg;
-	void *ret;
+	void *ret = (void *)(long)-1;
 
 	arg.fd	= fd;
 	arg.wd	= wd;
@@ -1093,7 +1093,7 @@ int __privileged_fork_setuid_execvp(
 	)
 {
 	struct pa_fork_execvp_arg arg;
-	void *ret;
+	void *ret = (void *)(long)-1;
 
 	arg.file = file;
 	arg.argv = argv;
@@ -1113,7 +1113,7 @@ int __privileged_fork_setuid_execvp(
 int __privileged_kill_child_wrapper(pid_t pid, int signal)
 {
 	struct pa_kill_child_arg arg;
-	void *ret;
+	void *ret = (void *)(long)-1;
 
 	arg.pid    = pid;
 	arg.signal = signal;

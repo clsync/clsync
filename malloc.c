@@ -95,7 +95,7 @@ void *xrealloc(void *oldptr, size_t size) {
 #ifdef CAPABILITIES_SUPPORT
 void *malloc_align(size_t size) {
 	size_t total_size;
-	void *ret;
+	void *ret = NULL;
 # ifdef _DEBUG
 	debug(20, "(%li)", size);
 # endif
