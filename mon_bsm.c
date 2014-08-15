@@ -49,23 +49,17 @@ enum event_bits {
 };
 
 struct recognize_event_return {
-	union {
-		struct {
-			struct {
-				eventobjtype_t objtype_old:16;
-				eventobjtype_t objtype_new:16;
-			} f;
-			struct {
-				eventobjtype_t objtype_old:16;
-				eventobjtype_t objtype_new:16;
-			} t;
-		} v;
-		uint64_t i;
-	} u;
+	struct {
+		eventobjtype_t objtype_old;
+		eventobjtype_t objtype_new;
+	} f;
+	struct {
+		eventobjtype_t objtype_old;
+		eventobjtype_t objtype_new;
+	} t;
 };
 
-static inline uint64_t recognize_event(uint32_t event) {
-	struct recognize_event_return r = {{{{0}}}};
+static inline uint64_t recognize_event(struct recognize_event_return *r, uint32_t event) {
 	int is_created, is_deleted, is_moved;
 	eventobjtype_t type;
 
@@ -115,25 +109,25 @@ static inline uint64_t recognize_event(uint32_t event) {
 			break;
 	}
 
-	r.u.v.f.objtype_old = type;
+	r->f.objtype_old = type;
 
 	if (is_moved) {
-		r.u.v.f.objtype_new = EOT_DOESNTEXIST;
-		r.u.v.t.objtype_old = EOT_DOESNTEXIST;
-		r.u.v.t.objtype_new = type;
+		r->f.objtype_new = EOT_DOESNTEXIST;
+		r->t.objtype_old = EOT_DOESNTEXIST;
+		r->t.objtype_new = type;
 
-		return r.u.i;
+		return;
 	}
 
-	r.u.v.f.objtype_new = type;
+	r->f.objtype_new = type;
 
 	if (is_created)
-		r.u.v.f.objtype_old = EOT_DOESNTEXIST;
+		r->f.objtype_old = EOT_DOESNTEXIST;
 
 	if (is_deleted)
-		r.u.v.f.objtype_new = EOT_DOESNTEXIST;
+		r->f.objtype_new = EOT_DOESNTEXIST;
 
-	return r.u.i;
+	return;
 }
 
 int auditd_restart() {
@@ -431,7 +425,7 @@ int bsm_handle(struct ctx *ctx_p, struct indexes *indexes_p) {
 #endif
 
 	do {
-		struct  recognize_event_return r;
+		struct  recognize_event_return r = {{0}};
 		char *path_stat;
 		struct stat st;
 		mode_t st_mode;
@@ -444,16 +438,16 @@ int bsm_handle(struct ctx *ctx_p, struct indexes *indexes_p) {
 		}
 #endif
 
-		r.u.i = recognize_event(event_p->type);
+		recognize_event(&r, event_p->type);
 
-		if (r.u.v.t.objtype_new != EOT_UNKNOWN) 
+		if (r.t.objtype_new != EOT_UNKNOWN) 
 			path_stat = event_p->path_to;
 		else 
 			path_stat = event_p->path;
 
 		if (lstat(path_stat, &st)) {
 			debug(2, "Cannot lstat64(\"%s\", st). Seems, that the object disappeared.", path_stat);
-			if(r.u.v.f.objtype_old == EOT_DIR || r.u.v.f.objtype_new == EOT_DIR)
+			if(r.f.objtype_old == EOT_DIR || r.f.objtype_new == EOT_DIR)
 				st_mode = S_IFDIR;
 			else
 				st_mode = S_IFREG;
@@ -464,7 +458,7 @@ int bsm_handle(struct ctx *ctx_p, struct indexes *indexes_p) {
 		}
 
 		if (*event_p->path) {
-			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, event_p->path, NULL, r.u.v.f.objtype_old, r.u.v.f.objtype_new, event_p->type, event_p->w_id, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
+			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, event_p->path, NULL, r.f.objtype_old, r.f.objtype_new, event_p->type, event_p->w_id, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
 				error("Got error while load_mark-ing into pre-queue \"%s\"", event_p->path);
 				count = -1;
 				*event_p->path = 0;
@@ -474,8 +468,8 @@ int bsm_handle(struct ctx *ctx_p, struct indexes *indexes_p) {
 			count++;
 		}
 
-		if ((r.u.v.t.objtype_new != EOT_UNKNOWN) && *event_p->path_to) {
-			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, event_p->path_to, NULL, r.u.v.t.objtype_old, r.u.v.t.objtype_new, event_p->type, event_p->w_id, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
+		if ((r.t.objtype_new != EOT_UNKNOWN) && *event_p->path_to) {
+			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, event_p->path_to, NULL, r.t.objtype_old, r.t.objtype_new, event_p->type, event_p->w_id, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
 				error("Got error while load_mark-ing into pre-queue \"%s\"", event_p->path_to);
 				count = -1;
 				*event_p->path_to = 0;

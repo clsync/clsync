@@ -32,18 +32,11 @@ enum event_bits {
 };
 
 struct recognize_event_return {
-	union {
-		struct {
-			eventobjtype_t objtype_old:16;
-			eventobjtype_t objtype_new:16;
-		} v;
-		uint32_t i;
-	} u;
+	eventobjtype_t objtype_old;
+	eventobjtype_t objtype_new;
 };
 
-static inline uint32_t recognize_event(uint32_t event) {
-	struct recognize_event_return r = {{{0}}};
-
+static inline void recognize_event(struct recognize_event_return *r, uint32_t event) {
 	eventobjtype_t type;
 	int is_created;
 	int is_deleted;
@@ -54,16 +47,10 @@ static inline uint32_t recognize_event(uint32_t event) {
 
 	debug(4, "type == %x; is_created == %x; is_deleted == %x", type, is_created, is_deleted);
 
-	r.u.v.objtype_old = type;
-	r.u.v.objtype_new = type;
+	r->objtype_old = (is_created ? EOT_DOESNTEXIST : type);
+	r->objtype_new = (is_deleted ? EOT_DOESNTEXIST : type);
 
-	if (is_created)
-		r.u.v.objtype_old = EOT_DOESNTEXIST;
-
-	if (is_deleted)
-		r.u.v.objtype_new = EOT_DOESNTEXIST;
-
-	return r.u.i;
+	return;
 }
 
 int inotify_add_watch_dir(ctx_t *ctx_p, indexes_t *indexes_p, const char *const accpath) {
@@ -168,10 +155,10 @@ int inotify_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 				st_size = lstat.st_size;
 			}
 
-			struct  recognize_event_return r;
-			r.u.i = recognize_event(event->mask);
+			struct  recognize_event_return r = {0};
+			recognize_event(&r, event->mask);
 
-			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, path_full, NULL, r.u.v.objtype_old, r.u.v.objtype_new, event->mask, event->wd, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
+			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, path_full, NULL, r.objtype_old, r.objtype_new, event->mask, event->wd, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
 				count = -1;
 				goto l_inotify_handle_end;
 			}
@@ -185,10 +172,10 @@ int inotify_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 	}
 
 l_inotify_handle_end:
-	if(path_full != NULL)
+	if (path_full != NULL)
 		free(path_full);
 
-	if(path_rel != NULL)
+	if (path_rel != NULL)
 		free(path_rel);
 
 	return count;
