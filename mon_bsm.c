@@ -59,7 +59,7 @@ struct recognize_event_return {
 	} t;
 };
 
-static inline uint64_t recognize_event(struct recognize_event_return *r, uint32_t event) {
+static inline void recognize_event(struct recognize_event_return *r, uint32_t event) {
 	int is_created, is_deleted, is_moved;
 	eventobjtype_t type;
 
