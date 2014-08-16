@@ -7,9 +7,12 @@ AC_CONFIG_SRCDIR([sync.c])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([1.11 foreign -Wall -Wno-portability])
 AC_CONFIG_HEADERS([config.h])
+AC_PROG_CC([gcc cc])
 AM_PROG_CC_C_O
 AC_PROG_CC_STDC
 AC_CONFIG_MACRO_DIR([m4])
+AC_PROG_LIBTOOL
+AM_PROG_LIBTOOL
 
 LT_INIT
 
@@ -120,11 +123,15 @@ AS_HELP_STRING([--enable-paranoid],
 esac],
 [paranoid=1])
 
-AS_IF([test $paranoid -ge 1],[
-CPPFLAGS="${CPPFLAGS} -D_FORTIFY_SOURCE=2 -DPARANOID"
-CFLAGS="${CFLAGS} -fstack-protector-all -Wall --param ssp-buffer-size=4 -fstack-check"
-LDFLAGS="${LDFLAGS} -Xlinker -zrelro"
-])
+AS_IF(
+	[test $paranoid -ge 1],
+	[
+		CPPFLAGS="${CPPFLAGS} -D_FORTIFY_SOURCE=2 -DPARANOID"
+		CFLAGS="${CFLAGS} -fstack-protector-all -Wall --param ssp-buffer-size=4"
+		LDFLAGS="${LDFLAGS} -Xlinker -zrelro"
+		AX_CHECK_COMPILE_FLAG([-fstack-check], [CFLAGS="${CFLAGS} -fstack-check"])
+	]
+)
 AS_IF([test $paranoid -eq 2], [CPPFLAGS="${CPPFLAGS} -DVERYPARANOID"])
 
 # Checks for programs.
