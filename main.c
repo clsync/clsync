@@ -97,7 +97,7 @@ static const struct option long_options[] =
 	{"forget-privthread-info",optional_argument,	NULL,	FORGET_PRIVTHREAD_INFO},
 #endif
 #ifdef GETMNTENT_SUPPORT
-	{"mountpoints",		optional_argument,	NULL,	MOUNTPOINTS},
+	{"mountpoints",		required_argument,	NULL,	MOUNTPOINTS},
 #endif
 #ifdef CAPABILITIES_SUPPORT
 	{"preserve-capabilities",required_argument,	NULL,	CAP_PRESERVE},
@@ -941,6 +941,9 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			while (ctx_p->mountpoints)
 				free(ctx_p->mountpoint[--ctx_p->mountpoints]);
 
+			if (!*arg)
+				break;
+
 			ptr = arg;
 			while (1) {
 				char *end = strchr(ptr, ',');
@@ -1511,7 +1514,7 @@ int ctx_check(ctx_t *ctx_p) {
 		error("\"--pivot-root\" cannot be used without \"--chroot\"");
 	}
 
-	if ((ctx_p->flags[PIVOT_ROOT] != PW_OFF) && (ctx_p->flags[MOUNTPOINTS]))
+	if ((ctx_p->flags[PIVOT_ROOT] != PW_OFF) && (ctx_p->mountpoints))
 		warning("\"--mountpoints\" is set while \"--pivot-root\" is set, too");
 #endif
 
@@ -2099,7 +2102,7 @@ int main(int argc, char *argv[]) {
 			unshare(CLONE_NEWUTS);
 			unshare(CLONE_SYSVSEM);
 		}
-		if ((ctx_p->flags[PIVOT_ROOT] != PW_OFF) || ctx_p->flags[MOUNTPOINTS]) {
+		if ((ctx_p->flags[PIVOT_ROOT] != PW_OFF) || ctx_p->mountpoints) {
 			unshare_wrapper(CLONE_FILES);
 			unshare_wrapper(CLONE_FS);
 			unshare_wrapper(CLONE_NEWNS);
@@ -2164,10 +2167,6 @@ int main(int argc, char *argv[]) {
 
 #ifdef GETMNTENT_SUPPORT
 		if (ctx_p->mountpoints && (ent_f != NULL)) {
-			char **to_umount       = NULL;
-			size_t to_umount_count = 0;
-			size_t to_umount_size  = 0;
-
 			// Getting mount-points to be umounted
 			while (NULL != (ent = getmntent(ent_f))) {
 				int i;
@@ -2185,35 +2184,14 @@ int main(int argc, char *argv[]) {
 				}
 
 				if (i >= ctx_p->mountpoints) {
-					debug(9, "queue umount \"%s\"", ent->mnt_dir);
-					if (to_umount_count >= to_umount_size) {
-						to_umount_size += ALLOC_PORTION;
-						to_umount       = xrealloc(to_umount, sizeof(*to_umount)*to_umount_size);
+					debug(1, "umount2(\"%s\", MNT_DETACH)", ent->mnt_dir);
+					if (umount2(ent->mnt_dir, MNT_DETACH) && errno != ENOENT && errno != EINVAL) {
+						error("Got error while umount2(\"%s\", MNT_DETACH)", ent->mnt_dir);
+						ret = errno;
 					}
-
-					to_umount[to_umount_count++] = strdup(ent->mnt_dir);
 				}
 			}
 
-			// Umounting
-			int umount_root = 0;
-			while (to_umount_count) {
-				char *mp = to_umount[--to_umount_count];
-				debug(1, "umount2(\"%s\", MNT_DETACH)", mp);
-
-				if (!strcmp(mp, "/"))
-					umount_root = 1;
-				else
-					umount2(mp, MNT_DETACH);
-				free(mp);
-			}
-
-			if (umount_root) {
-				debug(1, "umount2(\"/\", MNT_DETACH)");
-				umount2("/", MNT_DETACH);
-			}
-
-			free(to_umount);
 			endmntent(ent_f);
 		}
 #endif

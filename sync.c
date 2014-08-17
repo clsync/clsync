@@ -2112,14 +2112,11 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 			return;
 		}
 
-
-#ifdef PARANOID
-	critical_on ((ctx_p->listoutdir == NULL) && (!(ctx_p->synchandler_argf & SHFL_INCLUDE_LIST)) && (!(ctx_p->flags[MODE]==MODE_SO)));
-/*	if ((ctx_p->listoutdir == NULL) && (!(ctx_p->synchandler_argf & SHFL_INCLUDE_LIST)) && (!(ctx_p->flags[MODE]==MODE_SO))) {
+	if ((ctx_p->listoutdir == NULL) && (!(ctx_p->synchandler_argf & SHFL_INCLUDE_LIST)) && (!(ctx_p->flags[MODE]==MODE_SO))) {
 		debug(3, "calling sync_dosync()");
-		return SAFE(sync_dosync(fpath, evinfo->evmask, ctx_p, indexes_p), critical("fpath == \"%s\"; evmask == 0x%o", fpath, evinfo->evmask));
-	}*/
-#endif
+		SAFE(sync_dosync(fpath, evinfo->evmask, ctx_p, indexes_p), critical("fpath == \"%s\"; evmask == 0x%o", fpath, evinfo->evmask));
+		return;
+	}
 
 	int isnew = 0;
 	eventinfo_t *evinfo_idx = indexes_fpath2ei(indexes_p, fpath);
