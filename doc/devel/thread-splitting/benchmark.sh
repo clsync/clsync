@@ -71,9 +71,9 @@ configure --enable-highload-locks --enable-debug=yes
 
 benchmark
 
-configuration 's|SLEEP_SECONDS.*$|SLEEP_SECONDS 0|g' 's|#define HL_LOCK_TRIES_AUTO|//#define HL_LOCK_TRIES_AUTO|g' "s|HL_LOCK_TRIES_INITIAL.*$|HL_LOCK_TRIES_INITIAL $interval|g"
 interval=1;
 while [[ "$i" -le "2147483648" ]]; do
+	configuration 's|SLEEP_SECONDS.*$|SLEEP_SECONDS 0|g' 's|#define HL_LOCK_TRIES_AUTO|//#define HL_LOCK_TRIES_AUTO|g' "s|HL_LOCK_TRIES_INITIAL.*$|HL_LOCK_TRIES_INITIAL $interval|g"
 	benchmark --thread-splitting
 	interval=$[ $interval * 2 ]
 done

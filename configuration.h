@@ -75,7 +75,7 @@
 
 #define COUNTER_LIMIT			(1<<10)
 
-#define SLEEP_SECONDS			1
+#define SLEEP_SECONDS 0
 
 #define KILL_TIMEOUT			60
 
@@ -161,10 +161,10 @@ filesz:1M\n\
 // How long to wait on highloaded locks before fallback to mutexes
 // See: doc/devel/thread-splitting/highload-locks/clsync-graph-comma.odc
 // But optimal value can be very different on different systems
-#define HL_LOCK_TRIES_INITIAL		(1<<13)
+#define HL_LOCK_TRIES_INITIAL 
 
 // Enable run-time auto-adjustment
-#define HL_LOCK_TRIES_AUTO
+//#define HL_LOCK_TRIES_AUTO
 // Iterations delay between adjustments (power of 2; 2^x)
 #define HL_LOCK_AUTO_INTERVAL		7	/* 128 */
 // Initial adjustment factor
