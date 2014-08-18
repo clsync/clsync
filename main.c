@@ -2071,6 +2071,7 @@ int main(int argc, char *argv[]) {
 		}
 	}
 
+	debug(4, "ncpus == %u", ncpus);
 	debug(4, "debugging flags: %u %u %u %u", ctx_p->flags[OUTPUT_METHOD], ctx_p->flags[QUIET], ctx_p->flags[VERBOSE], ctx_p->flags[DEBUG]);
 
 	ctx_p->state = STATE_STARTING;

@@ -162,17 +162,17 @@ enum privileged_action {
 };
 
 # ifdef HL_LOCKS
-int		hl_lock_enabled;
+volatile int		hl_lock_enabled			= 1;
 #  ifdef HL_LOCK_TRIES_AUTO
-unsigned long	hl_lock_tries[PC_MAX]		= {[0 ... PC_MAX-1] = HL_LOCK_TRIES_INITIAL};
-unsigned long	hl_lock_count[PC_MAX]		= {[0 ... PC_MAX-1] = 0};
-unsigned long	hl_lock_delay[PC_MAX]		= {[0 ... PC_MAX-1] = ((unsigned long)~0)>>2};
-double		hl_lock_tries_step[PC_MAX]	= {[0 ... PC_MAX-1] = HL_LOCK_AUTO_K};
+volatile unsigned long	volatile hl_lock_tries[PC_MAX]	= {[0 ... PC_MAX-1] = HL_LOCK_TRIES_INITIAL};
+volatile unsigned long	hl_lock_count[PC_MAX]		= {[0 ... PC_MAX-1] = 0};
+volatile unsigned long	hl_lock_delay[PC_MAX]		= {[0 ... PC_MAX-1] = ((unsigned long)~0)>>2};
+volatile double		hl_lock_tries_step[PC_MAX]	= {[0 ... PC_MAX-1] = HL_LOCK_AUTO_K};
 
-#   define	hl_lock_tries_cur hl_lock_tries[callid]
+#   define		hl_lock_tries_cur hl_lock_tries[callid]
 #  else
-unsigned long	hl_lock_tries	= HL_LOCK_TRIES_INITIAL;
-#   define	hl_lock_tries_cur hl_lock_tries
+volatile unsigned long	hl_lock_tries	= HL_LOCK_TRIES_INITIAL;
+#   define		hl_lock_tries_cur hl_lock_tries
 #  endif
 
 enum highload_lock_id {
@@ -569,9 +569,9 @@ int pa_unsetup(struct pa_options *opts) {
 }
 
 # ifdef HL_LOCKS
-static int            hl_count_wait  [HLLOCK_MAX] = {0};
-static int            hl_count_signal[HLLOCK_MAX] = {0};
-static hllock_state_t hl_state[HLLOCK_MAX]        = {0};
+volatile static int            hl_count_wait  [HLLOCK_MAX] = {0};
+volatile static int            hl_count_signal[HLLOCK_MAX] = {0};
+volatile static hllock_state_t hl_state[HLLOCK_MAX]        = {0};
 
 static inline int hl_isanswered(int lockid) {
 	return hl_count_wait[lockid] == hl_count_signal[lockid]+1;
@@ -654,9 +654,26 @@ static inline int hl_signal(int lockid) {
 	return 0;
 }
 
+void hl_shutdown(int lockid) {
+	debug(1, "");
+
+#  ifdef PARANOID
+	critical_on (HLLOCK_MAX != 1);	// TODO: do this on compile time (not on running time)
+#   ifdef HL_LOCK_TRIES_AUTO
+	memset((void *)hl_lock_tries, 0, sizeof(hl_lock_tries));
+#   else
+	hl_lock_tries = 0;
+#   endif
+#  endif
+	hl_state[lockid]	 = HLLS_FALLBACK;
+	hl_lock_enabled 	 = 0;
+
+	return;
+}
+
 # endif
 
-static int privileged_handler_running = 1;
+volatile static int privileged_handler_running = 1;
 void *privileged_handler(void *_ctx_p)
 {
 # ifdef READWRITE_SIGNALLING
@@ -804,6 +821,7 @@ void *privileged_handler(void *_ctx_p)
 	}
 
 	pa_unsetup(opts);
+	hl_shutdown(HLLOCK_HANDLER);
 	pthread_mutex_unlock(&pthread_mutex_privileged);
 	debug(2, "Finished");
 	return 0;
@@ -818,6 +836,8 @@ static inline int privileged_action(
 		void **ret_p
 	)
 {
+	int rc = 0;
+
 # ifdef READWRITE_SIGNALLING
 	char buf[1] = {0};
 # endif
@@ -826,14 +846,19 @@ static inline int privileged_action(
 
 	int isadjusting;
 # endif
-	debug(10, "(%u, %p, %p)", action, arg, ret_p);
+	debug(10, "(%u, %p, %p): %i", action, arg, ret_p, hl_lock_enabled);
 
 	pthread_mutex_lock(&pthread_mutex_action_entrance);
 # if !READWRITE_SIGNALLING
 	debug(10, "Waiting the privileged thread to get prepared for signal");
 #  ifdef HL_LOCKS
 	if (hl_lock_enabled) {
-		while (!hl_isanswered(HLLOCK_HANDLER));
+		while (!hl_isanswered(HLLOCK_HANDLER))
+			if (!privileged_handler_running) {
+				debug(1, "The privileged thread is dead (#0). Ignoring the command.");
+				rc = ENOENT;
+				goto privileged_action_end;
+			}
 	} else {
 #  endif
 		pthread_mutex_lock(&pthread_mutex_privileged);
@@ -843,8 +868,9 @@ static inline int privileged_action(
 #  endif
 # endif
 	if (!privileged_handler_running) {
-		debug(1, "The privileged thread is dead. Ignoring the command.");
-		return ENOENT;
+		debug(1, "The privileged thread is dead (#1). Ignoring the command.");
+		rc = ENOENT;
+		goto privileged_action_end;
 	}
 
 	debug(10, "Sending information to the privileged thread");
@@ -890,8 +916,13 @@ static inline int privileged_action(
 
 	debug(10, "Waiting for the answer");
 # ifdef HL_LOCKS
-	if (hl_lock_enabled) {
-		while (!hl_isanswered(HLLOCK_HANDLER) && privileged_handler_running);
+	if (hl_lock_enabled && action != PA_DIE) {
+		while (!hl_isanswered(HLLOCK_HANDLER))
+			if (!privileged_handler_running) {
+				debug(1, "The privileged thread is dead (#2). Ignoring the command.");
+				rc = ENOENT;
+				goto privileged_action_end;
+			}
 
 #  ifdef HL_LOCK_TRIES_AUTO
 		if (isadjusting) {
@@ -917,7 +948,8 @@ static inline int privileged_action(
 			debug(14, "hl_lock_tries[%i] == %lu", callid, hl_lock_tries[callid]);
 		}
 #  endif
-	} else {
+	} else
+	if (!hl_lock_enabled) {
 # endif
 # ifdef READWRITE_SIGNALLING
 		read_inf(nonp_read_fd, buf, 1);
@@ -932,6 +964,7 @@ static inline int privileged_action(
 		*ret_p = cmd.ret;
 	errno = cmd._errno;
 
+privileged_action_end:
 	debug(10, "Unlocking pthread_mutex_action_*");
 # ifdef HL_LOCKS
 #  ifndef READWRITE_SIGNALLING
@@ -941,7 +974,7 @@ static inline int privileged_action(
 		pthread_mutex_unlock(&pthread_mutex_action_signal);
 	pthread_mutex_unlock(&pthread_mutex_action_entrance);
 
-	return 0;
+	return rc;
 }
 
 FTS *__privileged_fts_open(
@@ -1157,19 +1190,9 @@ int privileged_init(ctx_t *ctx_p)
 #endif
 
 #ifdef CAPABILITIES_SUPPORT
-# ifdef PARANOID
-#  ifdef HL_LOCKS
-	if (ncpus == 1) {
-#   ifdef HL_LOCK_TRIES_AUTO
-		memset(hl_lock_tries, 0, sizeof(hl_lock_tries));
-#   else
-		hl_lock_tries = 0;
-#   endif
-	}
-#  endif
-# endif
 # ifdef HL_LOCKS
-	hl_lock_enabled = (ncpus != 1);
+	if (ncpus == 1)
+		hl_shutdown(HLLOCK_HANDLER);
 # endif
 
 	if (!ctx_p->flags[THREADSPLITTING]) {
@@ -1287,6 +1310,10 @@ int privileged_deinit(ctx_t *ctx_p)
 		ret = errno
 	);
 
+# ifdef HL_LOCKS
+	hl_shutdown(HLLOCK_HANDLER);
+# endif
+
 	if (ctx_p->flags[FORGET_PRIVTHREAD_INFO]) {
 		pthread_mutex_lock(&pthread_mutex_privileged);
 		pthread_mutex_unlock(&pthread_mutex_privileged);
@@ -1300,6 +1327,15 @@ int privileged_deinit(ctx_t *ctx_p)
 	SAFE ( pthread_cond_destroy(&pthread_cond_privileged),		ret = errno );
 	SAFE ( pthread_cond_destroy(&pthread_cond_action),		ret = errno );
 
+# ifdef HL_LOCK_TRIES_AUTO
+	{
+		int i=0;
+		while (i < PC_MAX) {
+			debug(1, "hl_lock_tries[%i] == %lu", i, hl_lock_tries[i]);
+			i++;
+		}
+	}
+# endif
 #endif
 	return ret;
 }
