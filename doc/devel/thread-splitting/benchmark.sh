@@ -54,8 +54,8 @@ gcc -shared -o doc/devel/thread-splitting/benchmark-synchandler.so -fPIC -D_DEBU
 
 configuration
 
-#for args in "" "--thread-splitting"; do
-for args in "--thread-splitting"; do
+for args in "" "--thread-splitting"; do
+#for args in "--thread-splitting"; do
 	configure --enable-debug=yes
 	benchmark $args
 	configure --enable-highload-locks --enable-debug=no

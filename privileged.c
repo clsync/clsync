@@ -823,7 +823,9 @@ void *privileged_handler(void *_ctx_p)
 	}
 
 	pa_unsetup(opts);
+# ifdef HL_LOCKS
 	hl_shutdown(HLLOCK_HANDLER);
+# endif
 	pthread_mutex_unlock(&pthread_mutex_privileged);
 	debug(2, "Finished");
 	return 0;
