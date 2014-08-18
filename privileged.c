@@ -433,6 +433,8 @@ int privileged_execvp_check_arguments(struct pa_options *opts, const char *u_fil
 		if (argc != u_argc)
 			continue;
 
+		critical_on (!argc);
+
 		// Checking the execution file
 		if (pa_strcmp(argv[0], u_file, isexpanded[0]))
 			continue;
@@ -500,7 +502,7 @@ int pa_setup(struct pa_options *opts, ctx_t *ctx_p, uid_t *exec_uid_p, gid_t *ex
 			critical("Too many arguments");
 
 		if (argc_s < 1)
-			critical("Not enough arguments");
+			continue;
 
 		argv_d[0] = strdup_protect(ctx_p->handlerfpath, PROT_READ);
 
@@ -1310,6 +1312,16 @@ int privileged_deinit(ctx_t *ctx_p)
 		ret = errno
 	);
 
+# ifdef HL_LOCK_TRIES_AUTO
+{
+	int i=0;
+	while (i < PC_MAX) {
+		debug(1, "hl_lock_tries[%i] == %lu", i, hl_lock_tries[i]);
+		i++;
+	}
+}
+# endif
+
 # ifdef HL_LOCKS
 	hl_shutdown(HLLOCK_HANDLER);
 # endif
@@ -1326,17 +1338,8 @@ int privileged_deinit(ctx_t *ctx_p)
 	SAFE ( pthread_mutex_destroy(&pthread_mutex_action_signal),	ret = errno );
 	SAFE ( pthread_cond_destroy(&pthread_cond_privileged),		ret = errno );
 	SAFE ( pthread_cond_destroy(&pthread_cond_action),		ret = errno );
-
-# ifdef HL_LOCK_TRIES_AUTO
-	{
-		int i=0;
-		while (i < PC_MAX) {
-			debug(1, "hl_lock_tries[%i] == %lu", i, hl_lock_tries[i]);
-			i++;
-		}
-	}
-# endif
 #endif
+
 	return ret;
 }
 

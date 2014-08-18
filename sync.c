@@ -67,6 +67,27 @@ static inline unsigned int sync_seqid() {
 	return _sync_seqid_value++;
 }
 
+static inline void setenv_iteration(uint32_t iteration_num)
+{
+	char iterations[sizeof("4294967296")];	// 4294967296 == 2**32
+	sprintf(iterations, "%i", iteration_num);
+	setenv("CLSYNC_ITERATION", iterations, 1);
+
+	return;
+}
+
+static inline void finish_iteration(ctx_t *ctx_p) {
+	if (ctx_p->iteration_num < ~0) // ~0 is the max value for unsigned variables
+		ctx_p->iteration_num++;
+
+	if (!ctx_p->flags[THREADING])
+		setenv_iteration(ctx_p->iteration_num); 
+
+	debug(3, "next iteration: %u/%u", 
+		ctx_p->iteration_num, ctx_p->flags[MAXITERATIONS]);
+
+	return;
+}
 
 gpointer eidup(gpointer ei_gp) {
 	eventinfo_t *ei = (eventinfo_t *)ei_gp;
@@ -1495,7 +1516,8 @@ static void argv_free(char **argv) {
 	return;
 }
 
-static inline int sync_initialsync_cleanup(ctx_t *ctx_p, initsync_t initsync, int ret) {
+static inline int sync_initialsync_finish(ctx_t *ctx_p, initsync_t initsync, int ret) {
+	finish_iteration(ctx_p);
 	return ret;
 }
 
@@ -1541,7 +1563,7 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 				ei->objtype_new = EOT_DIR;
 
 				ret = so_call_sync(ctx_p, indexes_p, 1, ei);
-				return sync_initialsync_cleanup(ctx_p, initsync, ret);
+				return sync_initialsync_finish(ctx_p, initsync, ret);
 			} else {
 
 				struct dosync_arg dosync_arg;
@@ -1566,7 +1588,7 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 				if (!SHOULD_THREAD(ctx_p))	// If it's a thread then it will free the argv in GC. If not a thread then we have to free right here.
 					argv_free(argv);
 
-				return sync_initialsync_cleanup(ctx_p, initsync, ret);
+				return sync_initialsync_finish(ctx_p, initsync, ret);
 			}
 		}
 #ifdef DOXYGEN
@@ -1577,7 +1599,7 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 		if(ret)
 			error("Cannot get synclist");
 
-		return sync_initialsync_cleanup(ctx_p, initsync, ret);
+		return sync_initialsync_finish(ctx_p, initsync, ret);
 	}
 
 	// RSYNC case:
@@ -1601,7 +1623,7 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 		ret = sync_initialsync_walk(ctx_p, path, indexes_p, queue_id, initsync);
 		if(ret) {
 			error("Cannot get exclude what to exclude");
-			return sync_initialsync_cleanup(ctx_p, initsync, ret);
+			return sync_initialsync_finish(ctx_p, initsync, ret);
 		}
 
 		debug(3, "queueing \"%s\" with int-flags %p", path, (void *)(unsigned long)evinfo->flags);
@@ -1609,12 +1631,12 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 		char *path_rel = sync_path_abs2rel(ctx_p, path, -1, NULL, NULL);
 
 		ret = indexes_queueevent(indexes_p, path_rel, evinfo, queue_id);
-		return sync_initialsync_cleanup(ctx_p, initsync, ret);
+		return sync_initialsync_finish(ctx_p, initsync, ret);
 	}
 
 	// Searching for includes
 	ret = sync_initialsync_walk(ctx_p, path, indexes_p, queue_id, initsync);
-	return sync_initialsync_cleanup(ctx_p, initsync, ret);
+	return sync_initialsync_finish(ctx_p, initsync, ret);
 }
 
 int sync_notify_mark(ctx_t *ctx_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p) {
@@ -2701,13 +2723,6 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 	return;
 }
 
-static inline void setenv_iteration(uint32_t iteration_num)
-{
-	char iterations[sizeof("4294967296")];	// 4294967296 == 2**32
-	sprintf(iterations, "%i", iteration_num);
-	setenv("CLSYNC_ITERATION", iterations, 1);
-}
-
 int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
 	debug(3, "");
 	struct dosync_arg dosync_arg = {0};
@@ -2818,14 +2833,7 @@ int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
 		}
 	}
 
-	if(ctx_p->iteration_num < ~0) // ~0 is the max value for unsigned variables
-		ctx_p->iteration_num++;
-
-	if (!ctx_p->flags[THREADING])
-		setenv_iteration(ctx_p->iteration_num); 
-
-	debug(3, "next iteration: %u/%u", 
-		ctx_p->iteration_num, ctx_p->flags[MAXITERATIONS]);
+	finish_iteration(ctx_p);
 
 	return 0;
 }

@@ -14,7 +14,7 @@ configure() {
 }
 
 run() {
-	time ./clsync -M rsyncshell -S echo --max-iterations 1 -W ~/clsync-test $@
+	time ./clsync -Mso -S'doc/devel/thread-splitting/benchmark-synchandler.so' --have-recursive-sync --max-iterations 1 -W ~/clsync-test $@
 }
 
 benchmark() {
@@ -50,6 +50,8 @@ rm -f /tmp/hl_auto.bin.$$
 	done
 }
 
+gcc -shared -o doc/devel/thread-splitting/benchmark-synchandler.so -fPIC -D_DEBUG_SUPPORT doc/devel/thread-splitting/benchmark-synchandler.c
+
 configuration
 
 #for args in "" "--thread-splitting"; do
@@ -74,3 +76,4 @@ while [[ "$i" -le "2147483648" ]]; do
 	interval=$[ $interval * 2 ]
 done
 
+rm -f doc/devel/thread-splitting/benchmark-synchandler.so
