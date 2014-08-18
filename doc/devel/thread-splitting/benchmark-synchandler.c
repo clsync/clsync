@@ -33,8 +33,6 @@ int clsyncapi_sync(int n, api_eventinfo_t *ei) {
 
 int clsyncapi_deinit() {
 	debug(1, "Goodbye cruel world!");
-
-	exit(0);
 	return 0;
 }
 

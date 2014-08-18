@@ -253,7 +253,7 @@ typedef enum state_enum state_t;
 
 struct ctx {
 #ifndef LIBCLSYNC
-	state_t state;
+	volatile state_t state;
 	pid_t  pid;
 	char   pid_str[65];
 	size_t pid_str_len;

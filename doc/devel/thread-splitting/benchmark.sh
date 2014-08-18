@@ -2,6 +2,7 @@
 
 RUN_TIMES=27
 
+
 configuration() {
 	git checkout -- configuration.h
 	for regex in "$@"; do
@@ -10,11 +11,11 @@ configuration() {
 }
 
 configure() {
-	./configure -C $@ >/dev/null 2>/dev/null || ./configure $@
+	./configure -C $@ >/dev/null 2>/dev/null || ./configure $@ || exit -1
 }
 
 run() {
-	time ./clsync -Mso -S'doc/devel/thread-splitting/benchmark-synchandler.so' --have-recursive-sync --max-iterations 1 -W ~/clsync-test $@
+	time ./clsync -Mso -S'doc/devel/thread-splitting/benchmark-synchandler.so' --have-recursive-sync --max-iterations 1 -W ~/clsync-test $@ || exit -1
 }
 
 benchmark() {
@@ -42,17 +43,17 @@ rm -f /tmp/hl_auto.bin.$$
 	else
 		hash="$hash|$HL_INITIAL"
 	fi
-	rm -f /tmp/benchmark.{,time}log-"$hash"
+	rm -f /tmp/benchmark.{,err}log-"$hash"
 	i=0
 	while [[ "$i" -lt "$RUN_TIMES" ]]; do
-		run -d1 $@ >>/tmp/benchmark.log-"$hash" 2>> /tmp/benchmark.timelog-"$hash"
+		run -d1 $@ >>/tmp/benchmark.log-"$hash" 2>> /tmp/benchmark.errlog-"$hash"
 		i=$[ $i + 1 ]
 	done
 }
 
 gcc -shared -o doc/devel/thread-splitting/benchmark-synchandler.so -fPIC -D_DEBUG_SUPPORT doc/devel/thread-splitting/benchmark-synchandler.c
 
-configuration
+configuration 's|SLEEP_SECONDS.*$|SLEEP_SECONDS 0|g'
 
 for args in "" "--thread-splitting"; do
 #for args in "--thread-splitting"; do
@@ -69,9 +70,10 @@ done
 configure --enable-highload-locks --enable-debug=yes
 
 benchmark
+
+configuration 's|SLEEP_SECONDS.*$|SLEEP_SECONDS 0|g' 's|#define HL_LOCK_TRIES_AUTO|//#define HL_LOCK_TRIES_AUTO|g' "s|HL_LOCK_TRIES_INITIAL.*$|HL_LOCK_TRIES_INITIAL $interval|g"
 interval=1;
 while [[ "$i" -le "2147483648" ]]; do
-	configuration 's|#define HL_LOCK_TRIES_AUTO|//#define HL_LOCK_TRIES_AUTO|g' "s|HL_LOCK_TRIES_INITIAL.*$|HL_LOCK_TRIES_INITIAL $interval|g"
 	benchmark --thread-splitting
 	interval=$[ $interval * 2 ]
 done

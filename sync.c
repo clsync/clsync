@@ -485,8 +485,8 @@ int thread_cleanup(ctx_t *ctx_p) {
 	return thread_info_unlock(0);
 }
 
-state_t *state_p = NULL;
-int exitcode = 0;
+volatile state_t *state_p = NULL;
+volatile int exitcode = 0;
 #define SHOULD_THREAD(ctx_p) ((ctx_p->flags[THREADING] != PM_OFF) && (ctx_p->flags[THREADING] != PM_SAFE || ctx_p->iteration_num))
 
 int exec_argv(char **argv, int *child_pid) {
@@ -3177,7 +3177,7 @@ int sync_tryforcecycle(pthread_t pthread_parent) {
 	if (pthread_cond_timedwait(pthread_cond_state, pthread_mutex_state, &time_timeout) != ETIMEDOUT)
 		return 0;
 #else
-	sleep(1);	// TODO: replace this with pthread_cond_timedwait()
+	sleep(SLEEP_SECONDS);	// TODO: replace this with pthread_cond_timedwait()
 #endif
 
 	return EINPROGRESS;
@@ -3780,7 +3780,9 @@ int sync_run(ctx_t *ctx_p) {
 	debug(1, "killing sighandler");
 	// TODO: Do cleanup of watching points
 	pthread_kill(pthread_sighandler, SIGINT);
-	pthread_join(pthread_sighandler, NULL);
+#ifdef VALGRIND
+	pthread_join(pthread_sighandler, NULL);		// TODO: fix a deadlock
+#endif
 
 	// Killing children
 
@@ -3868,7 +3870,7 @@ int sync_run(ctx_t *ctx_p) {
 
 #ifdef VERYPARANOID
 	// One second for another threads
-	sleep(1);
+	sleep(SLEEP_SECONDS);
 #endif
 
 	if (ctx_p->flags[EXITHOOK]) {
