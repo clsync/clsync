@@ -850,7 +850,11 @@ static inline int privileged_action(
 
 	int isadjusting;
 # endif
+# ifdef HL_LOCKS
 	debug(10, "(%u, %p, %p): %i", action, arg, ret_p, hl_lock_enabled);
+# else
+	debug(10, "(%u, %p, %p)",     action, arg, ret_p);
+# endif
 
 	pthread_mutex_lock(&pthread_mutex_action_entrance);
 # if !READWRITE_SIGNALLING
