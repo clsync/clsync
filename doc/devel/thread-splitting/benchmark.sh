@@ -51,7 +51,7 @@ rm -f /tmp/hl_auto.bin.$$
 	done
 }
 
-gcc -shared -o doc/devel/thread-splitting/benchmark-synchandler.so -fPIC -D_DEBUG_SUPPORT doc/devel/thread-splitting/benchmark-synchandler.c
+gcc -I. -shared -o doc/devel/thread-splitting/benchmark-synchandler.so -fPIC -D_DEBUG_SUPPORT doc/devel/thread-splitting/benchmark-synchandler.c
 
 configuration 's|SLEEP_SECONDS.*$|SLEEP_SECONDS 0|g'
 
