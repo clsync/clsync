@@ -922,9 +922,12 @@ static inline int privileged_action(
 	}
 # endif
 
+	if (action == PA_DIE)
+		goto privileged_action_end;
 	debug(10, "Waiting for the answer");
+
 # ifdef HL_LOCKS
-	if (hl_lock_enabled && action != PA_DIE) {
+	if (hl_lock_enabled) {
 		while (!hl_isanswered(HLLOCK_HANDLER))
 			if (!privileged_handler_running) {
 				debug(1, "The privileged thread is dead (#2). Ignoring the command.");
@@ -956,8 +959,7 @@ static inline int privileged_action(
 			debug(14, "hl_lock_tries[%i] == %lu", callid, hl_lock_tries[callid]);
 		}
 #  endif
-	} else
-	if (!hl_lock_enabled) {
+	} else {
 # endif
 # ifdef READWRITE_SIGNALLING
 		read_inf(nonp_read_fd, buf, 1);
