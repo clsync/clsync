@@ -111,7 +111,8 @@ if true; then
 	for a6 in "--enable-socket-library" "--disable-socket-library"; do
 	for a7 in "--enable-highload-locks" ""; do
 	for a8 in "--with-libcgroup" "--without-libcgroup"; do
-		arg="$a0 $a1 $a2 $a3 $a4 $a5 $a6 $a7"
+	for a9 in "--with-libseccomp" "--without-libseccomp"; do
+		arg="$a0 $a1 $a2 $a3 $a4 $a5 $a6 $a7 $a8 $a9"
 		build_test "$arg"
 	done
 	done

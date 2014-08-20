@@ -400,10 +400,26 @@ esac
 AS_IF([test "$HAVE_INOTIFY" != ""], [AC_CHECK_FUNC([inotify_init1], [], [INOTIFY_OLD=1])])
 
 dnl searching for seccomp
+AC_ARG_WITH(libseccomp,
+	AS_HELP_STRING(--with-libseccomp,
+		[Enable seccomp support be able to forbid extra syscalls; values: no, check, yes; default: check]),
+	[],
+	[with_seccomp=check]
+)
+
+case "$with_libseccomp" in
+	yes)
+		AC_CHECK_TYPES([scmp_filter_ctx], [
+			AC_CHECK_DECLS([seccomp_syscall_resolve_name_arch], [HAVE_SECCOMP=1], [AC_MSG_FAILURE([Cannot find valid seccomp.h])], [[#include <seccomp.h>]])
+		], [AC_MSG_FAILURE([Cannot find valid seccomp.h])], [[#include <seccomp.h>]])
+		;;
+	check)
+		AC_CHECK_TYPES([scmp_filter_ctx], [
+			AC_CHECK_DECLS([seccomp_syscall_resolve_name_arch], [HAVE_SECCOMP=1], [], [[#include <seccomp.h>]])
+		], [], [[#include <seccomp.h>]])
+		;;
+esac
 AS_IF([test "$HAVE_CAPABILITIES" != ""], [
-	AC_CHECK_TYPES([scmp_filter_ctx], [
-		AC_CHECK_DECLS([seccomp_syscall_resolve_name_arch], [HAVE_SECCOMP=1], [], [[#include <seccomp.h>]])
-	], [], [[#include <seccomp.h>]])
 ])
 
 AM_CONDITIONAL([HAVE_KQUEUE],       [test "x$HAVE_KQUEUE"       != "x"])
