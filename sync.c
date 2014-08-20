@@ -3884,7 +3884,7 @@ int sync_run(ctx_t *ctx_p) {
 #ifdef CGROUP_SUPPORT
 	// Cleaning up cgroups staff
 	if (ctx_p->flags[FORBIDDEVICES])
-		error_on(privileged_clsync_cgroup_deinit());
+		error_on(privileged_clsync_cgroup_deinit(ctx_p));
 #endif
 
 	ret |= privileged_deinit(ctx_p);

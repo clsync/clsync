@@ -194,3 +194,5 @@ filesz:1M\n\
 		CG_DEV_NULL	" w",	\
 		NULL			\
 	}
+
+#define DEFAULT_CG_GROUPNAME	"clsync/%PID%"

@@ -79,7 +79,7 @@ extern int (*_privileged_inotify_rm_watch)	(
 	);
 
 #ifdef CGROUP_SUPPORT
-extern int (*_privileged_clsync_cgroup_deinit)	();
+extern int (*_privileged_clsync_cgroup_deinit)	(ctx_t *ctx_p);
 #endif
 
 # ifdef HL_LOCK_TRIES_AUTO

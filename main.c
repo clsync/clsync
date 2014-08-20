@@ -108,6 +108,7 @@ static const struct option long_options[] =
 #endif
 #ifdef CGROUP_SUPPORT
 	{"forbid-devices",	optional_argument,	NULL,	FORBIDDEVICES},
+	{"cgroup-group-name",	required_argument,	NULL,	CG_GROUPNAME},
 #endif
 	{"threading",		required_argument,	NULL,	THREADING},
 	{"retries",		optional_argument,	NULL,	RETRIES},
@@ -1061,6 +1062,11 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 		case LABEL:
 			ctx_p->label			= arg;
 			break;
+#ifdef CGROUP_SUPPORT
+		case CG_GROUPNAME:
+			ctx_p->cg_groupname		= arg;
+			break;
+#endif
 		case STANDBYFILE:
 			if(strlen(arg)) {
 				ctx_p->standbyfile		= arg;
@@ -2025,6 +2031,13 @@ int main(int argc, char *argv[]) {
 		if(nret) ret = nret;
 	}
 
+#ifdef CGROUP_SUPPORT
+	if (ctx_p->cg_groupname == NULL) {
+		ctx_p->cg_groupname = parameter_expand(ctx_p, strdup(DEFAULT_CG_GROUPNAME), 2, NULL, NULL, parameter_get, ctx_p);
+		ctx_p->flags_values_raw[CG_GROUPNAME] = ctx_p->cg_groupname;
+	}
+#endif
+
 	if (ctx_p->dump_path == NULL) {
 		ctx_p->dump_path = parameter_expand(ctx_p, strdup(DEFAULT_DUMPDIR), 2, NULL, NULL, parameter_get, ctx_p);
 		ctx_p->flags_values_raw[DUMPDIR] = ctx_p->dump_path;
@@ -2401,9 +2414,9 @@ int main(int argc, char *argv[]) {
 
 #ifdef CGROUP_SUPPORT
 	if (ctx_p->flags[FORBIDDEVICES]) {
-		error_on(clsync_cgroup_init());
+		error_on(clsync_cgroup_init(ctx_p));
 		error_on(clsync_cgroup_forbid_extra_devices());
-		error_on(clsync_cgroup_attach());
+		error_on(clsync_cgroup_attach(ctx_p));
 	}
 #endif
 

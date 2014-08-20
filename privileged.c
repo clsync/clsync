@@ -284,7 +284,7 @@ int (*_privileged_inotify_rm_watch)	(
 		int wd
 	);
 
-int (*_privileged_clsync_cgroup_deinit)	();
+int (*_privileged_clsync_cgroup_deinit)	(ctx_t *ctx_p);
 
 
 int cap_enable(__u32 caps) {
@@ -810,7 +810,7 @@ void *privileged_handler(void *_ctx_p)
 			}
 # ifdef CGROUP_SUPPORT
 			case PA_CLSYNC_CGROUP_DEINIT: {
-				cmd.ret = (void *)(long)clsync_cgroup_deinit();
+				cmd.ret = (void *)(long)clsync_cgroup_deinit(cmd.arg);
 				break;
 			}
 # endif
@@ -1144,7 +1144,7 @@ int __privileged_inotify_rm_watch(
 }
 
 # ifdef CGROUP_SUPPORT
-int __privileged_clsync_cgroup_deinit()
+int __privileged_clsync_cgroup_deinit(ctx_t *ctx_p)
 {
 	void *ret = (void *)(long)-1;
 
@@ -1154,7 +1154,7 @@ int __privileged_clsync_cgroup_deinit()
 			PC_DEFAULT,
 #  endif
 			PA_CLSYNC_CGROUP_DEINIT,
-			NULL,
+			ctx_p,
 			&ret
 		);
 

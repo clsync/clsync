@@ -23,13 +23,11 @@
 
 static struct cgroup *cgroup = NULL;
 
-int clsync_cgroup_init() {
-	char cgroup_name[BUFSIZ+1];
-	snprintf(cgroup_name, BUFSIZ, "clsync/%u", getpid());
-	debug(2, "cgroup_name == \"%s\"", cgroup_name);
+int clsync_cgroup_init(ctx_t *ctx_p) {
+	debug(2, "cgroup_name == \"%s\"", ctx_p->cg_groupname);
 
-	SAFE( cgroup_init(),						return -1; );
-	SAFE( (cgroup = cgroup_new_cgroup(cgroup_name)) == NULL,	return -1; );
+	SAFE( cgroup_init(),							return -1; );
+	SAFE( (cgroup = cgroup_new_cgroup(ctx_p->cg_groupname)) == NULL,	return -1; );
 
 	return 0;
 }
@@ -70,11 +68,11 @@ int clsync_cgroup_forbid_extra_devices() {
 	return 0;
 }
 
-int clsync_cgroup_attach() {
+int clsync_cgroup_attach(ctx_t *ctx_p) {
 	int rc;
 	debug(2, "");
 
-	if ((rc=cgroup_attach_task_pid(cgroup, getpid()))) {
+	if ((rc=cgroup_attach_task_pid(cgroup, ctx_p->pid))) {
 		error("Got error while cgroup_attach_task_pid(): %s", cgroup_strerror(rc));
 		return -1;
 	}
@@ -82,17 +80,16 @@ int clsync_cgroup_attach() {
 	return 0;
 }
 
-int clsync_cgroup_deinit() {
+int clsync_cgroup_deinit(ctx_t *ctx_p) {
 	debug(2, "");
-	pid_t pid = getpid();
 
 	setuid(0);
 
 	error_on(cgroup_delete_cgroup_ext(cgroup, CGFLAG_DELETE_IGNORE_MIGRATION | CGFLAG_DELETE_RECURSIVE));
 	cgroup_free(&cgroup);
 
-	if (pid != 0)
-		setuid(pid);
+	if (ctx_p->uid != 0)
+		setuid(ctx_p->uid);
 
 	return 0;
 }

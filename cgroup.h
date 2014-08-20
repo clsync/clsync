@@ -17,8 +17,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-extern int clsync_cgroup_init();
+extern int clsync_cgroup_init(struct ctx *ctx_p);
 extern int clsync_cgroup_forbid_extra_devices();
-extern int clsync_cgroup_attach();
-extern int clsync_cgroup_deinit();
+extern int clsync_cgroup_attach(struct ctx *ctx_p);
+extern int clsync_cgroup_deinit(struct ctx *ctx_p);
 

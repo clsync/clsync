@@ -1040,6 +1040,16 @@ Outputs clsync version and exits with exitcode "0".
 Is not set by default.
 .RE
 
+.PP
+.B \-\-cgroup\-group\-name
+.I cg\-group\-name
+.RS
+Set cgroup group name [see 
+.BR cgroup_new_cgroup ()].
+
+Is set to "clsync/%PID%" by default.
+.RE
+
 .SH SECURITY OPTIONS
 
 .B \-\-secure\-thread\-splitting

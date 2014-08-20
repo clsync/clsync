@@ -113,6 +113,7 @@ enum flags_enum {
 	SECURETHREADSPLITTING	= 37|OPTION_LONGOPTONLY,
 	FTS_EXPERIMENTAL_OPTIMIZATION = 38|OPTION_LONGOPTONLY,
 	FORBIDDEVICES		= 39|OPTION_LONGOPTONLY,
+	CG_GROUPNAME		= 40|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -292,6 +293,9 @@ struct ctx {
 	char *statusfile;
 	char *socketpath;
 	char *dump_path;
+#ifdef CGROUP_SUPPORT
+	char *cg_groupname;
+#endif
 	int socket;
 	mode_t socketmod;
 	uid_t  socketuid;
