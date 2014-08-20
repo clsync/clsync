@@ -1276,7 +1276,9 @@ int privileged_init(ctx_t *ctx_p)
 	_privileged_inotify_rm_watch	= __privileged_inotify_rm_watch;
 	_privileged_fork_execvp		= __privileged_fork_setuid_execvp;
 	_privileged_kill_child		= __privileged_kill_child_wrapper;
+# ifdef CGROUP_SUPPORT
 	_privileged_clsync_cgroup_deinit= __privileged_clsync_cgroup_deinit;
+# endif
 
 	SAFE ( pthread_mutex_init(&pthread_mutex_privileged,	NULL),	return errno;);
 	SAFE ( pthread_mutex_init(&pthread_mutex_action_entrance,NULL),	return errno;);
