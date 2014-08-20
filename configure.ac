@@ -404,7 +404,7 @@ AC_ARG_WITH(libseccomp,
 	AS_HELP_STRING(--with-libseccomp,
 		[Enable seccomp support be able to forbid extra syscalls; values: no, check, yes; default: check]),
 	[],
-	[with_seccomp=check]
+	[with_libseccomp=check]
 )
 
 case "$with_libseccomp" in
