@@ -158,6 +158,41 @@ AC_CHECK_FUNC([pivot_root], [HAVE_PIVOTROOT=1])
 dnl searching for unshare
 AC_CHECK_FUNC([unshare], [HAVE_UNSHARE=1])
 
+dnl libcgroup check
+AC_ARG_WITH(libcgroup,
+	AS_HELP_STRING(--with-libcgroup,
+		[Enable cgroup support via libcgroup; values: no, check, yes; default: check]),
+	[],
+	[with_libcgroup=check]
+)
+
+case "$with_libcgroup" in
+	yes)
+
+		AC_CHECK_LIB([cgroup], [cgroup_init],
+			[
+				AC_CHECK_HEADER(libcgroup.h, [], [AC_MSG_FAILURE([Cannot find libcgroup.h])])
+				LDFLAGS="${LDFLAGS} -lcgroup"
+				HAVE_LIBCGROUP=1
+			],
+			[
+				AC_MSG_FAILURE(
+					[Cannot find libcgroup])
+			]
+		)
+		;;
+	check)
+		AC_CHECK_LIB([cgroup], [cgroup_init],
+			[
+				AC_CHECK_HEADER(libcgroup.h, [], [AC_MSG_FAILURE([Cannot find libcgroup.h])])
+				LDFLAGS="${LDFLAGS} -lcgroup"
+				HAVE_LIBCGROUP=1
+			],
+			[]
+		)
+		;;
+esac
+
 dnl capabilities check
 AC_ARG_WITH(capabilities,
 	AS_HELP_STRING(--with-capabilities,
@@ -384,6 +419,7 @@ AM_CONDITIONAL([HAVE_PIVOTROOT],    [test "x$HAVE_PIVOTROOT"    != "x"])
 AM_CONDITIONAL([HAVE_UNSHARE],      [test "x$HAVE_UNSHARE"      != "x"])
 AM_CONDITIONAL([HAVE_SECCOMP],      [test "x$HAVE_SECCOMP"      != "x"])
 AM_CONDITIONAL([HAVE_TRE],          [test "x$HAVE_TRE"          != "x"])
+AM_CONDITIONAL([HAVE_LIBCGROUP],    [test "x$HAVE_LIBCGROUP"    != "x"])
 
 AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' ], [AC_MSG_FAILURE([kqueue, inotify and bsm are not supported on this system])])
 

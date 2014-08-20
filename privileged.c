@@ -31,7 +31,10 @@
 # include <fts.h>			// fts_open()
 # include <errno.h>			// errno
 # include <sys/capability.h>		// capset()
-# include "malloc.h"			// strdup_protect();
+# include "malloc.h"			// strdup_protect()
+# ifdef CGROUP_SUPPORT
+#  include "cgroup.h"			// clsync_cgroup_deinit()
+# endif
 #endif
 
 #include <unistd.h>			// execvp()
@@ -159,6 +162,8 @@ enum privileged_action {
 	PA_FORK_EXECVP,
 
 	PA_KILL_CHILD,
+
+	PA_CLSYNC_CGROUP_DEINIT,
 };
 
 # ifdef HL_LOCKS
@@ -278,6 +283,8 @@ int (*_privileged_inotify_rm_watch)	(
 		int fd,
 		int wd
 	);
+
+int (*_privileged_clsync_cgroup_deinit)	();
 
 
 int cap_enable(__u32 caps) {
@@ -801,6 +808,12 @@ void *privileged_handler(void *_ctx_p)
 				cmd.ret = (void *)(long)__privileged_kill_child_itself(arg_p->pid, arg_p->signal);
 				break;
 			}
+# ifdef CGROUP_SUPPORT
+			case PA_CLSYNC_CGROUP_DEINIT: {
+				cmd.ret = (void *)(long)clsync_cgroup_deinit();
+				break;
+			}
+# endif
 			default:
 				critical("Unknown command type \"%u\". It's a buffer overflow (which means a security problem) or just an internal error.");
 		}
@@ -1130,6 +1143,25 @@ int __privileged_inotify_rm_watch(
 	return (long)ret;
 }
 
+# ifdef CGROUP_SUPPORT
+int __privileged_clsync_cgroup_deinit()
+{
+	void *ret = (void *)(long)-1;
+
+
+	privileged_action(
+#  ifdef HL_LOCK_TRIES_AUTO
+			PC_DEFAULT,
+#  endif
+			PA_CLSYNC_CGROUP_DEINIT,
+			NULL,
+			&ret
+		);
+
+	return (long)ret;
+}
+# endif
+
 int __privileged_fork_setuid_execvp(
 		const char *file,
 		char *const argv[]
@@ -1223,6 +1255,9 @@ int privileged_init(ctx_t *ctx_p)
 		_privileged_inotify_init1	= (typeof(_privileged_inotify_init1))		inotify_init1;
 		_privileged_inotify_add_watch	= (typeof(_privileged_inotify_add_watch))	inotify_add_watch;
 		_privileged_inotify_rm_watch	= (typeof(_privileged_inotify_rm_watch))	inotify_rm_watch;
+# ifdef CGROUP_SUPPORT
+		_privileged_clsync_cgroup_deinit= (typeof(_privileged_clsync_cgroup_deinit))	clsync_cgroup_deinit;
+# endif
 
 		cap_drop(ctx_p, ctx_p->caps);
 #endif
@@ -1241,6 +1276,7 @@ int privileged_init(ctx_t *ctx_p)
 	_privileged_inotify_rm_watch	= __privileged_inotify_rm_watch;
 	_privileged_fork_execvp		= __privileged_fork_setuid_execvp;
 	_privileged_kill_child		= __privileged_kill_child_wrapper;
+	_privileged_clsync_cgroup_deinit= __privileged_clsync_cgroup_deinit;
 
 	SAFE ( pthread_mutex_init(&pthread_mutex_privileged,	NULL),	return errno;);
 	SAFE ( pthread_mutex_init(&pthread_mutex_action_entrance,NULL),	return errno;);

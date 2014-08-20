@@ -34,6 +34,7 @@ extern void _critical( const char *const function_name, const char *fmt, ...);
 
 extern void _error(const char *const function_name, const char *fmt, ...);
 #define error(...) 				_error(__FUNCTION__, __VA_ARGS__)
+#define error_on(cond) {if (cond) {error("Error: ("TOSTR(cond)") != 0");}}
 
 extern void _warning(const char *const function_name, const char *fmt, ...);
 #define warning(...) 				_warning(__FUNCTION__, __VA_ARGS__)

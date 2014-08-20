@@ -56,6 +56,10 @@ endif
 if HAVE_TRE
 clsync_CFLAGS  += -DTRE_SUPPORT
 endif
+if HAVE_LIBCGROUP
+clsync_CFLAGS  += -DCGROUP_SUPPORT
+clsync_SOURCES += cgroup.c cgroup.h
+endif
 
 if HLLOCKS
 clsync_CFLAGS  += -DHL_LOCKS

@@ -1457,6 +1457,33 @@ on everything not listed above.
 Is not set by default.
 .RE
 
+.B \-\-forbid\-devices
+.RS
+.B [Linux only]
+
+Forbid any access to all devices except listed ones:
+.RS
+read access to:
+.RS
+/dev/console
+.br
+/dev/zero
+.br
+/dev/urandom
+.br
+/dev/random
+.RE
+write access to:
+.RS
+/dev/console
+.br
+/dev/null
+.RE
+.RE
+
+Is not set by default.
+.RE
+
 .SH SYNC HANDLER MODES
 .B clsync
 executes

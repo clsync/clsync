@@ -75,7 +75,7 @@
 
 #define COUNTER_LIMIT			(1<<10)
 
-#define SLEEP_SECONDS 0
+#define SLEEP_SECONDS			1
 
 #define KILL_TIMEOUT			60
 
@@ -180,3 +180,17 @@ filesz:1M\n\
 
 //#define READWRITE_SIGNALLING
 
+#define CG_DEV_CONSOLE	"c 5:1"
+#define CG_DEV_ZERO	"c 1:5"
+#define CG_DEV_RANDOM	"c 1:8"
+#define CG_DEV_URANDOM	"c 1:9"
+#define CG_DEV_NULL	"c 1:3"
+
+#define CG_ALLOWED_DEVICES {		\
+		CG_DEV_CONSOLE	" rw",	\
+		CG_DEV_ZERO	" r",	\
+		CG_DEV_URANDOM	" r",	\
+		CG_DEV_RANDOM	" r",	\
+		CG_DEV_NULL	" w",	\
+		NULL			\
+	}

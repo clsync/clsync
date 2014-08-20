@@ -46,6 +46,9 @@
 #include "indexes.h"
 #include "privileged.h"
 #include "rules.h"
+#if CGROUP_SUPPORT
+#	include "cgroup.h"
+#endif
 
 #include <stdio.h>
 #include <dlfcn.h>
@@ -1356,7 +1359,7 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 
 			switch (ctx_p->flags[MODE]) {
 				case MODE_SIMPLE:
-					SAFE(sync_dosync(node->fts_path, evinfo.evmask, ctx_p, indexes_p), critical("fpath == \"%s\"; evmask == 0x%o", node->fts_path, evinfo.evmask));
+					SAFE(sync_dosync(node->fts_path, evinfo.evmask, ctx_p, indexes_p), debug(1, "fpath == \"%s\"; evmask == 0x%o", node->fts_path, evinfo.evmask); return -1;);
 					continue;
 				default:
 					break;
@@ -1981,7 +1984,7 @@ int sync_prequeue_loadmark
 
 	switch (ctx_p->flags[MODE]) {
 		case MODE_SIMPLE:
-			return SAFE(sync_dosync(path_rel, event_mask, ctx_p, indexes_p), critical("fpath == \"%s\"; evmask == 0x%o", path_rel, event_mask));
+			return SAFE(sync_dosync(path_rel, event_mask, ctx_p, indexes_p), debug(1, "fpath == \"%s\"; evmask == 0x%o", path_rel, event_mask); return -1;);
 		default:
 			break;
 	}
@@ -2136,7 +2139,7 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 
 	if ((ctx_p->listoutdir == NULL) && (!(ctx_p->synchandler_argf & SHFL_INCLUDE_LIST)) && (!(ctx_p->flags[MODE]==MODE_SO))) {
 		debug(3, "calling sync_dosync()");
-		SAFE(sync_dosync(fpath, evinfo->evmask, ctx_p, indexes_p), critical("fpath == \"%s\"; evmask == 0x%o", fpath, evinfo->evmask));
+		SAFE(sync_dosync(fpath, evinfo->evmask, ctx_p, indexes_p), debug(1, "fpath == \"%s\"; evmask == 0x%o", fpath, evinfo->evmask); exit(errno ? errno : -1));	// TODO: remove exit() from here
 		return;
 	}
 
@@ -3877,6 +3880,12 @@ int sync_run(ctx_t *ctx_p) {
 		char *argv[] = { ctx_p->exithookfile, ctx_p->label, NULL};
 		exec_argv(argv, NULL);
 	}
+
+#ifdef CGROUP_SUPPORT
+	// Cleaning up cgroups staff
+	if (ctx_p->flags[FORBIDDEVICES])
+		error_on(privileged_clsync_cgroup_deinit());
+#endif
 
 	ret |= privileged_deinit(ctx_p);
 

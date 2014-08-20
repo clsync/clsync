@@ -48,6 +48,9 @@
 #include "socket.h"
 #include "syscalls.h"
 #include "rules.h"
+#if CGROUP_SUPPORT
+#	include "cgroup.h"
+#endif
 
 //#include "revision.h"
 
@@ -102,6 +105,9 @@ static const struct option long_options[] =
 #ifdef CAPABILITIES_SUPPORT
 	{"preserve-capabilities",required_argument,	NULL,	CAP_PRESERVE},
 	{"inherit-capabilities",optional_argument,	NULL,	CAPS_INHERIT},
+#endif
+#ifdef CGROUP_SUPPORT
+	{"forbid-devices",	optional_argument,	NULL,	FORBIDDEVICES},
 #endif
 	{"threading",		required_argument,	NULL,	THREADING},
 	{"retries",		optional_argument,	NULL,	RETRIES},
@@ -2392,6 +2398,14 @@ int main(int argc, char *argv[]) {
 	} else
 	if (ctx_p->destproto != NULL)
 		ctx_p->destdirwslash = ctx_p->destdir;
+
+#ifdef CGROUP_SUPPORT
+	if (ctx_p->flags[FORBIDDEVICES]) {
+		error_on(clsync_cgroup_init());
+		error_on(clsync_cgroup_forbid_extra_devices());
+		error_on(clsync_cgroup_attach());
+	}
+#endif
 
 	if (ctx_p->flags[GID]) {
 		int rc;
