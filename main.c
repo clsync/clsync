@@ -336,6 +336,9 @@ int version() {
 #ifdef PIVOTROOT_OPT_SUPPORT
 		" -DPIVOTROOT_OPT_SUPPORT"
 #endif
+#ifdef CGROUP_SUPPORT
+		" -DCGROUP_SUPPORT"
+#endif
 #ifdef TRE_SUPPORT
 		" -DTRE_SUPPORT"
 #endif
