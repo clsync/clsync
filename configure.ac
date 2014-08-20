@@ -409,13 +409,15 @@ AC_ARG_WITH(libseccomp,
 
 case "$with_libseccomp" in
 	yes)
-		AC_CHECK_TYPES([scmp_filter_ctx], [
-			AC_CHECK_DECLS([seccomp_syscall_resolve_name_arch], [HAVE_SECCOMP=1], [AC_MSG_FAILURE([Cannot find valid seccomp.h])], [[#include <seccomp.h>]])
-		], [AC_MSG_FAILURE([Cannot find valid seccomp.h])], [[#include <seccomp.h>]])
+		AC_CHECK_TYPES([scmp_filter_ctx],                   [],               [AC_MSG_FAILURE([Cannot find valid seccomp.h])],       [[#include <seccomp.h>]])
+		AC_CHECK_DECLS([seccomp_syscall_resolve_name_arch], [],               [AC_MSG_FAILURE([Cannot find valid seccomp.h])],       [[#include <seccomp.h>]])
+		AC_CHECK_TYPES([struct seccomp_data],               [HAVE_SECCOMP=1], [AC_MSG_FAILURE([Cannot find valid linux/seccomp.h])], [[#include <linux/seccomp.h>]])
 		;;
 	check)
 		AC_CHECK_TYPES([scmp_filter_ctx], [
-			AC_CHECK_DECLS([seccomp_syscall_resolve_name_arch], [HAVE_SECCOMP=1], [], [[#include <seccomp.h>]])
+			AC_CHECK_DECLS([seccomp_syscall_resolve_name_arch], [
+				AC_CHECK_TYPES([struct seccomp_data], [HAVE_SECCOMP=1], [], [[#include <linux/seccomp.h>]])
+			], [], [[#include <seccomp.h>]])
 		], [], [[#include <seccomp.h>]])
 		;;
 esac
