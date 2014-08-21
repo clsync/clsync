@@ -51,6 +51,7 @@
 #if CGROUP_SUPPORT
 #	include "cgroup.h"
 #endif
+#include "helper.h"
 
 //#include "revision.h"
 
@@ -110,6 +111,8 @@ static const struct option long_options[] =
 	{"forbid-devices",	optional_argument,	NULL,	FORBIDDEVICES},
 	{"cgroup-group-name",	required_argument,	NULL,	CG_GROUPNAME},
 #endif
+	{"external-helper",	optional_argument,	NULL,	EXTHELPER},
+	{"unsecure-external-helper", optional_argument,	NULL,	UNSECURE_EXTHELPER},
 	{"threading",		required_argument,	NULL,	THREADING},
 	{"retries",		optional_argument,	NULL,	RETRIES},
 	{"ignore-failures",	optional_argument,	NULL,	IGNOREFAILURES},
@@ -2415,11 +2418,14 @@ int main(int argc, char *argv[]) {
 	if (ctx_p->destproto != NULL)
 		ctx_p->destdirwslash = ctx_p->destdir;
 
+	if (ctx_p->flags[EXTHELPER] && ctx_p->flags[UNSECURE_EXTHELPER])
+		SAFE( helper_init(ctx_p),			ret = errno = _SAFE_rc);
+
 #ifdef CGROUP_SUPPORT
 	if (ctx_p->flags[FORBIDDEVICES]) {
-		error_on(clsync_cgroup_init(ctx_p));
-		error_on(clsync_cgroup_forbid_extra_devices());
-		error_on(clsync_cgroup_attach(ctx_p));
+		SAFE( clsync_cgroup_init(ctx_p),		ret = errno = _SAFE_rc);
+		SAFE( clsync_cgroup_forbid_extra_devices(),	ret = errno = _SAFE_rc);
+		SAFE( clsync_cgroup_attach(ctx_p),		ret = errno = _SAFE_rc);
 	}
 #endif
 
@@ -2577,6 +2583,9 @@ int main(int argc, char *argv[]) {
 		if (rm_listoutdir == 2)
 			free(ctx_p->listoutdir);
 	}
+
+	if (ctx_p->flags[EXTHELPER] && ctx_p->flags[UNSECURE_EXTHELPER])
+		SAFE( helper_deinit(), ret = errno = _SAFE_rc);
 
 /*
 	if (ctx_p->flags[PIVOT_ROOT] == PW_AUTO || ctx_p->flags[PIVOT_ROOT] == PW_AUTORO) {

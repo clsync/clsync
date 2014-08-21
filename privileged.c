@@ -54,7 +54,9 @@
 # include <math.h>			// fabs()
 #endif
 
+#include "sync.h"
 #include "privileged.h"
+#include "helper.h"
 
 #ifdef SECCOMP_SUPPORT
 # include <seccomp.h>			// __NR_*
@@ -236,15 +238,6 @@ struct {
 	unsigned long		 hl_lock_tries;
 # endif
 } cmd;
-
-struct pa_options {
-	synchandler_args_t args[SHARGS_MAX];
-	char *label;
-	char *exithookfile;
-	char *preexithookfile;
-	char *permitted_hookfile[MAXPERMITTEDHOOKFILES+1];
-	int   permitted_hookfiles;
-};
 
 FTS *(*_privileged_fts_open)		(
 		char * const *path_argv,
@@ -684,6 +677,27 @@ void hl_shutdown(int lockid) {
 
 # endif
 
+pid_t do_fork_execvp(ctx_t *ctx_p, int use_args_check, struct pa_options *opts, const char *file, char *const *argv, uid_t uid, gid_t gid) {
+	debug(12, "");
+	if (use_args_check)
+		privileged_execvp_check_arguments(opts, file, argv);
+	pid_t pid = fork();
+	switch (pid) {
+		case -1: 
+			error("Cannot fork().");
+			break;
+		case  0:
+			debug(4, "setgid(%u) == %i", gid, setgid(gid));
+			debug(4, "setuid(%u) == %i", uid, setuid(uid));
+			debug(3, "execvp(\"%s\", argv)", file);
+			debug_argv_dump(10, (char const *const *)argv);
+			exit(execvp(file, argv));
+	}
+
+	debug(9, "pid == %u", pid);
+	return pid;
+}
+
 volatile static int privileged_handler_running = 1;
 void *privileged_handler(void *_ctx_p)
 {
@@ -692,9 +706,9 @@ void *privileged_handler(void *_ctx_p)
 # endif
 	int setup = 0;
 	ctx_t *ctx_p = _ctx_p;
+	
 	uid_t exec_uid = 65535;
 	gid_t exec_gid = 65535;
-	
 	struct pa_options *opts;
 	int use_args_check = 0;
 
@@ -789,20 +803,7 @@ void *privileged_handler(void *_ctx_p)
 			}
 			case PA_FORK_EXECVP: {
 				struct pa_fork_execvp_arg *arg_p = cmd.arg;
-				if (use_args_check)
-					privileged_execvp_check_arguments(opts, arg_p->file, arg_p->argv);
-				pid_t pid = fork();
-				switch (pid) {
-					case -1: 
-						error("Cannot fork().");
-						break;
-					case  0:
-						debug(4, "setgid(%u) == %i", exec_gid, setgid(exec_gid));
-						debug(4, "setuid(%u) == %i", exec_uid, setuid(exec_uid));
-						debug(3, "execvp(\"%s\", arg_p->argv)", arg_p->file);
-						exit(execvp(arg_p->file, arg_p->argv));
-				}
-				cmd.ret = (void *)(long)pid;
+				cmd.ret = (void *)(long)do_fork_execvp(ctx_p, use_args_check, opts, arg_p->file, arg_p->argv, exec_uid, exec_gid);
 				break;
 			}
 			case PA_KILL_CHILD: {
@@ -1278,15 +1279,18 @@ int privileged_init(ctx_t *ctx_p)
 		hl_shutdown(HLLOCK_HANDLER);
 # endif
 
+	if (ctx_p->flags[EXTHELPER] && !ctx_p->flags[UNSECURE_EXTHELPER])
+		SAFE( helper_init(ctx_p),	return _SAFE_rc; );
+
 	if (!ctx_p->flags[THREADSPLITTING]) {
 #endif
 
-		_privileged_fork_execvp		= __privileged_fork_execvp;
+		_privileged_fork_execvp		= (ctx_p->flags[EXTHELPER]) ? helper_fork_execvp : __privileged_fork_execvp;
 
 		__privileged_fork_execvp_uid	= ctx_p->synchandler_uid;
 		__privileged_fork_execvp_gid	= ctx_p->synchandler_gid;
 
-		_privileged_kill_child		= __privileged_kill_child_itself;
+		_privileged_kill_child		= (ctx_p->flags[EXTHELPER]) ? helper_kill_child  : __privileged_kill_child_itself;
 
 #ifdef CAPABILITIES_SUPPORT
 		_privileged_fts_open		= (typeof(_privileged_fts_open))		fts_open;
@@ -1315,8 +1319,8 @@ int privileged_init(ctx_t *ctx_p)
 	_privileged_inotify_init1	= __privileged_inotify_init1;
 	_privileged_inotify_add_watch	= __privileged_inotify_add_watch;
 	_privileged_inotify_rm_watch	= __privileged_inotify_rm_watch;
-	_privileged_fork_execvp		= __privileged_fork_setuid_execvp;
-	_privileged_kill_child		= __privileged_kill_child_wrapper;
+	_privileged_fork_execvp		= (ctx_p->flags[EXTHELPER]) ? helper_fork_execvp : __privileged_fork_setuid_execvp;
+	_privileged_kill_child		= (ctx_p->flags[EXTHELPER]) ? helper_kill_child  : __privileged_kill_child_wrapper;
 # ifdef CGROUP_SUPPORT
 	_privileged_clsync_cgroup_deinit= __privileged_clsync_cgroup_deinit;
 # endif
@@ -1426,6 +1430,9 @@ int privileged_deinit(ctx_t *ctx_p)
 	SAFE ( pthread_cond_destroy(&pthread_cond_privileged),		ret = errno );
 	SAFE ( pthread_cond_destroy(&pthread_cond_action),		ret = errno );
 #endif
+
+	if (ctx_p->flags[EXTHELPER] && !ctx_p->flags[UNSECURE_EXTHELPER])
+		SAFE(helper_deinit(), ret = _SAFE_rc);
 
 	return ret;
 }

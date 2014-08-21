@@ -21,6 +21,7 @@
 #include <string.h>	// strtok_r()
 #include <errno.h>	// errno
 
+#include "common.h"
 #include "malloc.h"
 #include "error.h"
 
@@ -149,4 +150,21 @@ int str_splitargs(
 	int rc = _str_splitargs(strchr(arg_start, 0), &arg_start, quotes, handler, arg);
 	free(instr);
 	return rc;
+}
+
+char *str_addtobuf(char *buf, char *end, const size_t size, const char *const str) {
+	debug(15, "(%p, %p, %lu, \"%s\")", buf, end, size, str);
+	long overflow = (long)(end-buf) <= (long)(size+sizeof(size_t));
+
+	critical_on(overflow);
+
+	*(size_t *)buf = size;
+	buf += sizeof(size);
+
+	memcpy(buf, str, size);
+
+	buf += size;
+
+	debug(19, "end: buf == %p", buf);
+	return buf;
 }

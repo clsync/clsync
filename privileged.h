@@ -129,3 +129,16 @@ extern int (*_privileged_fork_execvp)(
 extern int privileged_init(struct ctx *ctx_p);
 extern int privileged_deinit(struct ctx *ctx_p);
 
+struct pa_options {
+	synchandler_args_t args[SHARGS_MAX];
+	char *label;
+	char *exithookfile;
+	char *preexithookfile;
+	char *permitted_hookfile[MAXPERMITTEDHOOKFILES+1];
+	int   permitted_hookfiles;
+};
+
+extern pid_t do_fork_execvp(struct ctx *ctx_p, int use_args_check, struct pa_options *opts, const char *file, char *const *argv, uid_t uid, gid_t gid);
+extern int __privileged_kill_child_itself(pid_t child_pid, int signal);
+extern int pa_setup(struct pa_options *opts, ctx_t *ctx_p, uid_t *exec_uid_p, gid_t *exec_gid_p);
+

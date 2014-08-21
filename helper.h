@@ -17,6 +17,16 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-extern int str_splitargs(const char *const instr, int (*handler)(char *outstr, size_t outstr_len, void *arg), void *arg);
-extern char *str_addtobuf(char *buf, char *buf_end, const size_t size, const char *const str);
+extern int   helper_init(struct ctx *ctx_p);
+
+extern pid_t helper_fork_execvp(
+		const char *file,
+		char *const argv[]
+	);
+
+extern int   helper_kill_child(pid_t pid, int signal);
+
+extern int   helper_clsync_cgroup_deinit(ctx_t *ctx_p);
+
+extern int   helper_deinit();
 

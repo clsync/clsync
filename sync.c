@@ -865,15 +865,11 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 #define SYNC_EXEC(...)      (SHOULD_THREAD(ctx_p) ? sync_exec_thread      : sync_exec     )(__VA_ARGS__)
 #define SYNC_EXEC_ARGV(...) (SHOULD_THREAD(ctx_p) ? sync_exec_argv_thread : sync_exec_argv)(__VA_ARGS__)
 
-#define debug_argv_dump(level, argv)\
-	if (unlikely(ctx_p->flags[DEBUG] >= level))\
-		argv_dump(level, argv)
-
-static inline void argv_dump(int debug_level, char **argv) {
+void argv_dump(int debug_level, char const *const *argv) {
 #ifdef _DEBUG_FORCE
 	debug(19, "(%u, %p)", debug_level, argv);
 #endif
-	char **argv_p = argv;
+	char const *const *argv_p = argv;
 	while (*argv_p != NULL) {
 		debug(debug_level, "%p: \"%s\"", *argv_p, *argv_p);
 		argv_p++;
@@ -1000,7 +996,7 @@ pid_t clsyncapi_fork(ctx_t *ctx_p) {
 int sync_exec_argv(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callback, thread_callbackfunct_arg_t *callback_arg_p, char **argv) {
 	debug(2, "");
 
-	debug_argv_dump(2, argv);
+	debug_argv_dump(2, (const char *const *)argv);
 
 //	indexes_p->nonthreaded_syncing_fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
 	indexes_p->nonthreaded_syncing_fpath2ei_ht = indexes_p->fpath2ei_ht;
@@ -1115,7 +1111,7 @@ int __sync_exec_thread(threadinfo_t *threadinfo_p) {
 static inline int sync_exec_argv_thread(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callback, thread_callbackfunct_arg_t *callback_arg_p, char **argv) {
 	debug(2, "");
 
-	debug_argv_dump(2, argv);
+	debug_argv_dump(2, (char const *const *)argv);
 
 	threadinfo_t *threadinfo_p = thread_new();
 	if (threadinfo_p == NULL)

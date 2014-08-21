@@ -176,8 +176,9 @@ void _critical(const char *const function_name, const char *fmt, ...) {
 	{
 		va_list args;
 		pthread_t thread = pthread_self();
+		pid_t pid = getpid();
 
-		outfunct[method]("Critical (thread %p): %s(): ", thread, function_name);
+		outfunct[method]("Critical (pid: %u; thread: %p): %s(): ", pid, thread, function_name);
 		va_start(args, fmt);
 		voutfunct[method](fmt, args);
 		va_end(args);
@@ -225,9 +226,10 @@ void _error(const char *const function_name, const char *fmt, ...) {
 	pthread_mutex_lock(&error_mutex);
 
 	pthread_t thread = pthread_self();
+	pid_t pid = getpid();
 	outputmethod_t method = *outputmethod;
 
-	outfunct[method](*debug ? "Error (thread %p): %s(): " : "Error: ", thread, function_name);
+	outfunct[method](*debug ? "Error (pid: %u; thread: %p): %s(): " : "Error: ", pid, thread, function_name);
 	va_start(args, fmt);
 	voutfunct[method](fmt, args);
 	va_end(args);
@@ -251,9 +253,10 @@ void _info(const char *const function_name, const char *fmt, ...) {
 	pthread_mutex_lock(&error_mutex);
 
 	pthread_t thread = pthread_self();
+	pid_t pid = getpid();
 	outputmethod_t method = *outputmethod;
 
-	outfunct[method](*debug ? "Info (thread %p): %s(): " : "Info: ", thread, function_name);
+	outfunct[method](*debug ? "Info (pid: %u; thread: %p): %s(): " : "Info: ", pid, thread, function_name);
 	va_start(args, fmt);
 	voutfunct[method](fmt, args);
 	va_end(args);
@@ -275,9 +278,10 @@ void _warning(const char *const function_name, const char *fmt, ...) {
 	pthread_mutex_lock(&error_mutex);
 
 	pthread_t thread = pthread_self();
+	pid_t pid = getpid();
 	outputmethod_t method = *outputmethod;
 
-	outfunct[method](*debug ? "Warning (thread %p): %s(): " : "Warning: ", thread, function_name);
+	outfunct[method](*debug ? "Warning (pid: %u; thread: %p): %s(): " : "Warning: ", pid, thread, function_name);
 	va_start(args, fmt);
 	voutfunct[method](fmt, args);
 	va_end(args);
@@ -300,9 +304,10 @@ void _debug(int debug_level, const char *const function_name, const char *fmt, .
 	pthread_mutex_lock(&error_mutex);
 
 	pthread_t thread = pthread_self();
+	pid_t pid = getpid();
 	outputmethod_t method = *outputmethod;
 
-	outfunct[method]("Debug%u (thread %p): %s(): ", debug_level, thread, function_name);
+	outfunct[method]("Debug%u (pid: %u; thread: %p): %s(): ", debug_level, pid, thread, function_name);
 	va_start(args, fmt);
 	voutfunct[method](fmt, args);
 	va_end(args);

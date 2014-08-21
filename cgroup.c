@@ -22,9 +22,12 @@
 #include <libcgroup.h>
 
 static struct cgroup *cgroup = NULL;
+static ctx_t *_ctx_p = NULL;
 
 int clsync_cgroup_init(ctx_t *ctx_p) {
 	debug(2, "cgroup_name == \"%s\"", ctx_p->cg_groupname);
+
+	_ctx_p = ctx_p;
 
 	SAFE( cgroup_init(),							return -1; );
 	SAFE( (cgroup = cgroup_new_cgroup(ctx_p->cg_groupname)) == NULL,	return -1; );
@@ -82,6 +85,11 @@ int clsync_cgroup_attach(ctx_t *ctx_p) {
 
 int clsync_cgroup_deinit(ctx_t *ctx_p) {
 	debug(2, "");
+
+	/* Warning: ctx_p may be NULL, the function should use the same value
+	 * for ctx_p as it was in clsync_cgroupinit(). See "helper.c". */
+	if (ctx_p == NULL)
+		ctx_p = _ctx_p;
 
 	error_on(cgroup_delete_cgroup_ext(cgroup, CGFLAG_DELETE_IGNORE_MIGRATION | CGFLAG_DELETE_RECURSIVE));
 	cgroup_free(&cgroup);
