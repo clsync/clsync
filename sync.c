@@ -3591,9 +3591,6 @@ int sync_run(ctx_t *ctx_p) {
 		signal(SIGUSR_BLOPINT,	sync_sig_int);
 	}
 
-	if ((ret=privileged_init(ctx_p)))
-		return ret;
-
 	// Creating hash tables
 	{
 		int i;
@@ -3693,6 +3690,9 @@ int sync_run(ctx_t *ctx_p) {
 				return ret;
 			}
 	}
+
+	if ((ret=privileged_init(ctx_p)))
+		return ret;
 
 #ifdef CLUSTER_SUPPORT
 	// Initializing cluster subsystem
