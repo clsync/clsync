@@ -812,7 +812,46 @@ void *privileged_handler(void *_ctx_p)
 			}
 # ifdef CGROUP_SUPPORT
 			case PA_CLSYNC_CGROUP_DEINIT: {
-				cmd.ret = (void *)(long)clsync_cgroup_deinit(cmd.arg);
+				/*
+				 * That is strange, but setuid() doesn't work
+				 * without fork() in case of enabled seccomp
+				 * filter. So sorry for this hacky thing.
+				 *
+				 * TODO: fix that.
+				 */
+				int status;
+				pid_t pid = fork();
+				switch (pid) {
+					case -1: 
+						error("Cannot fork().");
+						break;
+					case  0:
+						debug(4, "setgid(0) == %i", setgid(0));
+						debug(4, "setuid(0) == %i", setuid(0));
+						exit(clsync_cgroup_deinit(cmd.arg));
+				}
+
+				if (waitpid(pid, &status, 0) != pid) {
+					switch (errno) {
+						case ECHILD:
+							debug(2, "Child %u has already died.", pid);
+							break;
+						default:
+							error("Cannot waitid().");
+							cmd._errno = errno;
+							cmd.ret    = (void *)(long)errno;
+					}
+				}
+#ifdef VERYPARANOID
+				pthread_sigmask(SIG_SETMASK, &sigset_old, NULL);
+#endif
+				// Return
+				int exitcode = WEXITSTATUS(status);
+				debug(3, "execution completed with exitcode %i", exitcode);
+
+				cmd._errno = exitcode;
+				cmd.ret    = (void *)(long)exitcode;
+
 				break;
 			}
 # endif

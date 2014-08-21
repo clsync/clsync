@@ -83,14 +83,10 @@ int clsync_cgroup_attach(ctx_t *ctx_p) {
 int clsync_cgroup_deinit(ctx_t *ctx_p) {
 	debug(2, "");
 
-	setuid(0);
-
 	error_on(cgroup_delete_cgroup_ext(cgroup, CGFLAG_DELETE_IGNORE_MIGRATION | CGFLAG_DELETE_RECURSIVE));
 	cgroup_free(&cgroup);
 
-	if (ctx_p->uid != 0)
-		setuid(ctx_p->uid);
-
+	debug(15, "end");
 	return 0;
 }
 
