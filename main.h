@@ -18,6 +18,7 @@
  */
 
 extern int ncpus;
+extern pid_t parent_pid;
 
 extern int main_rehash(ctx_t *ctx_p);
 extern int main_status_update(ctx_t *ctx_p);
@@ -33,3 +34,4 @@ extern char *parameter_expand(
 		const char *(*parameter_get)(const char *variable_name, void *arg),
 		void *parameter_get_arg
 	);
+extern pid_t myfork();

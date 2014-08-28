@@ -89,15 +89,14 @@ static const struct option long_options[] =
 #endif
 #ifdef CAPABILITIES_SUPPORT
 # ifdef SECCOMP_SUPPORT
-	{"secure-thread-splitting",optional_argument,	NULL,	SECURETHREADSPLITTING},
+	{"secure-process-splitting",optional_argument,	NULL,	SECUREPROCESSSPLITTING},
 # endif
-	{"thread-splitting",	optional_argument,	NULL,	THREADSPLITTING},
+	{"process-splitting",	optional_argument,	NULL,	PROCESSSPLITTING},
 	{"check-execvp-args",	optional_argument,	NULL,	CHECK_EXECVP_ARGS},
 	{"add-permitted-hook-files",required_argument,	NULL,	ADDPERMITTEDHOOKFILES},
 # ifdef SECCOMP_SUPPORT
 	{"seccomp-filter",	optional_argument,	NULL,	SECCOMP_FILTER},
 # endif
-	{"forget-privthread-info",optional_argument,	NULL,	FORGET_PRIVTHREAD_INFO},
 #endif
 #ifdef GETMNTENT_SUPPORT
 	{"mountpoints",		required_argument,	NULL,	MOUNTPOINTS},
@@ -291,6 +290,21 @@ int syntax() {
 }
 
 int ncpus;
+pid_t parent_pid;
+
+pid_t myfork() {
+	pid_t pid = fork();
+
+	if (!pid) {
+		parent_pid = getppid();
+# ifdef __linux__
+		prctl(PR_SET_PDEATHSIG, SIGCHLD);
+# endif
+		debug(20, "parent_pid == %u", parent_pid);
+	}
+
+	return pid;
+}
 
 int version() {
 	info(PROGRAM" v%i.%i"REVISION"\n\t"AUTHOR"\n\nCompiled with options"
@@ -777,11 +791,11 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 		}
 #ifdef CAPABILITIES_SUPPORT
 # ifdef SECCOMP_SUPPORT
-		case SECURETHREADSPLITTING: {
-			ctx_p->flags[THREADSPLITTING]++;
+		case SECUREPROCESSSPLITTING: {
+			ctx_p->flags[PROCESSSPLITTING]++;
 			ctx_p->flags[CHECK_EXECVP_ARGS]++;
 			ctx_p->flags[SECCOMP_FILTER]++;
-			ctx_p->flags[FORGET_PRIVTHREAD_INFO]++;
+			ctx_p->flags[FORBIDDEVICES]++;
 			break;
 		}
 # endif

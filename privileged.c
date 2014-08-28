@@ -39,6 +39,7 @@
 
 #include <unistd.h>			// execvp()
 
+
 #ifdef UNSHARE_SUPPORT
 # include <sched.h>			// unshare()
 #endif
@@ -104,6 +105,7 @@
 	SECCOMP_ALLOW_ACCUM_SYSCALL(rt_sigprocmask),			\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(rt_sigaction),			\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(nanosleep),				\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(mprotect),				\
 
 /* Syscalls allowed to non-privileged thread */
 static struct sock_filter filter_table[] = {
@@ -129,14 +131,15 @@ int (*privileged_fork_execvp)(const char *file, char *const argv[]);
 int (*privileged_kill_child)(pid_t pid, int sig);
 
 #ifdef CAPABILITIES_SUPPORT
-pthread_t	pthread_thread;
-pthread_mutex_t	pthread_mutex_privileged      = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t	pthread_mutex_action_signal   = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t	pthread_mutex_action_entrance = PTHREAD_MUTEX_INITIALIZER;
-pthread_mutex_t	pthread_mutex_runner          = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t	pthread_cond_privileged       = PTHREAD_COND_INITIALIZER;
-pthread_cond_t	pthread_cond_action           = PTHREAD_COND_INITIALIZER;
-pthread_cond_t	pthread_cond_runner           = PTHREAD_COND_INITIALIZER;
+pid_t		helper_pid;
+pthread_t	privileged_thread;
+pthread_mutex_t	*pthread_mutex_privileged_p;
+pthread_mutex_t	*pthread_mutex_action_signal_p;
+pthread_mutex_t	*pthread_mutex_action_entrance_p;
+pthread_mutex_t	*pthread_mutex_runner_p;
+pthread_cond_t	*pthread_cond_privileged_p;
+pthread_cond_t	*pthread_cond_action_p;
+pthread_cond_t	*pthread_cond_runner_p;
 
 # ifdef READWRITE_SIGNALLING
 int priv_read_fd;
@@ -168,20 +171,47 @@ enum privileged_action {
 	PA_CLSYNC_CGROUP_DEINIT,
 };
 
+struct pa_fts_open_arg {
+	char _path_argv[MAXARGUMENTS+1][PATH_MAX];
+	char *path_argv[MAXARGUMENTS+1];
+	int options;
+	int (*compar)(const FTSENT **, const FTSENT **);
+};
+
+struct pa_inotify_add_watch_arg {
+	int fd;
+	char pathname[PATH_MAX];
+	uint32_t mask;
+};
+
+struct pa_inotify_rm_watch_arg {
+	int fd;
+	int wd;
+};
+
+struct pa_fork_execvp_arg {
+	char file[PATH_MAX];
+	char _argv[MAXARGUMENTS+1][BUFSIZ];
+	char *argv[MAXARGUMENTS+1];
+};
+
+struct pa_kill_child_arg {
+	pid_t pid;
+	int   signal;
+};
+
+union pa_arg {
+	struct pa_fts_open_arg		 fts_open;
+	struct pa_inotify_add_watch_arg	 inotify_add_watch;
+	struct pa_inotify_rm_watch_arg	 inotify_rm_watch;
+	struct pa_fork_execvp_arg	 fork_execvp;
+	struct pa_kill_child_arg	 kill_child;
+	void				*void_v;
+	ctx_t				*ctx_p;
+	uint32_t			 uint32_v;
+};
+
 # ifdef HL_LOCKS
-volatile int		hl_lock_enabled			= 1;
-#  ifdef HL_LOCK_TRIES_AUTO
-volatile unsigned long	volatile hl_lock_tries[PC_MAX]	= {[0 ... PC_MAX-1] = HL_LOCK_TRIES_INITIAL};
-volatile unsigned long	hl_lock_count[PC_MAX]		= {[0 ... PC_MAX-1] = 0};
-volatile unsigned long	hl_lock_delay[PC_MAX]		= {[0 ... PC_MAX-1] = ((unsigned long)~0)>>2};
-volatile double		hl_lock_tries_step[PC_MAX]	= {[0 ... PC_MAX-1] = HL_LOCK_AUTO_K};
-
-#   define		hl_lock_tries_cur hl_lock_tries[callid]
-#  else
-volatile unsigned long	hl_lock_tries	= HL_LOCK_TRIES_INITIAL;
-#   define		hl_lock_tries_cur hl_lock_tries
-#  endif
-
 enum highload_lock_id {
 	HLLOCK_HANDLER = 0,
 
@@ -198,44 +228,70 @@ enum highlock_lock_state {
 	HLLS_WORKING	= 0x10,
 };
 typedef enum highlock_lock_state hllock_state_t;
+
+struct hl_lock {
+#  ifdef HL_LOCK_TRIES_AUTO
+	unsigned long		tries;
+#  endif
+	int			enabled;
+	int			wait[HLLOCK_MAX] = {0};
+	int			signal[HLLOCK_MAX] = {0};
+	hllock_state_t		state[HLLOCK_MAX] = {0};
+#  ifdef HL_LOCK_TRIES_AUTO
+	unsigned long		tries[PC_MAX];
+	unsigned long		count[PC_MAX]		= {[0 ... PC_MAX-1] = 0};
+	unsigned long		delay[PC_MAX]		= {[0 ... PC_MAX-1] = ((unsigned long)~0)>>2};
+	double			tries_step[PC_MAX]	= {[0 ... PC_MAX-1] = HL_LOCK_AUTO_K};
+
+#   define			tries_cur tries[callid]
+#  else
+	unsigned long		tries			= HL_LOCK_TRIES_INITIAL;
+#   define			tries_cur tries
+#  endif
+}
 # endif
 
-struct pa_fts_open_arg {
-	char * const *path_argv;
-	int options;
-	int (*compar)(const FTSENT **, const FTSENT **);
+struct pa_fts_read_ret {
+	FTSENT		ftsent;
+	char		fts_accpath[PATH_MAX];
+	char		fts_path[PATH_MAX];
+	char		fts_name[PATH_MAX];
 };
-
-struct pa_inotify_add_watch_arg {
-	int fd;
-	const char *pathname;
-	uint32_t mask;
+union pa_ret {
+	struct stat		stat;
+	struct pa_fts_read_ret	fts_read;
 };
-
-struct pa_inotify_rm_watch_arg {
-	int fd;
-	int wd;
-};
-
-struct pa_fork_execvp_arg {
-	const char *file;
-	char *const *argv;
-};
-
-struct pa_kill_child_arg {
-	pid_t pid;
-	int   signal;
-};
-
-struct {
-	enum privileged_action	 action;
-	void			*arg;
-	void			*ret;
-	int			 _errno;
-# ifdef HL_LOCK_TRIES_AUTO
-	unsigned long		 hl_lock_tries;
+struct cmd {
+	volatile union pa_arg		 arg;
+	volatile union pa_ret		 ret_buf;
+	volatile enum privileged_action	 action;
+	volatile void			*ret;
+	volatile int			 _errno;
+# ifdef HL_LOCKS
+	volatile struct hl_lock	 hl_lock;
 # endif
-} cmd;
+};
+volatile struct cmd *cmd_p;
+
+static inline void cmd_init(volatile struct cmd *cmd_p) {
+# ifdef HL_LOCKS
+	memset(cmd_p, 0, sizeof(*cmd_p));
+	cmd_p->hl_lock.enabled = 1;
+#  ifdef HL_LOCK_TRIES_AUTO
+	int i;
+	i = 0;
+	while (i < PC_MAX) {
+		cmd_p->hl_lock.tries[i]		= HL_LOCK_TRIES_INITIAL;
+		cmd_p->hl_lock.delay[i]		= ((unsigned long)~0)>>2;
+		cmd_p->hl_lock.tries_step[i]	= HL_LOCK_AUTO_K;
+		i++;
+	}
+#  else
+	cmd_p->hl_lock.tries	= HL_LOCK_TRIES_INITIAL;
+#  endif
+# endif
+	return;
+}
 
 struct pa_options {
 	synchandler_args_t args[SHARGS_MAX];
@@ -245,6 +301,42 @@ struct pa_options {
 	char *permitted_hookfile[MAXPERMITTEDHOOKFILES+1];
 	int   permitted_hookfiles;
 };
+
+int pthread_mutex_init_shared(pthread_mutex_t **mutex_p) {
+	static pthread_mutex_t mutex_initial = PTHREAD_MUTEX_INITIALIZER;
+	*mutex_p = shm_malloc(sizeof(**mutex_p));
+	memcpy(*mutex_p, &mutex_initial, sizeof(mutex_initial));
+
+	pthread_mutexattr_t attr;
+	pthread_mutexattr_init(&attr);
+	pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
+	return pthread_mutex_init(*mutex_p, &attr);
+}
+
+int pthread_mutex_destroy_shared(pthread_mutex_t *mutex_p) {
+	int rc;
+	rc = pthread_mutex_destroy(mutex_p);
+	shm_free(mutex_p);
+	return rc;
+}
+
+int pthread_cond_init_shared(pthread_cond_t **cond_p) {
+	static pthread_cond_t cond_initial = PTHREAD_COND_INITIALIZER;
+	*cond_p = shm_malloc(sizeof(**cond_p));
+	memcpy(*cond_p, &cond_initial, sizeof(cond_initial));
+
+	pthread_condattr_t attr;
+	pthread_condattr_init(&attr);
+	pthread_condattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
+	return pthread_cond_init(*cond_p, &attr);
+}
+
+int pthread_cond_destroy_shared(pthread_cond_t *cond_p) {
+	int rc;
+	rc = pthread_cond_destroy(cond_p);
+	shm_free(cond_p);
+	return rc;
+}
 
 FTS *(*_privileged_fts_open)		(
 		char * const *path_argv,
@@ -319,8 +411,7 @@ int cap_drop(ctx_t *ctx_p, __u32 caps) {
 
 	cap_hdr.version = _LINUX_CAPABILITY_VERSION;
 	if (capget(&cap_hdr, &cap_dat) < 0) {
-		if (ctx_p->flags[CAP_PRESERVE] != CAP_PRESERVE_TRY)
-			error("Cannot get capabilites with capget()");
+		error_or_debug((ctx_p->flags[CAP_PRESERVE] != CAP_PRESERVE_TRY) ? -1 : 3, "Cannot get capabilites with capget()");
 		return errno;
 	}
 	debug(3, "old: cap.eff == 0x%04x; cap.prm == 0x%04x; cap.inh == 0x%04x.",
@@ -346,8 +437,7 @@ int cap_drop(ctx_t *ctx_p, __u32 caps) {
 		cap_dat.effective, cap_dat.permitted, cap_dat.inheritable);
 
 	if (capset(&cap_hdr, &cap_dat) < 0) {
-		if (ctx_p->flags[CAP_PRESERVE] != CAP_PRESERVE_TRY)
-			error("Cannot set capabilities with capset().");
+		error_or_debug((ctx_p->flags[CAP_PRESERVE] != CAP_PRESERVE_TRY) ? -1 : 3, "Cannot set capabilities with capset().");
 		return errno;
 	}
 
@@ -580,20 +670,17 @@ int pa_unsetup(struct pa_options *opts) {
 }
 
 # ifdef HL_LOCKS
-volatile static int            hl_count_wait  [HLLOCK_MAX] = {0};
-volatile static int            hl_count_signal[HLLOCK_MAX] = {0};
-volatile static hllock_state_t hl_state[HLLOCK_MAX]        = {0};
 
 static inline int hl_isanswered(int lockid) {
-	return hl_count_wait[lockid] == hl_count_signal[lockid]+1;
+	return cmd_p->hl_lock.count_wait[lockid] == cmd_p->hl_lock.count_signal[lockid]+1;
 }
 
 static inline int hl_isready(int lockid) {
-	return hl_count_wait[lockid] == hl_count_signal[lockid];
+	return cmd_p->hl_lock.count_wait[lockid] == cmd_p->hl_lock.count_signal[lockid];
 }
 
 static inline void hl_setstate(int lockid, hllock_state_t stateid) {
-	hl_state[lockid] = stateid;
+	cmd_p->hl_lock.state[lockid] = stateid;
 }
 
 int hl_setstate_ifstate(int lockid, hllock_state_t stateid_new, hllock_state_t stateid_old_mask) {
@@ -608,12 +695,12 @@ int hl_setstate_ifstate(int lockid, hllock_state_t stateid_new, hllock_state_t s
 		return 0;
 	}
 
-	if (!(hl_state[lockid]&stateid_old_mask)) {
+	if (!(cmd_p->hl_lock.state[lockid]&stateid_old_mask)) {
 		g_atomic_int_dec_and_test(&local_lock);
 		return 0;
 	}
 
-	hl_state[lockid] = stateid_new;
+	cmd_p->hl_lock.state[lockid] = stateid_new;
 
 	g_atomic_int_dec_and_test(&local_lock);
 	return 1;
@@ -629,30 +716,30 @@ static inline int hl_wait(
 
 	debug(15, "");
 
-	while (hl_state[lockid] == HLLS_GOTSIGNAL);
+	while (cmd_p->hl_lock.state[lockid] == HLLS_GOTSIGNAL);
 	while (!hl_isready(lockid));
 	hl_setstate(lockid, HLLS_READY);
-	hl_count_wait[lockid]++;
+	cmd_p->hl_lock.count_wait[lockid]++;
 
 	while (try++ < hl_lock_tries)
-		if (hl_state[lockid] == HLLS_SIGNAL) {
+		if (cmd_p->hl_lock.state[lockid] == HLLS_SIGNAL) {
 			hl_setstate(lockid, HLLS_GOTSIGNAL);
 			debug(15, "got signal");
 			return 1;
 		}
 
 	while (!hl_setstate_ifstate(lockid, HLLS_FALLBACK, HLLS_READY|HLLS_SIGNAL));
-	debug(14, "fallback: hl_count_wait[%u] == %u; hl_count_signal[%u] = %u", lockid, hl_count_wait[lockid], lockid, hl_count_signal[lockid]);
+	debug(14, "fallback: cmd_p->hl_lock.count_wait[%u] == %u; cmd_p->hl_lock.count_signal[%u] = %u", lockid, cmd_p->hl_lock.count_wait[lockid], lockid, cmd_p->hl_lock.count_signal[lockid]);
 	return 0;
 }
 
 static inline int hl_signal(int lockid) {
 	debug(15, "%u", lockid);
-	hl_count_signal[lockid]++;
+	cmd_p->hl_lock.count_signal[lockid]++;
 
 	if (hl_setstate_ifstate(lockid, HLLS_SIGNAL, HLLS_READY)) {
-		while (hl_state[lockid] != HLLS_GOTSIGNAL)
-			if (hl_state[lockid] == HLLS_FALLBACK) {
+		while (cmd_p->hl_lock.state[lockid] != HLLS_GOTSIGNAL)
+			if (cmd_p->hl_lock.state[lockid] == HLLS_FALLBACK) {
 				debug(15, "fallback");
 				return 0;
 			}
@@ -671,124 +758,198 @@ void hl_shutdown(int lockid) {
 #  ifdef PARANOID
 	critical_on (HLLOCK_MAX != 1);	// TODO: do this on compile time (not on running time)
 #   ifdef HL_LOCK_TRIES_AUTO
-	memset((void *)hl_lock_tries, 0, sizeof(hl_lock_tries));
+	memset((void *)cmd_p->hl_lock.tries, 0, sizeof(cmd_p->hl_lock.tries));
 #   else
-	hl_lock_tries = 0;
+	cmd_p->hl_lock.tries = 0;
 #   endif
 #  endif
-	hl_state[lockid]	 = HLLS_FALLBACK;
-	hl_lock_enabled 	 = 0;
+	cmd_p->hl_lock.state[lockid]	 = HLLS_FALLBACK;
+	cmd_p->hl_lock.enabled 	 = 0;
 
 	return;
 }
 
 # endif
 
-volatile static int privileged_handler_running = 1;
-void *privileged_handler(void *_ctx_p)
+static inline int parent_isalive() {
+	int rc;
+	debug(12, "parent_pid == %u", parent_pid);
+
+	if ((rc=kill(parent_pid, 0))) {
+		debug(1, "kill(%u, 0) => %i", parent_pid, rc);
+		return 0;
+	}
+
+	return 1;
+}
+
+static int helper_isalive_cache;
+static inline int helper_isalive() {
+	int rc;
+	debug(12, "helper_pid == %u", helper_pid);
+
+	if ((rc=waitpid(helper_pid, NULL, WNOHANG))>=0)
+		return helper_isalive_cache=1;
+
+	debug(1, "waitpid(%u, NULL, WNOHANG) => %i", helper_pid, rc);
+
+	return helper_isalive_cache=0;
+}
+
+int privileged_check() {
+	critical_on(!helper_isalive());
+	return 0;
+}
+
+int privileged_handler(ctx_t *ctx_p)
 {
 # ifdef READWRITE_SIGNALLING
 	char buf[1] = {0};
 # endif
 	int setup = 0;
-	ctx_t *ctx_p = _ctx_p;
 	uid_t exec_uid = 65535;
 	gid_t exec_gid = 65535;
 	
 	struct pa_options *opts;
 	int use_args_check = 0;
+	int helper_isrunning = 1;
 
-	opts = calloc_align(1, sizeof(*opts));
+	opts  = calloc_align(1, sizeof(*opts));
 
+	sigset_t sigset;
+	sigemptyset(&sigset);
+	sigaddset(&sigset, SIGALRM);
+	sigaddset(&sigset, SIGHUP);
+	sigaddset(&sigset, SIGQUIT);
+	sigaddset(&sigset, SIGTERM);
+	sigaddset(&sigset, SIGINT);
+	sigaddset(&sigset, SIGCHLD);
+	critical_on(pthread_sigmask(SIG_UNBLOCK, &sigset, NULL));
+
+# ifndef __linux__
+	critical_on(!parent_isalive());
+# endif
 	cap_drop(ctx_p, ctx_p->caps);
 
 	debug(2, "Syncing with the runner");
-	pthread_mutex_lock(&pthread_mutex_privileged);
+	pthread_mutex_lock(pthread_mutex_privileged_p);
 
 	// Waiting for runner to get ready for signal
-	pthread_mutex_lock(&pthread_mutex_runner);
-	pthread_mutex_unlock(&pthread_mutex_runner);
+	pthread_mutex_lock(pthread_mutex_runner_p);
+	pthread_mutex_unlock(pthread_mutex_runner_p);
 
 	// Sending the signal that we're ready
-	pthread_cond_signal(&pthread_cond_runner);
+	pthread_cond_signal(pthread_cond_runner_p);
 
 	// The loop
 	debug(2, "Running the loop");
-	while (privileged_handler_running) {
+	while (helper_isrunning) {
+		errno = 0;
+
 		// Waiting for command
 		debug(10, "Waiting for command");
 # ifdef HL_LOCKS
-		if (!hl_lock_enabled || !hl_wait(
+		if (!cmd_p->hl_lock.enabled || !hl_wait(
 			HLLOCK_HANDLER
 #  ifdef HL_LOCK_TRIES_AUTO
-			, cmd.hl_lock_tries
+			, cmd_p->hl_lock_tries
 #  endif
 		)) {
+			critical_on(!parent_isalive());
 # endif
 # ifdef READWRITE_SIGNALLING
 			read_inf(priv_read_fd, buf, 1);
 # else
-			pthread_cond_wait(&pthread_cond_privileged, &pthread_mutex_privileged);
+			pthread_cond_wait(pthread_cond_privileged_p, pthread_mutex_privileged_p);
 # endif
 # ifdef HL_LOCKS
-			if (hl_lock_enabled)
+			if (cmd_p->hl_lock.enabled)
 				hl_setstate(HLLOCK_HANDLER, HLLS_WORKING);
 		}
 # endif
 
-		debug(10, "Got command %u", cmd.action);
+		debug(10, "Got command %u", cmd_p->action);
 
-		if (!setup && cmd.action != PA_SETUP)
+		if (!setup && cmd_p->action != PA_SETUP)
 			critical("A try to use commands before PA_SETUP");
 
-		switch (cmd.action) {
+		switch (cmd_p->action) {
 			case PA_SETUP: {
+				debug(20, "PA_SETUP");
 				if (setup)
 					critical("Double privileged_handler setuping. It can be if somebody is trying to hack the clsync.");
 
-				pa_setup(opts, cmd.arg, &exec_uid, &exec_gid);
+				critical_on(pa_setup(opts, cmd_p->arg.ctx_p, &exec_uid, &exec_gid));
 				mprotect(opts, sizeof(*opts), PROT_READ);
-				use_args_check = ((ctx_t *)cmd.arg)->flags[CHECK_EXECVP_ARGS];
+				use_args_check = cmd_p->arg.ctx_p->flags[CHECK_EXECVP_ARGS];
 				setup++;
+				critical_on(errno);
 				break;
 			}
 			case PA_DIE:
-				privileged_handler_running = 0;
+				debug(20, "PA_DIE");
+				helper_isrunning = 0;
 				break;
 			case PA_FTS_OPEN: {
-				struct pa_fts_open_arg *arg_p = cmd.arg;
+				volatile struct pa_fts_open_arg *arg_p = &cmd_p->arg.fts_open;
+				debug(20, "PA_FTS_OPEN");
 				if (arg_p->compar != NULL)
-					critical("\"arg_p->compar != NULL\" is forbidden because may be used to run an arbitrary code in the privileged thread.");
+					critical("\"arg_p->compar != NULL\" (arg_p->compar == %p) is forbidden because may be used to run an arbitrary code in the privileged thread.", arg_p->compar);
 
-				cmd.ret = fts_open(arg_p->path_argv, arg_p->options, NULL);
+				cmd_p->ret = fts_open((void *)arg_p->path_argv, arg_p->options, NULL);
+				debug(21, "/PA_FTS_OPEN => %p", cmd_p->ret);
 				break;
 			}
-			case PA_FTS_READ:
-				cmd.ret = fts_read(cmd.arg);
+			case PA_FTS_READ: {
+				debug(20, "PA_FTS_READ(%p)", cmd_p->arg.void_v);
+				FTSENT *ret = fts_read(cmd_p->arg.void_v);
+				if (ret == NULL) {
+					cmd_p->ret = NULL;
+					debug(10, "cmd_p->ret == NULL");
+					break;
+				}
+
+				{
+					struct pa_fts_read_ret *ret_buf = (void *)&cmd_p->ret_buf.fts_read;
+					memcpy(&ret_buf->ftsent, ret, sizeof(ret_buf->ftsent));
+					cmd_p->ret = &ret_buf->ftsent;
+					debug(25, "fts_path == <%s>", ret_buf->fts_path);
+					strncpy(ret_buf->fts_accpath, ret->fts_accpath, sizeof(ret_buf->fts_accpath));
+					strncpy(ret_buf->fts_path,    ret->fts_path,    sizeof(ret_buf->fts_path));
+					ret_buf->ftsent.fts_accpath = ret_buf->fts_accpath;
+					ret_buf->ftsent.fts_path    = ret_buf->fts_path;
+				}
 				break;
+			}
 			case PA_FTS_CLOSE:
-				cmd.ret = (void *)(long)fts_close(cmd.arg);
+				debug(20, "PA_FTS_CLOSE");
+				cmd_p->ret = (void *)(long)fts_close(cmd_p->arg.void_v);
 				break;
 			case PA_INOTIFY_INIT:
-				cmd.ret = (void *)(long)inotify_init();
+				debug(20, "PA_INOTIFY_INIT");
+				cmd_p->ret = (void *)(long)inotify_init();
 				break;
 # ifndef INOTIFY_OLD
 			case PA_INOTIFY_INIT1:
-				cmd.ret = (void *)(long)inotify_init1((long)cmd.arg);
+				debug(20, "PA_INOTIFY_INIT1");
+				cmd_p->ret = (void *)(long)inotify_init1((long)cmd_p->arg.ctx_p);
 				break;
 # endif
 			case PA_INOTIFY_ADD_WATCH: {
-				struct pa_inotify_add_watch_arg *arg_p = cmd.arg;
-				cmd.ret = (void *)(long)inotify_add_watch(arg_p->fd, arg_p->pathname, arg_p->mask);
+				struct pa_inotify_add_watch_arg *arg_p = (void *)&cmd_p->arg.inotify_add_watch;
+				debug(20, "PA_INOTIFY_ADD_WATCH(%u, <%s>, 0x%o)", arg_p->fd, arg_p->pathname, arg_p->mask);
+				cmd_p->ret = (void *)(long)inotify_add_watch(arg_p->fd, arg_p->pathname, arg_p->mask);
 				break;
 			}
 			case PA_INOTIFY_RM_WATCH: {
-				struct pa_inotify_rm_watch_arg *arg_p = cmd.arg;
-				cmd.ret = (void *)(long)inotify_rm_watch(arg_p->fd, arg_p->wd);
+				debug(20, "PA_INOTIFY_RM_WATCH");
+				struct pa_inotify_rm_watch_arg *arg_p = (void *)&cmd_p->arg.inotify_rm_watch;
+				cmd_p->ret = (void *)(long)inotify_rm_watch(arg_p->fd, arg_p->wd);
 				break;
 			}
 			case PA_FORK_EXECVP: {
-				struct pa_fork_execvp_arg *arg_p = cmd.arg;
+				debug(20, "PA_FORK_EXECVP");
+				struct pa_fork_execvp_arg *arg_p = (void *)&cmd_p->arg.fork_execvp;
 				if (use_args_check)
 					privileged_execvp_check_arguments(opts, arg_p->file, arg_p->argv);
 				pid_t pid = fork();
@@ -799,19 +960,21 @@ void *privileged_handler(void *_ctx_p)
 					case  0:
 						debug(4, "setgid(%u) == %i", exec_gid, setgid(exec_gid));
 						debug(4, "setuid(%u) == %i", exec_uid, setuid(exec_uid));
-						debug(3, "execvp(\"%s\", arg_p->argv)", arg_p->file);
+						debug(3, "execvp(\"%s\", cmd_p->arg.argv)", arg_p->file);
 						exit(execvp(arg_p->file, arg_p->argv));
 				}
-				cmd.ret = (void *)(long)pid;
+				cmd_p->ret = (void *)(long)pid;
 				break;
 			}
 			case PA_KILL_CHILD: {
-				struct pa_kill_child_arg *arg_p = cmd.arg;
-				cmd.ret = (void *)(long)__privileged_kill_child_itself(arg_p->pid, arg_p->signal);
+				debug(20, "PA_KILL_CHILD");
+				struct pa_kill_child_arg *arg_p = (void *)&cmd_p->arg.kill_child;
+				cmd_p->ret = (void *)(long)__privileged_kill_child_itself(arg_p->pid, arg_p->signal);
 				break;
 			}
 # ifdef CGROUP_SUPPORT
 			case PA_CLSYNC_CGROUP_DEINIT: {
+				debug(20, "PA_CLSYNC_CGROUP_DEINIT");
 				/*
 				 * That is strange, but setuid() doesn't work
 				 * without fork() in case of enabled seccomp
@@ -828,7 +991,7 @@ void *privileged_handler(void *_ctx_p)
 					case  0:
 						debug(4, "setgid(0) == %i", setgid(0));
 						debug(4, "setuid(0) == %i", setuid(0));
-						exit(clsync_cgroup_deinit(cmd.arg));
+						exit(clsync_cgroup_deinit(cmd_p->arg.void_v));
 				}
 
 				if (waitpid(pid, &status, 0) != pid) {
@@ -838,8 +1001,8 @@ void *privileged_handler(void *_ctx_p)
 							break;
 						default:
 							error("Cannot waitid().");
-							cmd._errno = errno;
-							cmd.ret    = (void *)(long)errno;
+							cmd_p->_errno = errno;
+							cmd_p->ret    = (void *)(long)errno;
 					}
 				}
 #ifdef VERYPARANOID
@@ -849,8 +1012,8 @@ void *privileged_handler(void *_ctx_p)
 				int exitcode = WEXITSTATUS(status);
 				debug(3, "execution completed with exitcode %i", exitcode);
 
-				cmd._errno = exitcode;
-				cmd.ret    = (void *)(long)exitcode;
+				cmd_p->_errno = exitcode;
+				cmd_p->ret    = (void *)(long)exitcode;
 
 				break;
 			}
@@ -859,17 +1022,20 @@ void *privileged_handler(void *_ctx_p)
 				critical("Unknown command type \"%u\". It's a buffer overflow (which means a security problem) or just an internal error.");
 		}
 
-		cmd._errno = errno;
-		debug(10, "Result: %p, errno: %u. Sending the signal to non-privileged thread.", cmd.ret, cmd._errno);
+		cmd_p->_errno = errno;
+		debug(10, "Result: %p, errno: %u. Sending the signal to non-privileged thread/process.", cmd_p->ret, cmd_p->_errno);
 # ifdef HL_LOCKS
-		if (!hl_lock_enabled) {
+		if (!cmd_p->hl_lock.enabled) {
+# endif
+# ifndef __linux__
+			critical_on(!parent_isalive());
 # endif
 # ifdef READWRITE_SIGNALLING
 			write_inf(nonp_write_fd, buf, 1);
 # else
-			pthread_mutex_lock(&pthread_mutex_action_signal);
-			pthread_mutex_unlock(&pthread_mutex_action_signal);
-			pthread_cond_signal(&pthread_cond_action);
+			pthread_mutex_lock(pthread_mutex_action_signal_p);
+			pthread_mutex_unlock(pthread_mutex_action_signal_p);
+			pthread_cond_signal(pthread_cond_action_p);
 # endif
 # ifdef HL_LOCKS
 		}
@@ -880,7 +1046,7 @@ void *privileged_handler(void *_ctx_p)
 # ifdef HL_LOCKS
 	hl_shutdown(HLLOCK_HANDLER);
 # endif
-	pthread_mutex_unlock(&pthread_mutex_privileged);
+	pthread_mutex_unlock(pthread_mutex_privileged_p);
 	debug(2, "Finished");
 	return 0;
 }
@@ -890,7 +1056,6 @@ static inline int privileged_action(
 		int callid,
 # endif
 		enum privileged_action action,
-		void *arg,
 		void **ret_p
 	)
 {
@@ -905,43 +1070,43 @@ static inline int privileged_action(
 	int isadjusting;
 # endif
 # ifdef HL_LOCKS
-	debug(10, "(%u, %p, %p): %i", action, arg, ret_p, hl_lock_enabled);
+	debug(10, "(%u, %p): %i", action, ret_p, cmd_p->hl_lock.enabled);
 # else
-	debug(10, "(%u, %p, %p)",     action, arg, ret_p);
+	debug(10, "(%u, %p)",     action, ret_p);
 # endif
 
-	pthread_mutex_lock(&pthread_mutex_action_entrance);
-# if !READWRITE_SIGNALLING
-	debug(10, "Waiting the privileged thread to get prepared for signal");
+	pthread_mutex_lock(pthread_mutex_action_entrance_p);
+# ifndef READWRITE_SIGNALLING
+	debug(10, "Waiting the privileged thread/process to get prepared for signal");
 #  ifdef HL_LOCKS
-	if (hl_lock_enabled) {
+	if (cmd_p->hl_lock.enabled) {
 		while (!hl_isanswered(HLLOCK_HANDLER))
-			if (!privileged_handler_running) {
-				debug(1, "The privileged thread is dead (#0). Ignoring the command.");
+			if (!helper_isalive_cache) {
+				debug(1, "The privileged thread/process is dead (#0). Ignoring the command.");
 				rc = ENOENT;
 				goto privileged_action_end;
 			}
 	} else {
 #  endif
-		pthread_mutex_lock(&pthread_mutex_privileged);
-		pthread_mutex_unlock(&pthread_mutex_privileged);
+		critical_on(!helper_isalive_cache);
+		pthread_mutex_lock(pthread_mutex_privileged_p);
+		pthread_mutex_unlock(pthread_mutex_privileged_p);
 #  ifdef HL_LOCKS
 	}
 #  endif
 # endif
-	if (!privileged_handler_running) {
-		debug(1, "The privileged thread is dead (#1). Ignoring the command.");
+	if (!helper_isalive_cache) {
+		debug(1, "The privileged thread/process is dead (#1). Ignoring the command.");
 		rc = ENOENT;
 		goto privileged_action_end;
 	}
 
-	debug(10, "Sending information to the privileged thread");
-	cmd.action        = action;
-	cmd.arg           = arg;
+	cmd_p->action = action;
+	debug(10, "Sending information (action == %i) to the privileged thread/process", action);
 # ifdef HL_LOCK_TRIES_AUTO
-	cmd.hl_lock_tries = hl_lock_tries[callid];
+	cmd_p->hl_lock_tries = hl_lock_tries[callid];
 
-	if ((isadjusting = hl_lock_enabled)) {
+	if ((isadjusting = cmd_p->hl_lock.enabled)) {
 		isadjusting = hl_lock_tries[callid];
 		if (isadjusting) {
 			isadjusting = ((double)fabs(hl_lock_tries_step[callid]-1) > (double)HL_LOCK_AUTO_K_FINISH);
@@ -956,21 +1121,22 @@ static inline int privileged_action(
 
 # endif
 # ifdef HL_LOCKS
-	if (!hl_lock_enabled || !hl_signal(HLLOCK_HANDLER)) {
+	if (!cmd_p->hl_lock.enabled || !hl_signal(HLLOCK_HANDLER)) {
 # endif
+		critical_on(!helper_isalive_cache);
 # ifdef READWRITE_SIGNALLING
 		write_inf(priv_write_fd, buf, 1);
 # else
 #  ifdef HL_LOCKS
-		if (hl_lock_enabled) {
-			debug(10, "Waiting the privileged thread to get prepared for signal (by fallback)");
-			pthread_mutex_lock(&pthread_mutex_privileged);
-			pthread_mutex_unlock(&pthread_mutex_privileged);
+		if (cmd_p->hl_lock.enabled) {
+			debug(10, "Waiting the privileged thread/process to get prepared for signal (by fallback)");
+			pthread_mutex_lock(pthread_mutex_privileged_p);
+			pthread_mutex_unlock(pthread_mutex_privileged_p);
 		} else
 #  endif
-		pthread_mutex_lock(&pthread_mutex_action_signal);
+		pthread_mutex_lock(pthread_mutex_action_signal_p);
 		debug(10, "pthread_cond_signal(&pthread_cond_privileged)");
-		pthread_cond_signal(&pthread_cond_privileged);
+		pthread_cond_signal(pthread_cond_privileged_p);
 # endif
 # ifdef HL_LOCKS
 	}
@@ -981,10 +1147,10 @@ static inline int privileged_action(
 	debug(10, "Waiting for the answer");
 
 # ifdef HL_LOCKS
-	if (hl_lock_enabled) {
+	if (cmd_p->hl_lock.enabled) {
 		while (!hl_isanswered(HLLOCK_HANDLER))
-			if (!privileged_handler_running) {
-				debug(1, "The privileged thread is dead (#2). Ignoring the command.");
+			if (!helper_isalive_cache) {
+				debug(1, "The privileged thread/process is dead (#2). Ignoring the command.");
 				rc = ENOENT;
 				goto privileged_action_end;
 			}
@@ -1015,34 +1181,35 @@ static inline int privileged_action(
 #  endif
 	} else {
 # endif
+		critical_on(!helper_isalive_cache);
 # ifdef READWRITE_SIGNALLING
 		read_inf(nonp_read_fd, buf, 1);
 # else
-		pthread_cond_wait(&pthread_cond_action, &pthread_mutex_action_signal);
+		pthread_cond_wait(pthread_cond_action_p, pthread_mutex_action_signal_p);
 # endif
 # ifdef HL_LOCKS
 	}
 # endif
 
 	if (ret_p != NULL)
-		*ret_p = cmd.ret;
-	errno = cmd._errno;
+		*ret_p = (void *)cmd_p->ret;
+	errno = cmd_p->_errno;
 
 privileged_action_end:
 	debug(10, "Unlocking pthread_mutex_action_*");
 # ifdef HL_LOCKS
 #  ifndef READWRITE_SIGNALLING
-	if (!hl_lock_enabled)
+	if (!cmd_p->hl_lock.enabled)
 #  endif
 # endif
-		pthread_mutex_unlock(&pthread_mutex_action_signal);
-	pthread_mutex_unlock(&pthread_mutex_action_entrance);
+		pthread_mutex_unlock(pthread_mutex_action_signal_p);
+	pthread_mutex_unlock(pthread_mutex_action_entrance_p);
 
 	return rc;
 }
 
 FTS *__privileged_fts_open(
-		char * const *path_argv,
+		char *const *path_argv,
 		int options,
 		int (*compar)(const FTSENT **, const FTSENT **)
 # ifdef HL_LOCK_TRIES_AUTO
@@ -1050,19 +1217,26 @@ FTS *__privileged_fts_open(
 # endif
 	)
 {
-	struct pa_fts_open_arg arg;
 	void *ret = NULL;
+	int i;
 
-	arg.path_argv	= path_argv;
-	arg.options	= options;
-	arg.compar	= compar;
+	i = 0;
+	while (path_argv[i] != NULL) {
+		cmd_p->arg.fts_open.path_argv[i] = (void *)cmd_p->arg.fts_open._path_argv[i];
+		debug(25, "path_argv[%i] == <%s> (%p) -> %p", i, path_argv[i], path_argv[i], cmd_p->arg.fts_open.path_argv[i]);
+		strncpy(cmd_p->arg.fts_open.path_argv[i], path_argv[i], sizeof(cmd_p->arg.fts_open._path_argv[i]));
+		i++;
+		critical_on(i >= MAXARGUMENTS);
+	}
+	cmd_p->arg.fts_open.path_argv[i]	= NULL;
+	cmd_p->arg.fts_open.options		= options;
+	cmd_p->arg.fts_open.compar		= compar;
 
 	privileged_action(
 # ifdef HL_LOCK_TRIES_AUTO
 			callid,
 # endif
 			PA_FTS_OPEN,
-			&arg,
 			&ret
 		);
 
@@ -1077,12 +1251,12 @@ FTSENT *__privileged_fts_read(
 	)
 {
 	void *ret = NULL;
+	cmd_p->arg.void_v = ftsp;
 	privileged_action(
 # ifdef HL_LOCK_TRIES_AUTO
 			callid,
 # endif
 			PA_FTS_READ,
-			ftsp,
 			&ret
 		);
 	return ret;
@@ -1096,12 +1270,12 @@ int __privileged_fts_close(
 	)
 {
 	void *ret = (void *)(long)-1;
+	cmd_p->arg.void_v = ftsp;
 	privileged_action(
 # ifdef HL_LOCK_TRIES_AUTO
 			callid,
 # endif
 			PA_FTS_CLOSE,
-			ftsp,
 			&ret
 		);
 	return (long)ret;
@@ -1114,7 +1288,6 @@ int __privileged_inotify_init() {
 			PC_DEFAULT,
 # endif
 			PA_INOTIFY_INIT,
-			NULL,
 			&ret
 		);
 	return (long)ret;
@@ -1122,12 +1295,12 @@ int __privileged_inotify_init() {
 
 int __privileged_inotify_init1(int flags) {
 	void *ret = (void *)(long)-1;
+	cmd_p->arg.uint32_v = flags;
 	privileged_action(
 # ifdef HL_LOCK_TRIES_AUTO
 			PC_DEFAULT,
 # endif
 			PA_INOTIFY_INIT1,
-			(void *)(long)flags,
 			&ret
 		);
 	return (long)ret;
@@ -1142,19 +1315,18 @@ int __privileged_inotify_add_watch(
 # endif
 	)
 {
-	struct pa_inotify_add_watch_arg arg;
+	debug(25, "(%i, <%s>, o%o, ?)", fd, pathname, mask);
 	void *ret = (void *)(long)-1;
 
-	arg.fd		= fd;
-	arg.pathname	= pathname;
-	arg.mask	= mask;
+	strncpy((void *)cmd_p->arg.inotify_add_watch.pathname, pathname, sizeof(cmd_p->arg.inotify_add_watch.pathname));
+	cmd_p->arg.inotify_add_watch.fd		= fd;
+	cmd_p->arg.inotify_add_watch.mask	= mask;
 
 	privileged_action(
 # ifdef HL_LOCK_TRIES_AUTO
 			callid,
 # endif
 			PA_INOTIFY_ADD_WATCH,
-			&arg,
 			&ret
 		);
 
@@ -1166,18 +1338,16 @@ int __privileged_inotify_rm_watch(
 		int wd
 	)
 {
-	struct pa_inotify_rm_watch_arg arg;
 	void *ret = (void *)(long)-1;
 
-	arg.fd	= fd;
-	arg.wd	= wd;
+	cmd_p->arg.inotify_rm_watch.fd	= fd;
+	cmd_p->arg.inotify_rm_watch.wd	= wd;
 
 	privileged_action(
 # ifdef HL_LOCK_TRIES_AUTO
 			PC_DEFAULT,
 # endif
 			PA_INOTIFY_RM_WATCH,
-			&arg,
 			&ret
 		);
 
@@ -1189,13 +1359,13 @@ int __privileged_clsync_cgroup_deinit(ctx_t *ctx_p)
 {
 	void *ret = (void *)(long)-1;
 
+	cmd_p->arg.ctx_p = ctx_p;
 
 	privileged_action(
 #  ifdef HL_LOCK_TRIES_AUTO
 			PC_DEFAULT,
 #  endif
 			PA_CLSYNC_CGROUP_DEINIT,
-			ctx_p,
 			&ret
 		);
 
@@ -1208,18 +1378,25 @@ int __privileged_fork_setuid_execvp(
 		char *const argv[]
 	)
 {
-	struct pa_fork_execvp_arg arg;
+	int i;
 	void *ret = (void *)(long)-1;
 
-	arg.file = file;
-	arg.argv = argv;
+	strncpy((void *)cmd_p->arg.fork_execvp.file, file, sizeof(cmd_p->arg.fork_execvp.file));
+
+	i=0;
+	while (argv[i] != NULL) {
+		cmd_p->arg.fork_execvp.argv[i] = (void *)cmd_p->arg.fork_execvp._argv[i];
+		strncpy(cmd_p->arg.fork_execvp.argv[i], argv[i], sizeof(cmd_p->arg.fork_execvp._argv[i]));
+		i++;
+		critical_on(i >= MAXARGUMENTS);
+	}
+	cmd_p->arg.fork_execvp.argv[i] = NULL;
 
 	privileged_action(
 # ifdef HL_LOCK_TRIES_AUTO
 			PC_DEFAULT,
 # endif
 			PA_FORK_EXECVP,
-			&arg,
 			&ret
 		);
 
@@ -1228,18 +1405,16 @@ int __privileged_fork_setuid_execvp(
 
 int __privileged_kill_child_wrapper(pid_t pid, int signal)
 {
-	struct pa_kill_child_arg arg;
 	void *ret = (void *)(long)-1;
 
-	arg.pid    = pid;
-	arg.signal = signal;
+	cmd_p->arg.kill_child.pid    = pid;
+	cmd_p->arg.kill_child.signal = signal;
 
 	privileged_action(
 # ifdef HL_LOCK_TRIES_AUTO
 			PC_DEFAULT,
 # endif
 			PA_KILL_CHILD,
-			&arg,
 			&ret);
 
 	return (long)ret;
@@ -1278,7 +1453,7 @@ int privileged_init(ctx_t *ctx_p)
 		hl_shutdown(HLLOCK_HANDLER);
 # endif
 
-	if (!ctx_p->flags[THREADSPLITTING]) {
+	if (!ctx_p->flags[PROCESSSPLITTING]) {
 #endif
 
 		_privileged_fork_execvp		= __privileged_fork_execvp;
@@ -1321,13 +1496,13 @@ int privileged_init(ctx_t *ctx_p)
 	_privileged_clsync_cgroup_deinit= __privileged_clsync_cgroup_deinit;
 # endif
 
-	SAFE ( pthread_mutex_init(&pthread_mutex_privileged,	NULL),	return errno;);
-	SAFE ( pthread_mutex_init(&pthread_mutex_action_entrance,NULL),	return errno;);
-	SAFE ( pthread_mutex_init(&pthread_mutex_action_signal,	NULL),	return errno;);
-	SAFE ( pthread_mutex_init(&pthread_mutex_runner,	NULL),	return errno;);
-	SAFE ( pthread_cond_init (&pthread_cond_privileged,	NULL),	return errno;);
-	SAFE ( pthread_cond_init (&pthread_cond_action,		NULL),	return errno;);
-	SAFE ( pthread_cond_init (&pthread_cond_runner,		NULL),	return errno;);
+	SAFE ( pthread_mutex_init_shared(&pthread_mutex_privileged_p),		return errno;);
+	SAFE ( pthread_mutex_init_shared(&pthread_mutex_action_entrance_p),	return errno;);
+	SAFE ( pthread_mutex_init_shared(&pthread_mutex_action_signal_p),	return errno;);
+	SAFE ( pthread_mutex_init_shared(&pthread_mutex_runner_p),		return errno;);
+	SAFE ( pthread_cond_init_shared (&pthread_cond_privileged_p),		return errno;);
+	SAFE ( pthread_cond_init_shared (&pthread_cond_action_p),		return errno;);
+	SAFE ( pthread_cond_init_shared (&pthread_cond_runner_p),		return errno;);
 
 # ifdef READWRITE_SIGNALLING
 	SAFE ( pipe2(pipefds, O_CLOEXEC), 				return errno;);
@@ -1339,13 +1514,19 @@ int privileged_init(ctx_t *ctx_p)
 	nonp_write_fd = pipefds[1];
 # endif
 
-	SAFE ( pthread_mutex_lock(&pthread_mutex_runner),		return errno;);
+	SAFE ( pthread_mutex_lock(pthread_mutex_runner_p),		return errno;);
 
-	SAFE ( pthread_create(&pthread_thread, NULL, (void *(*)(void *))privileged_handler, ctx_p), return errno);
+	unshare(CLONE_NEWIPC);
 
-	if (ctx_p->flags[FORGET_PRIVTHREAD_INFO])
-		pthread_thread = 0;
+	cmd_p = shm_malloc(sizeof(*cmd_p));
 
+	// Running the privileged helper
+	SAFE ( (helper_pid = myfork()) == -1,	return errno);
+	if (!helper_pid)
+		exit(privileged_handler(ctx_p));
+	critical_on(!helper_isalive());
+
+	// The rest routines
 	if (ctx_p->flags[DETACH_NETWORK] == DN_NONPRIVILEGED) {
 		SAFE ( cap_enable(CAP_TO_MASK(CAP_SYS_ADMIN)),	return errno; );
 		SAFE ( unshare(CLONE_NEWNET),			return errno; );
@@ -1353,21 +1534,21 @@ int privileged_init(ctx_t *ctx_p)
 	SAFE ( cap_drop(ctx_p, 0),				return errno; );
 
 	debug(4, "Waiting for the privileged thread to get prepared");
-	pthread_cond_wait(&pthread_cond_runner, &pthread_mutex_runner);
-	pthread_mutex_unlock(&pthread_mutex_runner);
+	pthread_cond_wait(pthread_cond_runner_p, pthread_mutex_runner_p);
+	pthread_mutex_unlock(pthread_mutex_runner_p);
 
 	debug(4, "Sending the settings (exec_uid == %u; exec_gid == %u)", ctx_p->synchandler_uid, ctx_p->synchandler_gid);
+	cmd_p->arg.ctx_p = ctx_p;
 	privileged_action(
 # ifdef HL_LOCK_TRIES_AUTO
 			PC_DEFAULT,
 # endif
 			PA_SETUP,
-			ctx_p,
 			NULL
 		);
 
-	SAFE (pthread_mutex_destroy(&pthread_mutex_runner),	return errno;);
-	SAFE (pthread_cond_destroy(&pthread_cond_runner),	return errno;);
+	SAFE (pthread_mutex_destroy_shared(pthread_mutex_runner_p),	return errno;);
+	SAFE (pthread_cond_destroy_shared(pthread_cond_runner_p),	return errno;);
 
 # ifdef SECCOMP_SUPPORT
 	if (ctx_p->flags[SECCOMP_FILTER])
@@ -1385,7 +1566,7 @@ int privileged_deinit(ctx_t *ctx_p)
 	int ret = 0;
 #ifdef CAPABILITIES_SUPPORT
 
-	if (!ctx_p->flags[THREADSPLITTING])
+	if (!ctx_p->flags[PROCESSSPLITTING])
 		return 0;
 
 	SAFE ( privileged_action(
@@ -1393,7 +1574,6 @@ int privileged_deinit(ctx_t *ctx_p)
 			PC_DEFAULT,
 # endif
 			PA_DIE,
-			NULL,
 			NULL
 		),
 		ret = errno
@@ -1413,20 +1593,22 @@ int privileged_deinit(ctx_t *ctx_p)
 	hl_shutdown(HLLOCK_HANDLER);
 # endif
 
-	if (ctx_p->flags[FORGET_PRIVTHREAD_INFO]) {
-		pthread_mutex_lock(&pthread_mutex_privileged);
-		pthread_mutex_unlock(&pthread_mutex_privileged);
-	} else {
-		SAFE ( pthread_join(pthread_thread, NULL),		ret = errno );
+	{
+		int status;
+		__privileged_kill_child_itself(helper_pid, SIGKILL);
+		waitpid(helper_pid, &status, 0);
 	}
-
-	SAFE ( pthread_mutex_destroy(&pthread_mutex_privileged),	ret = errno );
-	SAFE ( pthread_mutex_destroy(&pthread_mutex_action_entrance),	ret = errno );
-	SAFE ( pthread_mutex_destroy(&pthread_mutex_action_signal),	ret = errno );
-	SAFE ( pthread_cond_destroy(&pthread_cond_privileged),		ret = errno );
-	SAFE ( pthread_cond_destroy(&pthread_cond_action),		ret = errno );
+/*
+	SAFE ( pthread_mutex_destroy_shared(pthread_mutex_privileged_p),	ret = errno );
+	SAFE ( pthread_mutex_destroy_shared(pthread_mutex_action_entrance_p),	ret = errno );
+	SAFE ( pthread_mutex_destroy_shared(pthread_mutex_action_signal_p),	ret = errno );
+	SAFE ( pthread_cond_destroy_shared(pthread_cond_privileged_p),		ret = errno );
+	SAFE ( pthread_cond_destroy_shared(pthread_cond_action_p),		ret = errno );
+*/
+	shm_free((void *)cmd_p);
 #endif
 
+	debug(2, "endof privileged_deinit()");
 	return ret;
 }
 

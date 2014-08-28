@@ -82,6 +82,8 @@ extern int (*_privileged_inotify_rm_watch)	(
 extern int (*_privileged_clsync_cgroup_deinit)	(ctx_t *ctx_p);
 #endif
 
+extern int privileged_check();
+
 # ifdef HL_LOCK_TRIES_AUTO
 #  define privileged_fts_open(a,b,c,d)		_privileged_fts_open(a,b,c,d)
 #  define privileged_fts_read(a,b)		_privileged_fts_read(a,b)
@@ -100,6 +102,8 @@ extern int (*_privileged_clsync_cgroup_deinit)	(ctx_t *ctx_p);
 # define privileged_clsync_cgroup_deinit	_privileged_clsync_cgroup_deinit
 
 #else
+
+# define privileged_check(...)			{}
 
 # define privileged_fts_open(a,b,c,d)		fts_open(a,b,c)
 # define privileged_fts_read(a,b)		fts_read(a)

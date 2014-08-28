@@ -1686,7 +1686,7 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 	int fts_opts = FTS_NOCHDIR|FTS_PHYSICAL|FTS_NOSTAT|(ctx_p->flags[ONEFILESYSTEM]?FTS_XDEV:0);
 
         debug(3, "fts_opts == %p", (void *)(long)fts_opts);
-	tree = privileged_fts_open((char *const *)&rootpaths, fts_opts, NULL, PC_SYNC_MARK_WALK_FTS_OPEN);
+	tree = privileged_fts_open((char *const *)rootpaths, fts_opts, NULL, PC_SYNC_MARK_WALK_FTS_OPEN);
 
 	if (tree == NULL) {
 		error_or_debug((ctx_p->state == STATE_STARTING) ?-1:2, "Cannot privileged_fts_open() on \"%s\".", dirpath);
@@ -1796,9 +1796,9 @@ int sync_notify_init(ctx_t *ctx_p) {
 #ifdef INOTIFY_SUPPORT
 		case NE_INOTIFY: {
 #if INOTIFY_OLD
-			ctx_p->fsmondata = (void *)(long)inotify_init();
+			ctx_p->fsmondata = (void *)(long)privileged_inotify_init();
 #else
-			ctx_p->fsmondata = (void *)(long)inotify_init1(INOTIFY_FLAGS);
+			ctx_p->fsmondata = (void *)(long)privileged_inotify_init1(INOTIFY_FLAGS);
 #endif
 			if ((long)ctx_p->fsmondata == -1) {
 				error("cannot inotify_init(%i).", INOTIFY_FLAGS);
@@ -3462,6 +3462,7 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 				case SIGQUIT:
 				case SIGTERM:
 				case SIGINT:
+				case SIGCHLD:
 					// TODO: remove the exit() from here. Main thread should exit itself
 					exit(*exitcode_p);
 					break;
@@ -3517,6 +3518,9 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 			case SIGHUP:
 				sync_switch_state(pthread_parent, STATE_REHASH);
 				break;
+			case SIGCHLD:
+				privileged_check();
+				break;
 			case SIGUSR_THREAD_GC:
 				sync_switch_state(pthread_parent, STATE_THREAD_GC);
 				break;
@@ -3560,6 +3564,7 @@ int sync_run(ctx_t *ctx_p) {
 		sigaddset(&sigset_sighandler, SIGQUIT);
 		sigaddset(&sigset_sighandler, SIGTERM);
 		sigaddset(&sigset_sighandler, SIGINT);
+		sigaddset(&sigset_sighandler, SIGCHLD);
 		sigaddset(&sigset_sighandler, SIGUSR_THREAD_GC);
 		sigaddset(&sigset_sighandler, SIGUSR_INITSYNC);
 		sigaddset(&sigset_sighandler, SIGUSR_DUMP);

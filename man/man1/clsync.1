@@ -1052,10 +1052,10 @@ Is set to "clsync/%PID%" by default.
 
 .SH SECURITY OPTIONS
 
-.B \-\-secure\-thread\-splitting
+.B \-\-secure\-process\-splitting
 .RS
-Implies "\-\-thread\-splitting \-\-check\-execvp\-arguments \-\-seccomp\-filter
-\-\-forget\-privthread\-info".
+Implies "\-\-process\-splitting \-\-check\-execvp\-arguments \-\-seccomp\-filter
+\-\-forbid\-devices"
 .RE
 
 .B \-u, \-\-uid
@@ -1124,7 +1124,7 @@ and
 .BR prctl (2)
 to preserve "CAP_DAC_READ_SEARCH", "CAP_SETUID" or/and "CAP_SETGID" [see 
 .BR capabilities (7)]
-Linux capability for thread using
+Linux capability for process using
 .BR fts "(3), " inotify "(7) and " execve "(2)."
 This allows to preserve enough FS privileges to watch a file tree and execute
 the
@@ -1216,11 +1216,11 @@ Reset all capabilities
 The default value is "empty".
 .RE
 
-.B \-\-thread\-splitting
+.B \-\-process\-splitting
 .RS
 .B [Linux only, requires capabilities]
 
-Split the main thread to privileged and non-privileged. This's an additional
+Split the process to privileged and non-privileged. This's an additional
 way to secure your system from any bug in
 .B clsync
 while running it with capabilities or root privileges. But
@@ -1240,22 +1240,14 @@ too. Otherwise in case of
 security bug a hacker will be able to use execvp() with any arguments
 with root privileges.
 
-But there's an ability to change a code of the privileged thread from
-non\-privileged. To prevent it use
-.B \-\-seccomp\-filter
-option. It will forbid call of
-.BR mprotect (2)
-syscall, so the non\-privileged will be unable to drop protection from memory
-ages.
-
 Is not set by default.
 .RE
 
 .B \-\-check\-execvp\-arguments
 .RS
-.B [Requires \-\-thread\-splitting]
+.B [Requires \-\-process\-splitting]
 
-Enables execvp() arguments recheck in the privileged thread (in case of their
+Enables execvp() arguments recheck in the privileged process (in case of their
 substitution to any exploit-given arguments).
 
 This option doesn't utilize a lot of CPU resources but forbids run-time
@@ -1288,7 +1280,7 @@ Use
 .B seccomp
 filter to forbid syscalls that shouldn't be used by clsync.
 
-Forbid all syscalls for non-privileged thread, but
+Forbid all syscalls for non-privileged process, but
 .RS
 futex
 inotify_init1
@@ -1315,6 +1307,7 @@ read
 rt_sigprocmask
 rt_sigaction
 nanosleep
+mprotect
 .RE
 
 This option requires
@@ -1326,14 +1319,6 @@ syscall that is required by
 function.
 
 Is not set by default.
-.RE
-
-.B \-\-forget\-privthread\-info
-.RS
-Just sets pthread_t variable for the privileged thread to zero. It complicates
-attack on the privileged thread, but makes call of
-.BR pthread_join (3)
-on a privileged thread end impossible.
 .RE
 
 .B \-\-chroot
@@ -1442,12 +1427,12 @@ Possible values:
 .RS
 .B everywhere
 .RS
-Removes network for all threads.
+Removes network for all processes.
 .RE
 .B non\-privileged
 .RS
-Removes network from non\-privileged threads if option
-.B \-\-thread\-splitting
+Removes network from non\-privileged process if option
+.B \-\-process\-splitting
 is enabled, otherwise doesn't do anything.
 .RE
 .B off
