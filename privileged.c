@@ -230,25 +230,22 @@ enum highlock_lock_state {
 typedef enum highlock_lock_state hllock_state_t;
 
 struct hl_lock {
-#  ifdef HL_LOCK_TRIES_AUTO
-	unsigned long		tries;
-#  endif
 	int			enabled;
-	int			wait[HLLOCK_MAX] = {0};
-	int			signal[HLLOCK_MAX] = {0};
-	hllock_state_t		state[HLLOCK_MAX] = {0};
+	int			count_wait[HLLOCK_MAX];
+	int			count_signal[HLLOCK_MAX];
+	hllock_state_t		state[HLLOCK_MAX];
 #  ifdef HL_LOCK_TRIES_AUTO
 	unsigned long		tries[PC_MAX];
-	unsigned long		count[PC_MAX]		= {[0 ... PC_MAX-1] = 0};
-	unsigned long		delay[PC_MAX]		= {[0 ... PC_MAX-1] = ((unsigned long)~0)>>2};
-	double			tries_step[PC_MAX]	= {[0 ... PC_MAX-1] = HL_LOCK_AUTO_K};
+	unsigned long		count[PC_MAX];
+	unsigned long		delay[PC_MAX];
+	double			tries_step[PC_MAX];
 
 #   define			tries_cur tries[callid]
 #  else
-	unsigned long		tries			= HL_LOCK_TRIES_INITIAL;
+	unsigned long		tries;
 #   define			tries_cur tries
 #  endif
-}
+};
 # endif
 
 struct pa_fts_read_ret {
@@ -268,14 +265,15 @@ struct cmd {
 	volatile void			*ret;
 	volatile int			 _errno;
 # ifdef HL_LOCKS
-	volatile struct hl_lock	 hl_lock;
+	volatile struct hl_lock		 hl_lock;
+	unsigned long			 hl_lock_tries;
 # endif
 };
 volatile struct cmd *cmd_p;
 
 static inline void cmd_init(volatile struct cmd *cmd_p) {
 # ifdef HL_LOCKS
-	memset(cmd_p, 0, sizeof(*cmd_p));
+	memset((void *)cmd_p, 0, sizeof(*cmd_p));
 	cmd_p->hl_lock.enabled = 1;
 #  ifdef HL_LOCK_TRIES_AUTO
 	int i;
@@ -1104,15 +1102,15 @@ static inline int privileged_action(
 	cmd_p->action = action;
 	debug(10, "Sending information (action == %i) to the privileged thread/process", action);
 # ifdef HL_LOCK_TRIES_AUTO
-	cmd_p->hl_lock_tries = hl_lock_tries[callid];
+	cmd_p->hl_lock_tries = cmd_p->hl_lock.tries[callid];
 
 	if ((isadjusting = cmd_p->hl_lock.enabled)) {
-		isadjusting = hl_lock_tries[callid];
+		isadjusting = cmd_p->hl_lock.tries[callid];
 		if (isadjusting) {
-			isadjusting = ((double)fabs(hl_lock_tries_step[callid]-1) > (double)HL_LOCK_AUTO_K_FINISH);
+			isadjusting = ((double)fabs(cmd_p->hl_lock.tries_step[callid]-1) > (double)HL_LOCK_AUTO_K_FINISH);
 			if (isadjusting) {
-				isadjusting = !((++hl_lock_count[callid]) << (sizeof(hl_lock_count[callid])*CHAR_BIT - HL_LOCK_AUTO_INTERVAL));
-				debug(11, "isadjusting == %u; hl_lock_tries_step[%i] == %lf; hl_lock_count[%i] == %lu", isadjusting, callid, hl_lock_tries_step[callid], callid, hl_lock_count[callid]);
+				isadjusting = !((++cmd_p->hl_lock.count[callid]) << (sizeof(cmd_p->hl_lock.count[callid])*CHAR_BIT - HL_LOCK_AUTO_INTERVAL));
+				debug(11, "isadjusting == %u; cmd_p->hl_lock.tries_step[%i] == %lf; cmd_p->hl_lock.count[%i] == %lu", isadjusting, callid, cmd_p->hl_lock.tries_step[callid], callid, cmd_p->hl_lock.count[callid]);
 				if (isadjusting)
 					start_ticks = clock();
 			}
@@ -1158,25 +1156,25 @@ static inline int privileged_action(
 #  ifdef HL_LOCK_TRIES_AUTO
 		if (isadjusting) {
 			unsigned long delay = (long)clock() - (long)start_ticks;
-			long diff  = delay - hl_lock_delay[callid];
+			long diff  = delay - cmd_p->hl_lock.delay[callid];
 
-			debug(13, "diff == %li; hl_lock_delay[%i] == %lu; delay == %lu; delay*HL_LOCK_AUTO_THREADHOLD == %lu", diff, callid, hl_lock_delay[callid], delay, delay*HL_LOCK_AUTO_THREADHOLD)
+			debug(13, "diff == %li; cmd_p->hl_lock.delay[%i] == %lu; delay == %lu; delay*HL_LOCK_AUTO_THREADHOLD == %lu", diff, callid, cmd_p->hl_lock.delay[callid], delay, delay*HL_LOCK_AUTO_THREADHOLD)
 
 			if (diff && ((unsigned long)labs(diff) > (unsigned long)delay*HL_LOCK_AUTO_THREADHOLD)) {
 
 				if (diff > 0)
-					hl_lock_tries_step[callid] = 1/((hl_lock_tries_step[callid]-1)/HL_LOCK_AUTO_DECELERATION+1);
+					cmd_p->hl_lock.tries_step[callid] = 1/((cmd_p->hl_lock.tries_step[callid]-1)/HL_LOCK_AUTO_DECELERATION+1);
 
-				hl_lock_delay[callid]  = delay;
+				cmd_p->hl_lock.delay[callid]  = delay;
 
-				debug(12, "diff == %li; hl_lock_tries_step[%i] == %lf; hl_lock_delay[%i] == %lu", diff, callid, hl_lock_tries_step[callid], callid, hl_lock_delay[callid]);
+				debug(12, "diff == %li; cmd_p->hl_lock.tries_step[%i] == %lf; cmd_p->hl_lock.delay[%i] == %lu", diff, callid, cmd_p->hl_lock.tries_step[callid], callid, cmd_p->hl_lock.delay[callid]);
 			}
-			hl_lock_tries[callid] *= hl_lock_tries_step[callid];
+			cmd_p->hl_lock.tries[callid] *= cmd_p->hl_lock.tries_step[callid];
 
-			if (hl_lock_tries[callid] > HL_LOCK_AUTO_LIMIT_HIGH)
-				hl_lock_tries[callid] = HL_LOCK_AUTO_LIMIT_HIGH;
+			if (cmd_p->hl_lock.tries[callid] > HL_LOCK_AUTO_LIMIT_HIGH)
+				cmd_p->hl_lock.tries[callid] = HL_LOCK_AUTO_LIMIT_HIGH;
 
-			debug(14, "hl_lock_tries[%i] == %lu", callid, hl_lock_tries[callid]);
+			debug(14, "cmd_p->hl_lock.tries[%i] == %lu", callid, cmd_p->hl_lock.tries[callid]);
 		}
 #  endif
 	} else {
@@ -1583,7 +1581,7 @@ int privileged_deinit(ctx_t *ctx_p)
 {
 	int i=0;
 	while (i < PC_MAX) {
-		debug(1, "hl_lock_tries[%i] == %lu", i, hl_lock_tries[i]);
+		debug(1, "cmd_p->hl_lock.tries[%i] == %lu", i, cmd_p->hl_lock.tries[i]);
 		i++;
 	}
 }
