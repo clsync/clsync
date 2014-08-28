@@ -6,9 +6,9 @@ bin_PROGRAMS = clsync
 
 clsync_SOURCES = calc.c cluster.c error.c fileutils.c glibex.c		\
 	indexes.c main.c malloc.c rules.c stringex.c sync.c privileged.c\
-	calc.h cluster.h fileutils.h glibex.h main.h port-hacks.h	\
-	stringex.h sync.h common.h control.h privileged.h rules.h	\
-	syscalls.h
+	pthreadex.c calc.h cluster.h fileutils.h glibex.h main.h	\
+	port-hacks.h pthreadex.h stringex.h sync.h common.h control.h	\
+	privileged.h rules.h syscalls.h
 
 clsync_CFLAGS = $(AM_CFLAGS)
 

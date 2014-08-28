@@ -22,6 +22,7 @@
 #include "error.h"			// debug()
 #include "syscalls.h"			// read_inf()/write_inf()
 #include "main.h"			// ncpus
+#include "pthreadex.h"			// pthread_*_shared()
 
 #ifdef CAPABILITIES_SUPPORT
 # include <pthread.h>			// pthread_create()
@@ -230,20 +231,21 @@ enum highlock_lock_state {
 typedef enum highlock_lock_state hllock_state_t;
 
 struct hl_lock {
-	int			enabled;
-	int			count_wait[HLLOCK_MAX];
-	int			count_signal[HLLOCK_MAX];
-	hllock_state_t		state[HLLOCK_MAX];
+	volatile int			locallock_hl_setstate_ifstate;
+	volatile int			enabled;
+	volatile int			count_wait[HLLOCK_MAX];
+	volatile int			count_signal[HLLOCK_MAX];
+	volatile hllock_state_t		state[HLLOCK_MAX];
 #  ifdef HL_LOCK_TRIES_AUTO
-	unsigned long		tries[PC_MAX];
-	unsigned long		count[PC_MAX];
-	unsigned long		delay[PC_MAX];
-	double			tries_step[PC_MAX];
+	volatile unsigned long		tries[PC_MAX];
+	volatile unsigned long		count[PC_MAX];
+	volatile unsigned long		delay[PC_MAX];
+	volatile double			tries_step[PC_MAX];
 
-#   define			tries_cur tries[callid]
+#   define				tries_cur tries[callid]
 #  else
-	unsigned long		tries;
-#   define			tries_cur tries
+	volatile unsigned long		tries;
+#   define				tries_cur tries
 #  endif
 };
 # endif
@@ -266,12 +268,13 @@ struct cmd {
 	volatile int			 _errno;
 # ifdef HL_LOCKS
 	volatile struct hl_lock		 hl_lock;
-	unsigned long			 hl_lock_tries;
+	volatile unsigned long		 hl_lock_tries;
 # endif
 };
 volatile struct cmd *cmd_p;
 
 static inline void cmd_init(volatile struct cmd *cmd_p) {
+	debug(10, "");
 # ifdef HL_LOCKS
 	memset((void *)cmd_p, 0, sizeof(*cmd_p));
 	cmd_p->hl_lock.enabled = 1;
@@ -299,42 +302,6 @@ struct pa_options {
 	char *permitted_hookfile[MAXPERMITTEDHOOKFILES+1];
 	int   permitted_hookfiles;
 };
-
-int pthread_mutex_init_shared(pthread_mutex_t **mutex_p) {
-	static pthread_mutex_t mutex_initial = PTHREAD_MUTEX_INITIALIZER;
-	*mutex_p = shm_malloc(sizeof(**mutex_p));
-	memcpy(*mutex_p, &mutex_initial, sizeof(mutex_initial));
-
-	pthread_mutexattr_t attr;
-	pthread_mutexattr_init(&attr);
-	pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
-	return pthread_mutex_init(*mutex_p, &attr);
-}
-
-int pthread_mutex_destroy_shared(pthread_mutex_t *mutex_p) {
-	int rc;
-	rc = pthread_mutex_destroy(mutex_p);
-	shm_free(mutex_p);
-	return rc;
-}
-
-int pthread_cond_init_shared(pthread_cond_t **cond_p) {
-	static pthread_cond_t cond_initial = PTHREAD_COND_INITIALIZER;
-	*cond_p = shm_malloc(sizeof(**cond_p));
-	memcpy(*cond_p, &cond_initial, sizeof(cond_initial));
-
-	pthread_condattr_t attr;
-	pthread_condattr_init(&attr);
-	pthread_condattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
-	return pthread_cond_init(*cond_p, &attr);
-}
-
-int pthread_cond_destroy_shared(pthread_cond_t *cond_p) {
-	int rc;
-	rc = pthread_cond_destroy(cond_p);
-	shm_free(cond_p);
-	return rc;
-}
 
 FTS *(*_privileged_fts_open)		(
 		char * const *path_argv,
@@ -678,29 +645,33 @@ static inline int hl_isready(int lockid) {
 }
 
 static inline void hl_setstate(int lockid, hllock_state_t stateid) {
-	cmd_p->hl_lock.state[lockid] = stateid;
+	g_atomic_int_set(&cmd_p->hl_lock.state[lockid], stateid);
 }
 
 int hl_setstate_ifstate(int lockid, hllock_state_t stateid_new, hllock_state_t stateid_old_mask) {
-	static int local_lock = 0;
+	volatile int *local_lock_p = &cmd_p->hl_lock.locallock_hl_setstate_ifstate;
+	debug(90, "%i, 0x%o, 0x%o", lockid, stateid_new, stateid_old_mask);
 
-	if (local_lock)
+	if (*local_lock_p)
 		return 0;
 
-	g_atomic_int_inc(&local_lock);
-	if (local_lock != 1) {
-		g_atomic_int_dec_and_test(&local_lock);
+	debug(92, "%i", *local_lock_p);
+	g_atomic_int_inc(local_lock_p);
+	debug(92, "%i", *local_lock_p);
+	if (*local_lock_p != 1) {
+		g_atomic_int_dec_and_test(local_lock_p);
 		return 0;
 	}
 
 	if (!(cmd_p->hl_lock.state[lockid]&stateid_old_mask)) {
-		g_atomic_int_dec_and_test(&local_lock);
+		g_atomic_int_dec_and_test(local_lock_p);
 		return 0;
 	}
 
-	cmd_p->hl_lock.state[lockid] = stateid_new;
-
-	g_atomic_int_dec_and_test(&local_lock);
+	debug(50, "success");
+	g_atomic_int_set(&cmd_p->hl_lock.state[lockid], stateid_new);
+	g_atomic_int_dec_and_test(local_lock_p);
+#undef local_lock
 	return 1;
 }
 
@@ -736,11 +707,13 @@ static inline int hl_signal(int lockid) {
 	cmd_p->hl_lock.count_signal[lockid]++;
 
 	if (hl_setstate_ifstate(lockid, HLLS_SIGNAL, HLLS_READY)) {
-		while (cmd_p->hl_lock.state[lockid] != HLLS_GOTSIGNAL)
+		while (cmd_p->hl_lock.state[lockid] != HLLS_GOTSIGNAL) {
 			if (cmd_p->hl_lock.state[lockid] == HLLS_FALLBACK) {
 				debug(15, "fallback");
 				return 0;
 			}
+			debug(95, "state == %i != %i, %i", cmd_p->hl_lock.state[lockid], HLLS_GOTSIGNAL, HLLS_FALLBACK);
+		}
 		debug(15, "the signal is sent");
 		hl_setstate(lockid, HLLS_WORKING);
 		return 1;
@@ -847,6 +820,7 @@ int privileged_handler(ctx_t *ctx_p)
 		// Waiting for command
 		debug(10, "Waiting for command");
 # ifdef HL_LOCKS
+		debug(25, "cmd_p->hl_lock.enabled == %i", cmd_p->hl_lock.enabled);
 		if (!cmd_p->hl_lock.enabled || !hl_wait(
 			HLLOCK_HANDLER
 #  ifdef HL_LOCK_TRIES_AUTO
@@ -1517,6 +1491,7 @@ int privileged_init(ctx_t *ctx_p)
 	unshare(CLONE_NEWIPC);
 
 	cmd_p = shm_malloc(sizeof(*cmd_p));
+	cmd_init(cmd_p);
 
 	// Running the privileged helper
 	SAFE ( (helper_pid = myfork()) == -1,	return errno);
