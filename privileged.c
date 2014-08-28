@@ -742,18 +742,6 @@ void hl_shutdown(int lockid) {
 
 # endif
 
-static inline int parent_isalive() {
-	int rc;
-	debug(12, "parent_pid == %u", parent_pid);
-
-	if ((rc=kill(parent_pid, 0))) {
-		debug(1, "kill(%u, 0) => %i", parent_pid, rc);
-		return 0;
-	}
-
-	return 1;
-}
-
 static int helper_isalive_cache;
 static inline int helper_isalive() {
 	int rc;

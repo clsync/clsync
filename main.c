@@ -292,11 +292,40 @@ int syntax() {
 int ncpus;
 pid_t parent_pid;
 
+int parent_isalive() {
+	int rc;
+	debug(12, "parent_pid == %u", parent_pid);
+
+	if ((rc=kill(parent_pid, 0))) {
+		debug(1, "kill(%u, 0) => %i", parent_pid, rc);
+		return 0;
+	}
+
+	return 1;
+}
+
+void child_sigchld() {
+	debug(1, "Got SIGCHLD (parent ended). Exit.");
+	exit(-1);
+	return;
+}
+
+int sethandler_sigchld(void (*handler)()) {
+	struct sigaction sa;
+	sa.sa_handler = handler;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+	critical_on (sigaction(SIGCHLD, &sa, 0) == -1);
+
+	return 0;
+}
+
 pid_t myfork() {
 	pid_t pid = fork();
 
 	if (!pid) {
 		parent_pid = getppid();
+		sethandler_sigchld(child_sigchld);
 # ifdef __linux__
 		prctl(PR_SET_PDEATHSIG, SIGCHLD);
 # endif

@@ -48,4 +48,5 @@ extern int sync_prequeue_loadmark
 	);
 extern int sync_prequeue_unload(struct ctx *ctx_p, struct indexes *indexes_p);
 extern const char *sync_parameter_get(const char *variable_name, void *_dosync_arg_p);
+extern pthread_t pthread_sighandler;
 

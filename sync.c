@@ -3439,6 +3439,13 @@ l_sync_dump_end:
 
 /* === /DUMP === */
 
+void sync_sigchld() {
+	debug(9, "");
+	privileged_check();
+
+	return;
+}
+
 int *sync_sighandler_exitcode_p = NULL;
 int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 	int signal = 0, ret;
@@ -3449,6 +3456,8 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 	int *exitcode_p		 = sighandler_arg_p->exitcode_p;
 
 	sync_sighandler_exitcode_p = exitcode_p;
+
+	sethandler_sigchld(sync_sigchld);
 
 	while (state_p == NULL || ((ctx_p->state != STATE_TERM) && (ctx_p->state != STATE_EXIT))) {
 		debug(3, "waiting for signal");
@@ -3519,7 +3528,7 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 				sync_switch_state(pthread_parent, STATE_REHASH);
 				break;
 			case SIGCHLD:
-				privileged_check();
+				sync_sigchld();
 				break;
 			case SIGUSR_THREAD_GC:
 				sync_switch_state(pthread_parent, STATE_THREAD_GC);

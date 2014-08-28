@@ -35,3 +35,6 @@ extern char *parameter_expand(
 		void *parameter_get_arg
 	);
 extern pid_t myfork();
+extern int parent_isalive();
+extern int sethandler_sigchld(void (*handler)());
+
