@@ -170,7 +170,11 @@ void _critical(const char *const function_name, const char *fmt, ...) {
 	if (*quiet)
 		return;
 
-	pthread_mutex_lock(error_mutex_p);
+	struct timespec abs_time;
+	clock_gettime(CLOCK_REALTIME , &abs_time);
+	abs_time.tv_sec += 1;
+
+	pthread_mutex_timedlock(error_mutex_p, &abs_time);
 
 	outputmethod_t method = *outputmethod;
 
@@ -224,7 +228,7 @@ void _error(const char *const function_name, const char *fmt, ...) {
 	if (*verbose < 1)
 		return;
 
-	pthread_mutex_lock(error_mutex_p);
+	pthread_mutex_reltimedlock(error_mutex_p, 0, OUTPUT_LOCK_TIMEOUT);
 
 	pthread_t thread = pthread_self();
 	pid_t pid = getpid();
@@ -251,7 +255,7 @@ void _info(const char *const function_name, const char *fmt, ...) {
 	if (*verbose < 3)
 		return;
 
-	pthread_mutex_lock(error_mutex_p);
+	pthread_mutex_reltimedlock(error_mutex_p, 0, OUTPUT_LOCK_TIMEOUT);
 
 	pthread_t thread = pthread_self();
 	pid_t pid = getpid();
@@ -276,7 +280,7 @@ void _warning(const char *const function_name, const char *fmt, ...) {
 	if (*verbose < 2)
 		return;
 
-	pthread_mutex_lock(error_mutex_p);
+	pthread_mutex_reltimedlock(error_mutex_p, 0, OUTPUT_LOCK_TIMEOUT);
 
 	pthread_t thread = pthread_self();
 	pid_t pid = getpid();
@@ -302,7 +306,7 @@ void _debug(int debug_level, const char *const function_name, const char *fmt, .
 	if (debug_level > *debug)
 		return;
 
-	pthread_mutex_lock(error_mutex_p);
+	pthread_mutex_reltimedlock(error_mutex_p, 0, OUTPUT_LOCK_TIMEOUT);
 
 	pthread_t thread = pthread_self();
 	pid_t pid = getpid();

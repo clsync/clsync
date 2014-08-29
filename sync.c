@@ -961,12 +961,12 @@ char *sync_path_abs2rel(ctx_t *ctx_p, const char *path_abs, size_t path_abs_len,
 	debug(3, "\"%s\" (len: %i) --%i--> \"%s\" (len: %i) + ", 
 		path_abs, path_abs_len, path_rel[path_rel_len - 1] == '/',
 		ctx_p->watchdirwslash, watchdirlen+1);
-	if(path_rel[path_rel_len - 1] == '/')
+	if (path_rel[path_rel_len - 1] == '/')
 		path_rel[--path_rel_len] = 0x00;
 	debug(3, "\"%s\" (len: %i)", path_rel, path_rel_len);
 #endif
 
-	if(path_rel_len_p != NULL)
+	if (path_rel_len_p != NULL)
 		*path_rel_len_p = path_rel_len;
 
 	return path_rel;
@@ -978,15 +978,15 @@ pid_t clsyncapi_fork(ctx_t *ctx_p) {
 
 	// Cleaning stale pids. TODO: Optimize this. Remove this GC.
 	int i=0;
-	while(i < ctx_p->children) {
-		if(waitpid(ctx_p->child_pid[i], NULL, WNOHANG)<0)
+	while (i < ctx_p->children) {
+		if (waitpid(ctx_p->child_pid[i], NULL, WNOHANG)<0)
 			if(errno==ECHILD)
 				ctx_p->child_pid[i] = ctx_p->child_pid[--ctx_p->children];
 		i++;
 	}
 
 	// Too many children
-	if(ctx_p->children >= MAXCHILDREN) {
+	if (ctx_p->children >= MAXCHILDREN) {
 		errno = ECANCELED;
 		return -1;
 	}
@@ -1795,13 +1795,16 @@ int sync_notify_init(ctx_t *ctx_p) {
 #endif
 #ifdef INOTIFY_SUPPORT
 		case NE_INOTIFY: {
-#if INOTIFY_OLD
-			ctx_p->fsmondata = (void *)(long)privileged_inotify_init();
-#else
-			ctx_p->fsmondata = (void *)(long)privileged_inotify_init1(INOTIFY_FLAGS);
-#endif
+# ifdef INOTIFY_OLD
+			ctx_p->fsmondata = (void *)(long)inotify_init();
+#  if INOTIFY_FLAGS != 0
+#   warning Do not know how to set inotify flags (too old system)
+#  endif
+# else
+			ctx_p->fsmondata = (void *)(long)inotify_init1(INOTIFY_FLAGS);
+# endif
 			if ((long)ctx_p->fsmondata == -1) {
-				error("cannot inotify_init(%i).", INOTIFY_FLAGS);
+				error("cannot inotify_init1(%i).", INOTIFY_FLAGS);
 				return -1;
 			}
 
@@ -3180,6 +3183,7 @@ int sync_tryforcecycle(pthread_t pthread_parent) {
 	if (pthread_cond_timedwait(pthread_cond_state, pthread_mutex_state, &time_timeout) != ETIMEDOUT)
 		return 0;
 #else
+	debug(9, "sleep("TOSTR(SLEEP_SECONDS)")");
 	sleep(SLEEP_SECONDS);	// TODO: replace this with pthread_cond_timedwait()
 #endif
 
@@ -3705,9 +3709,6 @@ int sync_run(ctx_t *ctx_p) {
 			}
 	}
 
-	if ((ret=privileged_init(ctx_p)))
-		return ret;
-
 #ifdef CLUSTER_SUPPORT
 	// Initializing cluster subsystem
 
@@ -3766,21 +3767,24 @@ int sync_run(ctx_t *ctx_p) {
 
 #ifdef ENABLE_SOCKET
 	// Creating control socket
-	if(ctx_p->socketpath != NULL)
+	if (ctx_p->socketpath != NULL)
 		ret = control_run(ctx_p);
 #endif
 
-	if(!ctx_p->flags[ONLYINITSYNC]) {
-
+	if (!ctx_p->flags[ONLYINITSYNC]) {
 		// Initializing FS monitor kernel subsystem in this userspace application
-
-		if(sync_notify_init(ctx_p))
+		if (sync_notify_init(ctx_p))
 			return errno;
+	}
 
+	if ((ret=privileged_init(ctx_p)))
+		return ret;
+
+	if (!ctx_p->flags[ONLYINITSYNC]) {
 		// Marking file tree for FS monitor
+		debug(30, "Running recursive notify marking function");
 		ret = sync_mark_walk(ctx_p, ctx_p->watchdir, &indexes);
-		if(ret) return ret;
-
+		if (ret) return ret;
 	}
 
 	// "Infinite" loop of processling the events
@@ -3887,6 +3891,7 @@ int sync_run(ctx_t *ctx_p) {
 
 #ifdef VERYPARANOID
 	// One second for another threads
+	debug(9, "sleep("TOSTR(SLEEP_SECONDS)")");
 	sleep(SLEEP_SECONDS);
 #endif
 

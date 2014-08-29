@@ -57,3 +57,21 @@ int pthread_cond_destroy_shared(pthread_cond_t *cond_p) {
 	shm_free(cond_p);
 	return rc;
 }
+
+int pthread_mutex_reltimedlock(pthread_mutex_t *mutex_p, __time_t tv_sec, __syscall_slong_t tv_nsec) {
+	struct timespec abs_time;
+
+	if (clock_gettime(CLOCK_REALTIME, &abs_time))
+		return -1;
+
+	abs_time.tv_sec  += tv_sec;
+	abs_time.tv_nsec += tv_nsec;
+
+	if (abs_time.tv_nsec > 1000*1000*1000) {
+		abs_time.tv_sec++;
+		abs_time.tv_nsec -= 1000*1000*1000;
+	}
+
+	return pthread_mutex_timedlock(mutex_p, &abs_time);
+}
+

@@ -34,7 +34,8 @@ extern char *parameter_expand(
 		const char *(*parameter_get)(const char *variable_name, void *arg),
 		void *parameter_get_arg
 	);
-extern pid_t myfork();
+extern pid_t fork_helper();
 extern int parent_isalive();
 extern int sethandler_sigchld(void (*handler)());
+extern pid_t waitpid_timed(pid_t child_pid, int *status_p,  __time_t sec, __syscall_slong_t nsec);
 

@@ -61,7 +61,7 @@ int inotify_add_watch_dir(ctx_t *ctx_p, indexes_t *indexes_p, const char *const 
 int inotify_wait(ctx_t *ctx_p, struct indexes *indexes_p, struct timeval *tv_p) {
 	int inotify_d = (int)(long)ctx_p->fsmondata;
 
-	debug(3, "select with timeout %li secs.", tv_p->tv_sec);
+	debug(3, "select with timeout %li secs (fd == %u).", tv_p->tv_sec, inotify_d);
 	fd_set rfds;
 	FD_ZERO(&rfds);
 	FD_SET(inotify_d, &rfds);

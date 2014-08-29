@@ -292,6 +292,32 @@ int syntax() {
 int ncpus;
 pid_t parent_pid;
 
+pid_t waitpid_timed(pid_t child_pid, int *status_p,  __time_t sec, __syscall_slong_t nsec) {
+	struct timespec ts;
+	int status;
+
+	ts.tv_sec  = sec;
+	ts.tv_nsec = nsec;
+
+	while (ts.tv_sec >= 0) {
+		if (waitpid(child_pid, &status, WNOHANG)<0) {
+			if (errno==ECHILD)
+				return child_pid;
+			return -1;
+		} else
+			if (status_p != NULL)
+				*status_p = status;
+
+		ts.tv_nsec -= WAITPID_TIMED_GRANULARITY;
+		if (ts.tv_nsec < 0) {
+			ts.tv_nsec += 1000*1000*1000;
+			ts.tv_sec--;
+		}
+	}
+
+	return 0;
+}
+
 int parent_isalive() {
 	int rc;
 	debug(12, "parent_pid == %u", parent_pid);
@@ -320,16 +346,37 @@ int sethandler_sigchld(void (*handler)()) {
 	return 0;
 }
 
-pid_t myfork() {
+# ifndef __linux__
+void *watchforparent(void *parent_pid_p) {
+	while (1) {
+		if (getppid() == 1)
+			child_sigchld();
+		sleep(1);
+	}
+
+	return NULL;
+}
+# endif
+
+pthread_t pthread_watchforparent;
+pid_t fork_helper() {
 	pid_t pid = fork();
 
-	if (!pid) {
+	if (!pid) {	// is child?
+
 		parent_pid = getppid();
-		sethandler_sigchld(child_sigchld);
+
+		// Anti-zombie:
+
 # ifdef __linux__
+		// Linux have support of "prctl(PR_SET_PDEATHSIG, signal);"
+		sethandler_sigchld(child_sigchld);
 		prctl(PR_SET_PDEATHSIG, SIGCHLD);
+# else
+		pthread_create(&pthread_watchforparent, NULL, watchforparent, &parent_pid);
 # endif
 		debug(20, "parent_pid == %u", parent_pid);
+		return 0;
 	}
 
 	return pid;

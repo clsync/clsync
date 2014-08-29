@@ -420,7 +420,7 @@ int __privileged_kill_child_itself(pid_t child_pid, int signal) {
 			return errno;
 		}
 
-		sleep(1);	// TODO: replace this sleep() with something to do not sleep if process already died
+		waitpid_timed(child_pid, NULL, SLEEP_SECONDS, 0);
 	} else
 		return ENOENT;
 
@@ -782,7 +782,9 @@ int privileged_handler(ctx_t *ctx_p)
 	sigaddset(&sigset, SIGQUIT);
 	sigaddset(&sigset, SIGTERM);
 	sigaddset(&sigset, SIGINT);
+# ifdef __linux__
 	sigaddset(&sigset, SIGCHLD);
+# endif
 	critical_on(pthread_sigmask(SIG_UNBLOCK, &sigset, NULL));
 
 # ifndef __linux__
@@ -889,12 +891,10 @@ int privileged_handler(ctx_t *ctx_p)
 				debug(20, "PA_INOTIFY_INIT");
 				cmd_p->ret = (void *)(long)inotify_init();
 				break;
-# ifndef INOTIFY_OLD
 			case PA_INOTIFY_INIT1:
 				debug(20, "PA_INOTIFY_INIT1");
-				cmd_p->ret = (void *)(long)inotify_init1((long)cmd_p->arg.ctx_p);
+				cmd_p->ret = (void *)(long)inotify_init1(cmd_p->arg.uint32_v);
 				break;
-# endif
 			case PA_INOTIFY_ADD_WATCH: {
 				struct pa_inotify_add_watch_arg *arg_p = (void *)&cmd_p->arg.inotify_add_watch;
 				debug(20, "PA_INOTIFY_ADD_WATCH(%u, <%s>, 0x%o)", arg_p->fd, arg_p->pathname, arg_p->mask);
@@ -1482,7 +1482,7 @@ int privileged_init(ctx_t *ctx_p)
 	cmd_init(cmd_p);
 
 	// Running the privileged helper
-	SAFE ( (helper_pid = myfork()) == -1,	return errno);
+	SAFE ( (helper_pid = fork_helper()) == -1,	return errno);
 	if (!helper_pid)
 		exit(privileged_handler(ctx_p));
 	critical_on(!helper_isalive());
@@ -1557,6 +1557,7 @@ int privileged_deinit(ctx_t *ctx_p)
 	{
 		int status;
 		__privileged_kill_child_itself(helper_pid, SIGKILL);
+		debug(9, "waitpid(%u, ...)", helper_pid);
 		waitpid(helper_pid, &status, 0);
 	}
 /*
