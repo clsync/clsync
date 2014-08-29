@@ -58,7 +58,7 @@ int pthread_cond_destroy_shared(pthread_cond_t *cond_p) {
 	return rc;
 }
 
-int pthread_mutex_reltimedlock(pthread_mutex_t *mutex_p, __time_t tv_sec, __syscall_slong_t tv_nsec) {
+int pthread_mutex_reltimedlock(pthread_mutex_t *mutex_p, long tv_sec, long tv_nsec) {
 	struct timespec abs_time;
 
 	if (clock_gettime(CLOCK_REALTIME, &abs_time))

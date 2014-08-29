@@ -292,7 +292,7 @@ int syntax() {
 int ncpus;
 pid_t parent_pid;
 
-pid_t waitpid_timed(pid_t child_pid, int *status_p,  __time_t sec, __syscall_slong_t nsec) {
+pid_t waitpid_timed(pid_t child_pid, int *status_p, long sec, long nsec) {
 	struct timespec ts;
 	int status;
 

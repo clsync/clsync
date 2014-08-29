@@ -23,5 +23,5 @@ extern int pthread_mutex_init_shared(pthread_mutex_t **mutex_p);
 extern int pthread_mutex_destroy_shared(pthread_mutex_t *mutex_p);
 extern int pthread_cond_init_shared(pthread_cond_t **cond_p);
 extern int pthread_cond_destroy_shared(pthread_cond_t *cond_p);
-extern int pthread_mutex_reltimedlock(pthread_mutex_t *mutex_p, __time_t tv_sec, __syscall_slong_t tv_nsec);
+extern int pthread_mutex_reltimedlock(pthread_mutex_t *mutex_p, long tv_sec, long tv_nsec);
 

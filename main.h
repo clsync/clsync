@@ -37,5 +37,5 @@ extern char *parameter_expand(
 extern pid_t fork_helper();
 extern int parent_isalive();
 extern int sethandler_sigchld(void (*handler)());
-extern pid_t waitpid_timed(pid_t child_pid, int *status_p,  __time_t sec, __syscall_slong_t nsec);
+extern pid_t waitpid_timed(pid_t child_pid, int *status_p, long sec, long nsec);
 
