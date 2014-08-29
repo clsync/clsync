@@ -89,14 +89,15 @@ static const struct option long_options[] =
 #endif
 #ifdef CAPABILITIES_SUPPORT
 # ifdef SECCOMP_SUPPORT
-	{"secure-process-splitting",optional_argument,	NULL,	SECUREPROCESSSPLITTING},
+	{"secure-splitting",	required_argument,	NULL,	SECURESPLITTING},
 # endif
-	{"process-splitting",	optional_argument,	NULL,	PROCESSSPLITTING},
+	{"splitting",		required_argument,	NULL,	SPLITTING},
 	{"check-execvp-args",	optional_argument,	NULL,	CHECK_EXECVP_ARGS},
 	{"add-permitted-hook-files",required_argument,	NULL,	ADDPERMITTEDHOOKFILES},
 # ifdef SECCOMP_SUPPORT
 	{"seccomp-filter",	optional_argument,	NULL,	SECCOMP_FILTER},
 # endif
+	{"forget-privthread-info",optional_argument,	NULL,	FORGET_PRIVTHREAD_INFO},
 #endif
 #ifdef GETMNTENT_SUPPORT
 	{"mountpoints",		required_argument,	NULL,	MOUNTPOINTS},
@@ -228,6 +229,13 @@ static char *const threading_modes[] = {
 	NULL
 };
 
+static char *const splitting_modes[] = {
+	[SM_OFF]		= "off",
+	[SM_THREAD]		= "thread",
+	[SM_PROCESS]		= "process",
+	NULL
+};
+
 static char *const notify_engines[] = {
 	[NE_UNDEFINED]		= "",
 	[NE_INOTIFY]		= "inotify",
@@ -351,7 +359,7 @@ void *watchforparent(void *parent_pid_p) {
 	while (1) {
 		if (getppid() == 1)
 			child_sigchld();
-		sleep(1);
+		sleep(SLEEP_SECONDS);
 	}
 
 	return NULL;
@@ -867,11 +875,41 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 		}
 #ifdef CAPABILITIES_SUPPORT
 # ifdef SECCOMP_SUPPORT
-		case SECUREPROCESSSPLITTING: {
-			ctx_p->flags[PROCESSSPLITTING]++;
+		case SECURESPLITTING: {
 			ctx_p->flags[CHECK_EXECVP_ARGS]++;
 			ctx_p->flags[SECCOMP_FILTER]++;
 			ctx_p->flags[FORBIDDEVICES]++;
+		}
+		case SPLITTING: {
+			char *value, *arg_orig = arg;
+
+			if (!*arg) {
+				ctx_p->flags[param_id] = 0;
+				return 0;
+			}
+
+			splittingmode_t splittingmode = getsubopt(&arg, splitting_modes, &value);
+			if((int)splittingmode == -1) {
+				errno = EINVAL;
+				error("Invalid splitting mode entered: \"%s\"", arg_orig);
+				return EINVAL;
+			}
+			ctx_p->flags[SPLITTING] = splittingmode;
+
+			if (param_id != SECURESPLITTING)
+				break;
+			switch (splittingmode) {
+				case SM_THREAD:
+					ctx_p->flags[FORGET_PRIVTHREAD_INFO]++;
+					break;
+				case SM_PROCESS:
+					break;
+				case SM_OFF:
+					errno = EINVAL;
+					error("Cannot understand \"--secure-splitting=off\". This configuration line have no sence.");
+					break;
+			}
+			ctx_p->flags[PERMIT_MPROTECT] = 0;
 			break;
 		}
 # endif

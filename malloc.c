@@ -191,6 +191,9 @@ int memory_init() {
 
 void *shm_malloc(size_t size) {
 	void *ret;
+#ifdef PARANOID
+	size++;
+#endif
 	int privileged_shmid = shmget(0, size, IPC_PRIVATE|IPC_CREAT|0600);
 	struct shmid_ds shmid_ds;
 	critical_on (privileged_shmid == -1)
@@ -208,6 +211,23 @@ void *shm_malloc(size_t size) {
 	if (shmid_ds.shm_lpid != shmid_ds.shm_cpid)
 		critical("A process (pid %u) attached to my shared memory. It's a security problem. Emergency exit.");
 
+	return ret;
+}
+
+void *shm_calloc(size_t nmemb, size_t size) {
+	void *ret;
+	size_t total_size;
+#ifdef PARANOID
+	nmemb++;
+	size++;
+#endif
+
+	total_size = nmemb * size;
+
+	ret = shm_malloc(total_size);
+	critical_on (ret == NULL);
+
+	memset(ret, 0, total_size);
 	return ret;
 }
 

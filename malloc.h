@@ -31,6 +31,7 @@ extern int is_protected(void *addr);
 # endif
 #endif
 extern void *shm_malloc(size_t size);
+extern void *shm_calloc(size_t nmemb, size_t size);
 extern void shm_free(void *ptr);
 
 extern int memory_init();

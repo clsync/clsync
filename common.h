@@ -164,6 +164,13 @@ enum threadingmode {
 };
 typedef enum threadingmode threadingmode_t;
 
+enum splittingmode_enum {
+	SM_OFF		= 0,
+	SM_THREAD,
+	SM_PROCESS,
+};
+typedef enum splittingmode_enum splittingmode_t;
+
 /*
 struct excludeinfo {
 	unsigned int	seqid_min;

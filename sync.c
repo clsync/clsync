@@ -3709,19 +3709,6 @@ int sync_run(ctx_t *ctx_p) {
 			}
 	}
 
-#ifdef CLUSTER_SUPPORT
-	// Initializing cluster subsystem
-
-	if(ctx_p->cluster_iface != NULL) {
-		ret = cluster_init(ctx_p, &indexes);
-		if(ret) {
-			error("Cannot initialize cluster subsystem.");
-			cluster_deinit();
-			return ret;
-		}
-	}
-#endif
-
 	// Initializing rand-generator if it's required
 
 	if(ctx_p->listoutdir)
@@ -3765,12 +3752,6 @@ int sync_run(ctx_t *ctx_p) {
 		}
 	}
 
-#ifdef ENABLE_SOCKET
-	// Creating control socket
-	if (ctx_p->socketpath != NULL)
-		ret = control_run(ctx_p);
-#endif
-
 	if (!ctx_p->flags[ONLYINITSYNC]) {
 		// Initializing FS monitor kernel subsystem in this userspace application
 		if (sync_notify_init(ctx_p))
@@ -3779,6 +3760,25 @@ int sync_run(ctx_t *ctx_p) {
 
 	if ((ret=privileged_init(ctx_p)))
 		return ret;
+
+#ifdef CLUSTER_SUPPORT
+	// Initializing cluster subsystem
+
+	if(ctx_p->cluster_iface != NULL) {
+		ret = cluster_init(ctx_p, &indexes);
+		if(ret) {
+			error("Cannot initialize cluster subsystem.");
+			cluster_deinit();
+			return ret;
+		}
+	}
+#endif
+
+#ifdef ENABLE_SOCKET
+	// Creating control socket
+	if (ctx_p->socketpath != NULL)
+		ret = control_run(ctx_p);
+#endif
 
 	if (!ctx_p->flags[ONLYINITSYNC]) {
 		// Marking file tree for FS monitor
