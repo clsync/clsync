@@ -145,7 +145,7 @@ int (*privileged_fork_execvp)(const char *file, char *const argv[]);
 int (*privileged_kill_child)(pid_t pid, int sig);
 
 #ifdef CAPABILITIES_SUPPORT
-pid_t		helper_pid;
+pid_t		helper_pid = 0;
 pthread_t	privileged_thread;
 pthread_mutex_t	*pthread_mutex_privileged_p;
 pthread_mutex_t	*pthread_mutex_action_signal_p;
@@ -323,6 +323,7 @@ struct pa_options {
 	char *permitted_hookfile[MAXPERMITTEDHOOKFILES+1];
 	int   permitted_hookfiles;
 	int   isprocsplitting;
+	int   shm_mprotect;
 };
 
 FTS *(*_privileged_fts_open)		(
@@ -625,8 +626,6 @@ int pa_setup(struct pa_options *opts, ctx_t *ctx_p, uid_t *exec_uid_p, gid_t *ex
 		opts->permitted_hookfiles   = i;
 	}
 
-	opts->isprocsplitting = (ctx_p->flags[SPLITTING] == SM_PROCESS);
-
 	return 0;
 }
 
@@ -768,7 +767,7 @@ void hl_shutdown(int lockid) {
 # endif
 
 static int helper_isalive_cache;
-static inline int helper_isalive() {
+static inline int helper_isalive_proc() {
 	int rc;
 	debug(12, "helper_pid == %u", helper_pid);
 
@@ -779,9 +778,24 @@ static inline int helper_isalive() {
 
 	return helper_isalive_cache=0;
 }
+static inline int helper_isalive_thread() {
+	int rc;
+	debug(12, "");
+
+	if ((rc=pthread_kill(privileged_thread, 0)))
+		return helper_isalive_cache=0;
+
+	debug(1, "pthread_kill(privileged_thread, 0) => %i", helper_pid, rc);
+
+	return helper_isalive_cache=1;
+}
+static inline int helper_isalive() {
+	return helper_pid ? helper_isalive_proc() : helper_isalive_thread();
+}
 
 int privileged_check() {
-	critical_on(!helper_isalive());
+	if (helper_pid)
+		critical_on(!helper_isalive_proc());
 	return 0;
 }
 
@@ -799,22 +813,26 @@ int privileged_handler(ctx_t *ctx_p)
 	int helper_isrunning = 1;
 
 	opts  = calloc_align(1, sizeof(*opts));
+	opts->isprocsplitting = (ctx_p->flags[SPLITTING] == SM_PROCESS);
+	opts->shm_mprotect    =  ctx_p->flags[SHM_MPROTECT];
 
-	sigset_t sigset;
-	sigemptyset(&sigset);
-	sigaddset(&sigset, SIGALRM);
-	sigaddset(&sigset, SIGHUP);
-	sigaddset(&sigset, SIGQUIT);
-	sigaddset(&sigset, SIGTERM);
-	sigaddset(&sigset, SIGINT);
+	if (opts->isprocsplitting) {
+		sigset_t sigset;
+		sigemptyset(&sigset);
+		sigaddset(&sigset, SIGALRM);
+		sigaddset(&sigset, SIGHUP);
+		sigaddset(&sigset, SIGQUIT);
+		sigaddset(&sigset, SIGTERM);
+		sigaddset(&sigset, SIGINT);
 # ifdef __linux__
-	sigaddset(&sigset, SIGCHLD);
+		sigaddset(&sigset, SIGCHLD);
 # endif
-	critical_on(pthread_sigmask(SIG_UNBLOCK, &sigset, NULL));
+		critical_on(pthread_sigmask(SIG_UNBLOCK, &sigset, NULL));
 
 # ifndef __linux__
-	critical_on(!parent_isalive());
+		critical_on(!parent_isalive());
 # endif
+	}
 	cap_drop(ctx_p, ctx_p->caps);
 
 	debug(2, "Syncing with the runner");
@@ -834,8 +852,10 @@ int privileged_handler(ctx_t *ctx_p)
 
 		// Waiting for command
 		debug(10, "Waiting for command");
-		mprotect((void *)cmd_p,		sizeof(*cmd_p),		PROT_WRITE);
-		mprotect((void *)cmd_ret_p,	sizeof(*cmd_ret_p),	PROT_READ);
+		if (opts->shm_mprotect) {
+			mprotect((void *)cmd_p,		sizeof(*cmd_p),		PROT_WRITE);
+			mprotect((void *)cmd_ret_p,	sizeof(*cmd_ret_p),	PROT_READ);
+		}
 # ifdef HL_LOCKS
 		debug(25, "hl_lock_p->enabled == %i", hl_lock_p->enabled);
 		if (!hl_lock_p->enabled || !hl_wait(
@@ -844,7 +864,8 @@ int privileged_handler(ctx_t *ctx_p)
 			, (long)hl_lock_p->tries
 #  endif
 		)) {
-			critical_on(!parent_isalive());
+			if (opts->isprocsplitting)
+				critical_on(!parent_isalive());
 # endif
 # ifdef READWRITE_SIGNALLING
 			read_inf(priv_read_fd, buf, 1);
@@ -856,8 +877,10 @@ int privileged_handler(ctx_t *ctx_p)
 				hl_setstate(HLLOCK_HANDLER, HLLS_WORKING);
 		}
 # endif
-		mprotect((void *)cmd_p,		sizeof(*cmd_p),		PROT_READ);
-		mprotect((void *)cmd_ret_p,	sizeof(*cmd_ret_p),	PROT_WRITE);
+		if (opts->shm_mprotect) {
+			mprotect((void *)cmd_p,		sizeof(*cmd_p),		PROT_READ);
+			mprotect((void *)cmd_ret_p,	sizeof(*cmd_ret_p),	PROT_WRITE);
+		}
 
 		debug(10, "Got command %u", cmd_p->action);
 
@@ -883,19 +906,17 @@ int privileged_handler(ctx_t *ctx_p)
 				break;
 			case PA_FTS_OPEN: {
 				volatile struct pa_fts_open_arg *arg_p = &cmd_p->arg.fts_open;
-				debug(20, "PA_FTS_OPEN");
+				char *const *path_argv_p =(void *)(
+						opts->isprocsplitting 	?
+						arg_p->path_argv 	:
+						arg_p->path_argv_p
+					);
+
+				debug(20, "PA_FTS_OPEN (%s)", *path_argv_p);
 				if (arg_p->compar != NULL)
 					critical("\"arg_p->compar != NULL\" (arg_p->compar == %p) is forbidden because may be used to run an arbitrary code in the privileged thread.", arg_p->compar);
 
-				cmd_ret_p->ret = fts_open(
-						(void *)(
-							opts->isprocsplitting 	?
-							arg_p->path_argv 	:
-							arg_p->path_argv_p
-						),
-						arg_p->options,
-						NULL
-					);
+				cmd_ret_p->ret = fts_open(path_argv_p, arg_p->options, NULL);
 				debug(21, "/PA_FTS_OPEN => %p", cmd_ret_p->ret);
 				break;
 			}
@@ -1211,12 +1232,13 @@ static inline int privileged_action(
 
 privileged_action_end:
 	debug(10, "Unlocking pthread_mutex_action_*");
-# ifdef HL_LOCKS
-#  ifndef READWRITE_SIGNALLING
+# ifndef READWRITE_SIGNALLING
+#  ifdef HL_LOCKS
 	if (!hl_lock_p->enabled)
 #  endif
-# endif
 		pthread_mutex_unlock(pthread_mutex_action_signal_p);
+# endif
+
 	pthread_mutex_unlock(pthread_mutex_action_entrance_p);
 
 	return rc;
@@ -1708,12 +1730,12 @@ int privileged_init(ctx_t *ctx_p)
 			SAFE ( (helper_pid = fork_helper()) == -1,	return errno);
 			if (!helper_pid)
 				exit(privileged_handler(ctx_p));
-			critical_on(!helper_isalive());
 			break;
 		}
 		default:
 			critical("Invalid ctx_p->flags[SPLITTING]: %i", ctx_p->flags[SPLITTING]);
 	}
+	critical_on(!helper_isalive());
 
 	// The rest routines
 	if (ctx_p->flags[DETACH_NETWORK] == DN_NONPRIVILEGED) {

@@ -98,6 +98,8 @@ static const struct option long_options[] =
 	{"seccomp-filter",	optional_argument,	NULL,	SECCOMP_FILTER},
 # endif
 	{"forget-privthread-info",optional_argument,	NULL,	FORGET_PRIVTHREAD_INFO},
+	{"permit-mprotect",	optional_argument,	NULL,	PERMIT_MPROTECT},
+	{"shm-mprotect",	optional_argument,	NULL,	SHM_MPROTECT},
 #endif
 #ifdef GETMNTENT_SUPPORT
 	{"mountpoints",		required_argument,	NULL,	MOUNTPOINTS},

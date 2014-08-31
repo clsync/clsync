@@ -3660,7 +3660,7 @@ int sync_run(ctx_t *ctx_p) {
 				error("Can't stat clsync binary file \"%s\": %s", cl_str, strerror(errno));
 			}
 			if (ret == -1 || so_stat.st_uid != cl_stat.st_uid) {
-				error("Wrong owner for shared object \"%s\": %i"
+				error("Wrong owner for shared object \"%s\": %i. "
 					"Only root, clsync file owner and user started the program are allowed.",
 				ctx_p->handlerfpath, so_stat.st_uid);
 				return EPERM;
