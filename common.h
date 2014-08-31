@@ -122,7 +122,7 @@
 #define COLLECTDELAY_INSTANT ((unsigned int)~0)
 
 
-#define MSG_SECURITY_PROBLEM "Security problem: argv_free(NULL). Don't use this application until the bug fill be fixed. Report about the problem to: "AUTHOR
+#define MSG_SECURITY_PROBLEM(a) "Security problem: "a". Don't use this application until the bug will be fixed. Report about the problem to: "AUTHOR
 
 #define require_strlen_le(str, limit) \
 	if (strlen(str) >= limit)\

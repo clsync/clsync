@@ -1505,7 +1505,7 @@ static void argv_free(char **argv) {
 #endif
 #ifdef VERYPARANOID
 	if (argv == NULL)
-		critical(MSG_SECURITY_PROBLEM);
+		critical(MSG_SECURITY_PROBLEM("argv_free(NULL)"));
 #endif
 	argv_p = argv;
 	while (*argv_p != NULL) {
