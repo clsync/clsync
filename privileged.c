@@ -1814,7 +1814,9 @@ int privileged_deinit(ctx_t *ctx_p)
 			}
 			free((void *)cmd_p);
 			free((void *)cmd_ret_p);
+# ifdef HL_LOCKS
 			free((void *)hl_lock_p);
+# endif
 			break;
 		}
 		case SM_PROCESS: {
@@ -1824,7 +1826,9 @@ int privileged_deinit(ctx_t *ctx_p)
 			waitpid(helper_pid, &status, 0);
 			shm_free((void *)cmd_p);
 			shm_free((void *)cmd_ret_p);
+# ifdef HL_LOCKS
 			shm_free((void *)hl_lock_p);
+# endif
 			break;
 		}
 	}
