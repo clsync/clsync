@@ -1054,7 +1054,7 @@ Is set to "clsync/%PID%" by default.
 
 .B \-\-secure\-process\-splitting
 .RS
-Implies "\-\-process\-splitting \-\-check\-execvp\-arguments \-\-seccomp\-filter
+Implies "\-\-splitting=process \-\-check\-execvp\-arguments \-\-seccomp\-filter
 \-\-forbid\-devices"
 .RE
 
@@ -1216,12 +1216,11 @@ Reset all capabilities
 The default value is "empty".
 .RE
 
-.B \-\-process\-splitting
+.B \-\-splitting
+.I splitting\-type
 .RS
-.B [Linux only, requires capabilities]
-
-Split the process to privileged and non-privileged. This's an additional
-way to secure your system from any bug in
+Split the process/thread to privileged and non-privileged. This's an
+additional way to secure your system from any bug in
 .B clsync
 while running it with capabilities or root privileges. But
 .B clsync
@@ -1240,12 +1239,44 @@ too. Otherwise in case of
 security bug a hacker will be able to use execvp() with any arguments
 with root privileges.
 
-Is not set by default.
+Possible values:
+.RS
+.B off
+.RS
+Disable this feature
+.RE
+.B thread
+.RS
+.B [Linux only, requires capabilities]
+
+Creates a separate thread for privileged operations.
+
+It's highly recommended to enable
+.B \-\-seccomp\-filter
+in this case. But that will forbid
+.BR --threading .
+.RE
+.B process
+.RS
+More secure and portable way, but uses separate process and:
+.RS
+- forbids fanotify (that is not implemented yet anyway);
+.br
+- more complex code (and higher probability of error).
+.br
+- slower due to copying data between private and shared memory pages.
+.RE
+
+.B Recommended.
+.RE
+.RE
+
+Is set to "off" by default.
 .RE
 
 .B \-\-check\-execvp\-arguments
 .RS
-.B [Requires \-\-process\-splitting]
+.B [Requires \-\-splitting=[thread|process]]
 
 Enables execvp() arguments recheck in the privileged process (in case of their
 substitution to any exploit-given arguments).
@@ -1276,11 +1307,13 @@ Is not set by default.
 
 .B \-\-seccomp\-filter
 .RS
+.B [Linux only]
+
 Use
 .B seccomp
 filter to forbid syscalls that shouldn't be used by clsync.
 
-Forbid all syscalls for non-privileged process, but
+Forbid all syscalls for non-privileged process/thread, but
 .RS
 futex
 inotify_init1
@@ -1307,18 +1340,46 @@ read
 rt_sigprocmask
 rt_sigaction
 nanosleep
-mprotect
 .RE
 
-This option requires
-.BR \-\-threading =off
-due to forbidding
-.BR mprotect (2)
-syscall that is required by
-.BR pthread_create (3)
-function.
 
 Is not set by default.
+.RE
+
+.B \-\-permit\-mprotect
+.RS
+.B "[Requires \-\-seccomp\-filter]"
+
+Permits
+.BR mprotect (2)
+syscall.
+
+This syscall is required by
+.BR pthread_create (3),
+so it's required for
+.BR \-\-threading .
+
+Makes \-\-shm\-mprotect to be useless.
+
+Also it enables ability to change memory of privileged thread from
+non-privileged, so using of
+.B \-\-splitting=thread
+with this option is useless, too.
+
+Is set to "0" by default if \-\-splitting=thread is set. Otherwise "1".
+.RE
+
+.B \-\-shm\-mprotect
+.RS
+.B "[Requires \-\-splitting=process]"
+
+Permit shared memory for writting/reading when it shouldn't be writted or read.
+.BR mprotect (2)
+is used for the protection.
+
+This option is useless while
+.B \-\-permit\-mprotect
+is enabled.
 .RE
 
 .B \-\-chroot
