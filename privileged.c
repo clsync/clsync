@@ -812,6 +812,8 @@ int privileged_handler(ctx_t *ctx_p)
 	int use_args_check = 0;
 	int helper_isrunning = 1;
 
+	pthread_setname_np(pthread_self(), "clsync-helper");
+
 	opts  = calloc_align(1, sizeof(*opts));
 	opts->isprocsplitting = (ctx_p->flags[SPLITTING] == SM_PROCESS);
 	opts->shm_mprotect    =  ctx_p->flags[SHM_MPROTECT];
@@ -1156,6 +1158,9 @@ static inline int privileged_action(
 
 # endif
 # ifdef HL_LOCKS
+	if (action == PA_DIE)
+		hl_lock_p->enabled = 0;
+
 	if (!hl_lock_p->enabled || !hl_signal(HLLOCK_HANDLER)) {
 # endif
 		critical_on(!helper_isalive_cache);
