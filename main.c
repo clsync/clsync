@@ -130,6 +130,7 @@ static const struct option long_options[] =
 #endif
 	{"max-iterations",	required_argument,	NULL,	MAXITERATIONS},
 	{"standby-file",	required_argument,	NULL,	STANDBYFILE},
+	{"modification-signature",required_argument,	NULL,	MODSIGN},
 	{"timeout-sync",	required_argument,	NULL,	SYNCTIMEOUT},
 	{"delay-sync",		required_argument,	NULL,	SYNCDELAY},
 	{"delay-collect",	required_argument,	NULL,	DELAY},
@@ -182,6 +183,43 @@ static char *const pivotrootways[] = {
 #endif
 
 #ifdef CAPABILITIES_SUPPORT
+
+enum stat_fields {
+	STAT_FIELD_RESET		= 0x0000,
+	STAT_FIELD_DEV			= 0x0001,
+	STAT_FIELD_INO			= 0x0002,
+	STAT_FIELD_MODE			= 0x0004,
+	STAT_FIELD_NLINK		= 0x0008,
+	STAT_FIELD_UID			= 0x0010,
+	STAT_FIELD_GID			= 0x0020,
+	STAT_FIELD_RDEV			= 0x0040,
+	STAT_FIELD_SIZE			= 0x0080,
+	STAT_FIELD_BLKSIZE		= 0x0100,
+	STAT_FIELD_BLOCKS		= 0x0200,
+	STAT_FIELD_ATIME		= 0x0400,
+	STAT_FIELD_MTIME		= 0x0800,
+	STAT_FIELD_CTIME		= 0x1000,
+
+	STAT_FIELD_ALL			= 0x1ff7,
+};
+
+static char *const stat_fields[] = {
+	[STAT_FIELD_RESET]		= "",
+	[STAT_FIELD_DEV]		= "dev",
+	[STAT_FIELD_INO]		= "ino",
+	[STAT_FIELD_MODE]		= "mode",
+	[STAT_FIELD_NLINK]		= "nlink",
+	[STAT_FIELD_UID]		= "uid",
+	[STAT_FIELD_GID]		= "gid",
+	[STAT_FIELD_RDEV]		= "rdev",
+	[STAT_FIELD_SIZE]		= "size",
+	[STAT_FIELD_BLKSIZE]		= "blksize",
+	[STAT_FIELD_BLOCKS]		= "blocks",
+	[STAT_FIELD_ATIME]		= "atime",
+	[STAT_FIELD_MTIME]		= "mtime",
+	[STAT_FIELD_CTIME]		= "ctime",
+	NULL
+};
 
 enum x_capabilities {
 	X_CAP_RESET = 0,
@@ -1212,6 +1250,21 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 				ctx_p->flags[STANDBYFILE]	= 0;
 			}
 			break;
+		case MODSIGN: {
+			char *subopts = arg;
+
+			ctx_p->flags[MODSIGN] = 0;
+
+			while (*subopts != 0) {
+				char *value;
+				typeof(ctx_p->flags[MODSIGN]) field = getsubopt(&subopts, stat_fields, &value);
+				debug(4, "field == 0x%x", field);
+				if (field != STAT_FIELD_RESET)
+					ctx_p->flags[MODSIGN] |= field;
+			}
+
+			break;
+		}
 		case SYNCDELAY: 
 			ctx_p->syncdelay		= (unsigned int)atol(arg);
 			break;
