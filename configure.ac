@@ -274,7 +274,7 @@ AC_ARG_WITH(inotify,
 
 AC_ARG_WITH(bsm,
 	AS_HELP_STRING(--with-bsm,
-		[Enable BSM (Sun/*BSD audit) support as FS monitor subsystem; values: no, native, check; default: check]),
+		[Enable BSM (Sun/*BSD audit) support as FS monitor subsystem; values: no, lib, check; default: check]),
 	[],
 	[with_bsm=check]
 )
