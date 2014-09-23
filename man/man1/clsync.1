@@ -1366,14 +1366,14 @@ non-privileged, so using of
 .B \-\-splitting=thread
 with this option is useless, too.
 
-Is set to "0" by default if \-\-splitting=thread is set. Otherwise "1".
+Is set to "0" by default if \-\-splitting is set. Otherwise "1".
 .RE
 
 .B \-\-shm\-mprotect
 .RS
 .B "[Requires \-\-splitting=process]"
 
-Permit shared memory for writting/reading when it shouldn't be writted or read.
+Forbid writting or reading to/from shared memory when it shouldn't be.
 .BR mprotect (2)
 is used for the protection.
 

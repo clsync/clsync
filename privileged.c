@@ -183,6 +183,8 @@ enum privileged_action {
 	PA_KILL_CHILD,
 
 	PA_CLSYNC_CGROUP_DEINIT,
+
+	PA_WAITPID,
 };
 
 struct pa_fts_open_arg {
@@ -218,12 +220,19 @@ struct pa_kill_child_arg {
 	int   signal;
 };
 
-union pa_arg {
+struct pa_waitpid_arg {
+	pid_t  pid;
+	int    status;
+	int    options;
+};
+
+struct pa_arg {
 	struct pa_fts_open_arg		 fts_open;
 	struct pa_inotify_add_watch_arg	 inotify_add_watch;
 	struct pa_inotify_rm_watch_arg	 inotify_rm_watch;
 	struct pa_fork_execvp_arg	 fork_execvp;
 	struct pa_kill_child_arg	 kill_child;
+	struct pa_waitpid_arg		 waitpid;
 	void				*void_v;
 	ctx_t				*ctx_p;
 	uint32_t			 uint32_v;
@@ -273,19 +282,19 @@ struct pa_fts_read_ret {
 	char		fts_path[PATH_MAX];
 	char		fts_name[PATH_MAX];
 };
-union pa_ret {
+struct pa_ret {
 	struct stat		stat;
 	struct pa_fts_read_ret	fts_read;
 };
 struct cmd {
-	volatile union pa_arg		 arg;
+	volatile struct pa_arg		 arg;
 	volatile enum privileged_action	 action;
 # ifdef HL_LOCKS
 	volatile unsigned long		 hl_lock_tries;
 # endif
 };
 struct cmd_ret {
-	volatile union pa_ret		 ret_buf;
+	volatile struct pa_ret		 ret_buf;
 	volatile void			*ret;
 	volatile int			 _errno;
 };
@@ -368,6 +377,7 @@ int (*_privileged_inotify_rm_watch)	(
 
 int (*_privileged_clsync_cgroup_deinit)	(ctx_t *ctx_p);
 
+pid_t (*_privileged_waitpid)		(pid_t pid, int *status, int options);
 
 int cap_enable(__u32 caps) {
 	debug(1, "Enabling Linux capabilities 0x%x", caps);
@@ -973,7 +983,6 @@ int privileged_handler(ctx_t *ctx_p)
 				break;
 			}
 			case PA_FORK_EXECVP: {
-				debug(20, "PA_FORK_EXECVP");
 				struct pa_fork_execvp_arg *arg_p = (void *)&cmd_p->arg.fork_execvp;
 				const char *file;
 				char *const *argv;
@@ -985,6 +994,8 @@ int privileged_handler(ctx_t *ctx_p)
 					file = arg_p->file_p;
 					argv = arg_p->argv_p;
 				}
+
+				debug(20, "PA_FORK_EXECVP (\"%s\", argv)", file);
 
 				if (use_args_check)
 					privileged_execvp_check_arguments(opts, file, argv);
@@ -1001,6 +1012,7 @@ int privileged_handler(ctx_t *ctx_p)
 						exit(execvp(file, argv));
 				}
 				cmd_ret_p->ret = (void *)(long)pid;
+				debug(21, "/PA_FORK_EXECVP");
 				break;
 			}
 			case PA_KILL_CHILD: {
@@ -1055,6 +1067,12 @@ int privileged_handler(ctx_t *ctx_p)
 				break;
 			}
 # endif
+			case PA_WAITPID: {
+				struct pa_waitpid_arg *arg_p = (void *)&cmd_p->arg.waitpid;
+				debug(20, "PA_WAITPID(%u, 0x%o)", arg_p->pid, arg_p->options);
+				cmd_ret_p->ret = (void *)(long)waitpid(arg_p->pid, &arg_p->status, arg_p->options);
+				break;
+			}
 			default:
 				critical("Unknown command type \"%u\". It's a buffer overflow (which means a security problem) or just an internal error.");
 		}
@@ -1535,6 +1553,26 @@ int __privileged_kill_child_wrapper(pid_t pid, int signal)
 	return (long)ret;
 }
 
+pid_t __privileged_waitpid(pid_t pid, int *status, int options)
+{
+	void *ret = (void *)(long)-1;
+
+	cmd_p->arg.waitpid.pid     = pid;
+	cmd_p->arg.waitpid.options = options;
+
+	privileged_action(
+# ifdef HL_LOCK_TRIES_AUTO
+			PC_DEFAULT,
+# endif
+			PA_WAITPID,
+			&ret);
+
+	if (status != NULL)
+		*status = cmd_p->arg.waitpid.status;
+
+	return (long)ret;
+}
+
 #endif
 
 uid_t __privileged_fork_execvp_uid;
@@ -1658,6 +1696,7 @@ int privileged_init(ctx_t *ctx_p)
 # ifdef CGROUP_SUPPORT
 		_privileged_clsync_cgroup_deinit= (typeof(_privileged_clsync_cgroup_deinit))	clsync_cgroup_deinit;
 # endif
+		_privileged_waitpid		= (typeof(_privileged_waitpid))			waitpid;
 
 		cap_drop(ctx_p, ctx_p->caps);
 #endif
@@ -1676,6 +1715,7 @@ int privileged_init(ctx_t *ctx_p)
 # ifdef CGROUP_SUPPORT
 	_privileged_clsync_cgroup_deinit= __privileged_clsync_cgroup_deinit;
 # endif
+	_privileged_waitpid		= __privileged_waitpid;
 
 	SAFE ( pthread_mutex_init_smart(&pthread_mutex_privileged_p),		return errno;);
 	SAFE ( pthread_mutex_init_smart(&pthread_mutex_action_entrance_p),	return errno;);

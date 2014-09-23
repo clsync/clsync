@@ -515,7 +515,7 @@ int exec_argv(char **argv, int *child_pid) {
 #endif
 
 //	debug(3, "Pre-wait thread %p"")".", pthread_self() );
-	if (waitpid(pid, &status, 0) != pid) {
+	if (privileged_waitpid(pid, &status, 0) != pid) {
 		switch (errno) {
 			case ECHILD:
 				debug(2, "Child %u is already dead.", pid);
@@ -979,7 +979,7 @@ pid_t clsyncapi_fork(ctx_t *ctx_p) {
 	// Cleaning stale pids. TODO: Optimize this. Remove this GC.
 	int i=0;
 	while (i < ctx_p->children) {
-		if (waitpid(ctx_p->child_pid[i], NULL, WNOHANG)<0)
+		if (privileged_waitpid(ctx_p->child_pid[i], NULL, WNOHANG)<0)
 			if(errno==ECHILD)
 				ctx_p->child_pid[i] = ctx_p->child_pid[--ctx_p->children];
 		i++;

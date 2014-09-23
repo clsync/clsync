@@ -1695,9 +1695,9 @@ int ctx_check(ctx_t *ctx_p) {
 		ret = errno = EINVAL;
 		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--pre-exit-hook\".");
 	}
-	if (ctx_p->flags[THREADING] && ctx_p->flags[SECCOMP_FILTER] && ctx_p->flags[SPLITTING] == SM_THREAD) {
+	if (ctx_p->flags[THREADING] && ctx_p->flags[SPLITTING] != SM_OFF) {
 		ret = errno = EINVAL;
-		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--splitting=thread\" and \"--seccomp-filter\".");
+		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--splitting=thread\".");
 	}
 	if (ctx_p->flags[SKIPINITSYNC] && ctx_p->flags[EXITONNOEVENTS]) {
 		ret = errno = EINVAL;
