@@ -515,7 +515,7 @@ int exec_argv(char **argv, int *child_pid) {
 #endif
 
 //	debug(3, "Pre-wait thread %p"")".", pthread_self() );
-	if (waitpid(pid, &status, 0) != pid) {
+	if (privileged_waitpid(pid, &status, 0) != pid) {
 		switch (errno) {
 			case ECHILD:
 				debug(2, "Child %u is already dead.", pid);
@@ -961,12 +961,12 @@ char *sync_path_abs2rel(ctx_t *ctx_p, const char *path_abs, size_t path_abs_len,
 	debug(3, "\"%s\" (len: %i) --%i--> \"%s\" (len: %i) + ", 
 		path_abs, path_abs_len, path_rel[path_rel_len - 1] == '/',
 		ctx_p->watchdirwslash, watchdirlen+1);
-	if(path_rel[path_rel_len - 1] == '/')
+	if (path_rel[path_rel_len - 1] == '/')
 		path_rel[--path_rel_len] = 0x00;
 	debug(3, "\"%s\" (len: %i)", path_rel, path_rel_len);
 #endif
 
-	if(path_rel_len_p != NULL)
+	if (path_rel_len_p != NULL)
 		*path_rel_len_p = path_rel_len;
 
 	return path_rel;
@@ -978,15 +978,15 @@ pid_t clsyncapi_fork(ctx_t *ctx_p) {
 
 	// Cleaning stale pids. TODO: Optimize this. Remove this GC.
 	int i=0;
-	while(i < ctx_p->children) {
-		if(waitpid(ctx_p->child_pid[i], NULL, WNOHANG)<0)
+	while (i < ctx_p->children) {
+		if (privileged_waitpid(ctx_p->child_pid[i], NULL, WNOHANG)<0)
 			if(errno==ECHILD)
 				ctx_p->child_pid[i] = ctx_p->child_pid[--ctx_p->children];
 		i++;
 	}
 
 	// Too many children
-	if(ctx_p->children >= MAXCHILDREN) {
+	if (ctx_p->children >= MAXCHILDREN) {
 		errno = ECANCELED;
 		return -1;
 	}
@@ -1505,7 +1505,7 @@ static void argv_free(char **argv) {
 #endif
 #ifdef VERYPARANOID
 	if (argv == NULL)
-		critical(MSG_SECURITY_PROBLEM);
+		critical(MSG_SECURITY_PROBLEM("argv_free(NULL)"));
 #endif
 	argv_p = argv;
 	while (*argv_p != NULL) {
@@ -1686,7 +1686,7 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 	int fts_opts = FTS_NOCHDIR|FTS_PHYSICAL|FTS_NOSTAT|(ctx_p->flags[ONEFILESYSTEM]?FTS_XDEV:0);
 
         debug(3, "fts_opts == %p", (void *)(long)fts_opts);
-	tree = privileged_fts_open((char *const *)&rootpaths, fts_opts, NULL, PC_SYNC_MARK_WALK_FTS_OPEN);
+	tree = privileged_fts_open((char *const *)rootpaths, fts_opts, NULL, PC_SYNC_MARK_WALK_FTS_OPEN);
 
 	if (tree == NULL) {
 		error_or_debug((ctx_p->state == STATE_STARTING) ?-1:2, "Cannot privileged_fts_open() on \"%s\".", dirpath);
@@ -1795,13 +1795,16 @@ int sync_notify_init(ctx_t *ctx_p) {
 #endif
 #ifdef INOTIFY_SUPPORT
 		case NE_INOTIFY: {
-#if INOTIFY_OLD
+# ifdef INOTIFY_OLD
 			ctx_p->fsmondata = (void *)(long)inotify_init();
-#else
+#  if INOTIFY_FLAGS != 0
+#   warning Do not know how to set inotify flags (too old system)
+#  endif
+# else
 			ctx_p->fsmondata = (void *)(long)inotify_init1(INOTIFY_FLAGS);
-#endif
+# endif
 			if ((long)ctx_p->fsmondata == -1) {
-				error("cannot inotify_init(%i).", INOTIFY_FLAGS);
+				error("cannot inotify_init1(%i).", INOTIFY_FLAGS);
 				return -1;
 			}
 
@@ -3180,6 +3183,7 @@ int sync_tryforcecycle(pthread_t pthread_parent) {
 	if (pthread_cond_timedwait(pthread_cond_state, pthread_mutex_state, &time_timeout) != ETIMEDOUT)
 		return 0;
 #else
+	debug(9, "sleep("TOSTR(SLEEP_SECONDS)")");
 	sleep(SLEEP_SECONDS);	// TODO: replace this with pthread_cond_timedwait()
 #endif
 
@@ -3439,6 +3443,13 @@ l_sync_dump_end:
 
 /* === /DUMP === */
 
+void sync_sigchld() {
+	debug(9, "");
+	privileged_check();
+
+	return;
+}
+
 int *sync_sighandler_exitcode_p = NULL;
 int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 	int signal = 0, ret;
@@ -3449,6 +3460,8 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 	int *exitcode_p		 = sighandler_arg_p->exitcode_p;
 
 	sync_sighandler_exitcode_p = exitcode_p;
+
+	sethandler_sigchld(sync_sigchld);
 
 	while (state_p == NULL || ((ctx_p->state != STATE_TERM) && (ctx_p->state != STATE_EXIT))) {
 		debug(3, "waiting for signal");
@@ -3462,6 +3475,7 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 				case SIGQUIT:
 				case SIGTERM:
 				case SIGINT:
+				case SIGCHLD:
 					// TODO: remove the exit() from here. Main thread should exit itself
 					exit(*exitcode_p);
 					break;
@@ -3517,6 +3531,9 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 			case SIGHUP:
 				sync_switch_state(pthread_parent, STATE_REHASH);
 				break;
+			case SIGCHLD:
+				sync_sigchld();
+				break;
 			case SIGUSR_THREAD_GC:
 				sync_switch_state(pthread_parent, STATE_THREAD_GC);
 				break;
@@ -3560,6 +3577,7 @@ int sync_run(ctx_t *ctx_p) {
 		sigaddset(&sigset_sighandler, SIGQUIT);
 		sigaddset(&sigset_sighandler, SIGTERM);
 		sigaddset(&sigset_sighandler, SIGINT);
+		sigaddset(&sigset_sighandler, SIGCHLD);
 		sigaddset(&sigset_sighandler, SIGUSR_THREAD_GC);
 		sigaddset(&sigset_sighandler, SIGUSR_INITSYNC);
 		sigaddset(&sigset_sighandler, SIGUSR_DUMP);
@@ -3642,7 +3660,7 @@ int sync_run(ctx_t *ctx_p) {
 				error("Can't stat clsync binary file \"%s\": %s", cl_str, strerror(errno));
 			}
 			if (ret == -1 || so_stat.st_uid != cl_stat.st_uid) {
-				error("Wrong owner for shared object \"%s\": %i"
+				error("Wrong owner for shared object \"%s\": %i. "
 					"Only root, clsync file owner and user started the program are allowed.",
 				ctx_p->handlerfpath, so_stat.st_uid);
 				return EPERM;
@@ -3691,22 +3709,6 @@ int sync_run(ctx_t *ctx_p) {
 			}
 	}
 
-	if ((ret=privileged_init(ctx_p)))
-		return ret;
-
-#ifdef CLUSTER_SUPPORT
-	// Initializing cluster subsystem
-
-	if(ctx_p->cluster_iface != NULL) {
-		ret = cluster_init(ctx_p, &indexes);
-		if(ret) {
-			error("Cannot initialize cluster subsystem.");
-			cluster_deinit();
-			return ret;
-		}
-	}
-#endif
-
 	// Initializing rand-generator if it's required
 
 	if(ctx_p->listoutdir)
@@ -3750,23 +3752,39 @@ int sync_run(ctx_t *ctx_p) {
 		}
 	}
 
+	if (!ctx_p->flags[ONLYINITSYNC]) {
+		// Initializing FS monitor kernel subsystem in this userspace application
+		if (sync_notify_init(ctx_p))
+			return errno;
+	}
+
+	if ((ret=privileged_init(ctx_p)))
+		return ret;
+
+#ifdef CLUSTER_SUPPORT
+	// Initializing cluster subsystem
+
+	if(ctx_p->cluster_iface != NULL) {
+		ret = cluster_init(ctx_p, &indexes);
+		if(ret) {
+			error("Cannot initialize cluster subsystem.");
+			cluster_deinit();
+			return ret;
+		}
+	}
+#endif
+
 #ifdef ENABLE_SOCKET
 	// Creating control socket
-	if(ctx_p->socketpath != NULL)
+	if (ctx_p->socketpath != NULL)
 		ret = control_run(ctx_p);
 #endif
 
-	if(!ctx_p->flags[ONLYINITSYNC]) {
-
-		// Initializing FS monitor kernel subsystem in this userspace application
-
-		if(sync_notify_init(ctx_p))
-			return errno;
-
+	if (!ctx_p->flags[ONLYINITSYNC]) {
 		// Marking file tree for FS monitor
+		debug(30, "Running recursive notify marking function");
 		ret = sync_mark_walk(ctx_p, ctx_p->watchdir, &indexes);
-		if(ret) return ret;
-
+		if (ret) return ret;
 	}
 
 	// "Infinite" loop of processling the events
@@ -3873,6 +3891,7 @@ int sync_run(ctx_t *ctx_p) {
 
 #ifdef VERYPARANOID
 	// One second for another threads
+	debug(9, "sleep("TOSTR(SLEEP_SECONDS)")");
 	sleep(SLEEP_SECONDS);
 #endif
 

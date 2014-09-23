@@ -1052,10 +1052,10 @@ Is set to "clsync/%PID%" by default.
 
 .SH SECURITY OPTIONS
 
-.B \-\-secure\-thread\-splitting
+.B \-\-secure\-process\-splitting
 .RS
-Implies "\-\-thread\-splitting \-\-check\-execvp\-arguments \-\-seccomp\-filter
-\-\-forget\-privthread\-info".
+Implies "\-\-splitting=process \-\-check\-execvp\-arguments \-\-seccomp\-filter
+\-\-forbid\-devices"
 .RE
 
 .B \-u, \-\-uid
@@ -1124,7 +1124,7 @@ and
 .BR prctl (2)
 to preserve "CAP_DAC_READ_SEARCH", "CAP_SETUID" or/and "CAP_SETGID" [see 
 .BR capabilities (7)]
-Linux capability for thread using
+Linux capability for process using
 .BR fts "(3), " inotify "(7) and " execve "(2)."
 This allows to preserve enough FS privileges to watch a file tree and execute
 the
@@ -1216,12 +1216,11 @@ Reset all capabilities
 The default value is "empty".
 .RE
 
-.B \-\-thread\-splitting
+.B \-\-splitting
+.I splitting\-type
 .RS
-.B [Linux only, requires capabilities]
-
-Split the main thread to privileged and non-privileged. This's an additional
-way to secure your system from any bug in
+Split the process/thread to privileged and non-privileged. This's an
+additional way to secure your system from any bug in
 .B clsync
 while running it with capabilities or root privileges. But
 .B clsync
@@ -1240,22 +1239,46 @@ too. Otherwise in case of
 security bug a hacker will be able to use execvp() with any arguments
 with root privileges.
 
-But there's an ability to change a code of the privileged thread from
-non\-privileged. To prevent it use
-.B \-\-seccomp\-filter
-option. It will forbid call of
-.BR mprotect (2)
-syscall, so the non\-privileged will be unable to drop protection from memory
-ages.
+Possible values:
+.RS
+.B off
+.RS
+Disable this feature
+.RE
+.B thread
+.RS
+.B [Linux only, requires capabilities]
 
-Is not set by default.
+Creates a separate thread for privileged operations.
+
+It's highly recommended to enable
+.B \-\-seccomp\-filter
+in this case. But that will forbid
+.BR --threading .
+.RE
+.B process
+.RS
+More secure and portable way, but uses separate process and:
+.RS
+- forbids fanotify (that is not implemented yet anyway);
+.br
+- more complex code (and higher probability of error).
+.br
+- slower due to copying data between private and shared memory pages.
+.RE
+
+.B Recommended.
+.RE
+.RE
+
+Is set to "off" by default.
 .RE
 
 .B \-\-check\-execvp\-arguments
 .RS
-.B [Requires \-\-thread\-splitting]
+.B [Requires \-\-splitting=[thread|process]]
 
-Enables execvp() arguments recheck in the privileged thread (in case of their
+Enables execvp() arguments recheck in the privileged process (in case of their
 substitution to any exploit-given arguments).
 
 This option doesn't utilize a lot of CPU resources but forbids run-time
@@ -1284,11 +1307,13 @@ Is not set by default.
 
 .B \-\-seccomp\-filter
 .RS
+.B [Linux only]
+
 Use
 .B seccomp
 filter to forbid syscalls that shouldn't be used by clsync.
 
-Forbid all syscalls for non-privileged thread, but
+Forbid all syscalls for non-privileged process/thread, but
 .RS
 futex
 inotify_init1
@@ -1317,23 +1342,44 @@ rt_sigaction
 nanosleep
 .RE
 
-This option requires
-.BR \-\-threading =off
-due to forbidding
-.BR mprotect (2)
-syscall that is required by
-.BR pthread_create (3)
-function.
 
 Is not set by default.
 .RE
 
-.B \-\-forget\-privthread\-info
+.B \-\-permit\-mprotect
 .RS
-Just sets pthread_t variable for the privileged thread to zero. It complicates
-attack on the privileged thread, but makes call of
-.BR pthread_join (3)
-on a privileged thread end impossible.
+.B "[Requires \-\-seccomp\-filter]"
+
+Permits
+.BR mprotect (2)
+syscall.
+
+This syscall is required by
+.BR pthread_create (3),
+so it's required for
+.BR \-\-threading .
+
+Makes \-\-shm\-mprotect to be useless.
+
+Also it enables ability to change memory of privileged thread from
+non-privileged, so using of
+.B \-\-splitting=thread
+with this option is useless, too.
+
+Is set to "0" by default if \-\-splitting is set. Otherwise "1".
+.RE
+
+.B \-\-shm\-mprotect
+.RS
+.B "[Requires \-\-splitting=process]"
+
+Forbid writting or reading to/from shared memory when it shouldn't be.
+.BR mprotect (2)
+is used for the protection.
+
+This option is useless while
+.B \-\-permit\-mprotect
+is enabled.
 .RE
 
 .B \-\-chroot
@@ -1442,12 +1488,12 @@ Possible values:
 .RS
 .B everywhere
 .RS
-Removes network for all threads.
+Removes network for all processes.
 .RE
 .B non\-privileged
 .RS
-Removes network from non\-privileged threads if option
-.B \-\-thread\-splitting
+Removes network from non\-privileged process if option
+.B \-\-process\-splitting
 is enabled, otherwise doesn't do anything.
 .RE
 .B off

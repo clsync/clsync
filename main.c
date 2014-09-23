@@ -89,15 +89,17 @@ static const struct option long_options[] =
 #endif
 #ifdef CAPABILITIES_SUPPORT
 # ifdef SECCOMP_SUPPORT
-	{"secure-thread-splitting",optional_argument,	NULL,	SECURETHREADSPLITTING},
+	{"secure-splitting",	required_argument,	NULL,	SECURESPLITTING},
 # endif
-	{"thread-splitting",	optional_argument,	NULL,	THREADSPLITTING},
+	{"splitting",		required_argument,	NULL,	SPLITTING},
 	{"check-execvp-args",	optional_argument,	NULL,	CHECK_EXECVP_ARGS},
 	{"add-permitted-hook-files",required_argument,	NULL,	ADDPERMITTEDHOOKFILES},
 # ifdef SECCOMP_SUPPORT
 	{"seccomp-filter",	optional_argument,	NULL,	SECCOMP_FILTER},
 # endif
 	{"forget-privthread-info",optional_argument,	NULL,	FORGET_PRIVTHREAD_INFO},
+	{"permit-mprotect",	optional_argument,	NULL,	PERMIT_MPROTECT},
+	{"shm-mprotect",	optional_argument,	NULL,	SHM_MPROTECT},
 #endif
 #ifdef GETMNTENT_SUPPORT
 	{"mountpoints",		required_argument,	NULL,	MOUNTPOINTS},
@@ -229,6 +231,13 @@ static char *const threading_modes[] = {
 	NULL
 };
 
+static char *const splitting_modes[] = {
+	[SM_OFF]		= "off",
+	[SM_THREAD]		= "thread",
+	[SM_PROCESS]		= "process",
+	NULL
+};
+
 static char *const notify_engines[] = {
 	[NE_UNDEFINED]		= "",
 	[NE_INOTIFY]		= "inotify",
@@ -291,6 +300,99 @@ int syntax() {
 }
 
 int ncpus;
+pid_t parent_pid;
+
+pid_t waitpid_timed(pid_t child_pid, int *status_p, long sec, long nsec) {
+	struct timespec ts;
+	int status;
+
+	ts.tv_sec  = sec;
+	ts.tv_nsec = nsec;
+
+	while (ts.tv_sec >= 0) {
+		if (waitpid(child_pid, &status, WNOHANG)<0) {
+			if (errno==ECHILD)
+				return child_pid;
+			return -1;
+		} else
+			if (status_p != NULL)
+				*status_p = status;
+
+		ts.tv_nsec -= WAITPID_TIMED_GRANULARITY;
+		if (ts.tv_nsec < 0) {
+			ts.tv_nsec += 1000*1000*1000;
+			ts.tv_sec--;
+		}
+	}
+
+	return 0;
+}
+
+int parent_isalive() {
+	int rc;
+	debug(12, "parent_pid == %u", parent_pid);
+
+	if ((rc=kill(parent_pid, 0))) {
+		debug(1, "kill(%u, 0) => %i", parent_pid, rc);
+		return 0;
+	}
+
+	return 1;
+}
+
+void child_sigchld() {
+	if (getppid() != 1)
+		return;
+
+	debug(1, "Got SIGCHLD (parent ended). Exit.");
+	exit(-1);
+	return;
+}
+
+int sethandler_sigchld(void (*handler)()) {
+	struct sigaction sa;
+	sa.sa_handler = handler;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = SA_RESTART | SA_NOCLDSTOP;
+	critical_on (sigaction(SIGCHLD, &sa, 0) == -1);
+
+	return 0;
+}
+
+# ifndef __linux__
+void *watchforparent(void *parent_pid_p) {
+	while (1) {
+		child_sigchld();
+		sleep(SLEEP_SECONDS);
+	}
+
+	return NULL;
+}
+# endif
+
+pthread_t pthread_watchforparent;
+pid_t fork_helper() {
+	pid_t pid = fork();
+
+	if (!pid) {	// is child?
+
+		parent_pid = getppid();
+
+		// Anti-zombie:
+
+# ifdef __linux__
+		// Linux have support of "prctl(PR_SET_PDEATHSIG, signal);"
+		sethandler_sigchld(child_sigchld);
+		prctl(PR_SET_PDEATHSIG, SIGCHLD);
+# else
+		pthread_create(&pthread_watchforparent, NULL, watchforparent, &parent_pid);
+# endif
+		debug(20, "parent_pid == %u", parent_pid);
+		return 0;
+	}
+
+	return pid;
+}
 
 int version() {
 	info(PROGRAM" v%i.%i"REVISION"\n\t"AUTHOR"\n\nCompiled with options"
@@ -777,11 +879,42 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 		}
 #ifdef CAPABILITIES_SUPPORT
 # ifdef SECCOMP_SUPPORT
-		case SECURETHREADSPLITTING: {
-			ctx_p->flags[THREADSPLITTING]++;
+		case SECURESPLITTING: {
 			ctx_p->flags[CHECK_EXECVP_ARGS]++;
 			ctx_p->flags[SECCOMP_FILTER]++;
-			ctx_p->flags[FORGET_PRIVTHREAD_INFO]++;
+			ctx_p->flags[FORBIDDEVICES]++;
+		}
+		case SPLITTING: {
+			char *value, *arg_orig = arg;
+
+			if (!*arg) {
+				ctx_p->flags[param_id] = 0;
+				return 0;
+			}
+
+			splittingmode_t splittingmode = getsubopt(&arg, splitting_modes, &value);
+			if((int)splittingmode == -1) {
+				errno = EINVAL;
+				error("Invalid splitting mode entered: \"%s\"", arg_orig);
+				return EINVAL;
+			}
+			ctx_p->flags[SPLITTING] = splittingmode;
+
+			if (param_id != SECURESPLITTING)
+				break;
+			switch (splittingmode) {
+				case SM_THREAD:
+					ctx_p->flags[FORGET_PRIVTHREAD_INFO]++;
+					break;
+				case SM_PROCESS:
+					break;
+				case SM_OFF:
+					errno = EINVAL;
+					error("Cannot understand \"--secure-splitting=off\". This configuration line have no sence.");
+					break;
+			}
+			if (ctx_p->flags_values_raw[PERMIT_MPROTECT] == NULL)
+				ctx_p->flags[PERMIT_MPROTECT] = (splittingmode != SM_THREAD);
 			break;
 		}
 # endif
@@ -1562,9 +1695,9 @@ int ctx_check(ctx_t *ctx_p) {
 		ret = errno = EINVAL;
 		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--pre-exit-hook\".");
 	}
-	if (ctx_p->flags[THREADING] && ctx_p->flags[SECCOMP_FILTER]) {
+	if (ctx_p->flags[THREADING] && ctx_p->flags[SPLITTING] != SM_OFF) {
 		ret = errno = EINVAL;
-		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--seccomp-filter\".");
+		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--splitting=thread\".");
 	}
 	if (ctx_p->flags[SKIPINITSYNC] && ctx_p->flags[EXITONNOEVENTS]) {
 		ret = errno = EINVAL;
@@ -1973,8 +2106,10 @@ int main_status_update(ctx_t *ctx_p) {
 	return ret;
 }
 
+int argc;
+char **argv;
 #define UGID_PRESERVE (1<<16)
-int main(int argc, char *argv[]) {
+int main(int _argc, char *_argv[]) {
 	struct ctx *ctx_p = xcalloc(1, sizeof(*ctx_p));
 
 	int ret = 0, nret, rm_listoutdir = 0;
@@ -2007,6 +2142,9 @@ int main(int argc, char *argv[]) {
 	parse_parameter(ctx_p, LABEL, strdup(DEFAULT_LABEL), PS_DEFAULTS);
 
 	ncpus					 = sysconf(_SC_NPROCESSORS_ONLN); // Get number of available logical CPUs
+
+	argv = _argv;
+	argc = _argc;
 
 	memory_init();
 

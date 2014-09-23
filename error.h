@@ -1,18 +1,18 @@
 /*
-    clsyncmgr - intermediate daemon to aggregate clsync's sockets
-
-    Copyright (C) 2014  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
-
+    clsync - file tree sync utility based on inotify/kqueue
+    
+    Copyright (C) 2013-2014 Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
+    
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
-
+    
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-
+    
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -30,11 +30,11 @@
 
 extern void _critical( const char *const function_name, const char *fmt, ...);
 #define critical(...) 				_critical(__FUNCTION__, __VA_ARGS__)
-#define critical_on(cond) {if (cond) {critical("Assert: "TOSTR(cond));}}
+#define critical_on(cond) {if (unlikely(cond)) {critical("Assert: "TOSTR(cond));}}
 
 extern void _error(const char *const function_name, const char *fmt, ...);
 #define error(...) 				_error(__FUNCTION__, __VA_ARGS__)
-#define error_on(cond) {if (cond) {error("Error: ("TOSTR(cond)") != 0");}}
+#define error_on(cond)	  {if (unlikely(cond)) {error("Error: ("TOSTR(cond)") != 0");}}
 
 extern void _warning(const char *const function_name, const char *fmt, ...);
 #define warning(...) 				_warning(__FUNCTION__, __VA_ARGS__)

@@ -290,7 +290,7 @@ Russian:
 
 LVEE (Russian):
 - [clsync - live sync utility (abstract)](http://lvee.org/en/abstracts/118) [presentation](http://lvee.org/uploads/image_upload/file/337/winter_2014_15_clsync.pdf)
-
+- [clsync progress: security and porting to freebsd](http://lvee.org/en/abstracts/138)
 
 14. See also
 ------------

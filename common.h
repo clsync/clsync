@@ -122,7 +122,7 @@
 #define COLLECTDELAY_INSTANT ((unsigned int)~0)
 
 
-#define MSG_SECURITY_PROBLEM "Security problem: argv_free(NULL). Don't use this application until the bug fill be fixed. Report about the problem to: "AUTHOR
+#define MSG_SECURITY_PROBLEM(a) "Security problem: "a". Don't use this application until the bug will be fixed. Report about the problem to: "AUTHOR
 
 #define require_strlen_le(str, limit) \
 	if (strlen(str) >= limit)\
@@ -163,6 +163,13 @@ enum threadingmode {
 	PM_FULL
 };
 typedef enum threadingmode threadingmode_t;
+
+enum splittingmode_enum {
+	SM_OFF		= 0,
+	SM_THREAD,
+	SM_PROCESS,
+};
+typedef enum splittingmode_enum splittingmode_t;
 
 /*
 struct excludeinfo {
