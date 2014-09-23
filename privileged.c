@@ -812,8 +812,6 @@ int privileged_handler(ctx_t *ctx_p)
 	int use_args_check = 0;
 	int helper_isrunning = 1;
 
-	pthread_setname_np(pthread_self(), "clsync-helper");
-
 	opts  = calloc_align(1, sizeof(*opts));
 	opts->isprocsplitting = (ctx_p->flags[SPLITTING] == SM_PROCESS);
 	opts->shm_mprotect    =  ctx_p->flags[SHM_MPROTECT];
@@ -834,6 +832,8 @@ int privileged_handler(ctx_t *ctx_p)
 # ifndef __linux__
 		critical_on(!parent_isalive());
 # endif
+	} else {
+		pthread_setname_np(pthread_self(), "clsync-helper");
 	}
 	cap_drop(ctx_p, ctx_p->caps);
 

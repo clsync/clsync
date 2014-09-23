@@ -19,6 +19,8 @@
 
 extern int ncpus;
 extern pid_t parent_pid;
+extern int argc;
+extern char *argv[];
 
 extern int main_rehash(ctx_t *ctx_p);
 extern int main_status_update(ctx_t *ctx_p);

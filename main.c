@@ -341,6 +341,9 @@ int parent_isalive() {
 }
 
 void child_sigchld() {
+	if (getppid() != 1)
+		return;
+
 	debug(1, "Got SIGCHLD (parent ended). Exit.");
 	exit(-1);
 	return;
@@ -359,8 +362,7 @@ int sethandler_sigchld(void (*handler)()) {
 # ifndef __linux__
 void *watchforparent(void *parent_pid_p) {
 	while (1) {
-		if (getppid() == 1)
-			child_sigchld();
+		child_sigchld();
 		sleep(SLEEP_SECONDS);
 	}
 
@@ -911,7 +913,8 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 					error("Cannot understand \"--secure-splitting=off\". This configuration line have no sence.");
 					break;
 			}
-			ctx_p->flags[PERMIT_MPROTECT] = 0;
+			if (ctx_p->flags_values_raw[PERMIT_MPROTECT] == NULL)
+				ctx_p->flags[PERMIT_MPROTECT] = (splittingmode != SM_THREAD);
 			break;
 		}
 # endif
@@ -1692,9 +1695,9 @@ int ctx_check(ctx_t *ctx_p) {
 		ret = errno = EINVAL;
 		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--pre-exit-hook\".");
 	}
-	if (ctx_p->flags[THREADING] && ctx_p->flags[SECCOMP_FILTER]) {
+	if (ctx_p->flags[THREADING] && ctx_p->flags[SECCOMP_FILTER] && ctx_p->flags[SPLITTING] == SM_THREAD) {
 		ret = errno = EINVAL;
-		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--seccomp-filter\".");
+		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--splitting=thread\" and \"--seccomp-filter\".");
 	}
 	if (ctx_p->flags[SKIPINITSYNC] && ctx_p->flags[EXITONNOEVENTS]) {
 		ret = errno = EINVAL;
@@ -2103,8 +2106,10 @@ int main_status_update(ctx_t *ctx_p) {
 	return ret;
 }
 
+int argc;
+char **argv;
 #define UGID_PRESERVE (1<<16)
-int main(int argc, char *argv[]) {
+int main(int _argc, char *_argv[]) {
 	struct ctx *ctx_p = xcalloc(1, sizeof(*ctx_p));
 
 	int ret = 0, nret, rm_listoutdir = 0;
@@ -2137,6 +2142,9 @@ int main(int argc, char *argv[]) {
 	parse_parameter(ctx_p, LABEL, strdup(DEFAULT_LABEL), PS_DEFAULTS);
 
 	ncpus					 = sysconf(_SC_NPROCESSORS_ONLN); // Get number of available logical CPUs
+
+	argv = _argv;
+	argc = _argc;
 
 	memory_init();
 
