@@ -148,9 +148,9 @@ int kqueue_mark(ctx_t *ctx_p, monobj_t *obj_p) {
 	debug(9, "");
 
 	if (obj_p->dir_fd == -1)
-		obj_p->fd = open(ctx_p->watchdir, O_RDONLY);
+		obj_p->fd = open(ctx_p->watchdir, O_RDONLY|O_NOFOLLOW);
 	else
-		obj_p->fd = openat(obj_p->dir_fd, obj_p->name, O_RDONLY);
+		obj_p->fd = openat(obj_p->dir_fd, obj_p->name, O_RDONLY|O_NOFOLLOW);
 
 	debug(4, "obj_p->: dir_fd == %i; name == \"%s\"; fd == %i; type == %i (isdir == %i)", obj_p->dir_fd, obj_p->name, obj_p->fd, obj_p->type, obj_p->type == DT_DIR);
 
@@ -534,7 +534,7 @@ static inline int _kqueue_handle_oneevent_dircontent(ctx_t *ctx_p, indexes_t *in
 		fd = open(ctx_p->watchdir, O_RDONLY|O_PATH);
 	else
 		fd = openat(obj_p->dir_fd, obj_p->name, O_RDONLY|O_PATH);
-		
+
 	dir = fdopendir(fd);
 
 	while ((entry = readdir(dir))) {
