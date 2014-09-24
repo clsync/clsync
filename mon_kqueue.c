@@ -526,11 +526,15 @@ static inline int _kqueue_handle_oneevent_dircontent(ctx_t *ctx_p, indexes_t *in
 	DIR *dir;
 	struct dirent *entry;
 	struct kqueue_data *dat = ctx_p->fsmondata;
-	debug(8, "obj_p->fd == %i", obj_p->fd);
+	debug(8, "obj_p->dir_fd == %i", obj_p->dir_fd);
 
 	int fd;
 
-	fd  = openat(obj_p->fd, obj_p->name, O_RDONLY|O_PATH);
+	if (obj_p->dir_fd == -1)
+		fd = open(ctx_p->watchdir, O_RDONLY|O_PATH);
+	else
+		fd = openat(obj_p->dir_fd, obj_p->name, O_RDONLY|O_PATH);
+		
 	dir = fdopendir(fd);
 
 	while ((entry = readdir(dir))) {
