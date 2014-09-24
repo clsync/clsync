@@ -1818,6 +1818,10 @@ int ctx_check(ctx_t *ctx_p) {
 		ret = errno = EINVAL;
 		error("Conflicting options: \"--full-initialsync\" and \"--skip-initialsync\" cannot be used together.");
 	}
+	if (ctx_p->flags[MODSIGN] && (ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT)) {
+		ret = errno = EINVAL;
+		error("Conflicting options: \"--modification-signature\" and \"--cancel-syscalls=mon_stat\" cannot be used together.");
+	}
 
 	if (ctx_p->flags[EXCLUDEMOUNTPOINTS])
 		ctx_p->flags[ONEFILESYSTEM]=1;

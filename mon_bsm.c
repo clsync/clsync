@@ -446,7 +446,7 @@ int bsm_handle(struct ctx *ctx_p, struct indexes *indexes_p) {
 			path_stat = event_p->path;
 
 		if ((ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT) || lstat(path_stat, &st)) {
-			debug(2, "Cannot lstat64(\"%s\", st). Seems, that the object disappeared.", path_stat);
+			debug(2, "Cannot lstat64(\"%s\", st). Seems, that the object disappeared or option \"--cancel-syscalls=mon_stat\" is set.", path_stat);
 			if(r.f.objtype_old == EOT_DIR || r.f.objtype_new == EOT_DIR)
 				st_mode = S_IFDIR;
 			else

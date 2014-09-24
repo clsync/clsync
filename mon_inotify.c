@@ -143,7 +143,7 @@ int inotify_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 			mode_t st_mode;
 			size_t st_size;
 			if ((ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT) || lstat64(path_full, &lstat)) {
-				debug(2, "Cannot lstat64(\"%s\", lstat). Seems, that the object disappeared.", path_full);
+				debug(2, "Cannot lstat64(\"%s\", lstat). Seems, that the object disappeared or option \"--cancel-syscalls mon_stat\" is set.", path_full);
 				if(event->mask & IN_ISDIR)
 					st_mode = S_IFDIR;
 				else
