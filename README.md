@@ -236,6 +236,8 @@ split-brain, that can be solved two ways:
 Example of the script is just a script that calls "find" on both sides to
 determine which side has the latest changes :)
 
+UPD: I've added option "--modification-signature" that helps to prevent syncing file, that is not changed. You can easily use it to prevent sync-loops for bi-directional syncing.
+
 9. Known building issues
 ------------------------
 
