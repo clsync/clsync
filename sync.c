@@ -1886,6 +1886,39 @@ int sync_dosync(const char *fpath, uint32_t evmask, ctx_t *ctx_p, indexes_t *ind
 	return ret;
 }
 
+int fileischanged(ctx_t *ctx_p, indexes_t *indexes_p, const char *path_rel, stat64_t *lstat_p, int is_deleted) {
+	if (lstat_p == NULL || !ctx_p->flags[MODSIGN])
+		return 1;
+
+	debug(9, "Checking modification signature");
+	fileinfo_t *finfo = indexes_fileinfo(indexes_p, path_rel);
+	if (finfo != NULL) {
+		uint32_t diff;
+		if (!(diff=stat_diff(&finfo->lstat, lstat_p) & ctx_p->flags[MODSIGN])) {
+			debug(8, "Modification signature: File not changed: \"%s\"", path_rel);
+			return 0;	// Skip file syncing if it's metadata not changed enough (according to "--modification-signature" setting)
+		}
+		debug(8, "Modification signature: stat_diff == 0x%o; significant diff == 0x%o (ctx_p->flags[MODSIGN] == 0x%o)", diff, diff&ctx_p->flags[MODSIGN], ctx_p->flags[MODSIGN]);
+
+		if (is_deleted) {
+			debug(8, "Modification signature: Deleting information about \"%s\"", path_rel);
+			indexes_fileinfo_add(indexes_p, path_rel, NULL);
+			free(finfo);
+		} else {
+			debug(8, "Modification signature: Updating information about \"%s\"", path_rel);
+			memcpy(&finfo->lstat, lstat_p, sizeof(finfo->lstat));
+		}
+	} else {
+		debug(8, "There's no information about this file/dir: \"%s\". Just remembering the current state.", path_rel);
+		// Adding file/dir information
+		finfo = xmalloc(sizeof(*finfo));
+		memcpy(&finfo->lstat, lstat_p, sizeof(finfo->lstat));
+		indexes_fileinfo_add(indexes_p, path_rel, finfo);
+	}
+
+	return 1;
+}
+
 int sync_prequeue_loadmark
 (
 		int monitored,
@@ -1953,8 +1986,6 @@ int sync_prequeue_loadmark
 	if (is_dir) {
 		if (is_created) {
 			int ret;
-			if (lstat_p != NULL && ctx_p->flags[MODSIGN]) {
-			}
 
 			if (perm & RA_WALK) {
 				if (path_full == NULL) {
@@ -1978,6 +2009,7 @@ int sync_prequeue_loadmark
 				}
 			}
 
+			fileischanged(ctx_p, indexes_p, path_rel, lstat_p, is_deleted);	// Just to remember it's state
 			return 0;
 		} else 
 		if (is_deleted) {
@@ -1989,26 +2021,9 @@ int sync_prequeue_loadmark
 		return 0;
 	}
 
-	if (lstat_p != NULL && ctx_p->flags[MODSIGN]) {
-		fileinfo_t *finfo = indexes_fileinfo(indexes_p, path_rel);
-		if (finfo != NULL) {
-			if (!(stat_diff(&finfo->lstat, lstat_p) & ctx_p->flags[MODSIGN]))
-				return 0;	// Skip file syncing if it's metadata not changed enough (according to "--modification-signature" setting)
-
-			if (is_deleted) {
-				// Removing file/dir information
-				indexes_fileinfo_add(indexes_p, path_rel, NULL);
-				free(finfo);
-			} else {
-				// Updating file/dir information
-				memcpy(&finfo->lstat, lstat_p, sizeof(finfo->lstat));
-			}
-		} else {
-			// Adding file/dir information
-			finfo = xmalloc(sizeof(*finfo));
-			memcpy(&finfo->lstat, lstat_p, sizeof(finfo->lstat));
-			indexes_fileinfo_add(indexes_p, path_rel, finfo);
-		}
+	if (!fileischanged(ctx_p, indexes_p, path_rel, lstat_p, is_deleted)) {
+		debug(4, "The file is not changed. Returning.");
+		return 0;
 	}
 
 	switch (ctx_p->flags[MODE]) {

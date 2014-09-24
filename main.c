@@ -183,27 +183,71 @@ static char *const pivotrootways[] = {
 
 #ifdef CAPABILITIES_SUPPORT
 
+enum xstatfield {
+	X_STAT_FIELD_RESET = 0,
+	X_STAT_FIELD_DEV,
+	X_STAT_FIELD_INO,
+	X_STAT_FIELD_MODE,
+	X_STAT_FIELD_NLINK,
+	X_STAT_FIELD_UID,
+	X_STAT_FIELD_GID,
+	X_STAT_FIELD_RDEV,
+	X_STAT_FIELD_SIZE,
+	X_STAT_FIELD_BLKSIZE,
+	X_STAT_FIELD_BLOCKS,
+	X_STAT_FIELD_ATIME,
+	X_STAT_FIELD_MTIME,
+	X_STAT_FIELD_CTIME,
+};
+
+uint32_t xstatfield_to_statfield[] = {
+	[X_STAT_FIELD_RESET]		= STAT_FIELD_RESET,
+	[X_STAT_FIELD_DEV]		= STAT_FIELD_DEV,
+	[X_STAT_FIELD_INO]		= STAT_FIELD_INO,
+	[X_STAT_FIELD_MODE]		= STAT_FIELD_MODE,
+	[X_STAT_FIELD_NLINK]		= STAT_FIELD_NLINK,
+	[X_STAT_FIELD_UID]		= STAT_FIELD_UID,
+	[X_STAT_FIELD_GID]		= STAT_FIELD_GID,
+	[X_STAT_FIELD_RDEV]		= STAT_FIELD_RDEV,
+	[X_STAT_FIELD_SIZE]		= STAT_FIELD_SIZE,
+	[X_STAT_FIELD_BLKSIZE]		= STAT_FIELD_BLKSIZE,
+	[X_STAT_FIELD_BLOCKS]		= STAT_FIELD_BLOCKS,
+	[X_STAT_FIELD_ATIME]		= STAT_FIELD_ATIME,
+	[X_STAT_FIELD_MTIME]		= STAT_FIELD_MTIME,
+	[X_STAT_FIELD_CTIME]		= STAT_FIELD_CTIME,
+};
+
 static char *const stat_fields[] = {
-	[STAT_FIELD_RESET]		= "",
-	[STAT_FIELD_DEV]		= "dev",
-	[STAT_FIELD_INO]		= "ino",
-	[STAT_FIELD_MODE]		= "mode",
-	[STAT_FIELD_NLINK]		= "nlink",
-	[STAT_FIELD_UID]		= "uid",
-	[STAT_FIELD_GID]		= "gid",
-	[STAT_FIELD_RDEV]		= "rdev",
-	[STAT_FIELD_SIZE]		= "size",
-	[STAT_FIELD_BLKSIZE]		= "blksize",
-	[STAT_FIELD_BLOCKS]		= "blocks",
-	[STAT_FIELD_ATIME]		= "atime",
-	[STAT_FIELD_MTIME]		= "mtime",
-	[STAT_FIELD_CTIME]		= "ctime",
+	[X_STAT_FIELD_RESET]		= "",
+	[X_STAT_FIELD_DEV]		= "dev",
+	[X_STAT_FIELD_INO]		= "ino",
+	[X_STAT_FIELD_MODE]		= "mode",
+	[X_STAT_FIELD_NLINK]		= "nlink",
+	[X_STAT_FIELD_UID]		= "uid",
+	[X_STAT_FIELD_GID]		= "gid",
+	[X_STAT_FIELD_RDEV]		= "rdev",
+	[X_STAT_FIELD_SIZE]		= "size",
+	[X_STAT_FIELD_BLKSIZE]		= "blksize",
+	[X_STAT_FIELD_BLOCKS]		= "blocks",
+	[X_STAT_FIELD_ATIME]		= "atime",
+	[X_STAT_FIELD_MTIME]		= "mtime",
+	[X_STAT_FIELD_CTIME]		= "ctime",
 	NULL
 };
 
+enum x_csc_bm {
+	X_CSC_RESET = 0,
+	X_CSC_MON_STAT,
+};
+
+uint32_t xcsc_to_csc[] = {
+	[X_CSC_RESET]			= CSC_RESET,
+	[X_CSC_MON_STAT]		= CSC_MON_STAT,
+};
+
 static char *const syscalls_bitmask[] = {
-	[CSC_RESET]		= "",
-	[CSC_MON_STAT]		= "mon_stat",	// disable {l,}stat{,64}()-s in mon_*.c
+	[X_CSC_RESET]			= "",
+	[X_CSC_MON_STAT]		= "mon_stat",	// disable {l,}stat{,64}()-s in mon_*.c
 	NULL
 };
 
@@ -1244,18 +1288,19 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			while (*subopts != 0) {
 				char *value;
 				typeof(ctx_p->flags[MODSIGN]) field = getsubopt(&subopts, stat_fields, &value);
-				debug(4, "field == 0x%x", field);
-				if (field != STAT_FIELD_RESET)
-					ctx_p->flags[MODSIGN] |= field;
+				debug(4, "field == %i -> %x (%s)", field, xstatfield_to_statfield[field], value);
+				if (field != X_STAT_FIELD_RESET)
+					ctx_p->flags[MODSIGN] |= xstatfield_to_statfield[field];
 			}
 
+			debug(5, "ctx_p->flags[MODSIGN] == 0x%x", ctx_p->flags[MODSIGN]);
 			break;
 		}
 		case SYNCDELAY: 
 			ctx_p->syncdelay		= (unsigned int)atol(arg);
 			break;
 		case DELAY:
-			ctx_p->_queues[QUEUE_NORMAL].collectdelay = (unsigned int)atol(arg);
+			ctx_p->_queues[QUEUE_NORMAL].collectdelay  = (unsigned int)atol(arg);
 			break;
 		case BFILEDELAY:
 			ctx_p->_queues[QUEUE_BIGFILE].collectdelay = (unsigned int)atol(arg);
@@ -1269,13 +1314,13 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			while (*subopts != 0) {
 				char *value;
 				typeof(ctx_p->flags[CANCEL_SYSCALLS]) syscall_bitmask = getsubopt(&subopts, syscalls_bitmask, &value);
-				debug(4, "cancel syscall == 0x%x", syscall_bitmask);
-				if (syscall_bitmask == CSC_RESET) {
+				debug(4, "cancel syscall == %i -> 0x%x", syscall_bitmask, xcsc_to_csc[syscall_bitmask]);
+				if (syscall_bitmask == X_CSC_RESET) {
 					ctx_p->flags[CANCEL_SYSCALLS] = 0;
 					continue;
 				}
 
-				ctx_p->flags[CANCEL_SYSCALLS] |= syscall_bitmask;
+				ctx_p->flags[CANCEL_SYSCALLS] |= xcsc_to_csc[syscall_bitmask];
 			}
 
 			break;
