@@ -621,7 +621,8 @@ The default value is "0".
 .B \-\-modification\-signature
 .I signature\-mask
 .RS
-Sets file/dir modification recheck signature.
+Sets file/dir modification recheck signature. If file is not modified
+(according to the signature) then don't sync it.
 
 See
 .I "struct stat"
