@@ -198,6 +198,7 @@ enum xstatfield {
 	X_STAT_FIELD_ATIME,
 	X_STAT_FIELD_MTIME,
 	X_STAT_FIELD_CTIME,
+	X_STAT_FIELD_ALL,
 };
 
 uint32_t xstatfield_to_statfield[] = {
@@ -215,6 +216,7 @@ uint32_t xstatfield_to_statfield[] = {
 	[X_STAT_FIELD_ATIME]		= STAT_FIELD_ATIME,
 	[X_STAT_FIELD_MTIME]		= STAT_FIELD_MTIME,
 	[X_STAT_FIELD_CTIME]		= STAT_FIELD_CTIME,
+	[X_STAT_FIELD_ALL]		= STAT_FIELD_ALL,
 };
 
 static char *const stat_fields[] = {
@@ -232,6 +234,7 @@ static char *const stat_fields[] = {
 	[X_STAT_FIELD_ATIME]		= "atime",
 	[X_STAT_FIELD_MTIME]		= "mtime",
 	[X_STAT_FIELD_CTIME]		= "ctime",
+	[X_STAT_FIELD_ALL]		= "*",
 	NULL
 };
 
