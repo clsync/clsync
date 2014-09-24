@@ -618,14 +618,60 @@ to prevent infinite sync-up processes.
 The default value is "0".
 .RE
 
+.B \-\-modification\-signature
+.I signature\-mask
+.RS
+Sets file/dir modification recheck signature.
+
+See
+.I "struct stat"
+in
+.BR lstat (2)
+for possible fields.
+
+For example reasonable
+.IR signature\-mask \-s
+can be "dev,ino,mode,uid,gid,rdev,size,atime,mtime,ctime" (there's an alias for that — "*") or "uid,gid".
+
+Examples of use cases:
+.RS
+.B chown/chmod
+.RS
+If you're using clsync for fixing file/dir privileges [using 
+.BR chown (1)
+and/or
+.BR chmod (1)]
+than reasonable signature will be "uid,gid".
+
+Full example: clsync \-w5 \-t5 \-T5 \-x1 \-W /var/www/site.example.org/root \-Mdirect \-Schown \-\-uid 0 \-\-gid 0 \-Ysyslog \-b1 \-\-modification\-signature uid,gid \-\- \-\-from=root www\-data:www\-data %INCLUDE\-LIST%
+.RE
+.B "bi\-directional syncing"
+.RS
+If you're going to setup bi\-directional syncing then you may use \-\-modification\-signature "*" to prevent sync loop between servers.
+.RE
+.B Not enough CPU
+.RS
+If rsync eats too many CPU with rechecking hashsums of files on their dry open()/close() due to some hacky script (for example "chown -R www-data:www-data" in cron) then you can use \-\-modification\-signature "dev,ino,mode,uid,gid,rdev,size,atime,mtime" (without "blksize", "blocks", "nlink" and "ctime")
+.RE
+.RE
+
+.B Warning! This option may eat a lot of memory on huge file trees.
+
+This option cannot be used together with "\-\-cancel\-syscalls=mon_stat"
+
+To disable file/dir modification rechecking use empty value — "".
+
+The default value is "".
+.RE
+
 .PP
 .B \-k, \-\-timeout\-sync
-.I sync-timeout
+.I sync\-timeout
 .RS
 Sets timeout for syncing processes.
 .B clsync
 will die if syncing process alive more than
-.I sync-timeout
+.I sync\-timeout
 seconds.
 
 Set "0" to disable the timeout.
@@ -672,6 +718,31 @@ separate collecting delay. This is supposed to be used as a means of unloading
 IO resources.
 
 The default value is "134217728" ["128 MiB"].
+.RE
+
+.B \-\-cancel\-syscalls
+.I syscalls\-mask
+.RS
+Sets syscalls to be bypassed. This may be used for to squeeze more
+performance.
+
+Possible values:
+.RS
+.B mon_stat
+.RS
+Skip lstat() calls while handling files/dirs events. This makes unpossible to
+determine files sizes (that is used by
+.B \-\-threshold\-bigfile
+option) and to use option
+.BR \-\-modification\-signature .
+.RE
+.RE
+
+You can combine this values using commas.
+
+To disable this option just use empty value — "".
+
+The default value is "".
 .RE
 
 .PP

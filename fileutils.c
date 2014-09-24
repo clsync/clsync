@@ -19,8 +19,6 @@
 
 #include "common.h"
 
-#include "port-hacks.h"
-
 #include "error.h"
 #include "malloc.h"
 
@@ -206,4 +204,37 @@ int open_dir(int *fd_p, const char *const dir_path) {
 	return fd;
 }
 */
+
+
+uint32_t stat_diff(stat64_t *a, stat64_t *b) {
+	uint32_t difference;
+#ifdef PARANOID
+	critical_on (a == NULL);
+	critical_on (b == NULL);
+#endif
+
+	difference = 0x0000;
+
+#define STAT_COMPARE(bit, field)	\
+	if (a->field != b->field)	\
+		difference |= bit;
+
+	STAT_COMPARE(STAT_FIELD_DEV,	st_dev);
+	STAT_COMPARE(STAT_FIELD_INO,	st_ino);
+	STAT_COMPARE(STAT_FIELD_MODE,	st_mode);
+	STAT_COMPARE(STAT_FIELD_NLINK,	st_nlink);
+	STAT_COMPARE(STAT_FIELD_UID,	st_uid);
+	STAT_COMPARE(STAT_FIELD_GID,	st_gid);
+	STAT_COMPARE(STAT_FIELD_RDEV,	st_rdev);
+	STAT_COMPARE(STAT_FIELD_SIZE,	st_size);
+	STAT_COMPARE(STAT_FIELD_BLKSIZE,st_blksize);
+	STAT_COMPARE(STAT_FIELD_BLOCKS,	st_blocks);
+	STAT_COMPARE(STAT_FIELD_ATIME,	st_atime);
+	STAT_COMPARE(STAT_FIELD_MTIME,	st_mtime);
+	STAT_COMPARE(STAT_FIELD_CTIME,	st_ctime);
+
+#undef STAT_COMPARE
+
+	return difference;
+}
 

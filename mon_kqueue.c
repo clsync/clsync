@@ -18,7 +18,6 @@
  */
 
 #include "common.h"
-#include "port-hacks.h"
 
 #include <search.h>
 
@@ -449,7 +448,7 @@ char *kqueue_getpath(ctx_t *ctx_p, indexes_t *indexes_p, monobj_t *obj_p) {
 }
 
 int kqueue_sync(ctx_t *ctx_p, indexes_t *indexes_p, struct kevent *ev_p, monobj_t *obj_p) {
-	stat64_t lstat;
+	stat64_t lstat, *lstat_p;
 	char *path_full = kqueue_getpath(ctx_p, indexes_p, obj_p);
 
 #ifdef PARANOID
@@ -462,16 +461,18 @@ int kqueue_sync(ctx_t *ctx_p, indexes_t *indexes_p, struct kevent *ev_p, monobj_
 
 	mode_t st_mode;
 	size_t st_size;
-	if (lstat64(path_full, &lstat)) {
-		debug(2, "Cannot lstat64(\"%s\", lstat). Seems, that the object disappeared.", path_full);
+	if ((ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT) || lstat64(path_full, &lstat)) {
+		debug(2, "Cannot or cancelled lstat64(\"%s\", lstat). The object disappeared or option \"--cancel-syscalls=mon_stat\" is set.", path_full);
 		if(obj_p->type == DT_DIR)
 			st_mode = S_IFDIR;
 		else
 			st_mode = S_IFREG;
 		st_size = 0;
+		lstat_p = NULL;
 	} else {
-		st_mode = lstat.st_mode;
-		st_size = lstat.st_size;
+		st_mode =  lstat.st_mode;
+		st_size =  lstat.st_size;
+		lstat_p = &lstat;
 	}
 
 	{
@@ -480,7 +481,7 @@ int kqueue_sync(ctx_t *ctx_p, indexes_t *indexes_p, struct kevent *ev_p, monobj_
 		struct  recognize_event_return r;
 		r.u.i = recognize_event(ev_p->fflags, obj_p->type == DT_DIR);
 
-		int ret = sync_prequeue_loadmark(1, ctx_p, indexes_p, path_full, NULL, r.u.v.objtype_old, r.u.v.objtype_new, ev_p->fflags, ev_p->ident, st_mode, st_size, &path_rel, &path_rel_len, NULL);
+		int ret = sync_prequeue_loadmark(1, ctx_p, indexes_p, path_full, NULL, lstat_p, r.u.v.objtype_old, r.u.v.objtype_new, ev_p->fflags, ev_p->ident, st_mode, st_size, &path_rel, &path_rel_len, NULL);
 
 		if (path_rel != NULL)
 			free(path_rel);

@@ -22,6 +22,8 @@
  * to be slow but convenient functions.
  */
 
+#include "common.h"
+
 #include <stdlib.h>
 #include <execinfo.h>
 #include <stdio.h>
@@ -31,7 +33,6 @@
 #include <syslog.h>
 #include <pthread.h>	/* pthread_self() */
 #include "error.h"
-#include "common.h"
 #include "pthreadex.h"	/* pthread_*_shared() */
 
 static int zero     = 0;

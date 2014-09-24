@@ -25,8 +25,6 @@
 #	include <sys/prctl.h>		// for prctl() for --preserve-fil-access
 #endif
 
-#include "port-hacks.h"
-
 #include <pwd.h>	// getpwnam()
 #include <grp.h>	// getgrnam()
 
@@ -130,11 +128,13 @@ static const struct option long_options[] =
 #endif
 	{"max-iterations",	required_argument,	NULL,	MAXITERATIONS},
 	{"standby-file",	required_argument,	NULL,	STANDBYFILE},
+	{"modification-signature",required_argument,	NULL,	MODSIGN},
 	{"timeout-sync",	required_argument,	NULL,	SYNCTIMEOUT},
 	{"delay-sync",		required_argument,	NULL,	SYNCDELAY},
 	{"delay-collect",	required_argument,	NULL,	DELAY},
 	{"delay-collect-bigfile",required_argument,	NULL,	BFILEDELAY},
 	{"threshold-bigfile",	required_argument,	NULL,	BFILETHRESHOLD},
+	{"cancel-syscalls",	required_argument,	NULL,	CANCEL_SYSCALLS},
 	{"lists-dir",		required_argument,	NULL,	OUTLISTSDIR},
 	{"have-recursive-sync",	optional_argument,	NULL,	HAVERECURSIVESYNC},
 	{"synclist-simplify",	optional_argument,	NULL,	SYNCLISTSIMPLIFY},
@@ -182,6 +182,74 @@ static char *const pivotrootways[] = {
 #endif
 
 #ifdef CAPABILITIES_SUPPORT
+
+enum xstatfield {
+	X_STAT_FIELD_RESET = 0,
+	X_STAT_FIELD_DEV,
+	X_STAT_FIELD_INO,
+	X_STAT_FIELD_MODE,
+	X_STAT_FIELD_NLINK,
+	X_STAT_FIELD_UID,
+	X_STAT_FIELD_GID,
+	X_STAT_FIELD_RDEV,
+	X_STAT_FIELD_SIZE,
+	X_STAT_FIELD_BLKSIZE,
+	X_STAT_FIELD_BLOCKS,
+	X_STAT_FIELD_ATIME,
+	X_STAT_FIELD_MTIME,
+	X_STAT_FIELD_CTIME,
+};
+
+uint32_t xstatfield_to_statfield[] = {
+	[X_STAT_FIELD_RESET]		= STAT_FIELD_RESET,
+	[X_STAT_FIELD_DEV]		= STAT_FIELD_DEV,
+	[X_STAT_FIELD_INO]		= STAT_FIELD_INO,
+	[X_STAT_FIELD_MODE]		= STAT_FIELD_MODE,
+	[X_STAT_FIELD_NLINK]		= STAT_FIELD_NLINK,
+	[X_STAT_FIELD_UID]		= STAT_FIELD_UID,
+	[X_STAT_FIELD_GID]		= STAT_FIELD_GID,
+	[X_STAT_FIELD_RDEV]		= STAT_FIELD_RDEV,
+	[X_STAT_FIELD_SIZE]		= STAT_FIELD_SIZE,
+	[X_STAT_FIELD_BLKSIZE]		= STAT_FIELD_BLKSIZE,
+	[X_STAT_FIELD_BLOCKS]		= STAT_FIELD_BLOCKS,
+	[X_STAT_FIELD_ATIME]		= STAT_FIELD_ATIME,
+	[X_STAT_FIELD_MTIME]		= STAT_FIELD_MTIME,
+	[X_STAT_FIELD_CTIME]		= STAT_FIELD_CTIME,
+};
+
+static char *const stat_fields[] = {
+	[X_STAT_FIELD_RESET]		= "",
+	[X_STAT_FIELD_DEV]		= "dev",
+	[X_STAT_FIELD_INO]		= "ino",
+	[X_STAT_FIELD_MODE]		= "mode",
+	[X_STAT_FIELD_NLINK]		= "nlink",
+	[X_STAT_FIELD_UID]		= "uid",
+	[X_STAT_FIELD_GID]		= "gid",
+	[X_STAT_FIELD_RDEV]		= "rdev",
+	[X_STAT_FIELD_SIZE]		= "size",
+	[X_STAT_FIELD_BLKSIZE]		= "blksize",
+	[X_STAT_FIELD_BLOCKS]		= "blocks",
+	[X_STAT_FIELD_ATIME]		= "atime",
+	[X_STAT_FIELD_MTIME]		= "mtime",
+	[X_STAT_FIELD_CTIME]		= "ctime",
+	NULL
+};
+
+enum x_csc_bm {
+	X_CSC_RESET = 0,
+	X_CSC_MON_STAT,
+};
+
+uint32_t xcsc_to_csc[] = {
+	[X_CSC_RESET]			= CSC_RESET,
+	[X_CSC_MON_STAT]		= CSC_MON_STAT,
+};
+
+static char *const syscalls_bitmask[] = {
+	[X_CSC_RESET]			= "",
+	[X_CSC_MON_STAT]		= "mon_stat",	// disable {l,}stat{,64}()-s in mon_*.c
+	NULL
+};
 
 enum x_capabilities {
 	X_CAP_RESET = 0,
@@ -1212,11 +1280,27 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 				ctx_p->flags[STANDBYFILE]	= 0;
 			}
 			break;
+		case MODSIGN: {
+			char *subopts = arg;
+
+			ctx_p->flags[MODSIGN] = 0;
+
+			while (*subopts != 0) {
+				char *value;
+				typeof(ctx_p->flags[MODSIGN]) field = getsubopt(&subopts, stat_fields, &value);
+				debug(4, "field == %i -> %x (%s)", field, xstatfield_to_statfield[field], value);
+				if (field != X_STAT_FIELD_RESET)
+					ctx_p->flags[MODSIGN] |= xstatfield_to_statfield[field];
+			}
+
+			debug(5, "ctx_p->flags[MODSIGN] == 0x%x", ctx_p->flags[MODSIGN]);
+			break;
+		}
 		case SYNCDELAY: 
 			ctx_p->syncdelay		= (unsigned int)atol(arg);
 			break;
 		case DELAY:
-			ctx_p->_queues[QUEUE_NORMAL].collectdelay = (unsigned int)atol(arg);
+			ctx_p->_queues[QUEUE_NORMAL].collectdelay  = (unsigned int)atol(arg);
 			break;
 		case BFILEDELAY:
 			ctx_p->_queues[QUEUE_BIGFILE].collectdelay = (unsigned int)atol(arg);
@@ -1224,6 +1308,23 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 		case BFILETHRESHOLD:
 			ctx_p->bfilethreshold = (unsigned long)atol(arg);
 			break;
+		case CANCEL_SYSCALLS: {
+			char *subopts = arg;
+
+			while (*subopts != 0) {
+				char *value;
+				typeof(ctx_p->flags[CANCEL_SYSCALLS]) syscall_bitmask = getsubopt(&subopts, syscalls_bitmask, &value);
+				debug(4, "cancel syscall == %i -> 0x%x", syscall_bitmask, xcsc_to_csc[syscall_bitmask]);
+				if (syscall_bitmask == X_CSC_RESET) {
+					ctx_p->flags[CANCEL_SYSCALLS] = 0;
+					continue;
+				}
+
+				ctx_p->flags[CANCEL_SYSCALLS] |= xcsc_to_csc[syscall_bitmask];
+			}
+
+			break;
+		}
 		case MONITOR: {
 			char *value, *arg_orig = arg;
 			if (paramsource == PS_CONTROL) {
@@ -1716,6 +1817,10 @@ int ctx_check(ctx_t *ctx_p) {
 	if (ctx_p->flags[INITFULL] && ctx_p->flags[SKIPINITSYNC]) {
 		ret = errno = EINVAL;
 		error("Conflicting options: \"--full-initialsync\" and \"--skip-initialsync\" cannot be used together.");
+	}
+	if (ctx_p->flags[MODSIGN] && (ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT)) {
+		ret = errno = EINVAL;
+		error("Conflicting options: \"--modification-signature\" and \"--cancel-syscalls=mon_stat\" cannot be used together.");
 	}
 
 	if (ctx_p->flags[EXCLUDEMOUNTPOINTS])

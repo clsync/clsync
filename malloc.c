@@ -17,6 +17,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "common.h"
+
 #include <stdlib.h>
 #include <string.h>
 #ifdef CAPABILITIES_SUPPORT
@@ -31,7 +33,6 @@
 #include <sys/ipc.h>			// shmget()
 #include <sys/shm.h>			// shmget()
 
-#include "common.h"
 #include "malloc.h"
 #include "error.h"
 #include "configuration.h"

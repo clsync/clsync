@@ -33,7 +33,6 @@
 #ifdef CLUSTER_SUPPORT
 
 #include "common.h"
-#include "port-hacks.h"
 #include "indexes.h"
 #include "error.h"
 #include "cluster.h"
