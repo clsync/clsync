@@ -427,7 +427,7 @@ int bsm_handle(struct ctx *ctx_p, struct indexes *indexes_p) {
 	do {
 		struct  recognize_event_return r = {{0}};
 		char *path_stat;
-		struct stat st;
+		struct stat st, *st_p;
 		mode_t st_mode;
 		size_t st_size;
 
@@ -445,20 +445,24 @@ int bsm_handle(struct ctx *ctx_p, struct indexes *indexes_p) {
 		else 
 			path_stat = event_p->path;
 
-		if (lstat(path_stat, &st)) {
+		if ((ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT) || lstat(path_stat, &st)) {
 			debug(2, "Cannot lstat64(\"%s\", st). Seems, that the object disappeared.", path_stat);
 			if(r.f.objtype_old == EOT_DIR || r.f.objtype_new == EOT_DIR)
 				st_mode = S_IFDIR;
 			else
 				st_mode = S_IFREG;
 			st_size = 0;
+
+			st_p    = NULL;
 		} else {
 			st_mode = st.st_mode;
 			st_size = st.st_size;
+
+			st_p    = &st;
 		}
 
 		if (*event_p->path) {
-			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, event_p->path, NULL, r.f.objtype_old, r.f.objtype_new, event_p->type, event_p->w_id, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
+			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, event_p->path, NULL, st_p, r.f.objtype_old, r.f.objtype_new, event_p->type, event_p->w_id, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
 				error("Got error while load_mark-ing into pre-queue \"%s\"", event_p->path);
 				count = -1;
 				*event_p->path = 0;

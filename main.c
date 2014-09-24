@@ -25,8 +25,6 @@
 #	include <sys/prctl.h>		// for prctl() for --preserve-fil-access
 #endif
 
-#include "port-hacks.h"
-
 #include <pwd.h>	// getpwnam()
 #include <grp.h>	// getgrnam()
 
@@ -136,6 +134,7 @@ static const struct option long_options[] =
 	{"delay-collect",	required_argument,	NULL,	DELAY},
 	{"delay-collect-bigfile",required_argument,	NULL,	BFILEDELAY},
 	{"threshold-bigfile",	required_argument,	NULL,	BFILETHRESHOLD},
+	{"cancel-syscalls",	required_argument,	NULL,	CANCEL_SYSCALLS},
 	{"lists-dir",		required_argument,	NULL,	OUTLISTSDIR},
 	{"have-recursive-sync",	optional_argument,	NULL,	HAVERECURSIVESYNC},
 	{"synclist-simplify",	optional_argument,	NULL,	SYNCLISTSIMPLIFY},
@@ -184,25 +183,6 @@ static char *const pivotrootways[] = {
 
 #ifdef CAPABILITIES_SUPPORT
 
-enum stat_fields {
-	STAT_FIELD_RESET		= 0x0000,
-	STAT_FIELD_DEV			= 0x0001,
-	STAT_FIELD_INO			= 0x0002,
-	STAT_FIELD_MODE			= 0x0004,
-	STAT_FIELD_NLINK		= 0x0008,
-	STAT_FIELD_UID			= 0x0010,
-	STAT_FIELD_GID			= 0x0020,
-	STAT_FIELD_RDEV			= 0x0040,
-	STAT_FIELD_SIZE			= 0x0080,
-	STAT_FIELD_BLKSIZE		= 0x0100,
-	STAT_FIELD_BLOCKS		= 0x0200,
-	STAT_FIELD_ATIME		= 0x0400,
-	STAT_FIELD_MTIME		= 0x0800,
-	STAT_FIELD_CTIME		= 0x1000,
-
-	STAT_FIELD_ALL			= 0x1ff7,
-};
-
 static char *const stat_fields[] = {
 	[STAT_FIELD_RESET]		= "",
 	[STAT_FIELD_DEV]		= "dev",
@@ -218,6 +198,12 @@ static char *const stat_fields[] = {
 	[STAT_FIELD_ATIME]		= "atime",
 	[STAT_FIELD_MTIME]		= "mtime",
 	[STAT_FIELD_CTIME]		= "ctime",
+	NULL
+};
+
+static char *const syscalls_bitmask[] = {
+	[CSC_RESET]		= "",
+	[CSC_MON_STAT]		= "mon_stat",	// disable {l,}stat{,64}()-s in mon_*.c
 	NULL
 };
 
@@ -1277,6 +1263,23 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 		case BFILETHRESHOLD:
 			ctx_p->bfilethreshold = (unsigned long)atol(arg);
 			break;
+		case CANCEL_SYSCALLS: {
+			char *subopts = arg;
+
+			while (*subopts != 0) {
+				char *value;
+				typeof(ctx_p->flags[CANCEL_SYSCALLS]) syscall_bitmask = getsubopt(&subopts, syscalls_bitmask, &value);
+				debug(4, "cancel syscall == 0x%x", syscall_bitmask);
+				if (syscall_bitmask == CSC_RESET) {
+					ctx_p->flags[CANCEL_SYSCALLS] = 0;
+					continue;
+				}
+
+				ctx_p->flags[CANCEL_SYSCALLS] |= syscall_bitmask;
+			}
+
+			break;
+		}
 		case MONITOR: {
 			char *value, *arg_orig = arg;
 			if (paramsource == PS_CONTROL) {

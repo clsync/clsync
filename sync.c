@@ -1896,6 +1896,8 @@ int sync_prequeue_loadmark
 		const char *path_full,
 		const char *path_rel,
 
+		stat64_t *lstat_p,
+
 		eventobjtype_t objtype_old,
 		eventobjtype_t objtype_new,
 
@@ -1951,11 +1953,13 @@ int sync_prequeue_loadmark
 	if (is_dir) {
 		if (is_created) {
 			int ret;
+			if (lstat_p != NULL && ctx_p->flags[MODSIGN]) {
+			}
 
 			if (perm & RA_WALK) {
 				if (path_full == NULL) {
 					*path_buf_p   = sync_path_rel2abs(ctx_p, path_rel,  -1, path_buf_len_p, *path_buf_p);
-					path_full    = *path_buf_p;
+					 path_full    = *path_buf_p;
 				}
 
 				if (monitored) {
@@ -1983,6 +1987,28 @@ int sync_prequeue_loadmark
 
 	if (!(perm&RA_WALK)) {
 		return 0;
+	}
+
+	if (lstat_p != NULL && ctx_p->flags[MODSIGN]) {
+		fileinfo_t *finfo = indexes_fileinfo(indexes_p, path_rel);
+		if (finfo != NULL) {
+			if (!(stat_diff(&finfo->lstat, lstat_p) & ctx_p->flags[MODSIGN]))
+				return 0;	// Skip file syncing if it's metadata not changed enough (according to "--modification-signature" setting)
+
+			if (is_deleted) {
+				// Removing file/dir information
+				indexes_fileinfo_add(indexes_p, path_rel, NULL);
+				free(finfo);
+			} else {
+				// Updating file/dir information
+				memcpy(&finfo->lstat, lstat_p, sizeof(finfo->lstat));
+			}
+		} else {
+			// Adding file/dir information
+			finfo = xmalloc(sizeof(*finfo));
+			memcpy(&finfo->lstat, lstat_p, sizeof(finfo->lstat));
+			indexes_fileinfo_add(indexes_p, path_rel, finfo);
+		}
 	}
 
 	switch (ctx_p->flags[MODE]) {
@@ -2208,7 +2234,7 @@ gboolean sync_trylocked(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) 
 	struct trylocked_arg *data =  arg_p->data;
 
 	if (!sync_islocked(fpath)) {
-		if (sync_prequeue_loadmark(0, ctx_p, indexes_p, NULL, fpath, 
+		if (sync_prequeue_loadmark(0, ctx_p, indexes_p, NULL, fpath, NULL,
 				evinfo->evmask,
 				evinfo->objtype_old,
 				evinfo->objtype_new,
@@ -3615,11 +3641,12 @@ int sync_run(ctx_t *ctx_p) {
 
 		ctx_p->indexes_p	  = &indexes;
 
-		indexes.wd2fpath_ht	  =  g_hash_table_new_full(g_direct_hash, g_direct_equal, 0,    0);
-		indexes.fpath2wd_ht	  =  g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
-		indexes.fpath2ei_ht	  =  g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, free);
-		indexes.exc_fpath_ht	  =  g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
-		indexes.out_lines_aggr_ht =  g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
+		indexes.wd2fpath_ht	  = g_hash_table_new_full(g_direct_hash, g_direct_equal, 0,    0);
+		indexes.fpath2wd_ht	  = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
+		indexes.fpath2ei_ht	  = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, free);
+		indexes.exc_fpath_ht	  = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
+		indexes.out_lines_aggr_ht = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
+		indexes.fileinfo_ht	  = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, free);
 		i=0;
 		while (i<QUEUE_MAX) {
 			switch (i) {
@@ -3863,6 +3890,7 @@ int sync_run(ctx_t *ctx_p) {
 		g_hash_table_destroy(indexes.fpath2ei_ht);
 		g_hash_table_destroy(indexes.exc_fpath_ht);
 		g_hash_table_destroy(indexes.out_lines_aggr_ht);
+		g_hash_table_destroy(indexes.fileinfo_ht);
 		i = 0;
 		while (i<QUEUE_MAX) {
 			switch (i) {

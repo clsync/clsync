@@ -75,6 +75,7 @@
 #endif
 
 #include "clsync.h"
+#include "port-hacks.h"
 #include "ctx.h"
 #include "program.h"
 

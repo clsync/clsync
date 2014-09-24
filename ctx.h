@@ -117,6 +117,7 @@ enum flags_enum {
 	PERMIT_MPROTECT		= 41|OPTION_LONGOPTONLY,
 	SHM_MPROTECT		= 42|OPTION_LONGOPTONLY,
 	MODSIGN			= 43|OPTION_LONGOPTONLY,
+	CANCEL_SYSCALLS		= 44|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -254,6 +255,30 @@ enum state_enum {
 };
 typedef enum state_enum state_t;
 
+enum stat_fields {
+	STAT_FIELD_RESET		= 0x0000,
+	STAT_FIELD_DEV			= 0x0001,
+	STAT_FIELD_INO			= 0x0002,
+	STAT_FIELD_MODE			= 0x0004,
+	STAT_FIELD_NLINK		= 0x0008,
+	STAT_FIELD_UID			= 0x0010,
+	STAT_FIELD_GID			= 0x0020,
+	STAT_FIELD_RDEV			= 0x0040,
+	STAT_FIELD_SIZE			= 0x0080,
+	STAT_FIELD_BLKSIZE		= 0x0100,
+	STAT_FIELD_BLOCKS		= 0x0200,
+	STAT_FIELD_ATIME		= 0x0400,
+	STAT_FIELD_MTIME		= 0x0800,
+	STAT_FIELD_CTIME		= 0x1000,
+
+	STAT_FIELD_ALL			= 0x1ff7,
+};
+
+enum syscall_bitmask {
+	CSC_RESET	= 0x00,
+	CSC_MON_STAT	= 0x01,
+};
+
 #define CAP_PRESERVE_TRY (1<<16)
 
 struct ctx {
@@ -356,6 +381,12 @@ struct ctx {
 	void *fsmondata;
 };
 typedef struct ctx ctx_t;
+
+
+struct fileinfo {
+	stat64_t lstat;
+};
+typedef struct fileinfo fileinfo_t;
 
 #endif
 
