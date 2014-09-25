@@ -27,6 +27,8 @@
 #include <bsm/libbsm.h>
 #include <bsm/audit_kevents.h>
 #include <glib.h>
+#include <sys/ioctl.h>
+#include <security/audit/audit_ioctl.h>
 
 struct bsm_event {
 	u_int16_t type;
@@ -261,6 +263,7 @@ int bsm_config_revert(mondata_t *mondata) {
 }
 
 int bsm_init(ctx_t *ctx_p) {
+	debug(9, "");
 
 	ctx_p->fsmondata = xcalloc(sizeof(mondata_t), 1);
 	mondata_t *mondata = ctx_p->fsmondata;
@@ -268,10 +271,37 @@ int bsm_init(ctx_t *ctx_p) {
 	if (bsm_config_setup(mondata) == -1)
 		BSM_INIT_ERROR;
 
+	debug(5, "Openning \""AUDITPIPE_PATH"\"");
 	FILE *pipe = fopen(AUDITPIPE_PATH, "r");
 	if (pipe == NULL) {
 		error("Cannot open \""AUDITPIPE_PATH"\" for reading.");
 		BSM_INIT_ERROR;
+	}
+
+	{
+		// Setting auditpipe queue length to be maximal
+
+		int fd;
+		u_int len;
+
+		fd = fileno(pipe);
+
+		if (ioctl(fd, AUDITPIPE_GET_QLIMIT_MAX, &len) < 0) {
+			error("Cannot read QLIMIT_MAX from auditpipe");
+			BSM_INIT_ERROR;
+		}
+
+		if (ioctl(fd, AUDITPIPE_SET_QLIMIT, &len) < 0) {
+			error("Cannot set QLIMIT through auditpipe");
+			BSM_INIT_ERROR;
+		}
+
+		if (ioctl(fd, AUDITPIPE_GET_QLIMIT, &len) < 0) {
+			error("Cannot read QLIMIT from auditpipe");
+			BSM_INIT_ERROR;
+		}
+
+		debug(5, "auditpipe QLIMIT -> %i", (int)len);
 	}
 	
 	if (setvbuf(pipe, NULL, _IONBF, 0)) {
@@ -342,12 +372,14 @@ int bsm_wait(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *timeo
 
 		// Parsing the record
 		path_count = 0;
-		debug(3, "parsing the event");
+		debug(3, "parsing the event (au_parsed == %u; au_len == %u)", au_parsed, au_len);
 		while (au_parsed < au_len) {
-
-			if (au_fetch_tok(&tok, &au_buf[au_parsed], au_len - au_parsed) == -1)
+			if (au_fetch_tok(&tok, &au_buf[au_parsed], au_len - au_parsed) == -1) {
+				error("Cannot au_fetch_tok()");
 				return -1;
+			}
 			au_parsed += tok.len;
+			debug(4, "au_fetch_tok(): au_parsed -> %u", tok.len);
 
 			switch (tok.id) {
 				case AUT_HEADER32:
