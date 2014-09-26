@@ -11,7 +11,7 @@ rm -rf /mnt/data/from/*
 rm -rf /mnt/data/to/*
 
 cp -r /usr /mnt/data/from/usr &
-sleep 2; ../clsync -L /shm/clsync --exit-on-no-events -x 23 -x 24 -M rsyncdirect -S $(which rsync) -W /mnt/data/from -D /mnt/data/to -d99
+sleep 2; ../clsync -L /shm/clsync --monitor=bsm --exit-on-no-events -x 23 -x 24 -M rsyncdirect -S $(which rsync) -W /mnt/data/from -D /mnt/data/to -d99
 
 rm -rf /mnt/data/from/*
 rm -rf /mnt/data/to/*
