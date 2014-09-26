@@ -2220,6 +2220,9 @@ char **argv;
 int main(int _argc, char *_argv[]) {
 	struct ctx *ctx_p = xcalloc(1, sizeof(*ctx_p));
 
+	argv = _argv;
+	argc = _argc;
+
 	int ret = 0, nret, rm_listoutdir = 0;
 	ctx_p->flags[MONITOR]			 = DEFAULT_NOTIFYENGINE;
 	ctx_p->syncdelay 			 = DEFAULT_SYNCDELAY;
@@ -2250,9 +2253,6 @@ int main(int _argc, char *_argv[]) {
 	parse_parameter(ctx_p, LABEL, strdup(DEFAULT_LABEL), PS_DEFAULTS);
 
 	ncpus					 = sysconf(_SC_NPROCESSORS_ONLN); // Get number of available logical CPUs
-
-	argv = _argv;
-	argc = _argc;
 
 	memory_init();
 
