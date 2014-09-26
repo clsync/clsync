@@ -505,7 +505,7 @@ int bsm_handle(struct ctx *ctx_p, struct indexes *indexes_p) {
 		}
 
 		if ((r.t.objtype_new != EOT_UNKNOWN) && *event_p->path_to) {
-			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, event_p->path_to, NULL, r.t.objtype_old, r.t.objtype_new, event_p->type, event_p->w_id, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
+			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, event_p->path_to, NULL, st_p, r.t.objtype_old, r.t.objtype_new, event_p->type, event_p->w_id, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
 				error("Got error while load_mark-ing into pre-queue \"%s\"", event_p->path_to);
 				count = -1;
 				*event_p->path_to = 0;

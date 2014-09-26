@@ -19,8 +19,6 @@
 
 #include "common.h"
 
-#include "port-hacks.h"
-
 #if KQUEUE_SUPPORT
 #	include "mon_kqueue.h"
 #endif

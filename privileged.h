@@ -118,7 +118,7 @@ extern int privileged_check();
 # ifdef CGROUP_SUPPORT
 #  define privileged_clsync_cgroup_deinit	clsync_cgroup_deinit
 # endif
-# define privileged_waitpid			inotify_waitpid
+# define privileged_waitpid			waitpid
 #endif
 
 extern int (*_privileged_kill_child)(

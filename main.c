@@ -181,8 +181,6 @@ static char *const pivotrootways[] = {
 };
 #endif
 
-#ifdef CAPABILITIES_SUPPORT
-
 enum xstatfield {
 	X_STAT_FIELD_RESET = 0,
 	X_STAT_FIELD_DEV,
@@ -253,6 +251,8 @@ static char *const syscalls_bitmask[] = {
 	[X_CSC_MON_STAT]		= "mon_stat",	// disable {l,}stat{,64}()-s in mon_*.c
 	NULL
 };
+
+#ifdef CAPABILITIES_SUPPORT
 
 enum x_capabilities {
 	X_CAP_RESET = 0,

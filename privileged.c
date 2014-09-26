@@ -23,6 +23,7 @@
 #include "syscalls.h"			// read_inf()/write_inf()
 #include "main.h"			// ncpus
 #include "pthreadex.h"			// pthread_*_shared()
+#include "malloc.h"			// xmalloc()
 
 #ifdef CAPABILITIES_SUPPORT
 # include <pthread.h>			// pthread_create()
@@ -32,7 +33,6 @@
 # include <fts.h>			// fts_open()
 # include <errno.h>			// errno
 # include <sys/capability.h>		// capset()
-# include "malloc.h"			// strdup_protect()
 # ifdef CGROUP_SUPPORT
 #  include "cgroup.h"			// clsync_cgroup_deinit()
 # endif
