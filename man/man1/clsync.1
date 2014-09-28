@@ -1039,6 +1039,7 @@ CPU/HDD expensive way.
 
 FreeBSD users: notify me about found bugs or performance issues, please. And
 before the bugfix you can switch to "inotify" through libinotify or to "bsm".
+
 .RE
 .IR bsm
 .RS
@@ -1056,6 +1057,23 @@ will just parse the log via
 
 Reliable, but hacky way. It requires global audit reconfiguration that
 may hopple audit analysis.
+
+.B Warning!
+FreeBSD has a limit for queued events. In default FreeBSD kernel it's only
+1024 events. So choose
+.B one
+of:
+.RS
+\- To patch the kernel to increase the limit.
+.br
+\- Don't use
+.B clsync
+on systems with too many file events.
+.br
+\- Use
+.I bsm_prefetch
+mode.
+.RE
 
 .B Not well tested. Use with caution!
 Also file /etc/security/audit_control will be overwritten with:
@@ -1076,6 +1094,16 @@ policy:cnt
 .br
 filesz:1M
 .RE
+unless it's already starts with "#clsync\\n" ("\\n" is a new line character).
+
+.RE
+.I bsm_prefetch
+.RS
+The same as
+.I bsm
+but all BSM events will be prefetched by an additional thread to prevent BSM
+queue overflow. This may utilize a lot of memory on systems with a high FS
+events frequency.
 .RE
 .RE
 

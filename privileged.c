@@ -1594,6 +1594,7 @@ int __privileged_fork_execvp(const char *file, char *const argv[])
 	return pid;
 }
 
+#ifdef CAPABILITIES_SUPPORT
 #define pthread_mutex_init_smart(mutex_p) _pthread_mutex_init_smart(ctx_p->flags[SPLITTING]==SM_PROCESS, mutex_p)
 static inline int _pthread_mutex_init_smart(int isshared, pthread_mutex_t **mutex_p) {
 	int rc;
@@ -1661,7 +1662,7 @@ static inline int _pthread_cond_destroy_smart(int isshared, pthread_cond_t *cond
 
 	return 0;
 }
-
+#endif
 
 int privileged_init(ctx_t *ctx_p)
 {

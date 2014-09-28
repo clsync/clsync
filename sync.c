@@ -132,6 +132,7 @@ static inline void evinfo_merge(ctx_t *ctx_p, eventinfo_t *evinfo_dst, eventinfo
 #ifdef BSM_SUPPORT
 		switch(ctx_p->flags[MONITOR]) {
 			case NE_BSM:
+			case NE_BSM_PREFETCH:
 				evinfo_dst->evmask = evinfo_src->evmask;
 				break;
 		}
@@ -860,7 +861,7 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 
 // === SYNC_EXEC() === {
 
-#define SYNC_EXEC(...)      (SHOULD_THREAD(ctx_p) ? sync_exec_thread      : sync_exec     )(__VA_ARGS__)
+//#define SYNC_EXEC(...)      (SHOULD_THREAD(ctx_p) ? sync_exec_thread      : sync_exec     )(__VA_ARGS__)
 #define SYNC_EXEC_ARGV(...) (SHOULD_THREAD(ctx_p) ? sync_exec_argv_thread : sync_exec_argv)(__VA_ARGS__)
 
 #define debug_argv_dump(level, argv)\
@@ -1054,6 +1055,7 @@ int sync_exec_argv(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t ca
 	return ret;
 }
 
+/*
 static inline int sync_exec(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callback, thread_callbackfunct_arg_t *callback_arg_p, ...) {
 	int rc;
 	debug(2, "");
@@ -1067,6 +1069,7 @@ static inline int sync_exec(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackf
 	free(argv);
 	return rc;
 }
+*/
 
 int __sync_exec_thread(threadinfo_t *threadinfo_p) {
 	char **argv		= threadinfo_p->argv;
@@ -1139,6 +1142,7 @@ static inline int sync_exec_argv_thread(ctx_t *ctx_p, indexes_t *indexes_p, thre
 	return 0;
 }
 
+/*
 static inline int sync_exec_thread(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t callback, thread_callbackfunct_arg_t *callback_arg_p, ...) {
 	debug(2, "");
 
@@ -1149,6 +1153,7 @@ static inline int sync_exec_thread(ctx_t *ctx_p, indexes_t *indexes_p, thread_ca
 
 	return sync_exec_argv_thread(ctx_p, indexes_p, callback, callback_arg_p, argv);
 }
+*/
 
 // } === SYNC_EXEC() ===
 
@@ -1210,6 +1215,7 @@ static inline void evinfo_initialevmask(ctx_t *ctx_p, eventinfo_t *evinfo_p, int
 #endif
 #ifdef BSM_SUPPORT
 		case NE_BSM:
+		case NE_BSM_PREFETCH:
 			evinfo_p->evmask = (isdir ? AUE_MKDIR : AUE_OPEN_RWC);
 			break;
 #endif
@@ -1821,7 +1827,8 @@ int sync_notify_init(ctx_t *ctx_p) {
 		}
 #endif
 #ifdef BSM_SUPPORT
-		case NE_BSM: {
+		case NE_BSM:
+		case NE_BSM_PREFETCH: {
 			int bsm_d = bsm_init(ctx_p);
 			if(bsm_d == -1) {
 				error("cannot bsm_init(ctx_p).");
@@ -2067,6 +2074,7 @@ int sync_prequeue_loadmark
 #endif
 #ifdef BSM_SUPPORT
 		case NE_BSM:
+		case NE_BSM_PREFETCH:
 			evinfo->evmask  = event_mask;
 			break;
 #endif
@@ -3773,6 +3781,7 @@ int sync_run(ctx_t *ctx_p) {
 #endif
 #ifdef BSM_SUPPORT
 			case NE_BSM:
+			case NE_BSM_PREFETCH:
 				ctx_p->notifyenginefunct.add_watch_dir = bsm_add_watch_dir;
 				ctx_p->notifyenginefunct.wait          = bsm_wait;
 				ctx_p->notifyenginefunct.handle        = bsm_handle;
@@ -3864,6 +3873,7 @@ int sync_run(ctx_t *ctx_p) {
 #endif
 #ifdef BSM_SUPPORT
 		case NE_BSM:
+		case NE_BSM_PREFETCH:
 			bsm_deinit(ctx_p);
 			break;
 #endif
