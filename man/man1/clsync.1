@@ -327,6 +327,18 @@ Don't die on sync failures.
 Is not set by default.
 .RE
 
+.B \-\-exit\-on\-sync\-skip
+.RS
+Exit if some event could be skipped due to any reason.
+
+For example FreeBSD has a very short BSM event queue (1024). So it may be
+overflowed and some events can not climb to the queue. This option forces
+.B clsync
+to exit if the queue had been overflowed.
+
+Is not set by default.
+.RE
+
 .B \-p, \-\-threading
 .I threading-mode
 .RS
@@ -1074,6 +1086,8 @@ on systems with too many file events.
 .I bsm_prefetch
 mode.
 .RE
+See also option
+.IR \-\-exit\-on\-sync\-skip .
 
 .B Not well tested. Use with caution!
 Also file /etc/security/audit_control will be overwritten with:
