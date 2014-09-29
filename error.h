@@ -51,6 +51,7 @@ extern void _info(const char *const function_name, const char *fmt, ...);
 #	define error_or_debug(debug_level, ...)		((debug_level)<0 ? _error(__FUNCTION__, __VA_ARGS__) : (void)0)
 #endif
 
+#define critical_or_warning(cond, ...) ((cond) ? _critical : _warning)(__FUNCTION__, __VA_ARGS__)
 
 extern void error_init(void *_outputmethod, int *_quiet, int *_verbose, int *_debug);
 

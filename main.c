@@ -113,6 +113,7 @@ static const struct option long_options[] =
 	{"threading",		required_argument,	NULL,	THREADING},
 	{"retries",		optional_argument,	NULL,	RETRIES},
 	{"ignore-failures",	optional_argument,	NULL,	IGNOREFAILURES},
+	{"exit-on-sync-skipping",optional_argument,	NULL,	EXITONSYNCSKIP},
 	{"output",		required_argument,	NULL,	OUTPUT_METHOD},
 	{"one-file-system",	optional_argument,	NULL,	ONEFILESYSTEM},
 	{"exclude-mount-points",optional_argument,	NULL,	EXCLUDEMOUNTPOINTS},
@@ -315,6 +316,7 @@ static char *const notify_engines[] = {
 	[NE_KQUEUE]		= "kqueue",
 	[NE_FANOTIFY]		= "fanotify",
 	[NE_BSM]		= "bsm",
+	[NE_BSM_PREFETCH]	= "bsm_prefetch",
 	[NE_DTRACEPIPE]		= "dtracepipe",
 	NULL
 };
@@ -1359,6 +1361,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 #endif
 #ifdef BSM_SUPPORT
 				case NE_BSM:
+				case NE_BSM_PREFETCH:
 #endif
 #ifdef DTRACEPIPE_SUPPORT
 				case NE_DTRACEPIPE:
@@ -1999,6 +2002,7 @@ int ctx_check(ctx_t *ctx_p) {
 #endif
 #ifdef BSM_SUPPORT
 		case NE_BSM:
+		case NE_BSM_PREFETCH:
 #endif
 #ifdef DTRACEPIPE_SUPPORT
 		case NE_DTRACEPIPE:
@@ -2220,6 +2224,9 @@ char **argv;
 int main(int _argc, char *_argv[]) {
 	struct ctx *ctx_p = xcalloc(1, sizeof(*ctx_p));
 
+	argv = _argv;
+	argc = _argc;
+
 	int ret = 0, nret, rm_listoutdir = 0;
 	ctx_p->flags[MONITOR]			 = DEFAULT_NOTIFYENGINE;
 	ctx_p->syncdelay 			 = DEFAULT_SYNCDELAY;
@@ -2250,9 +2257,6 @@ int main(int _argc, char *_argv[]) {
 	parse_parameter(ctx_p, LABEL, strdup(DEFAULT_LABEL), PS_DEFAULTS);
 
 	ncpus					 = sysconf(_SC_NPROCESSORS_ONLN); // Get number of available logical CPUs
-
-	argv = _argv;
-	argc = _argc;
 
 	memory_init();
 

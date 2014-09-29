@@ -200,3 +200,5 @@ expire-after: 2d AND 20M\n\
 // In nanoseconds
 #define OUTPUT_LOCK_TIMEOUT		(100*1000*1000)
 #define WAITPID_TIMED_GRANULARITY	 (30*1000*1000)
+
+#define BSM_QUEUE_LENGTH_MAX		(1024*1024)
