@@ -540,7 +540,7 @@ int bsm_handle_allevents(struct ctx *ctx_p, struct indexes *indexes_p, bsm_handl
 
 #ifdef PARANOID
 		if (!*event_p->path && !*event_p->path_to) {
-			warning("bsm_handle() but no events are parsed.");
+			warning("no events are parsed (event_p == %p).", event_p);
 			continue;
 		}
 #endif
@@ -640,38 +640,46 @@ int bsm_prefetcher(struct ctx *ctx_p) {
 	mondata->event = xcalloc(sizeof(*mondata->event), ALLOC_PORTION);
 
 	while (42) {
-		critical_on (bsm_fetch(ctx_p, indexes_p, &event, pipe_fd, NULL, NULL));
-
-		// Pushing the event
-		debug(5, "We have an event. Pushing.");
+		if (bsm_fetch(ctx_p, indexes_p, &event, pipe_fd, NULL, NULL) > 0) {
+			// Pushing the event
+			debug(5, "We have an event. Pushing.");
 #ifdef PARANOID
-		critical_on (mondata->event_count >= BSM_QUEUE_LENGTH_MAX);
+			critical_on (mondata->event_count >= BSM_QUEUE_LENGTH_MAX);
 #endif
-		if (mondata->event_count >= mondata->event_alloc) {
-			debug(2, "Increasing queue length: %u -> %u (limit is "TOSTR(BSM_QUEUE_LENGTH_MAX)")", mondata->event_alloc, mondata->event_alloc+ALLOC_PORTION);
-			mondata->event_alloc += ALLOC_PORTION;
-			mondata->event = xrealloc(mondata->event, mondata->event_alloc*sizeof(*mondata->event));
-			memset(&mondata->event[mondata->event_count], 0, sizeof(*mondata->event)*(mondata->event_alloc - mondata->event_count));
-		}
+			if (mondata->event_count >= mondata->event_alloc) {
+				debug(2, "Increasing queue length: %u -> %u (limit is "TOSTR(BSM_QUEUE_LENGTH_MAX)")", mondata->event_alloc, mondata->event_alloc+ALLOC_PORTION);
+				mondata->event_alloc += ALLOC_PORTION;
+				mondata->event = xrealloc(mondata->event, mondata->event_alloc*sizeof(*mondata->event));
+				memset(&mondata->event[mondata->event_count], 0, sizeof(*mondata->event)*(mondata->event_alloc - mondata->event_count));
+			}
 
-		pthread_mutex_lock(&bsm_mutex_prefetcher);
-		event_p = &mondata->event[mondata->event_count++];
-		memcpy(event_p, &event, sizeof(*event_p));
-		debug(2, "event_count -> %u", mondata->event_count);
-		pthread_cond_broadcast(&bsm_cond_gotevent);
-		pthread_mutex_unlock(&bsm_mutex_prefetcher);
+			pthread_mutex_lock(&bsm_mutex_prefetcher);
+			event_p = &mondata->event[mondata->event_count++];
+			memcpy(event_p, &event, sizeof(*event_p));
+			debug(2, "event_count -> %u (event_p == %p; event_p->path == \"%s\")", mondata->event_count, event_p, event_p->path);
+			pthread_cond_broadcast(&bsm_cond_gotevent);
+			pthread_mutex_unlock(&bsm_mutex_prefetcher);
+
+			memset(&event, 0, sizeof(event));
+		}
 	}
 
 	critical ("This code shouldn't be reached");
 	return -1;
 }
 int bsm_wait_prefetched(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *timeout_p) {
+	debug(3, "(ctx_p, indexes_p, %p {%u, %u})", timeout_p, timeout_p == NULL?-1:timeout_p->tv_sec, timeout_p == NULL?0:timeout_p->tv_usec);
 #ifdef PARANOID
 	critical_on (timeout_p == NULL);
 #endif
 	mondata_t *mondata = ctx_p->fsmondata;
 	struct timespec ts_abs;
 	struct timeval tv_abs, timeout_abs;
+
+#define INFINITETIME (3600 * 24 * 365 * 10) /* ~10 years */
+	if (timeout_p->tv_sec > INFINITETIME)
+		timeout_p->tv_sec = INFINITETIME;
+#undef INFINITETIME
 
 	gettimeofday(&tv_abs, NULL);
 	timeradd(&tv_abs, timeout_p, &timeout_abs);
@@ -685,7 +693,13 @@ int bsm_wait_prefetched(struct ctx *ctx_p, struct indexes *indexes_p, struct tim
 		pthread_mutex_unlock(&bsm_mutex_prefetcher);
 		return mondata->event_count;
 	}
-	if (pthread_cond_timedwait(&bsm_cond_gotevent, &bsm_mutex_prefetcher, &ts_abs) == -1) {
+
+	if (timeout_p->tv_sec == 0 && timeout_p->tv_sec == 0)
+		return 0;
+
+//l_pthread_cond_timedwait_restart:
+	debug(10, "pthread_cond_timedwait(&bsm_cond_gotevent, &bsm_mutex_prefetcher, {%i, %i})", ts_abs.tv_sec, ts_abs.tv_nsec);
+	if ((errno = pthread_cond_timedwait(&bsm_cond_gotevent, &bsm_mutex_prefetcher, &ts_abs))) {
 		pthread_mutex_unlock(&bsm_mutex_prefetcher);
 		switch (errno) {
 			case ETIMEDOUT:
@@ -694,6 +708,9 @@ int bsm_wait_prefetched(struct ctx *ctx_p, struct indexes *indexes_p, struct tim
 #endif
 				debug(2, "Timed out -> no events (mondata->event_count == %i)", mondata->event_count);
 				return 0;
+/*			case EINTR:
+				debug(3, "pthread_cond_timedwait() -> EINTR. Restarting.");
+				goto l_pthread_cond_timedwait_restart;*/
 			default:
 				critical("Got unhandled error on pthread_cond_timedwait()");
 		}
