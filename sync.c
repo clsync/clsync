@@ -3026,6 +3026,7 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 	pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
 	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
 
+	debug(8, "ctx_p->notifyenginefunct.wait() [%p]", ctx_p->notifyenginefunct.wait);
 	int ret = ctx_p->notifyenginefunct.wait(ctx_p, indexes_p, &tv);
 
 	pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_SELECT]);
@@ -3762,6 +3763,15 @@ int sync_run(ctx_t *ctx_p) {
 	if(ctx_p->listoutdir)
 		srand(time(NULL));
 
+	if (!ctx_p->flags[ONLYINITSYNC]) {
+		// Initializing FS monitor kernel subsystem in this userspace application
+		if (sync_notify_init(ctx_p))
+			return errno;
+	}
+
+	if ((ret=privileged_init(ctx_p)))
+		return ret;
+
 	{
 		// Preparing monitor subsystem context function pointers
 		switch (ctx_p->flags[MONITOR]) {
@@ -3800,15 +3810,6 @@ int sync_run(ctx_t *ctx_p) {
 #endif
 		}
 	}
-
-	if (!ctx_p->flags[ONLYINITSYNC]) {
-		// Initializing FS monitor kernel subsystem in this userspace application
-		if (sync_notify_init(ctx_p))
-			return errno;
-	}
-
-	if ((ret=privileged_init(ctx_p)))
-		return ret;
 
 #ifdef CLUSTER_SUPPORT
 	// Initializing cluster subsystem
