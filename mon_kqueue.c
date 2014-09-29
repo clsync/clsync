@@ -192,6 +192,7 @@ int kqueue_mark(ctx_t *ctx_p, monobj_t *obj_p) {
 
 
 int kqueue_unmark(ctx_t *ctx_p, monobj_t *obj_p) {
+	debug(20, "obj_p == %p", obj_p);
 	struct kqueue_data *dat = ctx_p->fsmondata;
 #ifdef VERYPARANOID
 	if (obj_p == NULL) {
@@ -220,7 +221,7 @@ int kqueue_unmark(ctx_t *ctx_p, monobj_t *obj_p) {
 }
 
 monobj_t *kqueue_start_watch(ctx_t *ctx_p, ino_t inode, dev_t device, int dir_fd, const char *const fname, size_t name_len, unsigned char type) {
-	monobj_t *obj_p, *parent, parent_pattern;
+	monobj_t *obj_p, *parent, **parent_p, parent_pattern;
 	struct kqueue_data *dat = ctx_p->fsmondata;
 	debug(3, "(ctx_p, %i, \"%s\", %u, %u)", dir_fd, fname, name_len, type);
 
@@ -234,9 +235,20 @@ monobj_t *kqueue_start_watch(ctx_t *ctx_p, ino_t inode, dev_t device, int dir_fd
 	memcpy(obj_p->name, fname, obj_p->name_len+1);
 	obj_p->name_hash = adler32_calc((const unsigned char *)fname, name_len);
 
+	parent   = NULL;
 	parent_pattern.fd = dir_fd;
-	obj_p->parent = tfind(&parent_pattern, &dat->fd_btree, monobj_fdcmp);
-	parent = obj_p->parent;
+	parent_p = tfind(&parent_pattern, &dat->fd_btree, monobj_fdcmp);
+
+	if (parent_p != NULL) {
+		parent   = *parent_p;
+		obj_p->parent = parent;
+		debug(20, "Adding a child for dir_fd == %i", dir_fd);
+		if (tsearch((void *)obj_p, &parent->children_tree, monobj_filecmp) == NULL)
+			critical("Not enough memory");
+		debug(25, "parent->children_tree == %p", parent->children_tree);
+	}
+
+	debug(20, "parent == %p; obj_p == %p", parent, obj_p);
 
 	switch (type) {
 		case DT_DIR:
@@ -259,11 +271,6 @@ monobj_t *kqueue_start_watch(ctx_t *ctx_p, ino_t inode, dev_t device, int dir_fd
 		critical("Not enough memory");
 	if (tsearch((void *)obj_p,   &dat->fd_btree, monobj_fdcmp) == NULL)
 		critical("Not enough memory");
-
-	if (parent != NULL) {
-		if (tsearch((void *)obj_p, &parent->children_tree, monobj_filecmp) == NULL)
-			critical("Not enough memory");
-	}
 
 	return obj_p;
 }
@@ -533,16 +540,20 @@ static inline int _kqueue_handle_oneevent_dircontent_item(struct kqueue_data *da
 	obj.name_len  = strlen(entry->d_name);
 	obj.name_hash = adler32_calc((unsigned char *)entry->d_name, obj.name_len);
 
-	if (tfind((void *)&obj, &dat->file_btree, monobj_filecmp) != NULL)
+	debug(20, "Checking if the object is already monitored");
+	if (tfind((void *)&obj, &dat->file_btree, monobj_filecmp) != NULL) {
+		debug(20, "Marking the the object is found");
+		tdelete((void *)&obj, &children_notfound, monobj_filecmp);
 		return 0;
+	}
 
-	tdelete((void *)&obj, &children_notfound, monobj_filecmp);
-
+	debug(20, "Calling kqueue_start_watch() on the object");
 	if ((obj_p = kqueue_start_watch(ctx_p, entry->d_ino, dir_obj_p->device, dir_obj_p->fd, obj.name, obj.name_len, obj.type)) == NULL) {
 		error("Got error while kqueue_start_watch()");
 		return -1;
 	}
 
+	debug(20, "Calling kqueue_sync() for the object");
 	ev.ident  = obj_p->fd;
 	ev.fflags = NOTE_LINK;
 	if (kqueue_sync(ctx_p, indexes_p, &ev, obj_p)) {
@@ -558,20 +569,21 @@ int _kqueue_handle_oneevent_dircontent(ctx_t *ctx_p, indexes_t *indexes_p, monob
 	void *children_tree_dup;
 	struct dirent *entry;
 	struct kqueue_data *dat = ctx_p->fsmondata;
-	debug(8, "obj_p->dir_fd == %i", obj_p->dir_fd);
+	debug(8, "obj_p == %p; obj_p->dir_fd == %i", obj_p, obj_p->dir_fd);
 
+	debug(20, "tdup()-ing the children_tree == %p", obj_p->children_tree);
 	children_tree_dup = NULL;
-	tdup(&children_tree_dup, obj_p->children_tree, monobj_filecmp);
+	debug(8, "children_count == %i", tdup(&children_tree_dup, obj_p->children_tree, monobj_filecmp));
 
+	debug(20, "open*()-ing the directory");
 	int fd;
-
 	if (obj_p->dir_fd == -1)
 		fd = open(ctx_p->watchdir, O_RDONLY|O_PATH);
 	else
 		fd = openat(obj_p->dir_fd, obj_p->name, O_RDONLY|O_PATH);
 
+	debug(20, "reading the directory");
 	dir = fdopendir(fd);
-
 	while ((entry = readdir(dir))) {
 		debug(10, "file/dir: \"%s\"", entry->d_name);
 		if (!memcmp(entry->d_name, ".",  2))
@@ -584,8 +596,10 @@ int _kqueue_handle_oneevent_dircontent(ctx_t *ctx_p, indexes_t *indexes_p, monob
 		}
 	}
 
+	debug(20, "searching for deleted objects from the directory");
 	void unmarkchild(monobj_t *obj_p) {
 		static struct kevent ev = {0};
+		debug(10, "Calling kqueue_sync() on \"%s\" (obj_p: %p; dir_fd: %i; fd: %i)", obj_p->name, obj_p, obj_p->dir_fd, obj_p->fd);
 		ev.ident  = obj_p->fd;
 		ev.fflags = NOTE_DELETE;
 		critical_on (kqueue_sync(ctx_p, indexes_p, &ev, obj_p));
@@ -596,8 +610,8 @@ int _kqueue_handle_oneevent_dircontent(ctx_t *ctx_p, indexes_t *indexes_p, monob
 	}
 	tdestroy(children_tree_dup, (void (*)(void *))unmarkchild);
 
+	debug(20, "end");
 	closedir(dir);
-
 	return 0;
 }
 
@@ -682,7 +696,7 @@ void btree_free(void *node_p) {
 }
 
 int kqueue_deinit(ctx_t *ctx_p) {
-	struct kqueue_data *dat = ctx_p->fsmondata;
+//	struct kqueue_data *dat = ctx_p->fsmondata;
 
 #if 0
 	void btree_unmark(const void *_obj_p, const VISIT which, const int depth) {

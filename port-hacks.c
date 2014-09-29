@@ -18,30 +18,27 @@
  */
 
 #include "common.h"
-#include "error.h"
+#include "port-hacks.h"
+#include <stdlib.h>
 
-#include <search.h>
+#ifdef tdestroy_UNDEFINED
+struct _tdestroy_tree {
+	void *data;
+	struct _tdestroy_tree *left;
+	struct _tdestroy_tree *right;
+};
+ 
+void tdestroy(void *root, void (*free_node)(void *node_data)) {
+	struct _tdestroy_tree *node_p = root;
+	if (node_p == NULL)
+		return;
+	
+	tdestroy(node_p->left , free_node);
+	tdestroy(node_p->right, free_node);
 
-int tdup(void **to, void *from, int (*compar)(const void *, const void *)) {
-	debug(20, "");
-	int count;
-	if (from == NULL)
-		return 0;
-
-	count = 0;
-	void tdup_item(const void *node_p, const VISIT which, const int depth) {
-		debug(40, "%p, %i, %i", node_p, which, depth);
-		switch (which) {
-			case leaf:
-				tsearch(*(void **)node_p, to, compar);
-				count++;
-				break;
-			default:
-				critical("This code shoudn't be reached (%p, %i, %i).", node_p, which, depth);
-		}
-	}
-	twalk(from, tdup_item);
-
-	return count;
+	free_node(node_p->data);
+	free(node_p);
+	return;
 }
+#endif
 
