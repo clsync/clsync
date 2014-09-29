@@ -598,6 +598,7 @@ int bsm_handle_allevents(struct ctx *ctx_p, struct indexes *indexes_p, bsm_handl
 				left_count = mondata->event_count - event_num;
 				break;
 		}
+		debug(10, "left_count: %i; event_num: %i; mondata->event_count: %i", left_count, event_num, mondata->event_count);
 	} while (left_count > 0);
 	switch (how) {
 		case BSM_HANDLE_ITERATE:
@@ -607,8 +608,8 @@ int bsm_handle_allevents(struct ctx *ctx_p, struct indexes *indexes_p, bsm_handl
 					&mondata->event[event_num],
 					sizeof(*mondata->event)*(mondata->event_count - event_num)
 				);
-				mondata->event_count -= event_num;
 			}
+			mondata->event_count -= event_num;
 			break;
 		default:
 			break;
@@ -624,7 +625,7 @@ int bsm_handle_allevents(struct ctx *ctx_p, struct indexes *indexes_p, bsm_handl
 	// Moving events from local queue to global ones
 	sync_prequeue_unload(ctx_p, indexes_p);
 
-	debug(4, "Result count: %i", count);
+	debug(4, "Result count: %i -> %i", count, mondata->event_count);
 	if (count == -1)
 		return -1;
 
@@ -727,6 +728,7 @@ int bsm_wait_prefetched(struct ctx *ctx_p, struct indexes *indexes_p, struct tim
 }
 int bsm_handle_prefetched(struct ctx *ctx_p, struct indexes *indexes_p) {
 	int count;
+	debug(8, "");
 
 	pthread_mutex_lock(&bsm_mutex_prefetcher);
 	count = bsm_handle_allevents(ctx_p, indexes_p, BSM_HANDLE_ITERATE);
