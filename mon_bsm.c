@@ -155,7 +155,7 @@ static inline void recognize_event(struct recognize_event_return *r, uint32_t ev
 }
 
 int auditd_restart() {
-	debug(1, "Running \""AUDIT_CONTROL_INITSCRIPT" restart\"");
+	debug(1, "Running \""AUDIT_CONTROL_INITSCRIPT" onerestart\"");
 
 	pid_t pid = fork();
 	switch (pid) {
@@ -163,9 +163,9 @@ int auditd_restart() {
 			error("Cannot fork().");
 			return -1;
 		case  0:
-			debug(5, "fork: execl(\""AUDIT_CONTROL_INITSCRIPT"\", \""AUDIT_CONTROL_INITSCRIPT"\", \"restart\", NULL);", pid);
-			execl(AUDIT_CONTROL_INITSCRIPT, AUDIT_CONTROL_INITSCRIPT, "restart", NULL);
-			error("fork: Cannot execute \""AUDIT_CONTROL_INITSCRIPT" restart\"");
+			debug(5, "fork: execl(\""AUDIT_CONTROL_INITSCRIPT"\", \""AUDIT_CONTROL_INITSCRIPT"\", \"onerestart\", NULL);", pid);
+			execl(AUDIT_CONTROL_INITSCRIPT, AUDIT_CONTROL_INITSCRIPT, "onerestart", NULL);
+			error("fork: Cannot execute \""AUDIT_CONTROL_INITSCRIPT" onerestart\"");
 			return -1;
 	}
 
@@ -178,7 +178,7 @@ int auditd_restart() {
 	int exitcode = WEXITSTATUS(status);
 
 	if (exitcode)
-		error("Got error while running \""AUDIT_CONTROL_INITSCRIPT" restart\"");
+		error("Got error while running \""AUDIT_CONTROL_INITSCRIPT" onerestart\"");
 
 	debug(4, "exitcode == %u", exitcode);
 	return exitcode;
