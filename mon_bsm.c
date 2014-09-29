@@ -515,6 +515,7 @@ enum bsm_handletype {
 };
 typedef enum bsm_handletype bsm_handletype_t;
 int bsm_handle_allevents(struct ctx *ctx_p, struct indexes *indexes_p, bsm_handletype_t how) {
+	debug(4, "");
 	static struct timeval tv={0};
 	mondata_t *mondata = ctx_p->fsmondata;
 	int count, event_num;
@@ -715,6 +716,7 @@ int bsm_handle_prefetched(struct ctx *ctx_p, struct indexes *indexes_p) {
 	return count;
 }
 int bsm_wait_noprefetch(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *timeout_p) {
+	debug(3, "(ctx_p, indexes_p, %p {%u, %u})", timeout_p, timeout_p == NULL?-1:timeout_p->tv_sec, timeout_p == NULL?0:timeout_p->tv_usec);
 	mondata_t *mondata = ctx_p->fsmondata;
 	struct timeval timeout_abs, tv_abs;
 	struct bsm_event *event_p = mondata->event;
@@ -745,6 +747,7 @@ int bsm_wait_noprefetch(struct ctx *ctx_p, struct indexes *indexes_p, struct tim
 	return -1;
 }
 int bsm_handle_noprefetch(struct ctx *ctx_p, struct indexes *indexes_p) {
+	debug(3, "");
 	return bsm_handle_allevents(ctx_p, indexes_p, BSM_HANDLE_CALLWAIT);
 }
 int bsm_add_watch_dir(struct ctx *ctx_p, struct indexes *indexes_p, const char *const accpath) {
