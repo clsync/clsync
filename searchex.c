@@ -19,9 +19,11 @@
 
 #include "common.h"
 #include "error.h"
+#include "searchex.h"
 
 #include <search.h>
 
+#ifdef __GNUC__
 int tdup(void **to, void *from, int (*compar)(const void *, const void *)) {
 	debug(20, "");
 	int count;
@@ -44,4 +46,38 @@ int tdup(void **to, void *from, int (*compar)(const void *, const void *)) {
 
 	return count;
 }
+#else
+int   _tdup_count;
+void *_tdup_to;
+int (*_tdup_compar)(const void *, const void *);
+void tdup_item(const void *node_p, const VISIT which, const int depth) {
+	debug(40, "%p, %i, %i", node_p, which, depth);
+	switch (which) {
+		case leaf:
+			tsearch(*(void **)node_p, _tdup_to, _tdup_compar);
+			_tdup_count++;
+			break;
+		default:
+			critical("This code shoudn't be reached (%p, %i, %i).", node_p, which, depth);
+	}
+	return;
+}
+int tdup(void **to, void *from, int (*compar)(const void *, const void *)) {
+#ifdef PARANOID
+	static int lock = 0;
+	if (g_atomic_int_dec_and_test(&lock) != -1)
+		critical ("tdup() is not thread-safe function");
+#endif
+	debug(20, "");
+	if (from == NULL)
+		return 0;
+
+	_tdup_count  = 0;
+	_tdup_to     = to;
+	_tdup_compar = compar;
+	twalk(from, tdup_item);
+
+	return _tdup_count;
+}
+#endif
 

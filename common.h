@@ -117,6 +117,13 @@
 #	define offsetof(a, b) __builtin_offsetof(a, b)
 #endif
 
+// clang defines "__GNUC__", but not compatible with gnuc. Fixing.
+#ifdef __clang__
+#	ifdef __GNUC__
+#		undef __GNUC__
+#	endif
+#endif
+
 #define TOSTR(a) # a
 #define XTOSTR(a) TOSTR(a)
 

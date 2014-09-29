@@ -68,6 +68,9 @@ struct recognize_event_return {
 	} u;
 };
 
+ctx_t     *ctx_p;
+indexes_t *indexes_p;
+
 static inline uint32_t recognize_event(uint32_t event, int is_dir) {
 	struct recognize_event_return r = {{{0}}};
 
@@ -93,12 +96,14 @@ static inline uint32_t recognize_event(uint32_t event, int is_dir) {
 	return r.u.i;
 }
 
-int kqueue_init(ctx_t *ctx_p) {
+int kqueue_init(ctx_t *_ctx_p) {
 	ctx_p->fsmondata = xcalloc(1, sizeof(struct kqueue_data));
 	if (ctx_p->fsmondata == NULL)
 		return -1;
 
-	struct kqueue_data *dat = ctx_p->fsmondata;
+	struct kqueue_data *dat = _ctx_p->fsmondata;
+	ctx_p     = _ctx_p;
+	indexes_p = _ctx_p->indexes_p;
 
 	dat->kqueue_d = kqueue();
 
@@ -191,6 +196,10 @@ int kqueue_mark(ctx_t *ctx_p, monobj_t *obj_p) {
 }
 
 
+extern int kqueue_unmark(ctx_t *ctx_p, monobj_t *obj_p);
+void child_free(monobj_t *node) {
+	critical_on (kqueue_unmark(ctx_p, node));
+}
 int kqueue_unmark(ctx_t *ctx_p, monobj_t *obj_p) {
 	debug(20, "obj_p == %p", obj_p);
 	struct kqueue_data *dat = ctx_p->fsmondata;
@@ -208,9 +217,6 @@ int kqueue_unmark(ctx_t *ctx_p, monobj_t *obj_p) {
 
 	close(obj_p->fd);
 
-	void child_free(monobj_t *node) {
-		critical_on (kqueue_unmark(ctx_p, node));
-	}
 	tdestroy(obj_p->children_tree, (void (*)(void *))child_free);
 	tdelete(obj_p, &dat->file_btree, monobj_filecmp);
 	tdelete(obj_p,   &dat->fd_btree, monobj_fdcmp);
@@ -564,6 +570,17 @@ static inline int _kqueue_handle_oneevent_dircontent_item(struct kqueue_data *da
 	return 0;
 }
 
+void unmarkchild(monobj_t *obj_p) {
+	static struct kevent ev = {0};
+	debug(10, "Calling kqueue_sync() on \"%s\" (obj_p: %p; dir_fd: %i; fd: %i)", obj_p->name, obj_p, obj_p->dir_fd, obj_p->fd);
+	ev.ident  = obj_p->fd;
+	ev.fflags = NOTE_DELETE;
+	critical_on (kqueue_sync(ctx_p, indexes_p, &ev, obj_p));
+
+	debug(4, "Unmarking the child \"%s\" (dir_fd: %i; fd: %i)", obj_p->name, obj_p->dir_fd, obj_p->fd);
+	kqueue_unmark(ctx_p, obj_p);
+	return;
+}
 int _kqueue_handle_oneevent_dircontent(ctx_t *ctx_p, indexes_t *indexes_p, monobj_t *obj_p) {
 	DIR *dir;
 	void *children_tree_dup;
@@ -597,17 +614,6 @@ int _kqueue_handle_oneevent_dircontent(ctx_t *ctx_p, indexes_t *indexes_p, monob
 	}
 
 	debug(20, "searching for deleted objects from the directory");
-	void unmarkchild(monobj_t *obj_p) {
-		static struct kevent ev = {0};
-		debug(10, "Calling kqueue_sync() on \"%s\" (obj_p: %p; dir_fd: %i; fd: %i)", obj_p->name, obj_p, obj_p->dir_fd, obj_p->fd);
-		ev.ident  = obj_p->fd;
-		ev.fflags = NOTE_DELETE;
-		critical_on (kqueue_sync(ctx_p, indexes_p, &ev, obj_p));
-
-		debug(4, "Unmarking the child \"%s\" (dir_fd: %i; fd: %i)", obj_p->name, obj_p->dir_fd, obj_p->fd);
-		kqueue_unmark(ctx_p, obj_p);
-		return;
-	}
 	tdestroy(children_tree_dup, (void (*)(void *))unmarkchild);
 
 	debug(20, "end");

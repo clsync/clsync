@@ -1,3 +1,5 @@
+#ifndef __CONFIGURATION_H
+#define __CONFIGURATION_H
 
 
 #ifndef BUFSIZ
@@ -35,13 +37,14 @@
 #define MAXPERMITTEDHOOKFILES		(1<<8)
 
 #ifdef __CLSYNC_COMMON_H
-#	if INOTIFY_SUPPORT
+#	define DEFAULT_NOTIFYENGINE	NE_UNDEFINED
+#	ifdef __linux__
+#		undef  DEFAULT_NOTIFYENGINE
 #		define DEFAULT_NOTIFYENGINE	NE_INOTIFY
-#	elif KQUEUE_SUPPORT
+#	endif
+#	ifdef __FreeBSD__
+#		undef  DEFAULT_NOTIFYENGINE
 #		define DEFAULT_NOTIFYENGINE	NE_KQUEUE
-#		warning There is no inotify support, defaulting to kqueue (that is not well tested)
-#	else
-#		error No inotify/kqueue support, cannot compile working clsync
 #	endif
 #endif
 #define DEFAULT_RULES_PERM		RA_ALL
@@ -201,3 +204,5 @@ filesz:1M\n\
 #define WAITPID_TIMED_GRANULARITY	 (30*1000*1000)
 
 #define BSM_QUEUE_LENGTH_MAX		(1024*1024)
+
+#endif
