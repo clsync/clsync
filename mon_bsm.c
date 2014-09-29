@@ -694,8 +694,10 @@ int bsm_wait_prefetched(struct ctx *ctx_p, struct indexes *indexes_p, struct tim
 		return mondata->event_count;
 	}
 
-	if (timeout_p->tv_sec == 0 && timeout_p->tv_sec == 0)
+	if (timeout_p->tv_sec == 0 && timeout_p->tv_sec == 0) {
+		pthread_mutex_unlock(&bsm_mutex_prefetcher);
 		return 0;
+	}
 
 //l_pthread_cond_timedwait_restart:
 	debug(10, "pthread_cond_timedwait(&bsm_cond_gotevent, &bsm_mutex_prefetcher, {%i, %i})", ts_abs.tv_sec, ts_abs.tv_nsec);
