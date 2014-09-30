@@ -22,6 +22,8 @@
 
 #ifdef CAPABILITIES_SUPPORT
 #	include <sys/capability.h>	// for capset()/capget() for --preserve-file-access
+#endif
+#if defined(__linux__) | defined(CAPABILITIES_SUPPORT)
 #	include <sys/prctl.h>		// for prctl() for --preserve-fil-access
 #endif
 
