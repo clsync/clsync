@@ -53,12 +53,14 @@ int (*_tdup_compar)(const void *, const void *);
 void tdup_item(const void *node_p, const VISIT which, const int depth) {
 	debug(40, "%p, %i, %i", node_p, which, depth);
 	switch (which) {
+		case preorder:
 		case leaf:
 			tsearch(*(void **)node_p, _tdup_to, _tdup_compar);
 			_tdup_count++;
 			break;
 		default:
-			critical("This code shoudn't be reached (%p, %i, %i).", node_p, which, depth);
+			debug(25, "skipping: %p, %i, %i.", node_p, which, depth);
+			break;
 	}
 	return;
 }
