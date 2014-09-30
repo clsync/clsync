@@ -116,22 +116,22 @@ static int monobj_filecmp(const void *_a, const void *_b) {
 	const monobj_t *a=_a, *b=_b;
 
 	int diff_inode  = a->inode  - b->inode;
-	debug(10, "diff_inode = %i", diff_inode);
+	debug(90, "diff_inode = %i", diff_inode);
 	if (diff_inode)
 		return diff_inode;
 
 	int diff_device = a->device - b->device;
-	debug(10, "diff_device = %i", diff_device);
+	debug(50, "diff_device = %i", diff_device);
 	if (diff_device)
 		return diff_device;
 
 	int diff_dir_fd = a->dir_fd - b->dir_fd;
-	debug(10, "diff_dir_fd = %i (%i - %i)", diff_dir_fd, a->dir_fd, b->dir_fd);
+	debug(50, "diff_dir_fd = %i (%i - %i)", diff_dir_fd, a->dir_fd, b->dir_fd);
 	if (diff_dir_fd)
 		return diff_dir_fd;
 
 	int diff_name_hash = a->name_hash - b->name_hash;
-	debug(10, "diff_name_hash = %i", diff_name_hash);
+	debug(50, "diff_name_hash = %i", diff_name_hash);
 	if (diff_name_hash)
 		return diff_name_hash;
 
