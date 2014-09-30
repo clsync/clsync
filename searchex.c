@@ -63,21 +63,26 @@ void tdup_item(const void *node_p, const VISIT which, const int depth) {
 	return;
 }
 int tdup(void **to, void *from, int (*compar)(const void *, const void *)) {
+	int count;
 #ifdef PARANOID
 	static int lock = 0;
 	if (g_atomic_int_dec_and_test(&lock) != -1)
 		critical ("tdup() is not thread-safe function");
 #endif
 	debug(20, "");
-	if (from == NULL)
+	if (from == NULL) {
+		g_atomic_int_inc(&lock);
 		return 0;
+	}
 
 	_tdup_count  = 0;
 	_tdup_to     = to;
 	_tdup_compar = compar;
 	twalk(from, tdup_item);
 
-	return _tdup_count;
+	count = _tdup_count;
+	g_atomic_int_inc(&lock);
+	return count;
 }
 #endif
 
