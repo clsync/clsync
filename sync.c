@@ -3211,12 +3211,22 @@ void sync_sig_int(int signal) {
 	return;
 }
 
-int sync_tryforcecycle(pthread_t pthread_parent) {
-	debug(3, "sending signal to interrupt blocking operations like select()-s and so on");
-	pthread_kill(pthread_parent, SIGUSR_BLOPINT);
 #ifdef PARANOID
-	int i=0;
-	if (++i > KILL_TIMEOUT) {
+int _sync_tryforcecycle_i;
+#endif
+int sync_tryforcecycle(ctx_t *ctx_p, pthread_t pthread_parent) {
+	debug(3, "sending signal to interrupt blocking operations like select()-s and so on (ctx_p->blockthread_count == %i)", ctx_p->blockthread_count);
+	//pthread_kill(pthread_parent, SIGUSR_BLOPINT);
+	int i, count;
+	count = ctx_p->blockthread_count;
+	i     = 0;
+	while (i < count) {
+		debug(2, "Sending SIGUSR_BLOPINT to thread %p", ctx_p->blockthread[i]);
+		pthread_kill(ctx_p->blockthread[i], SIGUSR_BLOPINT);
+		i++;
+	}
+#ifdef PARANOID
+	if (++_sync_tryforcecycle_i > KILL_TIMEOUT) {
 		error("Seems we got a deadlock.");
 		return EDEADLK;
 	}
@@ -3231,20 +3241,20 @@ int sync_tryforcecycle(pthread_t pthread_parent) {
 	if (pthread_cond_timedwait(pthread_cond_state, pthread_mutex_state, &time_timeout) != ETIMEDOUT)
 		return 0;
 #else
-	debug(9, "sleep("TOSTR(SLEEP_SECONDS)")");
+	debug(9, "sleep("XTOSTR(SLEEP_SECONDS)")");
 	sleep(SLEEP_SECONDS);	// TODO: replace this with pthread_cond_timedwait()
 #endif
 
 	return EINPROGRESS;
 }
 
-int sync_switch_state(pthread_t pthread_parent, int newstate) {
+int sync_switch_state(ctx_t *ctx_p, pthread_t pthread_parent, int newstate) {
 	if (state_p == NULL) {
-		debug(3, "sync_switch_state(%p, %i), but state_p == NULL", pthread_parent, newstate);
+		debug(3, "sync_switch_state(ctx_p, %p, %i), but state_p == NULL", pthread_parent, newstate);
 		return 0;
 	}
 
-	debug(3, "sync_switch_state(%p, %i)", pthread_parent, newstate);
+	debug(3, "sync_switch_state(ctx_p, %p, %i)", pthread_parent, newstate);
 
 	// Getting mutexes
 	threadsinfo_t *threadsinfo_p = thread_info();
@@ -3261,17 +3271,23 @@ int sync_switch_state(pthread_t pthread_parent, int newstate) {
 	pthread_cond_t  *pthread_cond_state   = &threadsinfo_p->cond [PTHREAD_MUTEX_STATE];
 
 	// Locking all necessary mutexes
+#ifdef PARANOID
+	_sync_tryforcecycle_i = 0;
+#endif
 	debug(4, "while(pthread_mutex_trylock( pthread_mutex_state ))");
 	while (pthread_mutex_trylock(pthread_mutex_state) == EBUSY) {
-		int rc = sync_tryforcecycle(pthread_parent);
+		int rc = sync_tryforcecycle(ctx_p, pthread_parent);
 		if (rc && rc != EINPROGRESS)
 			return rc;
 		if (!rc)
 			break;
 	}
+#ifdef PARANOID
+	_sync_tryforcecycle_i = 0;
+#endif
 	debug(4, "while(pthread_mutex_trylock( pthread_mutex_select ))");
 	while (pthread_mutex_trylock(pthread_mutex_select) == EBUSY) {
-		int rc = sync_tryforcecycle(pthread_parent);
+		int rc = sync_tryforcecycle(ctx_p, pthread_parent);
 		if (rc && rc != EINPROGRESS)
 			return rc;
 		if (!rc)
@@ -3553,13 +3569,13 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 				*exitcode_p = ETIME;
 			case SIGQUIT:
 				if (ctx_p->flags[PREEXITHOOK])
-					sync_switch_state(pthread_parent, STATE_PREEXIT);
+					sync_switch_state(ctx_p, pthread_parent, STATE_PREEXIT);
 				else
-					sync_switch_state(pthread_parent, STATE_TERM);
+					sync_switch_state(ctx_p, pthread_parent, STATE_TERM);
 				break;
 			case SIGTERM:
 			case SIGINT:
-				sync_switch_state(pthread_parent, STATE_TERM);
+				sync_switch_state(ctx_p, pthread_parent, STATE_TERM);
 				// bugfix of https://github.com/xaionaro/clsync/issues/44
 				while (ctx_p->children) { // Killing children if non-pthread mode or/and (mode=="so" or mode=="rsyncso")
 					pid_t child_pid = ctx_p->child_pid[--ctx_p->children];
@@ -3577,23 +3593,23 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 				}
 				break;
 			case SIGHUP:
-				sync_switch_state(pthread_parent, STATE_REHASH);
+				sync_switch_state(ctx_p, pthread_parent, STATE_REHASH);
 				break;
 			case SIGCHLD:
 				sync_sigchld();
 				break;
 			case SIGUSR_THREAD_GC:
-				sync_switch_state(pthread_parent, STATE_THREAD_GC);
+				sync_switch_state(ctx_p, pthread_parent, STATE_THREAD_GC);
 				break;
 			case SIGUSR_INITSYNC:
-				sync_switch_state(pthread_parent, STATE_INITSYNC);
+				sync_switch_state(ctx_p, pthread_parent, STATE_INITSYNC);
 				break;
 			case SIGUSR_DUMP:
 				sync_dump(ctx_p, ctx_p->dump_path);
 				break;
 			default:
 				error("Unknown signal: %i. Exit.", signal);
-				sync_switch_state(pthread_parent, STATE_TERM);
+				sync_switch_state(ctx_p, pthread_parent, STATE_TERM);
 				break;
 		}
 
@@ -3617,6 +3633,8 @@ int sync_run(ctx_t *ctx_p) {
 	debug(9, "Creating signal handler thread");
 	{
 		int i;
+
+		register_blockthread();
 
 		sigset_t sigset_sighandler;
 		sigemptyset(&sigset_sighandler);

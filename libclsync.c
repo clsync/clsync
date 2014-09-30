@@ -18,6 +18,7 @@
  */
 
 #define LIBCLSYNC
+#include "common.h"
 
 #include <errno.h>
 #include <stdlib.h>

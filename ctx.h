@@ -26,6 +26,14 @@
 #	include <sys/capability.h>	// __u32
 #endif
 
+#define	MAX_BLOCKTHREADS	(1<<4)
+
+#define register_blockthread(thread) {\
+	critical_on (ctx_p->blockthread_count >= MAX_BLOCKTHREADS);\
+	ctx_p->blockthread[ctx_p->blockthread_count++] = pthread_self();\
+	debug(3, "register_blockthread(): ctx_p->blockthread_count -> %i", ctx_p->blockthread_count);\
+}
+
 #define OPTION_FLAGS		(1<<10)
 #define OPTION_LONGOPTONLY	(1<<9)
 #define OPTION_CONFIGONLY	(1<<8)
@@ -362,6 +370,8 @@ struct ctx {
 	unsigned int synctimeout;
 	sigset_t *sigset;
 	char isignoredexitcode[(1<<8)];
+	pthread_t blockthread[MAX_BLOCKTHREADS];
+	size_t    blockthread_count;
 
 	char *chroot_dir;
 
