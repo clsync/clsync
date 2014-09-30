@@ -843,6 +843,7 @@ int privileged_handler(ctx_t *ctx_p)
 		critical_on(!parent_isalive());
 # endif
 	} else {
+		register_blockthread();
 		pthread_setname_np(pthread_self(), "clsync-helper");
 	}
 	cap_drop(ctx_p, ctx_p->caps);
