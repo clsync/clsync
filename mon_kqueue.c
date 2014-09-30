@@ -97,13 +97,15 @@ static inline uint32_t recognize_event(uint32_t event, int is_dir) {
 }
 
 int kqueue_init(ctx_t *_ctx_p) {
+	debug(9, "_ctx_p == %p", _ctx_p);
+	ctx_p     = _ctx_p;
+	indexes_p =  ctx_p->indexes_p;
+
 	ctx_p->fsmondata = xcalloc(1, sizeof(struct kqueue_data));
 	if (ctx_p->fsmondata == NULL)
 		return -1;
 
-	struct kqueue_data *dat = _ctx_p->fsmondata;
-	ctx_p     = _ctx_p;
-	indexes_p = _ctx_p->indexes_p;
+	struct kqueue_data *dat = ctx_p->fsmondata;
 
 	dat->kqueue_d = kqueue();
 

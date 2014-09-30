@@ -3614,7 +3614,7 @@ int sync_run(ctx_t *ctx_p) {
 	sighandler_arg_t sighandler_arg = {0};
 	indexes_t        indexes        = {NULL};
 
-	// Creating signal handler thread
+	debug(9, "Creating signal handler thread");
 	{
 		int i;
 
@@ -3657,7 +3657,7 @@ int sync_run(ctx_t *ctx_p) {
 		signal(SIGUSR_BLOPINT,	sync_sig_int);
 	}
 
-	// Creating hash tables
+	debug(9, "Creating hash tables");
 	{
 		int i;
 
@@ -3683,7 +3683,7 @@ int sync_run(ctx_t *ctx_p) {
 		}
 	}
 
-	// Loading dynamical libraries
+	debug(9, "Loading dynamical libraries");
 	if (ctx_p->flags[MODE] == MODE_SO || ctx_p->flags[MODE] == MODE_RSYNCSO) {
 		/* security checks before dlopen */
 		struct stat so_stat;
@@ -3764,7 +3764,7 @@ int sync_run(ctx_t *ctx_p) {
 		srand(time(NULL));
 
 	if (!ctx_p->flags[ONLYINITSYNC]) {
-		// Initializing FS monitor kernel subsystem in this userspace application
+		debug(9, "Initializing FS monitor kernel subsystem in this userspace application");
 		if (sync_notify_init(ctx_p))
 			return errno;
 	}
