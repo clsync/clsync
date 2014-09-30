@@ -172,7 +172,7 @@ int kqueue_mark(ctx_t *ctx_p, monobj_t *obj_p) {
 
 	if (dat->changelist_used >= dat->changelist_alloced) {
 		dat->changelist_alloced += ALLOC_PORTION;
-		dat->changelist          = xrealloc(dat->changelist, dat->changelist_alloced*sizeof(dat->changelist));
+		dat->changelist          = xrealloc(dat->changelist, dat->changelist_alloced*sizeof(*dat->changelist));
 	}
 
 	switch (obj_p->type) {
