@@ -65,8 +65,8 @@ void tdup_item(const void *node_p, const VISIT which, const int depth) {
 int tdup(void **to, void *from, int (*compar)(const void *, const void *)) {
 	int count;
 #ifdef PARANOID
-	static int lock = 0;
-	if (g_atomic_int_dec_and_test(&lock) != -1)
+	static int lock = 1;
+	if (!g_atomic_int_dec_and_test(&lock))
 		critical ("tdup() is not thread-safe function");
 #endif
 	debug(20, "");
