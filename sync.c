@@ -3859,8 +3859,7 @@ int sync_run(ctx_t *ctx_p) {
 
 	thread_cleanup(ctx_p);
 
-	// Closing rest sockets and files
-
+	debug(2, "Deinitializing the FS monitor subsystem");
 	switch (ctx_p->flags[MONITOR]) {
 #ifdef INOTIFY_SUPPORT
 		case NE_INOTIFY:

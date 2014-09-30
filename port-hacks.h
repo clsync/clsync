@@ -18,6 +18,9 @@
  */
 
 
+#ifndef __PORT_HACKS_H
+#define __PORT_HACKS_H
+
 #ifndef ETIME
 #define ETIME ETIMEDOUT
 #endif
@@ -63,4 +66,17 @@
 #	warning O_PATH is not set
 #	define O_PATH 0
 #endif
+
+#define tdestroy_UNDEFINED
+#ifdef _GNU_SOURCE
+#	ifndef __FreeBSD__
+#		undef tdestroy_UNDEFINED
+#	endif
+#endif
+
+#ifdef tdestroy_UNDEFINED
+extern void tdestroy(void *root, void (*free_node)(void *nodep));
+#endif
+
+#endif // __PORT_HACKS_H
 

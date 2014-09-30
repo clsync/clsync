@@ -303,12 +303,14 @@ static char *const threading_modes[] = {
 	NULL
 };
 
+#ifdef CAPABILITIES_SUPPORT
 static char *const splitting_modes[] = {
 	[SM_OFF]		= "off",
 	[SM_THREAD]		= "thread",
 	[SM_PROCESS]		= "process",
 	NULL
 };
+#endif
 
 static char *const notify_engines[] = {
 	[NE_UNDEFINED]		= "",
