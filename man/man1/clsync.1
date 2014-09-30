@@ -1084,7 +1084,7 @@ on systems with too many file events.
 .br
 \- Use
 .I bsm_prefetch
-mode.
+mode (but there's no guarantee in this case anyway).
 .RE
 See also option
 .IR \-\-exit\-on\-sync\-skip .
@@ -1118,6 +1118,9 @@ The same as
 but all BSM events will be prefetched by an additional thread to prevent BSM
 queue overflow. This may utilize a lot of memory on systems with a high FS
 events frequency.
+
+However the thread may be not fast enough to unload the kernel BSM queue. So
+it may overflow anyway.
 .RE
 .RE
 
