@@ -109,7 +109,7 @@ minfree:0\n\
 naflags:fc,fd,fw,fm,cl\n\
 policy:cnt\n\
 filesz:1M\n\
-expire-after: 2d AND 20M\n\
+expire-after:20M\n\
 "
 
 #define DTRACE_PATH			"dtrace"
