@@ -145,8 +145,8 @@ int inotify_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 			stat64_t lstat, *lstat_p;
 			mode_t st_mode;
 			size_t st_size;
-			if ((r->objtype_new == EOT_DOESNTEXIST) || (ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT) || lstat64(path_full, &lstat)) {
-				debug(2, "Cannot lstat64(\"%s\", lstat). Seems, that the object had been deleted (%i) or option \"--cancel-syscalls mon_stat\" (%i) is set.", path_full, r->objtype_new == EOT_DOESNTEXIST, ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT);
+			if ((r.objtype_new == EOT_DOESNTEXIST) || (ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT) || lstat64(path_full, &lstat)) {
+				debug(2, "Cannot lstat64(\"%s\", lstat). Seems, that the object had been deleted (%i) or option \"--cancel-syscalls mon_stat\" (%i) is set.", path_full, r.objtype_new == EOT_DOESNTEXIST, ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT);
 				st_mode = (event->mask & IN_ISDIR ? S_IFDIR : S_IFREG);
 				st_size = 0;
 				lstat_p = NULL;
