@@ -258,73 +258,81 @@ FreeBSD doesn't support inotify, so there're 3.5 ways to use clsync on it:
 
 Here's an excerpt from the manpage:
 
-    Possible values:
-           inotify
-                  inotify(7) [Linux, (FreeBSD via libinotify)]
+              Possible values:
+                     inotify
+                            inotify(7) [Linux, (FreeBSD via libinotify)]
     
-                  Native, fast, reliable and well tested Linux FS monitor subsystem.
+                            Native, fast, reliable and well tested Linux FS monitor subsystem.
     
-                  There's no performance profit to use "inotify" instead of "kevent" on FreeBSD using "libinotify". It backends  to  "kevent"  anyway.
-                  However inotify support is well tested and recommended.
+                            There's no performance profit to use "inotify" instead of "kevent" on Fr
+                            However inotify support is well tested and recommended.
     
-                  FreeBSD users: The libinotify on FreeBSD is still not ready and unusable for clsync to sync a lot of files and directories.
+                            FreeBSD users: The libinotify on FreeBSD is still not ready and unusable
     
-           kqueue
-                  kqueue(2) [FreeBSD, (Linux via libkqueue)]
+                     kqueue
+                            kqueue(2) [FreeBSD, (Linux via libkqueue)]
+                            kqueue  requires  an  open()  on  every watched file/dir. But FreeBSD
+                            doesn't allow to open() symlink  itself  (without  follow)  and  it's
+                            highly  invasively  to open() pipes and devices. So clsync just won't
+                            call open() on everything except regular files and directories.  Con‐
+                            sequently,  clsync  cannot  determine  if  something  changed in sym‐
+                            link/pipe/socket and so on.  However it still  can  determine  if  it
+                            will  be created or deleted by watching the parent directory and res‐
+                            caning it on every appropriate event.
     
-                  A *BSD kernel event notification mechanism (inc. timer, sockets, files etc).
+                            Also this API requires to open every monitored file and directory. So
+                            it  may  produce  a  huge  amount  of  file descriptors. Be sure that
+                            kern.maxfiles is big enough (in FreeBSD).
     
-                  This  monitor  subsystem  that  cannot  determine file creation event, but it can determine a directory where something happened. So
-                  clsync is have to rescan whole dir every time on any content change. Moreover, kqueue requires an open() on every watched  file/dir.
-                  But  FreeBSD  doesn't  allow  to  open()  symlink itself (without follow) and it's highly invasively to open() pipes and devices. So
-                  clsync just won't call open() on everything except regular files and directories.  Consequently, clsync cannot  determine  if  some‐
-                  thing  changed  in  symlink/pipe/socket  and so on.  However it still can determine if it will be created or deleted by watching the
-                  parent directory and rescaning it on every appropriate event.
+                            CPU/HDD expensive way.
     
-                  Also this API requires to open every monitored file and directory. So it may produce a huge amount of file descriptors. Be sure that
-                  kern.maxfiles is big enough (in FreeBSD).
+                            Not well tested. Use with caution!
     
-                  CPU/HDD expensive way.
+                            Linux users: The libkqueue on Linux is not working. He-he :)
     
-                  Not well tested. Use with caution!
+                     bsm
+                            bsm(3) [FreeBSD]
     
-                  Linux users: The libkqueue on Linux is not working. He-he :)
+                            Basic Security Module (BSM) Audit API.
     
-           bsm
-                  bsm(3) [FreeBSD]
+                            This is not a FS monitor subsystem, actually. It's  just  an  API  to
+                            access  to  audit information (inc. logs).  clsync can setup audit to
+                            watch FS events and report it into log. After that clsync  will  just
+                            parse the log via auditpipe(4) [FreeBSD].
     
-                  Basic Security Module (BSM) Audit API.
+                            Reliable,  but  hacky  way.  It requires global audit reconfiguration
+                            that may hopple audit analysis.
     
-                  This is not a FS monitor subsystem, actually. It's just an API to access to audit information (inc. logs).  clsync can  setup  audit
-                  to watch FS events and report it into log. After that clsync will just parse the log via auditpipe(4) [FreeBSD].
+                            Warning!  FreeBSD has a limit for queued events. In  default  FreeBSD
+                            kernel it's only 1024 events. So choose one of:
+                                   - To patch the kernel to increase the limit.
+                                   - Don't use clsync on systems with too many file events.
+                                   - Use bsm_prefetch mode (but there's no guarantee in this case
+                                   anyway).
+                            See also option --exit-on-sync-skip.
     
-                  Reliable, but hacky way. It requires global audit reconfiguration that may hopple audit analysis.
+                            Not  well  tested.  Use   with   caution!    Also   file   /etc/secu‐
+                            rity/audit_control will be overwritten with:
+                                   #clsync
     
-                  Warning!  FreeBSD has a limit for queued events. In default FreeBSD kernel it's only 1024 events. So choose one of:
-                         - To patch the kernel to increase the limit.
-                         - Don't use clsync on systems with too many file events.
-                         - Use bsm_prefetch mode (but there's no guarantee in this case anyway).
-                  See also option --exit-on-sync-skip.
+                                   dir:/var/audit
+                                   flags:fc,fd,fw,fm,cl
+                                   minfree:0
+                                   naflags:fc,fd,fw,fm,cl
+                                   policy:cnt
+                                   filesz:1M
+                            unless it's already starts with "#clsync\n" ("\n" is a new line char‐
+                            acter).
     
-                  Not well tested. Use with caution!  Also file /etc/security/audit_control will be overwritten with:
-                         #clsync
+                     bsm_prefetch
+                            The same as bsm but all BSM events will be  prefetched  by  an  addi‐
+                            tional  thread  to prevent BSM queue overflow. This may utilize a lot
+                            of memory on systems with a high FS events frequency.
     
-                         dir:/var/audit
-                         flags:fc,fd,fw,fm,cl
-                         minfree:0
-                         naflags:fc,fd,fw,fm,cl
-                         policy:cnt
-                         filesz:1M
-                  unless it's already starts with "#clsync\n" ("\n" is a new line character).
+                            However the thread may be not fast enough to unload  the  kernel  BSM
+                            queue. So it may overflow anyway.
     
-           bsm_prefetch
-                  The  same as bsm but all BSM events will be prefetched by an additional thread to prevent BSM queue overflow. This may utilize a lot
-                  of memory on systems with a high FS events frequency.
-    
-                  However the thread may be not fast enough to unload the kernel BSM queue. So it may overflow anyway.
-    
-    The default value on Linux is "inotify". The default value on FreeBSD is "kqueue".
-
+              The default value on Linux is "inotify". The default value on FreeBSD is "kqueue".
 
 I hope you will send me bugreports to make me able to improve the FreeBSD support :)
 
