@@ -264,10 +264,12 @@ Here's an excerpt from the manpage:
     
                    Native, fast, reliable and well tested Linux FS monitor subsystem.
     
-                   There's no performance profit to use "inotify" instead of "kevent" on Fr
-                   However inotify support is well tested and recommended.
+                   There's no essential performance profit to use "inotify"  instead  of
+                   "kevent"  on FreeBSD using "libinotify". It backends to "kevent" any‐
+                   way.
     
-                   FreeBSD users: The libinotify on FreeBSD is still not ready and unusable
+                   FreeBSD users: The libinotify on FreeBSD is still not ready and unus‐
+                   able for clsync to sync a lot of files and directories.
     
             kqueue
                    kqueue(2) [FreeBSD, (Linux via libkqueue)]
