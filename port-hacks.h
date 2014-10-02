@@ -75,6 +75,8 @@
 #endif
 
 #ifdef tdestroy_UNDEFINED
+#define tdump(root) {if(_DEBUG_FORCE) _tdump(root);}
+void _tdump(void *root);
 extern void tdestroy(void *root, void (*free_node)(void *nodep));
 #endif
 

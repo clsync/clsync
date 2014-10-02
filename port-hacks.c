@@ -21,23 +21,47 @@
 #include "port-hacks.h"
 #include <stdlib.h>
 
+#include "error.h"
+
 #ifdef tdestroy_UNDEFINED
-struct _tdestroy_tree {
+struct _tcallfunct_tree {
 	void *data;
-	struct _tdestroy_tree *left;
-	struct _tdestroy_tree *right;
+	struct _tcallfunct_tree *left;
+	struct _tcallfunct_tree *right;
 };
  
-void tdestroy(void *root, void (*free_node)(void *node_data)) {
-	struct _tdestroy_tree *node_p = root;
+void tcallfunct(void *root, void (*funct)(struct _tcallfunct_tree *node_p, void *arg), void *arg) {
+	struct _tcallfunct_tree *node_p = root;
 	if (node_p == NULL)
 		return;
 	
-	tdestroy(node_p->left , free_node);
-	tdestroy(node_p->right, free_node);
+	tcallfunct(node_p->left , funct, arg);
+	tcallfunct(node_p->right, funct, arg);
 
-	free_node(node_p->data);
+	funct(node_p, arg);
+	return;
+}
+
+void tdump_node(struct _tcallfunct_tree *node_p, void *arg) {
+	debug(80, "node_p == %p; node_p->left == %p; node_p->right == %p; node_p->data == %p", node_p, node_p->left, node_p->right, node_p->data);
+	return;
+}
+
+void _tdump(void *root) {
+	debug(20, "root = %p", root);
+	tcallfunct(root, tdump_node, NULL);
+	return;
+}
+
+void tdestroy_freenode(struct _tcallfunct_tree *node_p, void *_free_node_funct) {
+	void (*free_node_funct)(void *node_data) = _free_node_funct;
+	free_node_funct(node_p->data);
 	free(node_p);
+	return;
+}
+
+void tdestroy(void *root, void (*free_node)(void *node_data)) {
+	tcallfunct(root, tdestroy_freenode, free_node);
 	return;
 }
 #endif

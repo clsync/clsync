@@ -114,6 +114,7 @@ int kqueue_init(ctx_t *_ctx_p) {
 
 static int monobj_filecmp(const void *_a, const void *_b) {
 	const monobj_t *a=_a, *b=_b;
+	debug(95, "a == %p; b == %p", a, b);
 
 	int diff_inode  = a->inode  - b->inode;
 	debug(90, "diff_inode = %i", diff_inode);
@@ -203,6 +204,7 @@ void child_free(monobj_t *node) {
 	critical_on (kqueue_unmark(ctx_p, node));
 }
 int kqueue_unmark(ctx_t *ctx_p, monobj_t *obj_p) {
+	monobj_t *parent;
 	debug(20, "obj_p == %p", obj_p);
 	struct kqueue_data *dat = ctx_p->fsmondata;
 #ifdef VERYPARANOID
@@ -212,13 +214,23 @@ int kqueue_unmark(ctx_t *ctx_p, monobj_t *obj_p) {
 	}
 #endif
 
-	if (obj_p->changelist_id+1 < dat->changelist_used)
+	if (obj_p->changelist_id+1 < dat->changelist_used) {
+		debug(20, "dat->changelist: moving %i -> %i", dat->changelist_used, obj_p->changelist_id);
 		memcpy(&dat->changelist[obj_p->changelist_id], &dat->changelist[dat->changelist_used], sizeof(*dat->changelist));
+	}
 
 	dat->changelist_used--;
 
 	close(obj_p->fd);
 
+	parent = obj_p->parent;
+	if (parent != NULL) {
+		debug(20, "Removing the obj from parent->children_tree (obj_p == %p; parent->children_tree == %p)", obj_p, parent->children_tree);
+		tdump(parent->children_tree);
+		tdelete(obj_p, &parent->children_tree, monobj_filecmp);
+	}
+
+	debug(20, "Removing the obj itself");
 	tdestroy(obj_p->children_tree, (void (*)(void *))child_free);
 	tdelete(obj_p, &dat->file_btree, monobj_filecmp);
 	tdelete(obj_p,   &dat->fd_btree, monobj_fdcmp);
@@ -253,6 +265,7 @@ monobj_t *kqueue_start_watch(ctx_t *ctx_p, ino_t inode, dev_t device, int dir_fd
 		debug(20, "Adding a child for dir_fd == %i", dir_fd);
 		if (tsearch((void *)obj_p, &parent->children_tree, monobj_filecmp) == NULL)
 			critical("Not enough memory");
+		tdump(parent->children_tree);
 		debug(25, "parent->children_tree == %p", parent->children_tree);
 	}
 
@@ -672,7 +685,7 @@ int kqueue_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 			obj.fd = ev_p->ident;
 			monobj_t **obj_pp = tfind((void *)&obj, &dat->fd_btree, monobj_fdcmp);
 			if (obj_pp == NULL) {
-				error("Internal error. Cannot find internal structure for fd == %u. Skipping the event.", ev_p->ident);
+				debug(3, "Cannot find internal structure for fd == %u. Skipping the event.", ev_p->ident);
 				continue;
 			}
 			monobj_t *obj_p = *obj_pp;
