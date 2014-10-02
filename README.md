@@ -277,11 +277,11 @@ Here's an excerpt from the manpage:
                    A  *BSD  kernel  event  notification  mechanism (inc. timer, sockets,
                    files etc).
     
-                   This monitor subsystem that cannot determine file creation event, but
-                   it  can  determine a directory where something happened. So clsync is
-                   have to rescan whole dir every time on any content change.  Moreover,
+                   This monitor subsystem cannot determine file creation event,  but  it
+                   can determine a directory where something happened. So clsync is have
+                   to rescan whole dir every  time  on  any  content  change.  Moreover,
                    kqueue  requires  an  open()  on  every watched file/dir. But FreeBSD
-                   doesn't allow to open() symlink  itself  (without  follow)  and  it's
+                   doesn't allow to open() symlink itself (without following)  and  it's
                    highly  invasively  to open() pipes and devices. So clsync just won't
                    call open() on everything except regular files and directories.  Con‐
                    sequently,  clsync  cannot  determine  if  something  changed in sym‐
