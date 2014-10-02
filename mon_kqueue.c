@@ -562,12 +562,9 @@ int kqueue_sync(ctx_t *ctx_p, indexes_t *indexes_p, struct kevent *ev_p, monobj_
 
 	mode_t st_mode;
 	size_t st_size;
-	if ((ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT) || lstat64(path_full, &lstat)) {
-		debug(2, "Cannot or cancelled lstat64(\"%s\", lstat). The object disappeared or option \"--cancel-syscalls=mon_stat\" is set.", path_full);
-		if(obj_p->type == DT_DIR)
-			st_mode = S_IFDIR;
-		else
-			st_mode = S_IFREG;
+	if ((ev_p->fflags == NOTE_DELETE) || (ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT) || lstat64(path_full, &lstat)) {
+		debug(2, "Cannot or cancelled lstat64(\"%s\", lstat). The object had been deleted (%i) or option \"--cancel-syscalls=mon_stat\" (%i) is set.", path_full, ev_p->fflags == NOTE_DELETE, ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT);
+		st_mode = (obj_p->type == DT_DIR ? S_IFDIR : S_IFREG);
 		st_size = 0;
 		lstat_p = NULL;
 	} else {
