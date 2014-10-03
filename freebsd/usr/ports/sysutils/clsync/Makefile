@@ -2,7 +2,7 @@
 # $FreeBSD: head/sysutils/clsync/Makefile 2014-05-23 16:38:52Z $
 
 PORTNAME=	clsync
-PORTVERSION=	0.4~rc1
+PORTVERSION=	0.4~rc6
 CATEGORIES=	sysutils
 MASTER_SITES=	http://mirror.mephi.ru/projects/clsync/archive/
 
@@ -23,14 +23,14 @@ PLIST_FILES=	sbin/clsync \
 		man/man1/clsync.1.gz
 
 
-OPTIONS_DEFINE=	PARANOID VERYPARANOID SOCKET DEBUG LIBCLSYNC
+OPTIONS_DEFINE=	PARANOID VERYPARANOID SOCKET DEBUG LIBCLSYNC BSM KQUEUE LIBINOTIFY
 
 PARANOID_DESC=	Enable paranoid secure routines
 VERYPARANOID_DESC=Enable extra paranoid secure routines and disable some extra features
 SOCKET_DESC=	Enable control socket support
 LIBCLSYNC_DESC=	Build libclsync.so for control socket clients
 
-OPTIONS_DEFAULT=PARANOID
+OPTIONS_DEFAULT=PARANOID KQUEUE
 
 .include <bsd.port.options.mk>
 
@@ -54,6 +54,18 @@ CONFIGURE_ARGS+=	--enable-debug
 
 .if ${PORT_OPTIONS:MLIBCLSYNC}
 CONFIGURE_ARGS+=	--enable-libclsync
+.endif
+
+.if ${PORT_OPTIONS:BSM}
+CONFIGURE_ARGS+=	--with-bsm=lib
+.endif
+
+.if ${PORT_OPTIONS:KQUEUE}
+CONFIGURE_ARGS+=	--with-kqueue=native
+.endif
+
+.if ${PORT_OPTIONS:LIBINOTIFY}
+CONFIGURE_ARGS+=	--with-inotify=lib
 .endif
 
 .include <bsd.port.pre.mk>
