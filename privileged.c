@@ -1055,9 +1055,7 @@ int privileged_handler(ctx_t *ctx_p)
 							cmd_ret_p->ret    = (void *)(long)errno;
 					}
 				}
-#ifdef VERYPARANOID
-				pthread_sigmask(SIG_SETMASK, &sigset_old, NULL);
-#endif
+
 				// Return
 				int exitcode = WEXITSTATUS(status);
 				debug(3, "execution completed with exitcode %i", exitcode);
