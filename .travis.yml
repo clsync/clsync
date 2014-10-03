@@ -1,7 +1,7 @@
 language: c
 before_install:
  - sudo apt-get update
- - sudo apt-get install libcap-dev libglib2.0-dev libmhash-dev libkqueue.* libcgroup-dev libseccomp-dev linux-libc-dev
+ - sudo apt-get install libcap-dev libglib2.0-dev libmhash-dev libkqueue.* libcgroup-dev libseccomp-dev linux-libc-dev libkqueue-dev
  - sudo pip install cpp-coveralls --use-mirrors
 script:
  - ./.travis.sh
