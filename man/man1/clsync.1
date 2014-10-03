@@ -1024,9 +1024,12 @@ Possible values:
 
 Native, fast, reliable and well tested Linux FS monitor subsystem.
 
-There's no performance profit to use "inotify" instead of "kevent" on FreeBSD
-using "libinotify". It backends to "kevent" anyway. However inotify support is
-well tested and recommended.
+There's no essential performance profit to use "inotify" instead of "kevent"
+on FreeBSD using "libinotify". It backends to "kevent" anyway.
+
+FreeBSD users: The libinotify on FreeBSD is still not ready and unusable for
+.B clsync
+to sync a lot of files and directories.
 
 .RE
 .IR kqueue
@@ -1035,10 +1038,20 @@ well tested and recommended.
 
 A *BSD kernel event notification mechanism (inc. timer, sockets, files etc).
 
-This monitor subsystem that cannot determine file creation event, but it can
+This monitor subsystem cannot determine file creation event, but it can
 determine a directory where something happened. So
 .B clsync
-is have to rescan whole dir every time on any content change.
+is have to rescan whole dir every time on any content change. Moreover, kqueue
+requires an open() on every watched file/dir. But FreeBSD doesn't allow to
+open() symlink itself (without following) and it's highly invasively to open()
+pipes and devices. So
+.B clsync
+just won't call open() on everything except regular files and directories.
+Consequently,
+.B clsync
+cannot determine if something changed in symlink/pipe/socket and so on.
+However it still can determine if it will be created or deleted by watching
+the parent directory and rescaning it on every appropriate event.
 
 Also this API requires to open every monitored file and directory. So it may
 produce a huge amount of file descriptors. Be sure that
@@ -1049,8 +1062,7 @@ CPU/HDD expensive way.
 
 .B Not well tested. Use with caution!
 
-FreeBSD users: notify me about found bugs or performance issues, please. And
-before the bugfix you can switch to "inotify" through libinotify or to "bsm".
+Linux users: The libkqueue on Linux is not working. He-he :)
 
 .RE
 .IR bsm

@@ -20,4 +20,5 @@
 typedef gpointer(*GDupFunc)(gpointer data);
 
 extern GHashTable *g_hash_table_dup(GHashTable *ht, GHashFunc hash_funct, GEqualFunc key_equal_funct, GDestroyNotify key_destroy_funct, GDestroyNotify value_destroy_funct, GDupFunc key_dup_funct, GDupFunc value_dup_funct);
+extern GTree *g_tree_dup(GTree *src, GCompareDataFunc key_compare_func, gpointer key_compare_data, GDestroyNotify key_destroy_func, GDestroyNotify value_destroy_func, GDupFunc key_dup_funct, GDupFunc value_dup_funct);
 

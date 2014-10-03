@@ -569,9 +569,9 @@ int bsm_handle_allevents(struct ctx *ctx_p, struct indexes *indexes_p, bsm_handl
 		else 
 			path_stat = event_p->path;
 
-		if ((ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT) || lstat(path_stat, &st)) {
-			debug(2, "Cannot lstat64(\"%s\", st). Seems, that the object disappeared or option \"--cancel-syscalls=mon_stat\" is set.", path_stat);
-			if(r.f.objtype_old == EOT_DIR || r.f.objtype_new == EOT_DIR)
+		if ((r.t.objtype_new == EOT_DOESNTEXIST) || (ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT) || lstat(path_stat, &st)) {
+			debug(2, "Cannot lstat64(\"%s\", st). Seems, that the object had been deleted (%i) or option \"--cancel-syscalls=mon_stat\" (%i) is set.", path_stat, r.t.objtype_new == EOT_DOESNTEXIST, ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT);
+			if (r.f.objtype_old == EOT_DIR || r.f.objtype_new == EOT_DIR)
 				st_mode = S_IFDIR;
 			else
 				st_mode = S_IFREG;

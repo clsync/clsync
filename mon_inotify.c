@@ -108,7 +108,7 @@ int inotify_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 			// Removing stale wd-s
 
-			if(event->mask & IN_IGNORED) {
+			if (event->mask & IN_IGNORED) {
 				debug(2, "Cleaning up info about watch descriptor %i.", event->wd);
 				indexes_remove_bywd(indexes_p, event->wd);
 				INOTIFY_HANDLE_CONTINUE;
@@ -118,7 +118,7 @@ int inotify_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 			char *fpath = indexes_wd2fpath(indexes_p, event->wd);
 
-			if(fpath == NULL) {
+			if (fpath == NULL) {
 				debug(2, "Event %p on stale watch (wd: %i).", (void *)(long)event->mask, event->wd);
 				INOTIFY_HANDLE_CONTINUE;
 			}
@@ -139,15 +139,15 @@ int inotify_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 			// Getting infomation about file/dir/etc
 
+			struct  recognize_event_return r = {0};
+			recognize_event(&r, event->mask);
+
 			stat64_t lstat, *lstat_p;
 			mode_t st_mode;
 			size_t st_size;
-			if ((ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT) || lstat64(path_full, &lstat)) {
-				debug(2, "Cannot lstat64(\"%s\", lstat). Seems, that the object disappeared or option \"--cancel-syscalls mon_stat\" is set.", path_full);
-				if(event->mask & IN_ISDIR)
-					st_mode = S_IFDIR;
-				else
-					st_mode = S_IFREG;
+			if ((r.objtype_new == EOT_DOESNTEXIST) || (ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT) || lstat64(path_full, &lstat)) {
+				debug(2, "Cannot lstat64(\"%s\", lstat). Seems, that the object had been deleted (%i) or option \"--cancel-syscalls mon_stat\" (%i) is set.", path_full, r.objtype_new == EOT_DOESNTEXIST, ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT);
+				st_mode = (event->mask & IN_ISDIR ? S_IFDIR : S_IFREG);
 				st_size = 0;
 				lstat_p = NULL;
 			} else {
@@ -155,9 +155,6 @@ int inotify_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 				st_size = lstat.st_size;
 				lstat_p = &lstat;
 			}
-
-			struct  recognize_event_return r = {0};
-			recognize_event(&r, event->mask);
 
 			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, path_full, NULL, lstat_p, r.objtype_old, r.objtype_new, event->mask, event->wd, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
 				count = -1;
