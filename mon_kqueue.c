@@ -119,7 +119,7 @@ gboolean unmarkchild_for_foreach(gpointer _obj_p, gpointer _value, gpointer _ctx
 
 void monobj_free(void *monobj_p) {
 	monobj_t *obj_p = monobj_p;
-	debug(20, "obj_p == %p", obj_p);
+	debug(20, "obj_p == %p; obj_p->fd == %i; obj_p->name == \"%s\"", obj_p, obj_p->fd, obj_p->name);
 
 	if (obj_p->children_tree != NULL) {
 		debug(20, "Removing children");
@@ -131,7 +131,7 @@ void monobj_free(void *monobj_p) {
 
 	if (obj_p->parent != NULL) {
 		monobj_t *parent = obj_p->parent;
-		debug(20, "Removing the obj from parent->children_tree (obj_p == %p; parent->children_tree == %p)", obj_p, parent->children_tree);
+		debug(20, "Removing the obj from parent->children_tree (obj_p == %p; parent == %p; parent->children_tree == %p)", obj_p, parent, parent->children_tree);
 		g_tree_remove(parent->children_tree, obj_p);
 	}
 
@@ -274,19 +274,21 @@ int kqueue_unmark(ctx_t *ctx_p, monobj_t *obj_p) {
 	}
 #endif
 
+	debug(30, "dat->changelist_used == %i", dat->changelist_used);
+	if (dat->changelist_used) {
 	dat->changelist_used--;
+		changelist_id_last = dat->changelist_used;
+		debug(30, "Checking: (obj_p->changelist_id [%i] < changelist_id_last [%i]) == %i", obj_p->changelist_id, changelist_id_last, (obj_p->changelist_id < changelist_id_last));
+		if (obj_p->changelist_id < changelist_id_last) {
+			debug(20, "dat->changelist: moving %i -> %i", changelist_id_last, obj_p->changelist_id);
 
-	changelist_id_last = dat->changelist_used;
-	debug(30, "Checking: (obj_p->changelist_id [%i] < changelist_id_last [%i]) == %i", obj_p->changelist_id, changelist_id_last, (obj_p->changelist_id < changelist_id_last));
-	if (obj_p->changelist_id < changelist_id_last) {
-		debug(20, "dat->changelist: moving %i -> %i", changelist_id_last, obj_p->changelist_id);
+			dat->obj_p_by_clid[ obj_p->changelist_id ]                = dat->obj_p_by_clid[ changelist_id_last ];
+			dat->obj_p_by_clid[ obj_p->changelist_id ]->changelist_id = obj_p->changelist_id;
 
-		dat->obj_p_by_clid[ obj_p->changelist_id ]                = dat->obj_p_by_clid[ changelist_id_last ];
-		dat->obj_p_by_clid[ obj_p->changelist_id ]->changelist_id = obj_p->changelist_id;
+			memcpy(&dat->changelist[obj_p->changelist_id], &dat->changelist[changelist_id_last], sizeof(*dat->changelist));
 
-		memcpy(&dat->changelist[obj_p->changelist_id], &dat->changelist[changelist_id_last], sizeof(*dat->changelist));
-
-		debug(30, "dat->obj_p_by_clid[ obj_p->changelist_id ] == %p; dat->obj_p_by_clid[ obj_p->changelist_id ].fd == %i", dat->obj_p_by_clid[ obj_p->changelist_id ], dat->obj_p_by_clid[ obj_p->changelist_id ]->fd);
+			debug(30, "dat->obj_p_by_clid[ obj_p->changelist_id ] == %p; dat->obj_p_by_clid[ obj_p->changelist_id ].fd == %i", dat->obj_p_by_clid[ obj_p->changelist_id ], dat->obj_p_by_clid[ obj_p->changelist_id ]->fd);
+		}
 	}
 
 	close(obj_p->fd);
