@@ -54,6 +54,7 @@ struct kqueue_data {
 	size_t         changelist_used;
 	struct kevent  eventlist[KQUEUE_EVENTLISTSIZE];
 	size_t         eventlist_count;
+	monobj_t     **obj_p_by_clid;			// An associative array to get the monobj pointer by an changelist_id
 	GTree   *file_btree;
 	GTree     *fd_btree;
 };
@@ -230,7 +231,8 @@ int kqueue_mark(ctx_t *ctx_p, monobj_t *obj_p) {
 
 	if (dat->changelist_used >= dat->changelist_alloced) {
 		dat->changelist_alloced += ALLOC_PORTION;
-		dat->changelist          = xrealloc(dat->changelist, dat->changelist_alloced*sizeof(*dat->changelist));
+		dat->changelist          = xrealloc(dat->changelist,    dat->changelist_alloced*sizeof(*dat->changelist));
+		dat->obj_p_by_clid       = xrealloc(dat->obj_p_by_clid, dat->changelist_alloced*sizeof(*dat->obj_p_by_clid));
 	}
 
 	switch (obj_p->type) {
@@ -252,6 +254,8 @@ int kqueue_mark(ctx_t *ctx_p, monobj_t *obj_p) {
 
 	obj_p->changelist_id = dat->changelist_used++;
 
+	dat->obj_p_by_clid[obj_p->changelist_id] = obj_p;
+
 	return 0;
 }
 
@@ -260,6 +264,7 @@ void child_free(monobj_t *node) {
 	critical_on (kqueue_unmark(ctx_p, node));
 }
 int kqueue_unmark(ctx_t *ctx_p, monobj_t *obj_p) {
+	int changelist_id_last;
 	debug(20, "obj_p == %p", obj_p);
 	struct kqueue_data *dat = ctx_p->fsmondata;
 #ifdef VERYPARANOID
@@ -269,12 +274,20 @@ int kqueue_unmark(ctx_t *ctx_p, monobj_t *obj_p) {
 	}
 #endif
 
-	if (obj_p->changelist_id+1 < dat->changelist_used) {
-		debug(20, "dat->changelist: moving %i -> %i", dat->changelist_used, obj_p->changelist_id);
-		memcpy(&dat->changelist[obj_p->changelist_id], &dat->changelist[dat->changelist_used], sizeof(*dat->changelist));
-	}
-
 	dat->changelist_used--;
+
+	changelist_id_last = dat->changelist_used;
+	debug(30, "Checking: (obj_p->changelist_id [%i] < changelist_id_last [%i]) == %i", obj_p->changelist_id, changelist_id_last, (obj_p->changelist_id < changelist_id_last));
+	if (obj_p->changelist_id < changelist_id_last) {
+		debug(20, "dat->changelist: moving %i -> %i", changelist_id_last, obj_p->changelist_id);
+
+		dat->obj_p_by_clid[ obj_p->changelist_id ]                = dat->obj_p_by_clid[ changelist_id_last ];
+		dat->obj_p_by_clid[ obj_p->changelist_id ]->changelist_id = obj_p->changelist_id;
+
+		memcpy(&dat->changelist[obj_p->changelist_id], &dat->changelist[changelist_id_last], sizeof(*dat->changelist));
+
+		debug(30, "dat->obj_p_by_clid[ obj_p->changelist_id ] == %p; dat->obj_p_by_clid[ obj_p->changelist_id ].fd == %i", dat->obj_p_by_clid[ obj_p->changelist_id ], dat->obj_p_by_clid[ obj_p->changelist_id ]->fd);
+	}
 
 	close(obj_p->fd);
 
@@ -321,6 +334,8 @@ monobj_t *kqueue_start_watch(ctx_t *ctx_p, ino_t inode, dev_t device, int dir_fd
 
 	switch (type) {
 		case DT_DIR:
+			obj_p->children_tree = g_tree_new_full(monobj_filecmp, ctx_p, NULL, NULL);
+			debug(25, "dir_p->children_tree == %p", obj_p->children_tree);
 		case DT_UNKNOWN:
 		case DT_REG:
 			if (kqueue_mark(ctx_p, obj_p)) {
@@ -469,8 +484,6 @@ int kqueue_add_watch_dir(ctx_t *ctx_p, indexes_t *indexes_p, const char *const a
 		error("Got error while kqueue_add_watch_path(ctx_p, \"%s\")", accpath);
 		return -1;
 	}
-
-	dir_obj_p->children_tree = g_tree_new_full(monobj_filecmp, ctx_p, NULL, NULL);
 
 	dir = fdopendir(dir_obj_p->fd);
 	if (dir == NULL)
