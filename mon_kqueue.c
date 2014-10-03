@@ -29,6 +29,14 @@
 #include "glibex.h"
 #include "mon_kqueue.h"
 
+enum kqueue_status {
+	KQUEUE_STATUS_UNKNOWN,
+	KQUEUE_STATUS_RUNNING,
+	KQUEUE_STATUS_DEINIT,
+	KQUEUE_STATUS_DEAD,
+};
+enum kqueue_status kqueue_status = KQUEUE_STATUS_UNKNOWN;
+
 struct monobj {
 	ino_t          inode;
 	dev_t          device;
@@ -41,8 +49,13 @@ struct monobj {
 	size_t         changelist_id;
 	struct monobj *parent;
 
-	// For directories only
-	GTree         *children_tree;
+	// Case specific stuff
+	union {
+		// For directories only, for original (not dupes) obj_p only
+		GTree *children_tree;
+		// For duplicates only, see _kqueue_handle_oneevent_dircontent()
+		struct monobj *origin;
+	};
 };
 typedef struct monobj monobj_t;
 
@@ -121,18 +134,19 @@ void monobj_free(void *monobj_p) {
 	monobj_t *obj_p = monobj_p;
 	debug(20, "obj_p == %p; obj_p->fd == %i; obj_p->name == \"%s\"", obj_p, obj_p->fd, obj_p->name);
 
-	if (obj_p->children_tree != NULL) {
-		debug(20, "Removing children");
-		if (g_tree_nnodes(obj_p->children_tree)) {
-			g_tree_foreach(obj_p->children_tree, unmarkchild_for_foreach, ctx_p);
-			g_tree_destroy(obj_p->children_tree);
+	if (kqueue_status != KQUEUE_STATUS_DEINIT) {
+		if (obj_p->children_tree != NULL) {
+			debug(20, "Removing children");
+			if (g_tree_nnodes(obj_p->children_tree)) {
+				g_tree_foreach(obj_p->children_tree, unmarkchild_for_foreach, ctx_p);
+				g_tree_destroy(obj_p->children_tree);
+			}
 		}
-	}
-
-	if (obj_p->parent != NULL) {
-		monobj_t *parent = obj_p->parent;
-		debug(20, "Removing the obj from parent->children_tree (obj_p == %p; parent == %p; parent->children_tree == %p)", obj_p, parent, parent->children_tree);
-		g_tree_remove(parent->children_tree, obj_p);
+		if (obj_p->parent != NULL) {
+			monobj_t *parent = obj_p->parent;
+			debug(20, "Removing the obj from parent->children_tree (obj_p == %p; parent == %p; parent->children_tree == %p)", obj_p, parent, parent->children_tree);
+			g_tree_remove(parent->children_tree, obj_p);
+		}
 	}
 
 	debug(20, "free()-s");
@@ -200,6 +214,7 @@ int kqueue_init(ctx_t *_ctx_p) {
 	mondata->file_btree = g_tree_new_full(monobj_filecmp, _ctx_p, monobj_free, NULL);
 	mondata->fd_btree   = g_tree_new_full(monobj_fdcmp,   _ctx_p, NULL,        NULL);
 
+	kqueue_status = KQUEUE_STATUS_RUNNING;
 	return 0;
 }
 
@@ -222,7 +237,7 @@ int kqueue_mark(ctx_t *ctx_p, monobj_t *obj_p) {
 	else
 		obj_p->fd = openat(obj_p->dir_fd, obj_p->name, O_RDONLY|O_NOFOLLOW);
 
-	debug(4, "obj_p->: dir_fd == %i; name == \"%s\"; fd == %i; type == %i (isdir == %i)", obj_p->dir_fd, obj_p->name, obj_p->fd, obj_p->type, obj_p->type == DT_DIR);
+	debug(4, "obj_p-> (%p): dir_fd == %i; name == \"%s\"; fd == %i; type == %i (isdir == %i)", obj_p, obj_p->dir_fd, obj_p->name, obj_p->fd, obj_p->type, obj_p->type == DT_DIR);
 
 	if (obj_p->fd == -1) {
 		debug(2, "File/dir \"%s\" disappeared. Skipping", obj_p->name);
@@ -276,9 +291,12 @@ int kqueue_unmark(ctx_t *ctx_p, monobj_t *obj_p) {
 
 	debug(30, "dat->changelist_used == %i", dat->changelist_used);
 	if (dat->changelist_used) {
-	dat->changelist_used--;
+		dat->changelist_used--;
 		changelist_id_last = dat->changelist_used;
 		debug(30, "Checking: (obj_p->changelist_id [%i] < changelist_id_last [%i]) == %i", obj_p->changelist_id, changelist_id_last, (obj_p->changelist_id < changelist_id_last));
+#ifdef PARANOID
+		critical_on (obj_p->changelist_id > changelist_id_last);
+#endif
 		if (obj_p->changelist_id < changelist_id_last) {
 			debug(20, "dat->changelist: moving %i -> %i", changelist_id_last, obj_p->changelist_id);
 
@@ -287,7 +305,14 @@ int kqueue_unmark(ctx_t *ctx_p, monobj_t *obj_p) {
 
 			memcpy(&dat->changelist[obj_p->changelist_id], &dat->changelist[changelist_id_last], sizeof(*dat->changelist));
 
-			debug(30, "dat->obj_p_by_clid[ obj_p->changelist_id ] == %p; dat->obj_p_by_clid[ obj_p->changelist_id ].fd == %i", dat->obj_p_by_clid[ obj_p->changelist_id ], dat->obj_p_by_clid[ obj_p->changelist_id ]->fd);
+			debug(30,
+					"dat->obj_p_by_clid[ obj_p->changelist_id ] == %p; "
+					"dat->obj_p_by_clid[ obj_p->changelist_id ]->fd == %i; "
+					"dat->obj_p_by_clid[ obj_p->changelist_id ]->name == \"%s\"",
+					dat->obj_p_by_clid[ obj_p->changelist_id ],
+					dat->obj_p_by_clid[ obj_p->changelist_id ]->fd,
+					dat->obj_p_by_clid[ obj_p->changelist_id ]->name
+				);
 		}
 	}
 
@@ -643,15 +668,37 @@ static inline int _kqueue_handle_oneevent_dircontent_item(struct kqueue_data *da
 	return 0;
 }
 
+void monobj_freedup(gpointer _obj_p) {
+	monobj_t *obj_p = _obj_p;
+
+	free(obj_p->name);
+	free(obj_p);
+
+	return;
+}
+
 gpointer monobj_dup(gpointer _obj_p) {
 	monobj_t *src = _obj_p, *dst;
 
 	dst = xmalloc(sizeof(*src));
 	memcpy(dst, src, sizeof(*src));
-	dst->name = xmalloc(src->name_len+2);
+
+	dst->name   = xmalloc(src->name_len+2);
 	memcpy(dst->name, src->name, src->name_len+1);
 
+	dst->origin = src;
+
 	return dst;
+}
+
+gboolean unmarkdupchild(gpointer _obj_p, gpointer value, gpointer _ctx_p) {
+	monobj_t *dupobj_p = _obj_p;
+	monobj_t *obj_p    = dupobj_p->origin;
+//	ctx_t    *ctx_p    = _ctx_p;
+
+	unmarkchild(obj_p);
+
+	return FALSE;
 }
 
 int _kqueue_handle_oneevent_dircontent(ctx_t *ctx_p, indexes_t *indexes_p, monobj_t *obj_p) {
@@ -677,7 +724,7 @@ int _kqueue_handle_oneevent_dircontent(ctx_t *ctx_p, indexes_t *indexes_p, monob
 	}
 
 	debug(20, "tdup()-ing the children_tree == %p", obj_p->children_tree);
-	children_tree_dup = g_tree_dup(obj_p->children_tree, monobj_filecmp, ctx_p, unmarkchild, NULL, monobj_dup, NULL);
+	children_tree_dup = g_tree_dup(obj_p->children_tree, monobj_filecmp, ctx_p, monobj_freedup, NULL, monobj_dup, NULL);
 	debug(8, "children_count == %i", g_tree_nnodes(children_tree_dup));
 
 	debug(20, "reading the directory");
@@ -695,6 +742,7 @@ int _kqueue_handle_oneevent_dircontent(ctx_t *ctx_p, indexes_t *indexes_p, monob
 
 	debug(20, "searching for deleted objects from the directory");
 
+	g_tree_foreach(children_tree_dup, unmarkdupchild, ctx_p);
 	g_tree_destroy(children_tree_dup);
 
 	debug(20, "end");
@@ -773,11 +821,13 @@ int kqueue_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 }
 
 int kqueue_deinit(ctx_t *ctx_p) {
+	kqueue_status = KQUEUE_STATUS_DEINIT;
 	struct kqueue_data *dat = ctx_p->fsmondata;
 	debug(3, "dat->eventlist_count == %i", dat->eventlist_count);
 
 	g_tree_destroy(dat->file_btree);
 	g_tree_destroy(dat->fd_btree);
+	kqueue_status = KQUEUE_STATUS_DEAD;
 	return 0;
 }
 
