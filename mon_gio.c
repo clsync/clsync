@@ -196,6 +196,7 @@ int gio_add_watch_dir(ctx_t *ctx_p, indexes_t *indexes_p, const char *const accp
 	return fmdat->handle_id;
 }
 
+int cancel_g_iteration_stop;
 pthread_t thread_g_iteration_stop;
 void *g_iteration_stop(void *_timeout_p) {
 	struct timeval *timeout_p = _timeout_p;
@@ -203,6 +204,10 @@ void *g_iteration_stop(void *_timeout_p) {
 	struct timespec ts_abs;
 	debug(10, "{%u, %u}", timeout_p->tv_sec, timeout_p->tv_usec);
 	critical_on (pthread_mutex_lock(&gio_mutex_prefetcher));
+	if (cancel_g_iteration_stop) {
+		critical_on (pthread_mutex_unlock(&gio_mutex_prefetcher));
+		return NULL;
+	}
 
 #define INFINITETIME (3600 * 24 * 365 * 10) /* ~10 years */
 	if (timeout_p->tv_sec > INFINITETIME)
@@ -249,6 +254,7 @@ static inline int gio_wait_now(ctx_t *ctx_p, struct indexes *indexes_p, struct t
 		return queue_length;
 	}
 
+	cancel_g_iteration_stop = 0;
 	pthread_create(&thread_g_iteration_stop, NULL, g_iteration_stop, tv_p);
 /*
 	debug(30, "pthread_spin_unlock(&queue_lock);");
@@ -263,20 +269,16 @@ static inline int gio_wait_now(ctx_t *ctx_p, struct indexes *indexes_p, struct t
 		return queue_length;
 	}
 */
-	debug(30, "pthread_spin_unlock(&queue_lock);");
-	pthread_spin_unlock(&queue_lock);
-	sleep(1);
+	debug_call  (40, pthread_spin_unlock(&queue_lock));
 	debug(20 , "g_main_context_iteration(NULL, TRUE); queue_length == %i", queue_length);
 	result  = g_main_context_iteration(NULL, TRUE);
 	debug(10, "g_main_context_iteration() -> %i", result);
-	debug(30, "pthread_spin_lock(&queue_lock);");
-	pthread_spin_lock(&queue_lock);
-	debug(20 , "pthread_mutex_lock(&gio_mutex_prefetcher);")
+	debug_call  (40, pthread_spin_lock(&queue_lock));
 	critical_on (pthread_mutex_lock(&gio_mutex_prefetcher));
-	debug(20 , "pthread_mutex_unlock(&gio_mutex_prefetcher);")
-	pthread_mutex_unlock(&gio_mutex_prefetcher);
-	pthread_cond_broadcast(&gio_cond_gotevent);
-	pthread_join(thread_g_iteration_stop, &ret);
+	cancel_g_iteration_stop = 1;
+	critical_on (pthread_mutex_unlock(&gio_mutex_prefetcher));
+	critical_on (pthread_cond_broadcast(&gio_cond_gotevent));
+	critical_on (pthread_join(thread_g_iteration_stop, &ret));
 
 	debug(9, "queue_length == %i", queue_length);
 	return queue_length;
@@ -285,10 +287,10 @@ int gio_wait(ctx_t *ctx_p, struct indexes *indexes_p, struct timeval *tv_p) {
 	int ret;
 
 	debug(30, "pthread_spin_lock(&queue_lock);");
-	pthread_spin_lock(&queue_lock);
+	debug_call (40, pthread_spin_lock(&queue_lock));
 	ret = gio_wait_now(ctx_p, indexes_p, tv_p);
 	debug(30, "pthread_spin_unlock(&queue_lock);");
-	pthread_spin_unlock(&queue_lock);
+	debug_call (40, pthread_spin_unlock(&queue_lock));
 
 	return ret;
 }

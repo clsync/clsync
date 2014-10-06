@@ -30,7 +30,7 @@
 
 extern void _critical( const char *const function_name, const char *fmt, ...);
 #define critical(...) 				_critical(__FUNCTION__, __VA_ARGS__)
-#define critical_on(cond) {if (unlikely(cond)) {critical("Assert: "TOSTR(cond));}}
+#define critical_on(cond) {debug(30, "%s", TOSTR(cond)); if (unlikely(cond)) {critical("Assert: "TOSTR(cond));}}
 
 extern void _error(const char *const function_name, const char *fmt, ...);
 #define error(...) 				_error(__FUNCTION__, __VA_ARGS__)
@@ -49,7 +49,10 @@ extern void _info(const char *const function_name, const char *fmt, ...);
 #else
 #	define debug(debug_level, ...)			{}
 #	define error_or_debug(debug_level, ...)		((debug_level)<0 ? _error(__FUNCTION__, __VA_ARGS__) : (void)0)
+
 #endif
+
+#define debug_call(debug_level, code)			debug(debug_level, "%s -> %i", TOSTR(code), code)
 
 #define critical_or_warning(cond, ...) ((cond) ? _critical : _warning)(__FUNCTION__, __VA_ARGS__)
 
