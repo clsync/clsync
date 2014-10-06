@@ -122,12 +122,12 @@ static void dir_gotevent(
 			path_full = g_file_get_path(file);
 			path_rel  = strdup(&path_full[ctx_p->watchdirlen+1]);
 			g_free(path_full);
+			debug(9, "Got event %i for \"%s\" (%i)", event, path_rel, filetype);
 			break;
 		default:
 			break;
 	}
 
-	debug(9, "Got event %i for \"%s\" (%i)", event, path_rel, filetype);
 	switch (filetype) {
 		case G_FILE_TYPE_DIRECTORY:
 			objtype = EOT_DIR;
@@ -249,10 +249,11 @@ static inline int gio_wait_now(ctx_t *ctx_p, struct indexes *indexes_p, struct t
 		return queue_length;
 	}
 
+	pthread_create(&thread_g_iteration_stop, NULL, g_iteration_stop, tv_p);
+/*
 	debug(30, "pthread_spin_unlock(&queue_lock);");
 	pthread_spin_unlock(&queue_lock);
-	pthread_create(&thread_g_iteration_stop, NULL, g_iteration_stop, tv_p);
-	debug(20 , "g_main_context_iteration(NULL, TRUE);")
+	debug(30 , "g_main_context_iteration(NULL, FALSE);");
 	result  = g_main_context_iteration(NULL, FALSE);
 	debug(30, "pthread_spin_lock(&queue_lock);");
 	pthread_spin_lock(&queue_lock);
@@ -261,10 +262,12 @@ static inline int gio_wait_now(ctx_t *ctx_p, struct indexes *indexes_p, struct t
 		debug(9, "already2: queue_length == %i", queue_length);
 		return queue_length;
 	}
-
+*/
 	debug(30, "pthread_spin_unlock(&queue_lock);");
 	pthread_spin_unlock(&queue_lock);
-	result += g_main_context_iteration(NULL, TRUE);
+	sleep(1);
+	debug(20 , "g_main_context_iteration(NULL, TRUE); queue_length == %i", queue_length);
+	result  = g_main_context_iteration(NULL, TRUE);
 	debug(10, "g_main_context_iteration() -> %i", result);
 	debug(30, "pthread_spin_lock(&queue_lock);");
 	pthread_spin_lock(&queue_lock);
