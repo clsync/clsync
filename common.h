@@ -162,6 +162,7 @@ enum notifyengine_enum {
 	NE_KQUEUE,
 	NE_BSM,
 	NE_BSM_PREFETCH,
+	NE_GIO,
 	NE_DTRACEPIPE,
 };
 typedef enum notifyengine_enum notifyengine_t;

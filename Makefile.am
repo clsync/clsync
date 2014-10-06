@@ -11,7 +11,8 @@ clsync_SOURCES = calc.c cluster.c error.c fileutils.c glibex.c		\
 	stringex.h sync.h common.h control.h privileged.h rules.h	\
 	syscalls.h
 
-clsync_CFLAGS = $(AM_CFLAGS)
+clsync_CFLAGS  = $(AM_CFLAGS)
+clsync_LDFLAGS = $(AM_LDFLAGS)
 
 if HAVE_KQUEUE
 clsync_CFLAGS  += -DKQUEUE_SUPPORT
@@ -31,6 +32,11 @@ endif
 if HAVE_BSM
 clsync_CFLAGS  += -DBSM_SUPPORT
 clsync_SOURCES += mon_bsm.c mon_bsm.h
+endif
+if HAVE_GIO
+clsync_CFLAGS  += -DGIO_SUPPORT $(GIO_CFLAGS)
+clsync_LDFLAGS += $(GIO_LIBS)
+clsync_SOURCES += mon_gio.c mon_gio.h
 endif
 if HAVE_DTRACEPIPE
 clsync_CFLAGS  += -DDTRACEPIPE_SUPPORT

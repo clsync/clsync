@@ -322,6 +322,7 @@ static char *const notify_engines[] = {
 	[NE_BSM]		= "bsm",
 	[NE_BSM_PREFETCH]	= "bsm_prefetch",
 	[NE_DTRACEPIPE]		= "dtracepipe",
+	[NE_GIO]		= "gio",
 	NULL
 };
 
@@ -493,6 +494,9 @@ int version() {
 #endif
 #ifdef BSM_SUPPORT
 		" -DBSM_SUPPORT"
+#endif
+#ifdef GIO_SUPPORT
+		" -DGIO_SUPPORT"
 #endif
 #ifdef DTRACEPIPE_SUPPORT
 		" -DDTRACEPIPE_SUPPORT"
@@ -1367,6 +1371,9 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 				case NE_BSM:
 				case NE_BSM_PREFETCH:
 #endif
+#ifdef GIO_SUPPORT
+				case NE_GIO:
+#endif
 #ifdef DTRACEPIPE_SUPPORT
 				case NE_DTRACEPIPE:
 #endif
@@ -2008,6 +2015,9 @@ int ctx_check(ctx_t *ctx_p) {
 		case NE_BSM:
 		case NE_BSM_PREFETCH:
 #endif
+#ifdef GIO_SUPPORT
+		case NE_GIO:
+#endif
 #ifdef DTRACEPIPE_SUPPORT
 		case NE_DTRACEPIPE:
 #endif
@@ -2026,6 +2036,9 @@ int ctx_check(ctx_t *ctx_p) {
 #endif
 #ifdef BSM_SUPPORT
 				" \"--monitor=bsm\""
+#endif
+#ifdef GIO_SUPPORT
+				" \"--monitor=gio\""
 #endif
 #ifdef DTRACEPIPE_SUPPORT
 				" \"--monitor=dtracepipe\""

@@ -32,6 +32,10 @@
 #	include "mon_bsm.h"
 #	include <bsm/audit_kevents.h>
 #endif
+#if GIO_SUPPORT
+#	include <gio/gio.h>
+#	include "mon_gio.h"
+#endif
 
 #include "main.h"
 #include "error.h"
@@ -129,14 +133,21 @@ static inline void evinfo_merge(ctx_t *ctx_p, eventinfo_t *evinfo_dst, eventinfo
 	if(SEQID_GE(evinfo_src->seqid_max,  evinfo_dst->seqid_max))  {
 		evinfo_dst->objtype_new = evinfo_src->objtype_new;
 		evinfo_dst->seqid_max   = evinfo_src->seqid_max;
-#ifdef BSM_SUPPORT
 		switch(ctx_p->flags[MONITOR]) {
+#ifdef GIO_SUPPORT
+			case NE_GIO:
+				evinfo_dst->evmask = evinfo_src->evmask;
+				break;
+#endif
+#ifdef BSM_SUPPORT
 			case NE_BSM:
 			case NE_BSM_PREFETCH:
 				evinfo_dst->evmask = evinfo_src->evmask;
 				break;
-		}
 #endif
+			default:
+				break;
+		}
 	}
 
 	return;
@@ -1219,6 +1230,11 @@ static inline void evinfo_initialevmask(ctx_t *ctx_p, eventinfo_t *evinfo_p, int
 			evinfo_p->evmask = (isdir ? AUE_MKDIR : AUE_OPEN_RWC);
 			break;
 #endif
+#ifdef GIO_SUPPORT
+		case NE_GIO:
+			evinfo_p->evmask = G_FILE_MONITOR_EVENT_CREATED;
+			break;
+#endif
 #ifdef VERYPARANOID
 		default:
 			critical("Unknown monitor subsystem: %u", ctx_p->flags[MONITOR]);
@@ -1838,6 +1854,12 @@ int sync_notify_init(ctx_t *ctx_p) {
 			return 0;
 		}
 #endif
+#ifdef GIO_SUPPORT
+		case NE_GIO: {
+			critical_on (gio_init(ctx_p) == -1);
+			return 0;
+		}
+#endif
 	}
 	error("unknown notify-engine: %i", ctx_p->flags[MONITOR]);
 	errno = EINVAL;
@@ -1949,7 +1971,23 @@ int sync_prequeue_loadmark
 
 		eventinfo_t *evinfo
 ) {
-	debug(5, "");
+	debug(10, "%i %p %p %p %p %p %i %i 0x%o %i %i %i %p %p %p",
+			monitored,
+			ctx_p,
+			indexes_p,
+			path_full,
+			path_rel,
+			lstat_p,
+			objtype_old,
+			objtype_new,
+			event_mask,
+			event_wd,
+			st_mode,
+			st_size,
+			path_buf_p,
+			path_buf_len_p,
+			evinfo
+		);
 #ifdef PARANOID
 	// &path_buf and &path_buf_len are passed to do not reallocate memory for path_rel/path_full each time
 	if ((path_buf_p == NULL || path_buf_len_p == NULL) && (path_full == NULL || path_rel == NULL)) {
@@ -2075,6 +2113,11 @@ int sync_prequeue_loadmark
 #ifdef BSM_SUPPORT
 		case NE_BSM:
 		case NE_BSM_PREFETCH:
+			evinfo->evmask  = event_mask;
+			break;
+#endif
+#ifdef GIO_SUPPORT
+		case NE_GIO:
 			evinfo->evmask  = event_mask;
 			break;
 #endif
@@ -3815,6 +3858,13 @@ int sync_run(ctx_t *ctx_p) {
 				ctx_p->notifyenginefunct.handle        = bsm_handle;
 				break;
 #endif
+#ifdef GIO_SUPPORT
+			case NE_GIO:
+				ctx_p->notifyenginefunct.add_watch_dir = gio_add_watch_dir;
+				ctx_p->notifyenginefunct.wait          = gio_wait;
+				ctx_p->notifyenginefunct.handle        = gio_handle;
+				break;
+#endif
 #ifdef DTRACEPIPE_SUPPORT
 			case NE_DTRACEPIPE:
 				ctx_p->notifyenginefunct.add_watch_dir = dtracepipe_add_watch_dir;
@@ -3893,6 +3943,11 @@ int sync_run(ctx_t *ctx_p) {
 		case NE_BSM:
 		case NE_BSM_PREFETCH:
 			bsm_deinit(ctx_p);
+			break;
+#endif
+#ifdef GIO_SUPPORT
+		case NE_GIO:
+			gio_deinit(ctx_p);
 			break;
 #endif
 #ifdef DTRACEPIPE_SUPPORT
