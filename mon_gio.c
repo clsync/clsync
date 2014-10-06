@@ -202,6 +202,7 @@ void *g_iteration_stop(void *_timeout_p) {
 	struct timeval tv_abs, timeout_abs;
 	struct timespec ts_abs;
 	debug(10, "{%u, %u}", timeout_p->tv_sec, timeout_p->tv_usec);
+	critical_on (pthread_mutex_lock(&gio_mutex_prefetcher));
 
 #define INFINITETIME (3600 * 24 * 365 * 10) /* ~10 years */
 	if (timeout_p->tv_sec > INFINITETIME)
@@ -250,7 +251,6 @@ static inline int gio_wait_now(ctx_t *ctx_p, struct indexes *indexes_p, struct t
 
 	debug(30, "pthread_spin_unlock(&queue_lock);");
 	pthread_spin_unlock(&queue_lock);
-	critical_on (pthread_mutex_lock(&gio_mutex_prefetcher));
 	pthread_create(&thread_g_iteration_stop, NULL, g_iteration_stop, tv_p);
 	debug(20 , "g_main_context_iteration(NULL, TRUE);")
 	result  = g_main_context_iteration(NULL, FALSE);
