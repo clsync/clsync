@@ -40,10 +40,11 @@ SOCKET_DESC=	Control socket support
 LIBCLSYNC_DESC=	Build libclsync.so for control socket clients
 
 OPTIONS_MULTI=	MONITOR
-OPTIONS_MULTI_MONITOR=	BSM KQUEUE LIBINOTIFY
+OPTIONS_MULTI_MONITOR=	BSM KQUEUE LIBINOTIFY GIO
 KQUEUE_DESC=	"Kqueue" monitor support
 BSM_DESC=	"BSM" monitor support
 LIBINOTIFY_DESC="Inotify" monitor support (via libinotify-kqueue)
+GIO_DESC=	"GIO" monitor support
 OPTIONS_DEFAULT+=KQUEUE BSM
 
 
@@ -59,6 +60,10 @@ CONFIGURE_ARGS+=	--with-kqueue=native
 
 .if ${PORT_OPTIONS:MLIBINOTIFY}
 CONFIGURE_ARGS+=	--with-inotify=lib
+.endif
+
+.if ${PORT_OPTIONS:MGIO}
+CONFIGURE_ARGS+=	--with-gio=check
 .endif
 
 .if ${PORT_OPTIONS:MVERYPARANOID}
