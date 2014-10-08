@@ -51,6 +51,7 @@
 #if CGROUP_SUPPORT
 #	include "cgroup.h"
 #endif
+#include "posix-hacks.h"
 
 //#include "revision.h"
 
@@ -322,6 +323,7 @@ static char *const notify_engines[] = {
 	[NE_BSM]		= "bsm",
 	[NE_BSM_PREFETCH]	= "bsm_prefetch",
 	[NE_DTRACEPIPE]		= "dtracepipe",
+	[NE_GIO]		= "gio",
 	NULL
 };
 
@@ -493,6 +495,9 @@ int version() {
 #endif
 #ifdef BSM_SUPPORT
 		" -DBSM_SUPPORT"
+#endif
+#ifdef GIO_SUPPORT
+		" -DGIO_SUPPORT"
 #endif
 #ifdef DTRACEPIPE_SUPPORT
 		" -DDTRACEPIPE_SUPPORT"
@@ -1367,6 +1372,9 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 				case NE_BSM:
 				case NE_BSM_PREFETCH:
 #endif
+#ifdef GIO_SUPPORT
+				case NE_GIO:
+#endif
 #ifdef DTRACEPIPE_SUPPORT
 				case NE_DTRACEPIPE:
 #endif
@@ -2008,6 +2016,9 @@ int ctx_check(ctx_t *ctx_p) {
 		case NE_BSM:
 		case NE_BSM_PREFETCH:
 #endif
+#ifdef GIO_SUPPORT
+		case NE_GIO:
+#endif
 #ifdef DTRACEPIPE_SUPPORT
 		case NE_DTRACEPIPE:
 #endif
@@ -2026,6 +2037,9 @@ int ctx_check(ctx_t *ctx_p) {
 #endif
 #ifdef BSM_SUPPORT
 				" \"--monitor=bsm\""
+#endif
+#ifdef GIO_SUPPORT
+				" \"--monitor=gio\""
 #endif
 #ifdef DTRACEPIPE_SUPPORT
 				" \"--monitor=dtracepipe\""
@@ -2232,6 +2246,9 @@ int main(int _argc, char *_argv[]) {
 	argc = _argc;
 
 	int ret = 0, nret, rm_listoutdir = 0;
+
+	SAFE (posixhacks_init(), errno = ret = _SAFE_rc);
+
 	ctx_p->flags[MONITOR]			 = DEFAULT_NOTIFYENGINE;
 	ctx_p->syncdelay 			 = DEFAULT_SYNCDELAY;
 	ctx_p->_queues[QUEUE_NORMAL].collectdelay   = DEFAULT_COLLECTDELAY;
@@ -2855,6 +2872,9 @@ int main(int _argc, char *_argv[]) {
 	ctx_cleanup(ctx_p);
 	debug(1, "finished, exitcode: %i: %s.", ret, strerror(ret));
 	free(ctx_p);
+
+	SAFE (posixhacks_deinit(), errno = ret = _SAFE_rc);
+
 	return ret;
 }
 

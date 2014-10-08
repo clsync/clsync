@@ -272,6 +272,13 @@ AC_ARG_WITH(inotify,
 	[with_inotify=check]
 )
 
+AC_ARG_WITH(gio,
+	AS_HELP_STRING(--with-gio,
+		[Enable GIO support as FS monitor subsystem; values: no, lib, check; default: check]),
+	[],
+	[with_gio=check]
+)
+
 AC_ARG_WITH(bsm,
 	AS_HELP_STRING(--with-bsm,
 		[Enable BSM (Sun/*BSD audit) support as FS monitor subsystem; values: no, lib, check; default: check]),
@@ -365,6 +372,25 @@ case "$with_inotify" in
 		;;
 esac
 
+case "$with_gio" in
+	check)
+		PKG_CHECK_MODULES(GIO,  [gio-2.0], [
+			HAVE_GIO=1
+			AC_SUBST([GIO_CFLAGS])
+			AC_SUBST([GIO_LIBS])
+		])
+		;;
+	lib)
+		PKG_CHECK_MODULES(GIO,  [gio-2.0], [
+			HAVE_GIO=1
+			AC_SUBST([GIO_CFLAGS])
+			AC_SUBST([GIO_LIBS])
+		], [
+			AC_MSG_FAILURE([Cannot find libgio-2.0])
+		])
+		;;
+esac
+
 case "$with_bsm" in
 	check)
 		AC_CHECK_FUNC([au_fetch_tok],
@@ -429,6 +455,7 @@ AM_CONDITIONAL([HAVE_INOTIFY],      [test "x$HAVE_INOTIFY"      != "x"])
 AM_CONDITIONAL([INOTIFY_OLD],       [test "x$INOTIFY_OLD"       != "x"])
 AM_CONDITIONAL([HAVE_FANOTIFY],     [test "x$HAVE_FANOTIFY"     != "x"])
 AM_CONDITIONAL([HAVE_BSM],          [test "x$HAVE_BSM"          != "x"])
+AM_CONDITIONAL([HAVE_GIO],          [test "x$HAVE_GIO"          != "x"])
 AM_CONDITIONAL([HAVE_DTRACEPIPE],   [test "x$HAVE_DTRACEPIPE"   != "x"])
 AM_CONDITIONAL([HAVE_BACKTRACE],    [test "x$HAVE_BACKTRACE"    != "x"])
 AM_CONDITIONAL([HAVE_CAPABILITIES], [test "x$HAVE_CAPABILITIES" != "x"])

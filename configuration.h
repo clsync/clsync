@@ -85,7 +85,7 @@
 #define CLUSTER_WINDOW_BUFSIZE_PORTION	(1<<20) /* 1  MiB */
 #define CLUSTER_PACKET_MAXSIZE		(1<<24) /* 16 MiB */
 
-#define CONFIG_PATHS 			{ ".clsync.conf", "/etc/clsync/clsync.conf", NULL } /* "~/.clsync.conf" and "/etc/clsync/clsync.conf" */
+#define CONFIG_PATHS 			{ ".clsync.conf", "/etc/clsync/clsync.conf", "/etc/clsync.conf", "/usr/local/etc/clsync/clsync.conf", "/usr/local/etc/clsync.conf", NULL } /* "~/.clsync.conf", "/etc/clsync/clsync.conf" ... */
 
 #define API_PREFIX			"clsyncapi_"
 
@@ -205,5 +205,6 @@ expire-after:20M\n\
 #define WAITPID_TIMED_GRANULARITY	 (30*1000*1000)
 
 #define BSM_QUEUE_LENGTH_MAX		(1024*1024)
+#define GIO_QUEUE_LENGTH_MAX		BSM_QUEUE_LENGTH_MAX
 
 #endif
