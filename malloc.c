@@ -45,9 +45,7 @@ int  devzero_fd;
 #endif
 
 void *xmalloc(size_t size) {
-#ifdef _DEBUG
 	debug(20, "(%li)", size);
-#endif
 #ifdef PARANOID
 	size++;	// Just in case
 #endif
@@ -64,9 +62,7 @@ void *xmalloc(size_t size) {
 }
 
 void *xcalloc(size_t nmemb, size_t size) {
-#ifdef _DEBUG
 	debug(20, "(%li, %li)", nmemb, size);
-#endif
 #ifdef PARANOID
 	nmemb++; // Just in case
 	size++;	 // Just in case
@@ -82,9 +78,7 @@ void *xcalloc(size_t nmemb, size_t size) {
 }
 
 void *xrealloc(void *oldptr, size_t size) {
-#ifdef _DEBUG
 	debug(20, "(%p, %li)", oldptr, size);
-#endif
 #ifdef PARANOID
 	size++;	// Just in case
 #endif
@@ -101,9 +95,7 @@ void *xrealloc(void *oldptr, size_t size) {
 void *malloc_align(size_t size) {
 	size_t total_size;
 	void *ret = NULL;
-# ifdef _DEBUG
 	debug(20, "(%li)", size);
-# endif
 # ifdef PARANOID
 	size++;	 // Just in case
 # endif
@@ -130,9 +122,7 @@ void *malloc_align(size_t size) {
 void *calloc_align(size_t nmemb, size_t size) {
 	size_t total_size;
 	void *ret;
-# ifdef _DEBUG
 	debug(20, "(%li, %li)", nmemb, size);
-# endif
 # ifdef PARANOID
 	nmemb++; // Just in case
 	size++;	 // Just in case

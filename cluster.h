@@ -68,10 +68,10 @@
 // Types
 
 enum adler32_calc {
-	ADLER32_CALC_NONE		= 0x00,
+	ADLER32_CALC_NONE	= 0x00,
 	ADLER32_CALC_HEADER	= 0x01,
-	ADLER32_CALC_DATA		= 0x02,
-	ADLER32_CALC_ALL		= 0x03,
+	ADLER32_CALC_DATA	= 0x02,
+	ADLER32_CALC_ALL	= 0x03,
 };
 typedef enum adler32_calc adler32_calc_t;
 
@@ -149,7 +149,7 @@ typedef struct clustercmd_ack clustercmd_ack_t;
 
 enum reject_reason {
 	REJ_UNKNOWN		= 0,
-	REJ_adler32MISMATCH,
+	REJ_ADLER32MISMATCH,
 };
 typedef enum reject_reason reject_reason_t;
 
@@ -167,8 +167,8 @@ struct clustercmd_ht_exch {
 typedef struct clustercmd_ht_exch clustercmd_ht_exch_t;
 
 struct clustercmdadler32 {
-	uint32_t hdr;
-	uint32_t dat;
+	uint32_t hdr;					// 32
+	uint32_t dat;					// 64
 };
 typedef struct clustercmdadler32 clustercmdadler32_t;
 
@@ -177,10 +177,10 @@ struct clustercmdhdr {					// bits
 	uint8_t			src_node_id;		// 16
 	uint8_t			flags;			// 24	(for future compatibility)
 	uint8_t			cmd_id;			// 32
-	clustercmdadler32_t	adler32;		// 64
-	uint32_t		data_len;		// 96
-	uint32_t		ts;			// 128
-	uint32_t		serial;			// 160
+	clustercmdadler32_t	adler32;		// 96
+	uint32_t		data_len;		// 128
+	uint32_t		ts;			// 160
+	uint32_t		serial;			// 192
 };
 typedef struct clustercmdhdr clustercmdhdr_t;
 

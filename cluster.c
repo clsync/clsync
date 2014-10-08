@@ -231,14 +231,29 @@ static inline int clustercmd_window_del(window_t *window_p, clustercmdqueuedpack
  */
 
 int clustercmd_adler32_calc(clustercmd_t *clustercmd_p, clustercmdadler32_t *clustercmdadler32_p, adler32_calc_t flags) {
+	debug(15, "(%p, %p, 0x%x)", clustercmd_p, clustercmdadler32_p, flags);
 
-	if(flags & ADLER32_CALC_HEADER) {
+	if (flags & ADLER32_CALC_DATA) {
+		uint32_t adler32;
+
+		uint32_t size = clustercmd_p->h.data_len;
+		char    *ptr  = clustercmd_p->data.p;
+
+		// Calculating
+		adler32 = adler32_calc((unsigned char *)ptr, CLUSTER_PAD(size));
+		debug(20, "dat: 0x%x", adler32);
+
+		// Ending
+		clustercmdadler32_p->dat = adler32 ^ 0xFFFFFFFF;
+	}
+
+	if (flags & ADLER32_CALC_HEADER) {
 		uint32_t adler32;
 		clustercmdadler32_t adler32_save;
 
 		// Preparing
-		memcpy(&adler32_save, 	&clustercmd_p->h.adler32, sizeof(clustercmdadler32_t));
-		memset(&clustercmd_p->h.adler32, 		0, 	sizeof(clustercmdadler32_t));
+		memcpy(&adler32_save.hdr,		&clustercmd_p->h.adler32.hdr,	sizeof(clustercmd_p->h.adler32.hdr));
+		memset(&clustercmd_p->h.adler32.hdr, 	0,				sizeof(clustercmd_p->h.adler32.hdr));
 		adler32 = 0xFFFFFFFF;
 
 		uint32_t size = sizeof(clustercmdhdr_t);
@@ -246,31 +261,11 @@ int clustercmd_adler32_calc(clustercmd_t *clustercmd_p, clustercmdadler32_t *clu
 
 		// Calculating
 		adler32 = adler32_calc((unsigned char *)ptr, size);
+		debug(20, "hdr: 0x%x", adler32);
 
 		// Ending
-		memcpy(&clustercmd_p->h.adler32, &adler32_save, sizeof(clustercmdadler32_t));
+		memcpy(&clustercmd_p->h.adler32.hdr, &adler32_save.hdr, sizeof(clustercmd_p->h.adler32.hdr));
 		clustercmdadler32_p->hdr = adler32 ^ 0xFFFFFFFF;
-	}
-
-	if(flags & ADLER32_CALC_DATA) {
-		uint32_t adler32;
-
-		uint32_t size = clustercmd_p->h.data_len;
-		char    *ptr  = clustercmd_p->data.p;
-
-#ifdef PARANOID
-		if(size & 0x3) {
-			error("clustercmd_adler32_calc(): clustercmd_p->h.data_len&0x3 != 0: %u",
-				clustercmd_p->h.data_len);
-			return EINVAL;
-		}
-#endif
-
-		// Calculating
-		adler32 = adler32_calc((unsigned char *)ptr, size);
-
-		// Ending
-		clustercmdadler32_p->dat = adler32 ^ 0xFFFFFFFF;
 	}
 
 	return 0;
@@ -347,9 +342,9 @@ int node_status_change(uint8_t node_id, uint8_t node_status) {
  * 
  */
 
-int cluster_send(clustercmd_t *clustercmd_p) {
+int _cluster_send(clustercmd_t *clustercmd_p) {
 	clustercmd_p->h.src_node_id = node_id_my;
-	clustercmd_adler32_calc(clustercmd_p, &clustercmd_p->h.adler32, ADLER32_CALC_ALL);
+	SAFE (clustercmd_adler32_calc(clustercmd_p, &clustercmd_p->h.adler32, ADLER32_CALC_ALL), return _SAFE_rc );
 
 	debug(3, "Sending: "
 		"{h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u, adler32.hdr: %p, adler32.dat: %p, data_len: %u}",
@@ -361,7 +356,7 @@ int cluster_send(clustercmd_t *clustercmd_p) {
 	nodeinfo_p = &nodeinfo[clustercmd_p->h.dst_node_id];
 
 	// Checking if the node online
-	switch(nodeinfo_p->status) {
+	switch (nodeinfo_p->status) {
 		case NODESTATUS_DOESNTEXIST:
 		case NODESTATUS_OFFLINE:
 			debug(1, "There's no online node with id %u. Skipping sending.", clustercmd_p->h.dst_node_id);
@@ -370,15 +365,26 @@ int cluster_send(clustercmd_t *clustercmd_p) {
 			break;
 	}
 
-	// Putting the message into output windowa
-	if(nodeinfo_my != NULL)
+	// Putting the message into an output window
+	if (nodeinfo_my != NULL)
 		clustercmd_window_add(&window_o, clustercmd_p, nodeinfo_my->serial2queuedpacket_ht);
 
 	// Sending the message
-	sendto(sock_o, clustercmd_p, CLUSTERCMD_SIZE_PADDED(clustercmd_p), 0, &sa_o, sizeof(sa_o));
+	debug(10, "sendto(%p, %p, %i, 0, %p, %i)", sock_o, clustercmd_p, CLUSTERCMD_SIZE_PADDED(clustercmd_p), &sa_o, sizeof(sa_o));
+	debug(50, "clustercmd_p->data.p[0] == 0x%x", clustercmd_p->data.p[0]);
+	critical_on (sendto(sock_o, clustercmd_p, CLUSTERCMD_SIZE_PADDED(clustercmd_p), 0, &sa_o, sizeof(sa_o)) == -1);
 
 	// Finishing
 	return 0;
+}
+
+static inline int cluster_send(clustercmd_t *clustercmd_p) {
+	int rc;
+
+	rc = _cluster_send(clustercmd_p);
+	debug(10, "__________________sent___________________ %i", rc);
+
+	return rc;
 }
 
 /**
@@ -415,24 +421,30 @@ static inline int cluster_read(int sock, void *buf, size_t size, cluster_read_fl
 	static struct in_addr last_addr = {0};
 	struct sockaddr_in sa_in;
 	size_t sa_in_len = sizeof(sa_in);
+	debug(20, "%i, %p, %i, 0x%x", sock, buf, size, flags);
+
+	if (!size)
+		return 0;
 
 	int readret = recvfrom(sock, buf, size, MSG_WAITALL, (struct sockaddr *)&sa_in, (socklen_t * restrict)&sa_in_len);
-	if(flags & CLREAD_CONTINUE) {
+	debug(30, "recvfrom(%i, %p, %i, 0x%x, %p, %p) -> %i", sock, buf, size, MSG_WAITALL, &sa_in, &sa_in_len, readret);
+	if (flags & CLREAD_CONTINUE) {
 		if(memcmp(&last_addr, &sa_in.sin_addr, sizeof(last_addr))) {
 			debug(1, "Get message from wrong source (%s != %s). Skipping it :(.", inet_ntoa(sa_in.sin_addr), inet_ntoa(last_addr));
 			size = 0;
 			return 0;
 		}
 	}
+	debug(50, "*buf == 0x%x", *(char *)buf);
 	memcpy(&last_addr, &sa_in.sin_addr, sizeof(last_addr));
 
 #ifdef PARANOID
-	if(!readret) {
+	if (!readret) {
 		error("recvfrom() returned 0. This shouldn't happend. Exit.");
 		return EINVAL;
 	}
 #endif
-	if(readret < 0) {
+	if (readret < 0) {
 		error("recvfrom() returned %i. "
 			"Seems, that something wrong with network socket.", 
 			readret);
@@ -441,10 +453,16 @@ static inline int cluster_read(int sock, void *buf, size_t size, cluster_read_fl
 
 	debug(2, "Got message from %s (len: %i, expected: %i).", inet_ntoa(sa_in.sin_addr), readret, size);
 
-	if(readret < size) {
+	if (readret < size) {
 		// Too short message
 		error("Warning: cluster_read(): Got too short message from node. Ignoring it.");
 		return -1;
+	}
+
+	// Incorrect size of data?
+	if (readret & 0x3) {
+		error("Warning: cluster_recv(): Received frame of size %i (not a multiple of 4). Ignoring it.", readret);
+		return 0;
 	}
 
 	return 0;
@@ -491,7 +509,7 @@ static inline int clustercmd_reject(clustercmd_t *clustercmd_p, uint8_t reason) 
  * 
  */
 
-static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
+static int _cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 	static clustercmd_t *clustercmd_p=NULL;
 	static size_t size=0;
 	static uint8_t  last_src_node_id = NODEID_NOID;
@@ -550,7 +568,7 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 	//clustercmd_t *clustercmd_p = (clustercmd_t *)mmap(NULL, sizeof(clustercmdhdr_t), PROT_NONE, 
 	//	MAP_PRIVATE, sock, 0);
 	int ret;
-	if((ret=cluster_read(sock_i, (void *)clustercmd_p, sizeof(clustercmdhdr_t), CLREAD_NONE))) {
+	if ((ret=cluster_read(sock_i, (void *)clustercmd_p, sizeof(clustercmdhdr_t), CLREAD_NONE))) {
 		if(ret == -1) return 0; // Invalid message? Skipping.
 
 		error("Got error from cluster_read().");
@@ -558,13 +576,22 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 		return -1;
 	}
 
+	debug(3, "Received: {h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u,"
+		" serial: %u, adler32: {0x%x, 0x%x}, data_len: %u}, "
+		"timeout: %u -> %u",
+		clustercmd_p->h.dst_node_id, clustercmd_p->h.src_node_id, 
+		clustercmd_p->h.cmd_id, clustercmd_p->h.serial,
+		clustercmd_p->h.adler32.hdr, clustercmd_p->h.adler32.dat,
+		clustercmd_p->h.data_len, *timeout_p,
+		timeout);
+
 	// Checking adler32 of packet headers.
 	clustercmd_adler32_calc(clustercmd_p, &adler32, ADLER32_CALC_HEADER);
-	if(adler32.hdr != clustercmd_p->h.adler32.hdr) {
+	if (adler32.hdr != clustercmd_p->h.adler32.hdr) {
 		debug(1, "hdr-adler32 mismatch: %p != %p.", 
 			(void*)(long)clustercmd_p->h.adler32.hdr, (void*)(long)adler32.hdr);
 
-		if((ret=clustercmd_reject(clustercmd_p, REJ_adler32MISMATCH)) != EADDRNOTAVAIL) {
+		if((ret=clustercmd_reject(clustercmd_p, REJ_ADLER32MISMATCH)) != EADDRNOTAVAIL) {
 			error("Got error while clustercmd_reject().");
 			errno = ret;
 			return -1;
@@ -576,40 +603,36 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 	uint8_t dst_node_id = clustercmd_p->h.dst_node_id;
 
 	// 	Packet from registering node?
-	if(src_node_id == NODEID_NOID) {
+	if (src_node_id == NODEID_NOID) {
 		// 	Wrong command from registering node?
-		if(clustercmd_p->h.cmd_id != CLUSTERCMDID_GETMYID) {
+		if (clustercmd_p->h.cmd_id != CLUSTERCMDID_GETMYID) {
 			error("Warning: cluster_recv(): Got non getmyid packet from NOID node. Ignoring the packet.");
 			return 0;
 		}
-		if(clustercmd_p->h.serial != 0) {
+		if (clustercmd_p->h.serial != 0) {
 			error("Warning: cluster_recv(): Got packet with non-zero serial from NOID node. Ignoring the packet.");
 			return 0;
 		}
 	} else
 	// 	Wrong src_node_id?
-	if(src_node_id >= MAXNODES) {
+	if (src_node_id >= MAXNODES) {
 		error("Warning: cluster_recv(): Invalid h.src_node_id: %i >= "XTOSTR(MAXNODES)"",
 			src_node_id);
 		return 0;
 	}
 
 	// 	Is this broadcast message?
-	if(dst_node_id == NODEID_NOID) {
+	if (dst_node_id == NODEID_NOID) {
 		// CODE HERE
 	} else
 	//	Wrong dst_node_id?
-	if(dst_node_id >= MAXNODES) {
+	if (dst_node_id >= MAXNODES) {
 		error("Warning: cluster_recv(): Invalid h.dst_node_id: %i >= "XTOSTR(MAXNODES)"", 
 			dst_node_id);
 		return 0;
 	}
 
 	// Seems, that headers are correct. Continuing.
-	debug(3, "Received: {h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u,"
-		"serial: %u, adler32: %u, data_len: %u}, timeout: %u -> %u",
-		dst_node_id, src_node_id, clustercmd_p->h.cmd_id, clustercmd_p->h.serial,
-		clustercmd_p->h.adler32, clustercmd_p->h.data_len, *timeout_p, timeout);
 
 	// Paranoid routines
 	//	The message from us? Something wrong if it is.
@@ -656,12 +679,6 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 		return 0;
 	}
 
-	// Incorrect size of data?
-	if (clustercmd_p->h.data_len & 0x3) {
-		error("Warning: cluster_recv(): Received packet of size %i (not a multiple of 4). Ignoring it.", clustercmd_p->h.data_len);
-		return 0;
-	}
-
 	// Need more space for this packet?
 	if (CLUSTERCMD_SIZE(clustercmd_p) > size) {
 		size   = CLUSTERCMD_SIZE(clustercmd_p);
@@ -669,7 +686,7 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 	}
 
 	// Reading the data
-	if ((ret=cluster_read(sock_i, (void *)clustercmd_p->data.p, clustercmd_p->h.data_len, CLREAD_CONTINUE))) {
+	if ((ret=cluster_read(sock_i, (void *)clustercmd_p->data.p, CLUSTER_PAD(clustercmd_p->h.data_len), CLREAD_CONTINUE))) {
 		if (ret == -1) return 0;
 
 		error("Got error from cluster_read().");
@@ -683,7 +700,7 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 		debug(1, "dat-adler32 mismatch: %p != %p.", 
 			(void*)(long)clustercmd_p->h.adler32.dat, (void*)(long)adler32.dat);
 
-		if ((ret=clustercmd_reject(clustercmd_p, REJ_adler32MISMATCH)) != EADDRNOTAVAIL) {
+		if ((ret=clustercmd_reject(clustercmd_p, REJ_ADLER32MISMATCH)) != EADDRNOTAVAIL) {
 			error("Got error while clustercmd_reject().");
 			errno = ret;
 			return -1;
@@ -691,6 +708,15 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 	}
 
 	CLUSTER_RECV_RETURNMESSAGE(clustercmd_p);
+}
+
+static inline int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
+	int rc;
+
+	rc = _cluster_recv(clustercmd_pp, timeout_p);
+	debug(10, "__________________recv___________________ %i", rc);
+
+	return rc;
 }
 
 
@@ -970,30 +996,32 @@ int cluster_init(ctx_t *_ctx_p, indexes_t *_indexes_p) {
 	//	Trying to preserve my node_id after restart. :)
 	//	Asking another nodes about my previous node_id
 	{
+		debug(15, "Preparing a message with my nodename == \"%s\" (%i)", ctx_p->cluster_nodename, ctx_p->cluster_nodename_len);
+
 		clustercmd_t *clustercmd_p = CLUSTER_ALLOCA(clustercmd_getmyid_t, ctx_p->cluster_nodename_len);
 
-		clustercmd_p->h.data_len = ((ctx_p->cluster_nodename_len+3) >> 2) << 2;
+		clustercmd_p->h.data_len = ctx_p->cluster_nodename_len;
 		memcpy(clustercmd_p->data.getmyid.node_name, ctx_p->cluster_nodename, clustercmd_p->h.data_len+1);
 
 		clustercmd_p->h.cmd_id      = CLUSTERCMDID_GETMYID;
 		clustercmd_p->h.dst_node_id = NODEID_NOID; // broadcast
-		if((ret=cluster_send(clustercmd_p)))
+		if ((ret=cluster_send(clustercmd_p)))
 			return ret;
 	}
 
 	//	Processing answers
 	cluster_recv_proc_set(CLUSTERCMDID_SETID, cluster_recvproc_setid);
 
-	if((ret=cluster_recv_proc(cluster_timeout)))
+	if ((ret=cluster_recv_proc(cluster_timeout)))
 		return ret;
 
 	debug(3, "After communicating with others, my node_id is %i.", node_id_my);
 
 	//	Getting free node_id if nobody said us the certain value (see above).
-	if(node_id_my == NODEID_NOID) {
+	if (node_id_my == NODEID_NOID) {
 		int i=0;
-		while(i<MAXNODES) {
-			if(nodeinfo[i].status == NODESTATUS_DOESNTEXIST) {
+		while (i<MAXNODES) {
+			if (nodeinfo[i].status == NODESTATUS_DOESNTEXIST) {
 				node_id_my = i;
 				break;
 			}

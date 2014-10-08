@@ -1921,7 +1921,7 @@ int ctx_check(ctx_t *ctx_p) {
 		if (ctx_p->cluster_nodename == NULL) {
 
 			if(!uname(&utsname))
-				ctx_p->cluster_nodename = utsname.nodename;
+				ctx_p->cluster_nodename = strdup(utsname.nodename);
 
 			debug(1, "cluster node name is: %s", ctx_p->cluster_nodename);
 		}
