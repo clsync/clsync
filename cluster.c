@@ -94,8 +94,8 @@ static inline int clustercmd_window_add(window_t *window_p, clustercmd_t *cluste
 #		define CXREALLOC(a, size) \
 			(typeof(a))xrealloc((char *)(a), (size_t)(size) * sizeof(*(a)))
 	
-		window_p->packets_id     = CXREALLOC(window_p->packets_id,	 window_p->size);
-		window_p->occupied_sides = CXREALLOC(window_p->occupied_sides, window_p->size);
+		window_p->packets_id     = CXREALLOC(window_p->packets_id,	window_p->size);
+		window_p->occupied_sides = CXREALLOC(window_p->occupied_sides,	window_p->size);
 #		undef CXREALLOC
 	}
 
@@ -109,7 +109,7 @@ static inline int clustercmd_window_add(window_t *window_p, clustercmd_t *cluste
 	i = 0;
 	while(i < window_p->packets_len) {
 		unsigned int window_id;
-		window_id  = window_p->packets_id[i];
+		window_id  = window_p->packets_id[ i++ ];
 
 		occupied_left  = MIN(occupied_left,  window_p->occupied_sides[window_id].left);
 		occupied_right = MAX(occupied_right, window_p->occupied_sides[window_id].right);
@@ -309,8 +309,9 @@ int node_status_change(uint8_t node_id, uint8_t node_status) {
 
 	switch(node_status_old) {
 		case NODESTATUS_DOESNTEXIST:
-			nodeinfo_p->id  = node_id;
-			nodeinfo_p->num = node_count;
+			nodeinfo_p->id			   = node_id;
+			nodeinfo_p->num			   = node_count;
+			nodeinfo_p->last_serial		   = -1;
 			nodeinfo_p->modtime_ht 		   = g_hash_table_new_full(g_str_hash,	  g_str_equal,	  free, 0);
 			nodeinfo_p->serial2queuedpacket_ht = g_hash_table_new_full(g_direct_hash, g_direct_equal, 0,    0);
 
@@ -606,8 +607,8 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 
 	// Seems, that headers are correct. Continuing.
 	debug(3, "Received: {h.dst_node_id: %u, h.src_node_id: %u, cmd_id: %u,"
-		" adler32: %u, data_len: %u}, timeout: %u -> %u",
-		dst_node_id, src_node_id, clustercmd_p->h.cmd_id, 
+		"serial: %u, adler32: %u, data_len: %u}, timeout: %u -> %u",
+		dst_node_id, src_node_id, clustercmd_p->h.cmd_id, clustercmd_p->h.serial,
 		clustercmd_p->h.adler32, clustercmd_p->h.data_len, *timeout_p, timeout);
 
 	// Paranoid routines
@@ -615,7 +616,7 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 #ifdef PARANOID
 	if((clustercmd_p->h.src_node_id == node_id_my) && (node_id_my != NODEID_NOID)) {
 #ifdef VERYPARANOID
-		error("clustercmd_p->h.src_node_id == node_id_my (%i != %i)."
+		error("clustercmd_p->h.src_node_id == node_id_my (%i == %i)."
 			" Exit.", clustercmd_p->h.src_node_id, node_id_my);
 		return EINVAL;
 #else
@@ -630,44 +631,46 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 	nodeinfo_t *nodeinfo_p = &nodeinfo[src_node_id];
 
 	// Not actual packet?
-	if(clustercmd_p->h.serial <= nodeinfo_p->last_serial) {
-		debug(1, "Ignoring packet from %i due to serial: %i <= %i", 
-			src_node_id, clustercmd_p->h.serial, nodeinfo_p->last_serial);
+	long serial_diff = clustercmd_p->h.serial - nodeinfo_p->last_serial;
+	debug(10, "serial_diff == %i", serial_diff);
+	if (serial_diff <= 0 || serial_diff > CLUSTER_WINDOW_PCKTLIMIT) {
+		debug(1, "Ignoring packet (serial %i) from %i due to serial_diff: 0 <= || > %i", 
+			clustercmd_p->h.serial, src_node_id, serial_diff, CLUSTER_WINDOW_PCKTLIMIT);
 		return 0;
 	}
 
 	// Is this misordered packet?
-	if(clustercmd_p->h.serial != nodeinfo_p->last_serial + 1) {
+	if (clustercmd_p->h.serial != nodeinfo_p->last_serial + 1) {
 		clustercmd_window_add(&window_i, clustercmd_p, nodeinfo_p->serial2queuedpacket_ht);
 		return 0;
 	}
 
 	// Is this the end of packet (packet without data)
-	if(clustercmd_p->h.data_len == 0)
+	if (clustercmd_p->h.data_len == 0)
 		CLUSTER_RECV_RETURNMESSAGE(clustercmd_p);
 
 	// Too big data?
-	if(clustercmd_p->h.data_len > CLUSTER_PACKET_MAXSIZE) {
+	if (clustercmd_p->h.data_len > CLUSTER_PACKET_MAXSIZE) {
 		error("Warning: cluster_recv(): Got too big message from node %i. Ignoring it.",
 			src_node_id);
 		return 0;
 	}
 
 	// Incorrect size of data?
-	if(clustercmd_p->h.data_len & 0x3) {
-		error("Warning: cluster_recv(): Received packet of size not a multiple of 4. Ignoring it.");
+	if (clustercmd_p->h.data_len & 0x3) {
+		error("Warning: cluster_recv(): Received packet of size %i (not a multiple of 4). Ignoring it.", clustercmd_p->h.data_len);
 		return 0;
 	}
 
 	// Need more space for this packet?
-	if(CLUSTERCMD_SIZE(clustercmd_p) > size) {
+	if (CLUSTERCMD_SIZE(clustercmd_p) > size) {
 		size   = CLUSTERCMD_SIZE(clustercmd_p);
 		clustercmd_p = (clustercmd_t *)xrealloc((char *)clustercmd_p, size);
 	}
 
 	// Reading the data
-	if((ret=cluster_read(sock_i, (void *)clustercmd_p->data.p, clustercmd_p->h.data_len, CLREAD_CONTINUE))) {
-		if(ret == -1) return 0;
+	if ((ret=cluster_read(sock_i, (void *)clustercmd_p->data.p, clustercmd_p->h.data_len, CLREAD_CONTINUE))) {
+		if (ret == -1) return 0;
 
 		error("Got error from cluster_read().");
 		errno = ret;
@@ -676,11 +679,11 @@ static int cluster_recv(clustercmd_t **clustercmd_pp, unsigned int *timeout_p) {
 
 	// Checking adler32 of packet data.
 	clustercmd_adler32_calc(clustercmd_p, &adler32, ADLER32_CALC_DATA);
-	if(adler32.dat != clustercmd_p->h.adler32.dat) {
+	if (adler32.dat != clustercmd_p->h.adler32.dat) {
 		debug(1, "dat-adler32 mismatch: %p != %p.", 
 			(void*)(long)clustercmd_p->h.adler32.dat, (void*)(long)adler32.dat);
 
-		if((ret=clustercmd_reject(clustercmd_p, REJ_adler32MISMATCH)) != EADDRNOTAVAIL) {
+		if ((ret=clustercmd_reject(clustercmd_p, REJ_adler32MISMATCH)) != EADDRNOTAVAIL) {
 			error("Got error while clustercmd_reject().");
 			errno = ret;
 			return -1;
@@ -969,7 +972,7 @@ int cluster_init(ctx_t *_ctx_p, indexes_t *_indexes_p) {
 	{
 		clustercmd_t *clustercmd_p = CLUSTER_ALLOCA(clustercmd_getmyid_t, ctx_p->cluster_nodename_len);
 
-		clustercmd_p->h.data_len = ctx_p->cluster_nodename_len;
+		clustercmd_p->h.data_len = ((ctx_p->cluster_nodename_len+3) >> 2) << 2;
 		memcpy(clustercmd_p->data.getmyid.node_name, ctx_p->cluster_nodename, clustercmd_p->h.data_len+1);
 
 		clustercmd_p->h.cmd_id      = CLUSTERCMDID_GETMYID;
