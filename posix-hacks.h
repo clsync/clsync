@@ -17,14 +17,20 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __POSIX_HACKS_C
-#	define fopen	posixhacks_fopen
-#	define fdopen	posixhacks_fdopen
-#	define fclose	posixhacks_fclose
-#endif
+#ifdef __FreeBSD__
+
+#	ifndef __POSIX_HACKS_C
+#		define fopen	posixhacks_fopen
+#		define fdopen	posixhacks_fdopen
+#		define fclose	posixhacks_fclose
+#	endif
+
 
 extern int posixhacks_init();
 extern FILE *posixhacks_fopen(const char *path, const char *mode);
 extern int posixhacks_fclose(FILE *fp);
 extern int posixhacks_deinit();
-
+#else
+#	define posixhacks_init() (0)
+#	define posixhacks_deinit() (0)
+#endif

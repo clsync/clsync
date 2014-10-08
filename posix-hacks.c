@@ -17,6 +17,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#ifdef __FreeBSD__
+
 #define _GNU_SOURCE
 
 #include <stdio.h>
@@ -85,8 +87,11 @@ int posixhacks_deinit() {
 	while (i < (FOPEN_MAX+1)/2) {
 		close(reserved_fd[ (i<<1)     ]);
 		close(reserved_fd[ (i<<1) + 1 ]);
+		i++;
 	}
 
 	return 0;
 }
+
+#endif
 
