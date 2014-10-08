@@ -76,6 +76,7 @@
 
 #include "clsync.h"
 #include "port-hacks.h"
+#include "posix-hacks.h"
 #include "ctx.h"
 #include "program.h"
 
@@ -162,8 +163,8 @@ enum notifyengine_enum {
 	NE_KQUEUE,
 	NE_BSM,
 	NE_BSM_PREFETCH,
-	NE_GIO,
 	NE_DTRACEPIPE,
+	NE_GIO,
 };
 typedef enum notifyengine_enum notifyengine_t;
 

@@ -51,6 +51,7 @@
 #if CGROUP_SUPPORT
 #	include "cgroup.h"
 #endif
+#include "posix-hacks.h"
 
 //#include "revision.h"
 
@@ -2245,6 +2246,9 @@ int main(int _argc, char *_argv[]) {
 	argc = _argc;
 
 	int ret = 0, nret, rm_listoutdir = 0;
+
+	SAFE (posixhacks_init(), errno = ret = _SAFE_rc);
+
 	ctx_p->flags[MONITOR]			 = DEFAULT_NOTIFYENGINE;
 	ctx_p->syncdelay 			 = DEFAULT_SYNCDELAY;
 	ctx_p->_queues[QUEUE_NORMAL].collectdelay   = DEFAULT_COLLECTDELAY;
@@ -2868,6 +2872,9 @@ int main(int _argc, char *_argv[]) {
 	ctx_cleanup(ctx_p);
 	debug(1, "finished, exitcode: %i: %s.", ret, strerror(ret));
 	free(ctx_p);
+
+	SAFE (posixhacks_deinit(), errno = ret = _SAFE_rc);
+
 	return ret;
 }
 
