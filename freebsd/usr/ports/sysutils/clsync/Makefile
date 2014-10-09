@@ -47,6 +47,8 @@ LIBINOTIFY_DESC="Inotify" monitor support (via libinotify-kqueue)
 GIO_DESC=	"GIO" monitor support
 OPTIONS_DEFAULT+=KQUEUE BSM
 
+LIBS+=          -L${LOCALBASE}/lib
+CPPFLAGS+=      -I${LOCALBASE}/include
 
 .include <bsd.port.options.mk>
 
