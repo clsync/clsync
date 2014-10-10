@@ -77,7 +77,6 @@ typedef enum adler32_calc adler32_calc_t;
 
 enum cluster_read_flags {
 	CLREAD_NONE		= 0x00,
-	CLREAD_CONTINUE		= 0x01,
 	CLREAD_ALL		= 0xff
 };
 typedef enum cluster_read_flags cluster_read_flags_t;
@@ -112,33 +111,38 @@ struct nodeinfo {
 	packets_stats_t	 packets_in;
 	packets_stats_t	 packets_out;
 	uint32_t	 last_serial;
+	char		 *node_name;
 };
 typedef struct nodeinfo nodeinfo_t;
 
 enum clustercmd_id {
-	CLUSTERCMDID_PING 	= 0,
-	CLUSTERCMDID_ACK 	= 1,
-	CLUSTERCMDID_REG 	= 2,
-	CLUSTERCMDID_GETMYID	= 3,
-	CLUSTERCMDID_SETID	= 4,
-	CLUSTERCMDID_HT_EXCH	= 5,
+	CLUSTERCMDID_PING	= 0,
+	CLUSTERCMDID_ACK	= 1,
+	CLUSTERCMDID_REG	= 2,
+	CLUSTERCMDID_HELLO	= 3,
+	CLUSTERCMDID_WELCOME	= 4,
+	CLUSTERCMDID_DIE	= 5,
+	CLUSTERCMDID_HT_EXCH	= 6,
 	COUNT_CLUSTERCMDID
 };
 typedef enum clustercmd_id clustercmd_id_t;
 
-struct clustercmd_getmyid {
-	char      node_name[1];
+struct clustercmd_hello {
+	char      node_name[0];
 };
-typedef struct clustercmd_getmyid clustercmd_getmyid_t;
+typedef struct clustercmd_hello clustercmd_hello_t;
 
-struct clustercmd_setiddata {
-	uint32_t  updatets;
-	char      node_name[1];
+#define    welcome_to_node_name_len(cmd_p) ((cmd_p)->h.data_len-(((clustercmd_welcome_t *)&(cmd_p)->data)->from_node_name_len)-sizeof(clustercmd_welcome_t))
+#define    welcome_to_node_name(cmddata_p) (&cmddata_p->from_node_name[cmddata_p->from_node_name_len])
+struct clustercmd_welcome {
+	size_t    from_node_name_len;
+	char      from_node_name[0];
+//                to_node_name  ==  my_node_name+my_node_name_len
 };
-typedef struct clustercmd_setiddata clustercmd_setiddata_t;
+typedef struct clustercmd_welcome clustercmd_welcome_t;
 
 struct clustercmd_reg {
-	char      node_name[1];
+	char      node_name[0];
 };
 typedef struct clustercmd_reg clustercmd_reg_t;
 
@@ -162,7 +166,7 @@ typedef struct clustercmd_rej clustercmd_rej_t;
 struct clustercmd_ht_exch {
 	time_t	 ctime;
 	size_t	 path_length;
-	char	 path[1];
+	char	 path[0];
 };
 typedef struct clustercmd_ht_exch clustercmd_ht_exch_t;
 
@@ -184,16 +188,19 @@ struct clustercmdhdr {					// bits
 };
 typedef struct clustercmdhdr clustercmdhdr_t;
 
+typedef char clustercmd_die_t;
+
 struct clustercmd {
 	clustercmdhdr_t h;
 	union data {
-		char 			p[1];
-		clustercmd_setiddata_t	setid;
+		char 			p[0];
+		clustercmd_welcome_t	welcome;
 		clustercmd_reg_t	reg;
 		clustercmd_ack_t	ack;
 		clustercmd_rej_t	rej;
-		clustercmd_getmyid_t	getmyid;
+		clustercmd_hello_t	hello;
 		clustercmd_ht_exch_t	ht_exch;
+		clustercmd_die_t	die;
 	} data;
 };
 typedef struct clustercmd clustercmd_t;

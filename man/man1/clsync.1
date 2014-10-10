@@ -556,11 +556,25 @@ The default value is "1000". [1 second]
 .RS
 .B Not implemented yet.
 
-Sets the name of current node in the cluster. It will be used in action
+Sets the name of this node in the cluster. It will be used in action
 scripts of another nodes (see 
 .BR "SYNC HANDLER MODES" ).
 
 The default value is $(uname \-n).
+.RE
+
+.PP
+.B \-n, \-\-cluster\-node\-id
+.I cluster\-node\-id
+.RS
+.B Not implemented yet.
+
+Sets an ID for this node in the cluster. It's used for messaging between
+cluster nodes.
+
+Use value "-1" to choose it automatically.
+
+The default value is "-1".
 .RE
 
 .PP

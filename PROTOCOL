@@ -5,19 +5,19 @@ broadcast:	dst_node_id == NOID
 
 session example of two nodes (A and B):
 
-A appears (getting node_id):
+"A" appears (getting node_id):
 
-A -> getmyid	(serial: 0;	src: NOID	; dst: NOID;	name: A)		| cluster_init()
+A -> hello	(serial: 0;	src: NOID	; dst: NOID;	name: A)		| cluster_init()
 A -> register	(serial: 1;	src: 0		; dst: NOID;	name: A)		|
 
 Trying to sync with somebody:
 
 A -> updtree	(serial: 2;	src: 0		; dst: NOID;	[A modtree])
 
-B appears (getting node_id):
+"B" appears (getting node_id):
 
-B -> getmyid	(serial: 0;	src: NOID	; dst: NOID;	name: B)		| cluster_init()
-A -> setid	(serial: 3;	src: 0		; dst: NOID;	name: A; updatets: 100)	
+B -> hello	(serial: 0;	src: NOID	; dst: NOID;	name: B)		| cluster_init()
+A -> welcome	(serial: 3;	src: 0		; dst: NOID;	my_name: A; to_name: B)
 B -> register	(serial: 1;	src: 1		: dst: NOID;	name: B)		|
 A -> ack	(serial: 4;	src: 0		; dst: 1;	ack_serial: 1)
 
@@ -41,11 +41,11 @@ B -> ack	(serial: 6;	src: 1		; dst: 0;	ack_serial: 10)
 A -> unlockall	(serial: 11:	src: 0		; dst: NOID)
 B -> ack	(serial: 7;	src: 1		; dst: 0;	ack_serial: 11)
 
-A disappers (shutdown)
-A appears (registering with old node_id)
+"A" disappers (shutdown)
+"A" appears (registering with old node_id)
 
-A -> getmyid	(serial: 0;	src: NOID	; dst: NOID;	name: A)
-B -> setid	(serial: 4;	src: 1		; dst: 0;	name: A; updatets: 200)
+A -> hello	(serial: 0;	src: NOID	; dst: NOID;	name: A)
+B -> welcome	(serial: 4;	src: 1		; dst: 0;	my_name: B; to_name: A)
 A -> register	(serial: 1;	src: 0		; dst: NOID;	name: A)
 B -> ack	(serial: 5;	src: 1		; dst: 0;	ack_serial: 1)
 

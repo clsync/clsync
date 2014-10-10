@@ -36,6 +36,9 @@ struct indexes {
 	GHashTable *out_lines_aggr_ht;			// output lines aggregation hashtable
 	GHashTable *nonthreaded_syncing_fpath2ei_ht;	// events that are synchronized in signle-mode (non threaded)
 	GHashTable *fileinfo_ht;			// to search "fileinfo" structures (that contains secondary sorts of things about any files/dirs)
+#ifdef CLUSTER_SUPPORT
+	GHashTable *nodenames_ht;			// node_name -> node_id
+#endif
 };
 typedef struct indexes indexes_t;
 
