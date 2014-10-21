@@ -1654,14 +1654,14 @@ int arguments_parse(int argc, char *argv[], struct ctx *ctx_p) {
 void gkf_parse(ctx_t *ctx_p, GKeyFile *gkf, paramsource_t paramsource) {
 	debug(9, "");
 	char *config_block = (char *)ctx_p->config_block;
-	do {
+	while (config_block != NULL) {
 		const struct option *lo_ptr = long_options;
 
 		if (config_block != ctx_p->config_block) {
 			ctx_p->flags_values_raw[CONFIGBLOCKINHERITS] = NULL;
 			ctx_p->flags_set[CONFIGBLOCKINHERITS] = 0;
 		}
-		while(lo_ptr->name != NULL) {
+		while (lo_ptr->name != NULL) {
 			gchar *value = g_key_file_get_value(gkf, config_block, lo_ptr->name, NULL);
 			if(value != NULL) {
 				int ret = parse_parameter(ctx_p, lo_ptr->val, value, paramsource);
@@ -1677,7 +1677,7 @@ void gkf_parse(ctx_t *ctx_p, GKeyFile *gkf, paramsource_t paramsource) {
 
 		if (config_block != NULL)
 			debug(2, "Next block is: %s", config_block);
-	} while (config_block != NULL);
+	};
 
 	return;
 }
