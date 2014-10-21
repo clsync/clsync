@@ -3,6 +3,9 @@ Author: Dmtiry Yu Okunev; e-mail: dyokunev@ut.mephi.ru; PGP: 0x8E30679C
 What's left:
 	1. Edit %%PREFIX%%/etc/clsync/clsync.conf
 	2. Set clsync_enable="YES" in /etc/rc.conf
+	3. Set required config groups to start in /etc/rc.conf:
+		clsync_config_groups=(www-backup etc-replicate)
+
 Start the program:  %%PREFIX%%/etc/rc.d/clsync start
 ------------------------------------------------------------------------------
 
