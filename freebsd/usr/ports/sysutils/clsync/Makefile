@@ -26,7 +26,7 @@ SUB_FILES=	pkg-message
 USE_GITHUB=	yes
 GH_ACCOUNT=	xaionaro
 GH_PROJECT=	clsync
-GH_COMMIT=	85e5475
+GH_COMMIT=	dc6c721
 GH_TAGNAME=	${GH_COMMIT}
 
 USE_AUTOTOOLS=	autoconf aclocal automake libtoolize
