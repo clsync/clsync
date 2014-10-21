@@ -34,7 +34,7 @@ clsync_start()
 {
 	for config_group in $clsync_config_groups; do
 		echo "Running clsync (group ${config_group})."
-		"${clsync_program}" -f "$clsync_config" -K "$config_block" -b \
+		"${clsync_program}" -H "$clsync_config" -K "$config_groups" -b \
 			--pid-file=/var/run/clsync-"${config_group}".pid
 	done
 }
