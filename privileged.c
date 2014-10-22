@@ -1587,7 +1587,9 @@ int __privileged_fork_execvp(const char *file, char *const argv[])
 		case  0:
 			debug(4, "setgid(%u) == %i", __privileged_fork_execvp_gid, setgid(__privileged_fork_execvp_gid));
 			debug(4, "setuid(%u) == %i", __privileged_fork_execvp_uid, setuid(__privileged_fork_execvp_uid));
-			exit(execvp(file, argv));
+			errno = 0;
+			execvp(file, argv);
+			exit(errno);
 	}
 
 	return pid;
