@@ -18,6 +18,7 @@ LIB_DEPENDS=	libinotify.so:${PORTSDIR}/devel/libinotify \
 GNU_CONFIGURE=	yes
 USES=		gmake libtool pkgconfig
 USE_GNOME=	glib20
+USE_LDCONFIG=	yes
 
 USE_RC_SUBR=	clsync
 
@@ -26,7 +27,7 @@ SUB_FILES=	pkg-message
 USE_GITHUB=	yes
 GH_ACCOUNT=	xaionaro
 GH_PROJECT=	clsync
-GH_COMMIT=	dc6c721
+GH_COMMIT=	12ea62c
 GH_TAGNAME=	${GH_COMMIT}
 
 USE_AUTOTOOLS=	autoconf aclocal automake libtoolize
@@ -51,6 +52,8 @@ LIBS+=          -L${LOCALBASE}/lib
 CPPFLAGS+=      -I${LOCALBASE}/include
 
 .include <bsd.port.options.mk>
+
+CONFIGURE_ARGS+=	--bindir=${PREFIX}/sbin
 
 .if ${PORT_OPTIONS:MBSM}
 CONFIGURE_ARGS+=	--with-bsm=lib
@@ -80,6 +83,7 @@ CONFIGURE_ARGS+=	--enable-paranoid=0
 
 .if ${PORT_OPTIONS:MSOCKET}
 CONFIGURE_ARGS+=	--enable-socket
+PLIST_FILES+=		include/clsync/socket.h
 .endif
 
 .if ${PORT_OPTIONS:MDEBUG}
@@ -87,7 +91,20 @@ CONFIGURE_ARGS+=	--enable-debug
 .endif
 
 .if ${PORT_OPTIONS:MLIBCLSYNC}
-CONFIGURE_ARGS+=	--enable-libclsync
+CONFIGURE_ARGS+=	--enable-socket-library
+PLIST_FILES+=		include/libclsync/clsync.h \
+			include/libclsync/ctx.h \
+			include/libclsync/libclsync.h \
+			include/libclsync/malloc.h \
+			include/libclsync/socket.h \
+			lib/libclsync.a \
+			lib/libclsync.so \
+			lib/libclsync.so.0 \
+			lib/libclsync.so.0.0.0 \
+			lib/pkgconfig/libclsync.pc
+PLIST_DIRS+=		include/libclsync \
+			lib/pkgconfig
+
 .endif
 
 .include <bsd.port.pre.mk>
@@ -95,9 +112,7 @@ CONFIGURE_ARGS+=	--enable-libclsync
 pre-configure:
 	cd "${WRKSRC}" && ${AUTORECONF} -fi
 
-do-install:
-	@${INSTALL_SCRIPT} ${WRKSRC}/clsync ${STAGEDIR}/${PREFIX}/sbin/clsync
-	${INSTALL_DATA} ${WRKSRC}/man/man1/clsync.1 ${STAGEDIR}/${PREFIX}/man/man1/clsync.1
+post-stage:
 	${MKDIR} ${STAGEDIR}/${ETCDIR}
 	${INSTALL_DATA} ${WRKSRC}/freebsd/usr/local/etc/clsync/${PORTNAME}.conf ${STAGEDIR}/${ETCDIR}/${PORTNAME}.conf.sample
 

@@ -1,4 +1,48 @@
-sbin/clsync
-man/man1/clsync.1.gz
 @sample %%ETCDIR%%/clsync.conf.sample
 @dirrmtry %%ETCDIR%%
+include/clsync/clsync.h
+include/clsync/configuration.h
+include/clsync/ctx.h
+include/clsync/error.h
+include/clsync/indexes.h
+include/clsync/malloc.h
+man/man1/clsync.1.gz
+sbin/clsync
+%%PORTDOCS%%%%DOCSDIR%%/CONTRIB
+%%PORTDOCS%%%%DOCSDIR%%/DEVELOPING
+%%PORTDOCS%%%%DOCSDIR%%/LICENSE
+%%PORTDOCS%%%%DOCSDIR%%/PROTOCOL
+%%PORTDOCS%%%%DOCSDIR%%/README.md
+%%PORTDOCS%%%%DOCSDIR%%/TODO
+%%PORTDOCS%%%%DOCSDIR%%/examples/clsync-start-cluster.sh
+%%PORTDOCS%%%%DOCSDIR%%/examples/clsync-start-rsyncdirect.sh
+%%PORTDOCS%%%%DOCSDIR%%/examples/clsync-start-rsyncshell.sh
+%%PORTDOCS%%%%DOCSDIR%%/examples/clsync-start-rsyncso.sh
+%%PORTDOCS%%%%DOCSDIR%%/examples/clsync-start-so.sh
+%%PORTDOCS%%%%DOCSDIR%%/examples/clsync-synchandler-rsyncshell.sh
+%%PORTDOCS%%%%DOCSDIR%%/examples/clsync-synchandler-rsyncso.c
+%%PORTDOCS%%%%DOCSDIR%%/examples/clsync-synchandler-so.c
+%%PORTDOCS%%%%DOCSDIR%%/examples/production/%%ETCDIR%%/clsync.conf
+%%PORTDOCS%%%%DOCSDIR%%/examples/production/%%ETCDIR%%/hooks/lxc/exit-backup.sh
+%%PORTDOCS%%%%DOCSDIR%%/examples/production/%%ETCDIR%%/hooks/lxc/exit-brother.sh
+%%PORTDOCS%%%%DOCSDIR%%/examples/production/%%ETCDIR%%/rules/hpc
+%%PORTDOCS%%%%DOCSDIR%%/examples/production/%%ETCDIR%%/rules/hpc-backup
+%%PORTDOCS%%%%DOCSDIR%%/examples/production/%%ETCDIR%%/rules/lxc
+%%PORTDOCS%%%%DOCSDIR%%/examples/production/%%ETCDIR%%/synchandler/hpc/Makefile
+%%PORTDOCS%%%%DOCSDIR%%/examples/production/%%ETCDIR%%/synchandler/hpc/handler-backup.c
+%%PORTDOCS%%%%DOCSDIR%%/examples/production/%%ETCDIR%%/synchandler/hpc/handler-pdcp.c
+%%PORTDOCS%%%%DOCSDIR%%/examples/production/%%ETCDIR%%/synchandler/lxc/backup.sh
+%%PORTDOCS%%%%DOCSDIR%%/examples/production/%%ETCDIR%%/synchandler/lxc/brother.sh
+%%PORTDOCS%%%%DOCSDIR%%/examples/production/%%ETCDIR%%/synchandler/lxc/rsync.exclude
+@dir include/clsync
+%%PORTDOCS%%@dir %%DOCSDIR%%/examples/production/%%ETCDIR%%/hooks/lxc
+%%PORTDOCS%%@dir %%DOCSDIR%%/examples/production/%%ETCDIR%%/hooks
+%%PORTDOCS%%@dir %%DOCSDIR%%/examples/production/%%ETCDIR%%/rules
+%%PORTDOCS%%@dir %%DOCSDIR%%/examples/production/%%ETCDIR%%/synchandler/hpc
+%%PORTDOCS%%@dir %%DOCSDIR%%/examples/production/%%ETCDIR%%/synchandler/lxc
+%%PORTDOCS%%@dir %%DOCSDIR%%/examples/production/%%ETCDIR%%/synchandler
+%%PORTDOCS%%@dir %%DOCSDIR%%/examples/production/%%ETCDIR%%
+%%PORTDOCS%%@dir %%DOCSDIR%%/examples/production/etc
+%%PORTDOCS%%@dir %%DOCSDIR%%/examples/production
+%%PORTDOCS%%@dir %%DOCSDIR%%/examples
+%%PORTDOCS%%@dir %%DOCSDIR%%
