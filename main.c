@@ -2873,7 +2873,9 @@ int main(int _argc, char *_argv[]) {
 	debug(1, "finished, exitcode: %i: %s.", ret, strerror(ret));
 	free(ctx_p);
 
+#ifndef __FreeBSD__	// Hanging up with 100%CPU eating, https://github.com/xaionaro/clsync/issues/97
 	SAFE (posixhacks_deinit(), errno = ret = _SAFE_rc);
+#endif
 
 	return ret;
 }
