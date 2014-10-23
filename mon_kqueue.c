@@ -225,10 +225,6 @@ int kqueue_mark(ctx_t *ctx_p, monobj_t *obj_p) {
 		errno = EINVAL;
 		return -1;
 	}
-	if (tree_lookup(dat->file_btree, obj_p) != NULL) {
-		warning("\"%s\" is already marked", obj_p->name);
-		return 0;
-	}
 #endif
 	debug(9, "");
 
