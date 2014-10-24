@@ -1358,7 +1358,7 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 			if (!(perm&RA_WALK)) {
 				debug(3, "Rejecting to walk into \"%s\".", path_rel);
 				fts_set(tree, node, FTS_SKIP);
-			} else
+			}
 
 			if (!(perm&RA_MONITOR)) {
 				debug(3, "Excluding \"%s\".", path_rel);
