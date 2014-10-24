@@ -2367,6 +2367,11 @@ int main(int _argc, char *_argv[]) {
 	debug(4, "ncpus == %u", ncpus);
 	debug(4, "debugging flags: %u %u %u %u", ctx_p->flags[OUTPUT_METHOD], ctx_p->flags[QUIET], ctx_p->flags[VERBOSE], ctx_p->flags[DEBUG]);
 
+	if (chdir(ctx_p->watchdir)) {
+		error("Got error while chdir(\"%s\")", ctx_p->watchdir);
+		ret = errno;
+	}
+
 	ctx_p->state = STATE_STARTING;
 
 	{
