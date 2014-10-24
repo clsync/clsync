@@ -2694,6 +2694,10 @@ int main(int _argc, char *_argv[]) {
 	}
 #endif
 
+	nret=main_rehash(ctx_p);
+	if (nret)
+		ret = nret;
+
 	if (ctx_p->flags[GID]) {
 		int rc;
 		debug(3, "Trying to drop gid to %i", ctx_p->gid);
@@ -2783,10 +2787,6 @@ int main(int _argc, char *_argv[]) {
 #endif
 			}
 	}
-
-	nret=main_rehash(ctx_p);
-	if (nret)
-		ret = nret;
 
 	if (ctx_p->flags[BACKGROUND]) {
 		nret = becomedaemon();
