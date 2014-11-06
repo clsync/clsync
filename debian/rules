@@ -12,9 +12,11 @@
 %:
 	dh $@ --parallel --with autoreconf
 
-#override_dh_auto_configure:
-#	dh_auto_configure -- --enable-socket=yes
+override_dh_auto_configure:
+	dh_auto_configure -- --enable-socket --enable-socket-library --enable-highload-locks
 
 #override_dh_auto_install:
+
+#	$(MAKE) DESTDIR=$$(pwd)/debian/clsync prefix=/usr install
 #	dh_auto_install
 #	-rm --verbose debian/clsync/usr/share/doc/clsync/LICENSE

@@ -1,3 +1,9 @@
+clsync (0.4-1) unstable; urgency=low
+
+  * A lot of fixes
+
+ -- Dmitry Yu Okunev <dyokunev@ut.mephi.ru>  Thu, 6 Nov 2014 10:17:49 +0300
+
 clsync (0.3-1) unstable; urgency=low
 
   * Added support of control socket

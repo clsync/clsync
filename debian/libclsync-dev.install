@@ -1,2 +1,2 @@
-usr/include/clsync/socket.h
-usr/include/clsync/libclsync.h
+usr/include/libclsync/socket.h
+usr/include/libclsync/libclsync.h
