@@ -43,6 +43,7 @@ Description: development files for clsync
 
 Package: libclsync
 Architecture: any
+Pre-Depends: multiarch-support
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: clsync control socket library
  Clsync recursively watches for source directory and executes external
