@@ -13,7 +13,7 @@ Vcs-Browser: http://anonscm.debian.org/gitweb/?p=collab-maint/clsync.git
 Package: clsync
 Recommends: rsync
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${misc:Depends}
 Description: live sync tool based on inotify, written in GNU C
  Clsync recursively watches for source directory and executes external
  program to sync the changes. Clsync is adapted to use together with rsync.
@@ -23,7 +23,7 @@ Description: live sync tool based on inotify, written in GNU C
 
 Package: clsync-doc
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${misc:Depends}
 Description: examples and other documentation for clsync
  Clsync recursively watches for source directory and executes external
  program to sync the changes. Clsync is adapted to use together with rsync.
@@ -33,7 +33,7 @@ Description: examples and other documentation for clsync
 
 Package: clsync-dev
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${misc:Depends}
 Description: development files for clsync
  Clsync recursively watches for source directory and executes external
  program to sync the changes. Clsync is adapted to use together with rsync.
@@ -53,7 +53,7 @@ Description: clsync control socket library
 
 Package: libclsync-dev
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: ${misc:Depends}
 Description: development files for libclsync
  Clsync recursively watches for source directory and executes external
  program to sync the changes. Clsync is adapted to use together with rsync.
