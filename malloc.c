@@ -180,16 +180,17 @@ int memory_init() {
 	return 0;
 }
 
-void *shm_malloc(size_t size) {
+void *shm_malloc_try(size_t size) {
 	void *ret;
 #ifdef PARANOID
 	size++;
 #endif
 	int privileged_shmid = shmget(0, size, IPC_PRIVATE|IPC_CREAT|0600);
 	struct shmid_ds shmid_ds;
-	critical_on (privileged_shmid == -1)
+	if (privileged_shmid == -1) return NULL;
+
 	ret = shmat(privileged_shmid, NULL, 0);
-	critical_on((long)ret == -1);
+	if ((long)ret == -1) return NULL;
 	debug(15, "ret == %p", ret);
 
 	// Forbidding access for others to the pointer
@@ -199,8 +200,20 @@ void *shm_malloc(size_t size) {
 
 	// Checking that nobody else attached to the shared memory before access forbidding
 	shmctl(privileged_shmid, IPC_STAT, &shmid_ds);
-	if (shmid_ds.shm_lpid != shmid_ds.shm_cpid)
-		critical("A process (pid %u) attached to my shared memory. It's a security problem. Emergency exit.");
+	if (shmid_ds.shm_lpid != shmid_ds.shm_cpid) {
+		error("A process (pid %u) attached to my shared memory. It's a security problem. Emergency exit.");
+		shmdt (ret);
+		return NULL;
+	}
+
+	return ret;
+}
+
+void *shm_malloc(size_t size) {
+	void *ret;
+
+	ret = shm_malloc_try(size);
+	critical_on (ret == NULL);
 
 	return ret;
 }

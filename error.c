@@ -217,6 +217,8 @@ void _critical(const char *const function_name, const char *fmt, ...) {
 
 	if (error_mutex_p != NULL)
 		pthread_mutex_unlock(error_mutex_p);
+
+	error_deinit();
 	exit(errno);
 
 	return;
@@ -340,8 +342,39 @@ void error_init(void *_outputmethod, int *_quiet, int *_verbose, int *_debug) {
 	verbose		= _verbose;
 	debug		= _debug;
 
-	pthread_mutex_init_shared(&error_mutex_p);
 	openlog(NULL, SYSLOG_FLAGS, SYSLOG_FACILITY);
+
+	return;
+}
+
+ipc_type_t ipc_type;
+void error_init_ipc(ipc_type_t _ipc_type) {
+	static pthread_mutex_t error_mutex = PTHREAD_MUTEX_INITIALIZER;
+	ipc_type = _ipc_type;
+
+	switch (ipc_type) {
+		case IPCT_SHARED:
+			pthread_mutex_init_shared(&error_mutex_p);
+			break;
+		case IPCT_PRIVATE:
+			error_mutex_p = &error_mutex;
+			pthread_mutex_init(error_mutex_p, NULL);
+			break;
+		default:
+			critical ("Unknown ipc_type: %i", ipc_type);
+	}
+
+	return;
+}
+
+void error_deinit() {
+	switch (ipc_type) {
+		case IPCT_SHARED:
+			pthread_mutex_destroy_shared(error_mutex_p);
+			break;
+		case IPCT_PRIVATE:
+			break;
+	}
 
 	return;
 }

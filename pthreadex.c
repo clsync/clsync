@@ -24,7 +24,7 @@
 
 int pthread_mutex_init_shared(pthread_mutex_t **mutex_p) {
 	static pthread_mutex_t mutex_initial = PTHREAD_MUTEX_INITIALIZER;
-	*mutex_p = shm_malloc(sizeof(**mutex_p));
+	*mutex_p = shm_malloc_try(sizeof(**mutex_p));
 	memcpy(*mutex_p, &mutex_initial, sizeof(mutex_initial));
 
 	pthread_mutexattr_t attr;

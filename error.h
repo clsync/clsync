@@ -56,7 +56,15 @@ extern void _info(const char *const function_name, const char *fmt, ...);
 
 #define critical_or_warning(cond, ...) ((cond) ? _critical : _warning)(__FUNCTION__, __VA_ARGS__)
 
+enum ipc_type {
+	IPCT_PRIVATE,
+	IPCT_SHARED,
+};
+typedef enum ipc_type ipc_type_t;
+
 extern void error_init(void *_outputmethod, int *_quiet, int *_verbose, int *_debug);
+extern void error_init_ipc(ipc_type_t ipc_type);
+extern void error_deinit();
 
 enum outputmethod {
 	OM_STDERR = 0,

@@ -86,6 +86,7 @@ static const struct option long_options[] =
 #endif
 #ifdef UNSHARE_SUPPORT
 	{"detach-network",	required_argument,	NULL,	DETACH_NETWORK},
+	{"detach-ipc",		required_argument,	NULL,	DETACH_IPC},
 	{"detach-miscellanea",	optional_argument,	NULL,	DETACH_MISCELLANEA},
 #endif
 #ifdef CAPABILITIES_SUPPORT
@@ -2275,6 +2276,7 @@ int main(int _argc, char *_argv[]) {
 	ctx_p->synchandler_uid			 = getuid();
 	ctx_p->synchandler_gid			 = getgid();
 	ctx_p->flags[CAPS_INHERIT]		 = DEFAULT_CAPS_INHERIT;
+	ctx_p->flags[DETACH_IPC]		 = DEFAULT_DETACH_IPC;
 	parse_parameter(ctx_p, LABEL, strdup(DEFAULT_LABEL), PS_DEFAULTS);
 
 	ncpus					 = sysconf(_SC_NPROCESSORS_ONLN); // Get number of available logical CPUs
@@ -2395,6 +2397,10 @@ int main(int _argc, char *_argv[]) {
 		if (unshare(a)) {\
 			error("Got error from unshare("TOSTR(a)")");\
 			ret = errno;\
+		}
+		if (ctx_p->flags[DETACH_IPC]) {
+			unshare(CLONE_NEWUTS);
+			error_init_ipc(ctx_p->flags[SPLITTING] == SM_PROCESS ? IPCT_SHARED : IPCT_PRIVATE);
 		}
 		if (ctx_p->flags[DETACH_MISCELLANEA]) {
 			unshare(CLONE_NEWIPC);
@@ -2825,11 +2831,11 @@ int main(int _argc, char *_argv[]) {
 	// == /RUNNING ==
 
 	if (ctx_p->pidfile != NULL) {
-	         if (unlink(ctx_p->pidfile)) {
-	         	error("Cannot unlink pidfile \"%s\"",
-	         		ctx_p->pidfile);
-	         	ret = errno;
-	         }
+		if (unlink(ctx_p->pidfile)) {
+			error("Cannot unlink pidfile \"%s\"",
+				ctx_p->pidfile);
+			ret = errno;
+		}
 	}
 
 	if (ctx_p->statusfile != NULL) {
@@ -2863,17 +2869,18 @@ int main(int _argc, char *_argv[]) {
 	main_cleanup(ctx_p);
 
 	if (ctx_p->watchdirsize)
-	         free(ctx_p->watchdir);
+		free(ctx_p->watchdir);
 
 	if (ctx_p->watchdirwslashsize)
-	         free(ctx_p->watchdirwslash);
+		free(ctx_p->watchdirwslash);
 
 	if (ctx_p->destdirsize)
-	         free(ctx_p->destdir);
+		free(ctx_p->destdir);
 
 	if (ctx_p->destdirwslashsize)
 		free(ctx_p->destdirwslash);
 
+	error_deinit();
 	ctx_cleanup(ctx_p);
 	debug(1, "finished, exitcode: %i: %s.", ret, strerror(ret));
 	free(ctx_p);
