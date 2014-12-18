@@ -1274,7 +1274,19 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 
 	skip_rules |= (ctx_p->rules_count == 0);
 
-	char fts_no_stat = (initsync==INITSYNC_FULL) && !(ctx_p->flags[EXCLUDEMOUNTPOINTS]);
+	char fts_no_stat =
+		(
+			(
+				initsync == INITSYNC_FULL
+			) ||
+			(
+				ctx_p->_queues[QUEUE_NORMAL ].collectdelay ==
+				ctx_p->_queues[QUEUE_BIGFILE].collectdelay
+			) ||
+			(
+				ctx_p->bfilethreshold == 0
+			)
+		) && !(ctx_p->flags[EXCLUDEMOUNTPOINTS]);
 
 	int fts_opts =  FTS_NOCHDIR | FTS_PHYSICAL | 
 			(fts_no_stat			? FTS_NOSTAT	: 0) | 
