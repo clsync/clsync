@@ -744,6 +744,9 @@ Sets file size threshold (in bytes) that separates ordinary files from
 separate collecting delay. This is supposed to be used as a means of unloading
 IO resources.
 
+To disable detection of "big files" set "0" (zero). This can improve
+perfomance by removing necessity in extra lstat() syscall.
+
 The default value is "134217728" ["128 MiB"].
 .RE
 
@@ -1708,6 +1711,34 @@ write access to:
 
 Is not set by default.
 .RE
+
+.SH PERFORMANCE
+
+Recommendations to improve the perfomance:
+.RS
+- Disable thread/process splitting.
+.br
+- Don't use clsync rules (use rules on sync-handler side) or/and use option
+"--full-initialsync"
+.br
+- Use option "-B0".
+.br
+- Use option "--cancel-syscalls=mon_stat".
+.br
+- Use option "-p safe" or "-p full".
+.br
+- Disable debugging with "-d0" or better disable debugging support at all
+with "./configure" option "--enable-debug=no"
+.br
+- Don't use option "--exclude-mount-points"
+.br
+- Free memory for disk cache
+.br
+.RE
+
+You shouldn't follow all this recommendation blindfold. You should use only
+the ideas that fixes performance problems in your specific use case. And only
+if it's necessary.
 
 .SH SYNC HANDLER MODES
 .B clsync
