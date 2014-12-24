@@ -2509,7 +2509,57 @@ Not implemented yet.
 Not described yet.
 
 .SH EXAMPLES
-Working examples you can try out in "/usr/share/doc/clsync/examples/"
+
+.B Mirroring a directory:
+.RS
+clsync -Mrsyncdirect -W/path/to/source_dir -D/path/to/destination_dir
+.RE
+
+.B Mirroring a directory, but faster:
+.RS
+clsync -w5 -t5 -T5 -Mrsyncdirect -W/path/to/source_dir -D/path/to/destination_dir
+.RE
+
+.B Instant mirroring of a directory:
+.RS
+clsync -w0 -t0 -T0 -Mrsyncdirect -W/path/to/source_dir -D/path/to/destination_dir
+.RE
+
+.B Making two directories synchronous:
+.RS
+clsync -Mrsyncdirect --background -z /var/run/clsync0.pid --output syslog -Mrsyncdirect -W/path/to/dir1 -D/path/to/dir2 --modification-signature '*'
+.br
+clsync -Mrsyncdirect --background -z /var/run/clsync1.pid --output syslog -Mrsyncdirect -W/path/to/dir2 -D/path/to/dir1 --modification-signature '*'
+.RE
+
+.B Fixing privileges of a web-site:
+.RS
+clsync -w3 -t3 -T3 -x1 -W/var/www/site.example.org/root -Mdirect -Schown --uid 0 --gid 0 -Ysyslog -b1 --modification-signature uid,gid -- --from=root www-data:www-data %INCLUDE-LIST%
+.RE
+
+.B "'Atomic' sync:"
+.RS
+clsync --exit-on-no-events --max-iterations=20 --mode=rsyncdirect -W/var/www_new -Srsync -- %RSYNC-ARGS% /var/www_new/ /var/www/
+.RE
+
+.B Moving a web-server:
+.RS
+clsync --exit-on-no-events --max-iterations=20 --pre-exit-hook=/root/stop-here.sh --exit-hook=/root/start-there.sh --mode=rsyncdirect --ignore-exitcode=23,24 --retries=3 -W /var/www -S rsync -- %RSYNC-ARGS% /var/www/ rsync://clsync@another-host/var/www/
+.RE
+
+.B Copying files to slave-nodes using
+.BR pdcp (1):
+.RS
+clsync -Msimple -S pdcp -W /opt/global -b -Y syslog -- -a %INCLUDE-LIST% %INCLUDE-LIST%
+.RE
+
+.B Copying files to slave-nodes using
+.BR uftp (1):
+.RS
+clsync -Mdirect -S uftp -W/opt/global --background=1 --output=syslog -- -M 248.225.233.1 %INCLUDE-LIST%
+.RE
+
+More working examples you can try out in "/usr/share/doc/clsync/examples/"
 directory. Copy this directory somewhere (e.g. into "/tmp"). And try to run
 "clsync-start-rsync.sh" in there. Any files/directories modifications in
 "testdir/from" will be synced to "testdir/to" with few seconds delay.
