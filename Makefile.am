@@ -60,9 +60,9 @@ if HAVE_PIVOTROOT
 clsync_CFLAGS  += -DPIVOTROOT_OPT_SUPPORT
 endif
 endif
-if HAVE_TRE
-clsync_CFLAGS  += -DTRE_SUPPORT
-endif
+#if HAVE_TRE
+#clsync_CFLAGS  += -DTRE_SUPPORT
+#endif
 if HAVE_LIBCGROUP
 clsync_CFLAGS  += -DCGROUP_SUPPORT
 clsync_SOURCES += cgroup.c cgroup.h

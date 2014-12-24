@@ -223,38 +223,38 @@ esac
 
 dnl tre check
 
-AC_ARG_WITH(tre,
-	AS_HELP_STRING(--with-tre,
-		[Enable tre support be able to predict which directories should be scanned for excludes; values: no, check, yes; default: check]),
-	[],
-	[with_tre=check]
-)
-
-case "$with_tre" in
-	yes)
-		AC_CHECK_LIB([tre], [tre_regaexec],
-			[
-				AC_CHECK_HEADER(tre/tre.h, [], [AC_MSG_FAILURE([Cannot find tre/tre.h])])
-				LDFLAGS="${LDFLAGS} -ltre"
-				HAVE_TRE=1
-			],
-			[
-				AC_MSG_FAILURE(
-					[Cannot find libtre])
-			]
-		)
-		;;
-	check)
-		AC_CHECK_LIB([tre], [tre_regaexec],
-			[
-				AC_CHECK_HEADER(tre/tre.h, [], [AC_MSG_FAILURE([Cannot find tre/tre.h])])
-				LDFLAGS="${LDFLAGS} -ltre"
-				HAVE_TRE=1
-			],
-			[]
-		)
-		;;
-esac
+#AC_ARG_WITH(tre,
+#	AS_HELP_STRING(--with-tre,
+#		[Enable tre support be able to predict which directories should be scanned for excludes; values: no, check, yes; default: check]),
+#	[],
+#	[with_tre=check]
+#)
+#
+#case "$with_tre" in
+#	yes)
+#		AC_CHECK_LIB([tre], [tre_regaexec],
+#			[
+#				AC_CHECK_HEADER(tre/tre.h, [], [AC_MSG_FAILURE([Cannot find tre/tre.h])])
+#				LDFLAGS="${LDFLAGS} -ltre"
+#				HAVE_TRE=1
+#			],
+#			[
+#				AC_MSG_FAILURE(
+#					[Cannot find libtre])
+#			]
+#		)
+#		;;
+#	check)
+#		AC_CHECK_LIB([tre], [tre_regaexec],
+#			[
+#				AC_CHECK_HEADER(tre/tre.h, [], [AC_MSG_FAILURE([Cannot find tre/tre.h])])
+#				LDFLAGS="${LDFLAGS} -ltre"
+#				HAVE_TRE=1
+#			],
+#			[]
+#		)
+#		;;
+#esac
 
 dnl kqueue/inotify/bsm
 
