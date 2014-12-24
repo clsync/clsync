@@ -829,11 +829,20 @@ int privileged_handler(ctx_t *ctx_p)
 	if (opts->isprocsplitting) {
 		sigset_t sigset;
 		sigemptyset(&sigset);
+
+/*	Do not uncomment this. This causes handler closing on any terminal
+	signal to parent process. In turn it causes: https://github.com/xaionaro/clsync/issues/104
+
 		sigaddset(&sigset, SIGALRM);
 		sigaddset(&sigset, SIGHUP);
 		sigaddset(&sigset, SIGQUIT);
 		sigaddset(&sigset, SIGTERM);
 		sigaddset(&sigset, SIGINT);
+*/
+# ifndef __linux__
+#  error There's no automatical mechanism that guarantees handler closing on non-linux. Don't use process splitting!
+# endif
+
 # ifdef __linux__
 		sigaddset(&sigset, SIGCHLD);
 # endif
@@ -883,7 +892,7 @@ int privileged_handler(ctx_t *ctx_p)
 # ifdef READWRITE_SIGNALLING
 			read_inf(priv_read_fd, buf, 1);
 # else
-			pthread_cond_wait(pthread_cond_privileged_p, pthread_mutex_privileged_p);
+			critical_on (pthread_cond_wait(pthread_cond_privileged_p, pthread_mutex_privileged_p));
 # endif
 # ifdef HL_LOCKS
 			if (hl_lock_p->enabled)
@@ -1087,9 +1096,9 @@ int privileged_handler(ctx_t *ctx_p)
 # ifdef READWRITE_SIGNALLING
 			write_inf(nonp_write_fd, buf, 1);
 # else
-			pthread_mutex_lock(pthread_mutex_action_signal_p);
-			pthread_mutex_unlock(pthread_mutex_action_signal_p);
-			pthread_cond_signal(pthread_cond_action_p);
+			critical_on (pthread_mutex_lock(pthread_mutex_action_signal_p));
+			critical_on (pthread_mutex_unlock(pthread_mutex_action_signal_p));
+			critical_on (pthread_cond_signal(pthread_cond_action_p));
 # endif
 # ifdef HL_LOCKS
 		}
@@ -1187,13 +1196,12 @@ static inline int privileged_action(
 #  ifdef HL_LOCKS
 		if (hl_lock_p->enabled) {
 			debug(10, "Waiting the privileged thread/process to get prepared for signal (by fallback)");
-			pthread_mutex_lock(pthread_mutex_privileged_p);
-			pthread_mutex_unlock(pthread_mutex_privileged_p);
+			critical_on (pthread_mutex_lock(pthread_mutex_privileged_p));
+			critical_on (pthread_mutex_unlock(pthread_mutex_privileged_p));
 		} else
 #  endif
-		pthread_mutex_lock(pthread_mutex_action_signal_p);
-		debug(10, "pthread_cond_signal(&pthread_cond_privileged)");
-		pthread_cond_signal(pthread_cond_privileged_p);
+		critical_on (pthread_mutex_lock(pthread_mutex_action_signal_p));
+		critical_on (pthread_cond_signal(pthread_cond_privileged_p));
 # endif
 # ifdef HL_LOCKS
 	}
@@ -1242,7 +1250,7 @@ static inline int privileged_action(
 # ifdef READWRITE_SIGNALLING
 		read_inf(nonp_read_fd, buf, 1);
 # else
-		pthread_cond_wait(pthread_cond_action_p, pthread_mutex_action_signal_p);
+		critical_on (pthread_cond_wait(pthread_cond_action_p, pthread_mutex_action_signal_p));
 # endif
 # ifdef HL_LOCKS
 	}

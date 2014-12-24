@@ -4015,6 +4015,7 @@ int sync_run(ctx_t *ctx_p) {
 
 	// Deinitializing cluster subsystem
 #ifdef CLUSTER_SUPPORT
+	debug(3, "Deinitializing cluster subsystem");
 	if (ctx_p->cluster_iface != NULL) {
 		int _ret;
 		_ret = cluster_deinit();
@@ -4025,8 +4026,8 @@ int sync_run(ctx_t *ctx_p) {
 	}
 #endif
 
-#ifdef VERYPARANOID
 	// One second for another threads
+#ifdef VERYPARANOID
 	debug(9, "sleep("TOSTR(SLEEP_SECONDS)")");
 	sleep(SLEEP_SECONDS);
 #endif
@@ -4036,14 +4037,17 @@ int sync_run(ctx_t *ctx_p) {
 		exec_argv(argv, NULL);
 	}
 
-#ifdef CGROUP_SUPPORT
 	// Cleaning up cgroups staff
+#ifdef CGROUP_SUPPORT
+	debug(3, "Cleaning up cgroups staff");
 	if (ctx_p->flags[FORBIDDEVICES])
 		error_on(privileged_clsync_cgroup_deinit(ctx_p));
 #endif
 
+	debug(3, "privileged_deinit()");
 	ret |= privileged_deinit(ctx_p);
 
+	debug(3, "finish");
 	return ret;
 }
 
