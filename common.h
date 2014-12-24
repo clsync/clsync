@@ -67,7 +67,6 @@
 #include <netinet/in.h>
 #include <libgen.h>
 #include <pthread.h>
-#include <glib.h>
 
 #include "configuration.h"
 #ifdef HAVE_CONFIG_H
@@ -204,38 +203,6 @@ struct eventinfo {
 };
 typedef struct eventinfo eventinfo_t;
 
-struct thread_callbackfunct_arg {
-	char *excfpath;
-	char *incfpath;
-};
-typedef struct thread_callbackfunct_arg thread_callbackfunct_arg_t;
-
-typedef int (*thread_callbackfunct_t)(ctx_t *ctx_p, thread_callbackfunct_arg_t *arg_p);
-struct threadinfo {
-	int				  thread_num;
-	uint32_t			  iteration;
-	thread_callbackfunct_t 		  callback;
-	thread_callbackfunct_arg_t 	 *callback_arg;
-	char				**argv;
-	pthread_t			  pthread;
-	int				  exitcode;
-	int				  errcode;
-	state_t				  state;
-	ctx_t				 *ctx_p;
-	time_t				  starttime;
-	time_t				  expiretime;
-	int				  child_pid;
-
-	GHashTable			 *fpath2ei_ht;		// file path -> event information
-
-	int				  try_n;
-
-	// for so-synchandler
-	int				  n;
-	api_eventinfo_t			 *ei;
-};
-typedef struct threadinfo threadinfo_t;
-
 enum pthread_mutex_id {
 	PTHREAD_MUTEX_STATE,
 	PTHREAD_MUTEX_SELECT,
@@ -243,18 +210,6 @@ enum pthread_mutex_id {
 	PTHREAD_MUTEX_MAX
 };
 
-
-struct threadsinfo {
-	pthread_mutex_t		  mutex[PTHREAD_MUTEX_MAX];
-	pthread_cond_t		  cond [PTHREAD_MUTEX_MAX];
-	char			  mutex_init;
-	int			  allocated;
-	int			  used;
-	threadinfo_t 		 *threads;
-	threadinfo_t 		**threadsstack;	// stack of threadinfo_t to be used on thread_new()
-	int			  stacklen;
-};
-typedef struct threadsinfo threadsinfo_t;
 
 struct dosync_arg {
 	int evcount;

@@ -18,6 +18,9 @@
  */
 
 #include "common.h"
+
+#include <glib.h>	// g_hash_table_*
+
 #include "rules.h"
 #include "error.h"
 

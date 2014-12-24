@@ -29,6 +29,7 @@
 
 #include <pwd.h>	// getpwnam()
 #include <grp.h>	// getgrnam()
+#include <glib.h>	// gkf
 
 
 #ifdef UNSHARE_SUPPORT

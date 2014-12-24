@@ -17,6 +17,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>
+
 typedef gpointer(*GDupFunc)(gpointer data);
 
 extern GHashTable *g_hash_table_dup(GHashTable *ht, GHashFunc hash_funct, GEqualFunc key_equal_funct, GDestroyNotify key_destroy_funct, GDestroyNotify value_destroy_funct, GDupFunc key_dup_funct, GDupFunc value_dup_funct);
