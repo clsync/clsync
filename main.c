@@ -91,7 +91,7 @@ static const struct option long_options[] =
 #endif
 #ifdef CAPABILITIES_SUPPORT
 # ifdef SECCOMP_SUPPORT
-	{"secure-splitting",	required_argument,	NULL,	SECURESPLITTING},
+	{"secure-splitting",	no_argument,		NULL,	SECURESPLITTING},
 # endif
 	{"splitting",		required_argument,	NULL,	SPLITTING},
 	{"check-execvp-args",	optional_argument,	NULL,	CHECK_EXECVP_ARGS},
@@ -966,6 +966,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			ctx_p->flags[CHECK_EXECVP_ARGS]++;
 			ctx_p->flags[SECCOMP_FILTER]++;
 			ctx_p->flags[FORBIDDEVICES]++;
+			arg = "process";
 		}
 		case SPLITTING: {
 			char *value, *arg_orig = arg;
