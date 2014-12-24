@@ -371,6 +371,7 @@ void error_deinit() {
 	switch (ipc_type) {
 		case IPCT_SHARED:
 			pthread_mutex_destroy_shared(error_mutex_p);
+			error_mutex_p = NULL;
 			break;
 		case IPCT_PRIVATE:
 			break;
