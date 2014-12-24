@@ -359,7 +359,8 @@ struct ctx {
 	char *handlerfpath;
 	void *handler_handle;
 	api_functs_t handler_funct;
-	char *rulfpath;
+	char  *rulfpath;
+	size_t rulfpathsize;
 	char *listoutdir;
 	struct notifyenginefuncts notifyenginefunct;
 	int retries;

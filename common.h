@@ -151,6 +151,8 @@ enum paramsource_enum {
 	PS_CONFIG,
 	PS_CONTROL,
 	PS_DEFAULTS,
+//	PS_REHASH,
+	PS_CORRECTION,
 };
 typedef enum paramsource_enum paramsource_t;
 

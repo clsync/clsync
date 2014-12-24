@@ -553,6 +553,7 @@ const char *parameter_get(const char *variable_name, void *_ctx_p) {
 	const ctx_t *ctx_p = _ctx_p;
 	const struct option *long_option_p = long_options;
 	int param_id = -1;
+	debug(8, "(\"%s\", %p)", variable_name, ctx_p);
 
 	while (long_option_p->name != NULL) {
 		if (!strcmp(long_option_p->name, variable_name)) {
@@ -567,6 +568,8 @@ const char *parameter_get(const char *variable_name, void *_ctx_p) {
 		errno = ENOENT;
 		return NULL;
 	}
+
+	debug(9, "ctx_p->flags_values_raw[%i] == \"%s\"", param_id, ctx_p->flags_values_raw[param_id]);
 
 	return ctx_p->flags_values_raw[param_id];
 }
@@ -674,6 +677,7 @@ char *parameter_expand(
 					break;
 				}
 
+				debug(25, "A macro");
 				char nest_searching = 1;
 				char *ptr_nest = ptr;
 				while (nest_searching) {
@@ -697,7 +701,9 @@ char *parameter_expand(
 							nest_searching = 0;
 							*ptr_nest = 0;
 							variable_name  = &ptr[1];
+							debug(15, "The macro is \"%s\"", variable_name);
 							if (!strcmp(variable_name, "PID")) {
+								debug(35, "\"PID\"", variable_name);
 								if (!*ctx_p->pid_str) {
 									snprintf(ctx_p->pid_str, 64, "%u", ctx_p->pid);
 									ctx_p->pid_str_len = strlen(ctx_p->pid_str);
@@ -706,10 +712,12 @@ char *parameter_expand(
 								variable_value_len = ctx_p->pid_str_len;
 							} else
 							if (*variable_name >= 'A' && *variable_name <= 'Z' && (exceptionflags&4)) {	// Lazy substitution, preserving the value
+								debug(35, "Lazy substitution", variable_name);
 								variable_value     =  ptr;
 								variable_value_len = (ptr_nest - ptr + 1);
 								parameter_get(variable_name, parameter_get_arg);
 							} else {									// Substituting
+								debug(35, "Substitution", variable_name);
 								errno = 0;
 								variable_value = parameter_get(variable_name, parameter_get_arg);
 								if (variable_value == NULL) {
@@ -901,12 +909,24 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			}
 #endif
 			break;
+/*		case PS_REHASH:
+			arg = ctx_p->flags_values_raw[param_id];
+#ifdef VERYPARANOID
+			critical_on (arg == NULL);
+#endif
+
+			debug(9, "Rehash setting %i -> \"%s\"", param_id, arg);
+			break;*/
+		case PS_CORRECTION:
+			critical_on (arg == NULL);
+			debug(9, "Correcting setting %i -> \"%s\"", param_id, arg);
+			break;
 		default:
 			error("Unknown parameter #%i source (value \"%s\").", param_id, arg!=NULL ? arg : "");
 			break;
 	}
 
-	if (arg != NULL) {
+	if ((arg != NULL) /*&& (paramsource != PS_REHASH)*/) {
 		if (param_id != SYNCHANDLERARGS0 && param_id != SYNCHANDLERARGS1)
 			arg = parameter_expand(ctx_p, arg, 0, NULL, NULL, parameter_get, ctx_p);
 
@@ -1610,13 +1630,13 @@ int arguments_parse(int argc, char *argv[], struct ctx *ctx_p) {
 
 	const struct option *lo_ptr = long_options;
 	while (lo_ptr->name != NULL) {
-		if(!(lo_ptr->val & (OPTION_CONFIGONLY|OPTION_LONGOPTONLY))) {
+		if (!(lo_ptr->val & (OPTION_CONFIGONLY|OPTION_LONGOPTONLY))) {
 			*(optstring_ptr++) = lo_ptr->val & 0xff;
 
-			if(lo_ptr->has_arg == required_argument)
+			if (lo_ptr->has_arg == required_argument)
 				*(optstring_ptr++) = ':';
 
-			if(lo_ptr->has_arg == optional_argument) {
+			if (lo_ptr->has_arg == optional_argument) {
 				*(optstring_ptr++) = ':';
 				*(optstring_ptr++) = ':';
 			}
@@ -2340,15 +2360,181 @@ int main(int _argc, char *_argv[]) {
 			case MODE_RSYNCSHELL:
 				args_line0 = (ctx_p->flags[RSYNCPREFERINCLUDE]) ? DEFAULT_SYNCHANDLER_ARGS_RSHELL_I  : DEFAULT_SYNCHANDLER_ARGS_RSHELL_E;
 				break;
+			default:
+				break;
 		}
 
-		if (args_line0 != NULL)
-			parse_parameter(ctx_p, SYNCHANDLERARGS0, strdup(args_line0), PS_DEFAULTS);
+		if (args_line0 != NULL) {
+			char *args_line = strdup(args_line0);
+			parse_parameter(ctx_p, SYNCHANDLERARGS0, args_line, PS_DEFAULTS);
+		}
 
-		if (args_line1 != NULL)
-			parse_parameter(ctx_p, SYNCHANDLERARGS1, strdup(args_line1), PS_DEFAULTS);
+		if (args_line1 != NULL) {
+			char *args_line = strdup(args_line1);
+			parse_parameter(ctx_p, SYNCHANDLERARGS1, args_line, PS_DEFAULTS);
+		}
 	}
 
+	debug(4, "ncpus == %u", ncpus);
+	debug(4, "debugging flags: %u %u %u %u", ctx_p->flags[OUTPUT_METHOD], ctx_p->flags[QUIET], ctx_p->flags[VERBOSE], ctx_p->flags[DEBUG]);
+
+	if (ctx_p->watchdir != NULL) {
+		char *rwatchdir = realpath(ctx_p->watchdir, NULL);
+		if (rwatchdir == NULL) {
+			error("Got error while realpath() on \"%s\" [#0].", ctx_p->watchdir);
+			ret = errno;
+		}
+		debug(5, "rwatchdir == \"%s\"", rwatchdir);
+
+/*
+		stat64_t stat64={0};
+		if (lstat64(ctx_p->watchdir, &stat64)) {
+			error("Cannot lstat64() on \"%s\"", ctx_p->watchdir);
+			if (!ret)
+				ret = errno;
+		} else {
+			if (ctx_p->flags[EXCLUDEMOUNTPOINTS])
+				ctx_p->st_dev = stat64.st_dev;
+			if ((stat64.st_mode & S_IFMT) == S_IFLNK) {
+				// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
+				// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
+				// it disables filters, because exclude-list will be empty.
+#ifdef VERYPARANOID
+				error("Watch dir cannot be symlink, but \"%s\" is a symlink.", ctx_p->watchdir);
+				ret = EINVAL;
+#else
+				char *watchdir_resolved_part = xcalloc(1, PATH_MAX+2);
+				ssize_t r = readlink(ctx_p->watchdir, watchdir_resolved_part, PATH_MAX+1);
+	
+				if (r>=PATH_MAX) {	// TODO: check if it's possible
+					ret = errno = EINVAL;
+					error("Too long file path resolved from symbolic link \"%s\"", ctx_p->watchdir);
+				} else
+				if (r<0) {
+					error("Cannot resolve symbolic link \"%s\": readlink() error", ctx_p->watchdir);
+					ret = EINVAL;
+				} else {
+					char *watchdir_resolved;
+#ifdef VERYPARANOID
+					if (ctx_p->watchdirsize)
+						if (ctx_p->watchdir != NULL)
+							free(ctx_p->watchdir);
+#endif
+
+					size_t watchdir_resolved_part_len = strlen(watchdir_resolved_part);
+					ctx_p->watchdirsize = watchdir_resolved_part_len+1;	// Not true for case of relative symlink
+					if (*watchdir_resolved_part == '/') {
+						// Absolute symlink
+						watchdir_resolved = malloc(ctx_p->watchdirsize);
+						memcpy(watchdir_resolved, watchdir_resolved_part, ctx_p->watchdirsize);
+					} else {
+						// Relative symlink :(
+						char *rslash = strrchr(ctx_p->watchdir, '/');
+
+						char *watchdir_resolved_rel  = xmalloc(PATH_MAX+2);
+						size_t watchdir_resolved_rel_len = rslash-ctx_p->watchdir + 1;
+						memcpy(watchdir_resolved_rel, ctx_p->watchdir, watchdir_resolved_rel_len);
+						memcpy(&watchdir_resolved_rel[watchdir_resolved_rel_len], watchdir_resolved_part, watchdir_resolved_part_len+1);
+
+						watchdir_resolved = realpath(watchdir_resolved_rel, NULL);
+
+						free(watchdir_resolved_rel);
+					}
+
+					
+					debug(1, "Symlink resolved: watchdir \"%s\" -> \"%s\"", ctx_p->watchdir, watchdir_resolved);
+					ctx_p->watchdir = watchdir_resolved;
+				}
+				free(watchdir_resolved_part);
+#endif // VERYPARANOID else
+			}
+		}
+*/
+
+		if (!ret) {
+			parse_parameter(ctx_p, WATCHDIR, rwatchdir, PS_CORRECTION);
+			ctx_p->watchdirlen  = strlen(ctx_p->watchdir);
+			ctx_p->watchdirsize = ctx_p->watchdirlen;
+
+#ifdef VERYPARANOID
+			if (ctx_p->watchdirlen == 1) {
+				ret = errno = EINVAL;
+				error("Very-Paranoid: --watch-dir is supposed to be not \"/\".");
+			}
+#endif
+		}
+
+		if (!ret) {
+			if (ctx_p->watchdirlen == 1) {
+				ctx_p->watchdirwslash     = ctx_p->watchdir;
+				ctx_p->watchdirwslashsize = 0;
+				ctx_p->watchdir_dirlevel  = 0;
+			} else {
+				size_t size = ctx_p->watchdirlen + 2;
+				char *newwatchdir = xmalloc(size);
+				memcpy( newwatchdir, ctx_p->watchdir, ctx_p->watchdirlen);
+				ctx_p->watchdirwslash     = newwatchdir;
+				ctx_p->watchdirwslashsize = size;
+				memcpy(&ctx_p->watchdirwslash[ctx_p->watchdirlen], "/", 2);
+
+				ctx_p->watchdir_dirlevel  = fileutils_calcdirlevel(ctx_p->watchdirwslash);
+			}
+		}
+	}
+
+	if ((ctx_p->destdir != NULL) && (ctx_p->destproto == NULL)) {	// "ctx_p->destproto == NULL" means "no protocol"/"local directory"
+		char *rdestdir = realpath(ctx_p->destdir, NULL);
+		if (rdestdir == NULL) {
+			error("Got error while realpath() on \"%s\" [#1].", ctx_p->destdir);
+			ret = errno;
+		}
+
+		if (!ret) {
+			parse_parameter(ctx_p, DESTDIR, rdestdir, PS_CORRECTION);
+			ctx_p->destdirlen  = strlen(ctx_p->destdir);
+			ctx_p->destdirsize = ctx_p->destdirlen;
+
+			if (ctx_p->destdirlen == 1) {
+				ret = errno = EINVAL;
+				error("destdir is supposed to be not \"/\".");
+			}
+		}
+
+		if (!ret) {
+			size_t size = ctx_p->destdirlen  + 2;
+			char *newdestdir  = xmalloc(size);
+			memcpy( newdestdir,  ctx_p->destdir,  ctx_p->destdirlen);
+			ctx_p->destdirwslash     = newdestdir;
+			ctx_p->destdirwslashsize = size;
+			memcpy(&ctx_p->destdirwslash[ctx_p->destdirlen], "/", 2);
+		}
+	} else
+	if (ctx_p->destproto != NULL)
+		ctx_p->destdirwslash = ctx_p->destdir;
+
+	if (ctx_p->rulfpath) {
+		if (*ctx_p->rulfpath != '/') {
+			ctx_p->rulfpath     = realpath(ctx_p->rulfpath, NULL);
+
+			if (ctx_p->rulfpath == NULL)
+				error("Cannot find rules-file. Got error while realpath(\"%s\")", ctx_p->rulfpath);
+			else
+				ctx_p->rulfpathsize = 1;
+		}
+	}
+
+	debug(9, "chdir(\"%s\");", ctx_p->watchdir);
+	if (chdir(ctx_p->watchdir)) {
+		error("Got error while chdir(\"%s\")", ctx_p->watchdir);
+		ret = errno;
+	}
+/*
+	if (ctx_p->flags_values_raw[SYNCHANDLERARGS0] != NULL)
+		parse_parameter(ctx_p, SYNCHANDLERARGS0, NULL, PS_REHASH);
+
+	if (ctx_p->flags_values_raw[SYNCHANDLERARGS1] != NULL)
+		parse_parameter(ctx_p, SYNCHANDLERARGS1, NULL, PS_REHASH);
+*/
 	{
 		int n = 0;
 		while (n < SHARGS_MAX) {
@@ -2366,14 +2552,6 @@ int main(int _argc, char *_argv[]) {
 				i++;
 			}
 		}
-	}
-
-	debug(4, "ncpus == %u", ncpus);
-	debug(4, "debugging flags: %u %u %u %u", ctx_p->flags[OUTPUT_METHOD], ctx_p->flags[QUIET], ctx_p->flags[VERBOSE], ctx_p->flags[DEBUG]);
-
-	if (chdir(ctx_p->watchdir)) {
-		error("Got error while chdir(\"%s\")", ctx_p->watchdir);
-		ret = errno;
 	}
 
 	ctx_p->state = STATE_STARTING;
@@ -2568,137 +2746,6 @@ int main(int _argc, char *_argv[]) {
 	}
 #endif
 
-	if (ctx_p->watchdir != NULL) {
-		char *rwatchdir = realpath(ctx_p->watchdir, NULL);
-		if (rwatchdir == NULL) {
-			error("Got error while realpath() on \"%s\" [#0].", ctx_p->watchdir);
-			ret = errno;
-		}
-
-		stat64_t stat64={0};
-		if (lstat64(ctx_p->watchdir, &stat64)) {
-			error("Cannot lstat64() on \"%s\"", ctx_p->watchdir);
-			if (!ret)
-				ret = errno;
-		} else {
-			if (ctx_p->flags[EXCLUDEMOUNTPOINTS])
-				ctx_p->st_dev = stat64.st_dev;
-			if ((stat64.st_mode & S_IFMT) == S_IFLNK) {
-				// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
-				// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
-				// it disables filters, because exclude-list will be empty.
-#ifdef VERYPARANOID
-				error("Watch dir cannot be symlink, but \"%s\" is a symlink.", ctx_p->watchdir);
-				ret = EINVAL;
-#else
-				char *watchdir_resolved_part = xcalloc(1, PATH_MAX+2);
-				ssize_t r = readlink(ctx_p->watchdir, watchdir_resolved_part, PATH_MAX+1);
-	
-				if (r>=PATH_MAX) {	// TODO: check if it's possible
-					ret = errno = EINVAL;
-					error("Too long file path resolved from symbolic link \"%s\"", ctx_p->watchdir);
-				} else
-				if (r<0) {
-					error("Cannot resolve symbolic link \"%s\": readlink() error", ctx_p->watchdir);
-					ret = EINVAL;
-				} else {
-					char *watchdir_resolved;
-#ifdef VERYPARANOID
-					if (ctx_p->watchdirsize)
-						if (ctx_p->watchdir != NULL)
-							free(ctx_p->watchdir);
-#endif
-
-					size_t watchdir_resolved_part_len = strlen(watchdir_resolved_part);
-					ctx_p->watchdirsize = watchdir_resolved_part_len+1;	// Not true for case of relative symlink
-					if (*watchdir_resolved_part == '/') {
-						// Absolute symlink
-						watchdir_resolved = malloc(ctx_p->watchdirsize);
-						memcpy(watchdir_resolved, watchdir_resolved_part, ctx_p->watchdirsize);
-					} else {
-						// Relative symlink :(
-						char *rslash = strrchr(ctx_p->watchdir, '/');
-
-						char *watchdir_resolved_rel  = xmalloc(PATH_MAX+2);
-						size_t watchdir_resolved_rel_len = rslash-ctx_p->watchdir + 1;
-						memcpy(watchdir_resolved_rel, ctx_p->watchdir, watchdir_resolved_rel_len);
-						memcpy(&watchdir_resolved_rel[watchdir_resolved_rel_len], watchdir_resolved_part, watchdir_resolved_part_len+1);
-
-						watchdir_resolved = realpath(watchdir_resolved_rel, NULL);
-
-						free(watchdir_resolved_rel);
-					}
-
-					
-					debug(1, "Symlink resolved: watchdir \"%s\" -> \"%s\"", ctx_p->watchdir, watchdir_resolved);
-					ctx_p->watchdir = watchdir_resolved;
-				}
-				free(watchdir_resolved_part);
-#endif // VERYPARANOID else
-			}
-		}
-
-		if (!ret) {
-			ctx_p->watchdir     = rwatchdir;
-			ctx_p->watchdirlen  = strlen(ctx_p->watchdir);
-			ctx_p->watchdirsize = ctx_p->watchdirlen;
-
-#ifdef VERYPARANOID
-			if (ctx_p->watchdirlen == 1) {
-				ret = errno = EINVAL;
-				error("Very-Paranoid: --watch-dir is supposed to be not \"/\".");
-			}
-#endif
-		}
-
-		if (!ret) {
-			if (ctx_p->watchdirlen == 1) {
-				ctx_p->watchdirwslash     = ctx_p->watchdir;
-				ctx_p->watchdirwslashsize = 0;
-				ctx_p->watchdir_dirlevel  = 0;
-			} else {
-				size_t size = ctx_p->watchdirlen + 2;
-				char *newwatchdir = xmalloc(size);
-				memcpy( newwatchdir, ctx_p->watchdir, ctx_p->watchdirlen);
-				ctx_p->watchdirwslash     = newwatchdir;
-				ctx_p->watchdirwslashsize = size;
-				memcpy(&ctx_p->watchdirwslash[ctx_p->watchdirlen], "/", 2);
-
-				ctx_p->watchdir_dirlevel  = fileutils_calcdirlevel(ctx_p->watchdirwslash);
-			}
-		}
-	}
-
-	if ((ctx_p->destdir != NULL) && (ctx_p->destproto == NULL)) {	// "ctx_p->destproto == NULL" means "no protocol"/"local directory"
-		char *rdestdir = realpath(ctx_p->destdir, NULL);
-		if(rdestdir == NULL) {
-			error("Got error while realpath() on \"%s\" [#1].", ctx_p->destdir);
-			ret = errno;
-		}
-
-		if (!ret) {
-			ctx_p->destdir     = rdestdir;
-			ctx_p->destdirlen  = strlen(ctx_p->destdir);
-			ctx_p->destdirsize = ctx_p->destdirlen;
-
-			if(ctx_p->destdirlen == 1) {
-				ret = errno = EINVAL;
-				error("destdir is supposed to be not \"/\".");
-			}
-		}
-
-		if (!ret) {
-			size_t size = ctx_p->destdirlen  + 2;
-			char *newdestdir  = xmalloc(size);
-			memcpy( newdestdir,  ctx_p->destdir,  ctx_p->destdirlen);
-			ctx_p->destdirwslash     = newdestdir;
-			ctx_p->destdirwslashsize = size;
-			memcpy(&ctx_p->destdirwslash[ctx_p->destdirlen], "/", 2);
-		}
-	} else
-	if (ctx_p->destproto != NULL)
-		ctx_p->destdirwslash = ctx_p->destdir;
-
 #ifdef CGROUP_SUPPORT
 	if (ctx_p->flags[FORBIDDEVICES]) {
 		error_on(clsync_cgroup_init(ctx_p));
@@ -2870,17 +2917,14 @@ int main(int _argc, char *_argv[]) {
 */
 	main_cleanup(ctx_p);
 
-	if (ctx_p->watchdirsize)
-		free(ctx_p->watchdir);
-
 	if (ctx_p->watchdirwslashsize)
 		free(ctx_p->watchdirwslash);
 
-	if (ctx_p->destdirsize)
-		free(ctx_p->destdir);
-
 	if (ctx_p->destdirwslashsize)
 		free(ctx_p->destdirwslash);
+
+	if (ctx_p->rulfpathsize)
+		free(ctx_p->rulfpath);
 
 	error_deinit();
 	ctx_cleanup(ctx_p);
