@@ -41,18 +41,22 @@ run_example_cleanup_failure() {
 }
 
 # Run example script
+run_example_counter=0
 run_example() {
 	MODE="$1"; shift;
 
-	export CLSYNC_PIDFILE="/tmp/clsync-example-$MODE.pid"
+	export CLSYNC_PIDFILE="/tmp/clsync-example-$MODE.$$.${run_example_counter}.pid"
+
+	run_example_counter=$(( $run_example_counter + 1 ))
 
 	rm -rf "examples/testdir"/*/*
 	mkdir -p "examples/testdir/to" "examples/testdir/from"
 
 	trap run_example_cleanup_failure INT TERM
-	cd examples
-	bash -x clsync-start-"$MODE".sh --background --pid-file "$CLSYNC_PIDFILE" --config-file '/NULL/' -w1 -t1 -d9 $@
-	cd -
+	(
+		cd examples
+		bash -x clsync-start-"$MODE".sh --background --pid-file "$CLSYNC_PIDFILE" --config-file '/NULL/' -w1 -t1 -d0 $@
+	)
 
 	sleep 1
 	mkdir -p examples/testdir/from/a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p/q/r/s/t/u/v/w/x/y/z/DIR
@@ -147,9 +151,10 @@ if true; then
 	export PATH="$(pwd):$PATH"
 	build_test --enable-cluster --enable-debug --enable-paranoid=2 --with-capabilities --without-mhash
 	run_example rsyncdirect
-	run_example rsyncdirect --splitting=thread
-	run_example rsyncdirect --splitting=process
-	run_example rsyncshell
+	run_example rsyncdirect --splitting=thread --threading=off
+	run_example rsyncdirect --splitting=process --threading=off
+	run_example rsyncdirect --threading=safe
+#	run_example rsyncshell
 #	run_example rsyncso
 	#run_example so
 	#run_example cluster
