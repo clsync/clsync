@@ -2559,6 +2559,19 @@ clsync -Msimple -S pdcp -W /opt/global -b -Y syslog -- -a %INCLUDE-LIST% %INCLUD
 clsync -Mdirect -S uftp -W/opt/global --background=1 --output=syslog -- -M 248.225.233.1 %INCLUDE-LIST%
 .RE
 
+.B A dry running to see
+.BR rsync (1)
+.B arguments that clsync will use:
+.RS
+clsync -Mrsyncdirect -S echo -W/path/to/source_dir -D/path/to/destination_dir
+.RE
+
+.B An another dry running to look how clsync will call
+.BR pdcp (1):
+.RS
+clsync -Msimple -S echo -W /opt/global -b0 -- pdcp -a %INCLUDE-LIST% %INCLUDE-LIST%
+.RE
+
 More working examples you can try out in "/usr/share/doc/clsync/examples/"
 directory. Copy this directory somewhere (e.g. into "/tmp"). And try to run
 "clsync-start-rsync.sh" in there. Any files/directories modifications in
