@@ -103,34 +103,34 @@ if true; then
 
 	# clsync enabled
 	a0="--enable-clsync"
-	for a1 in "--enable-cluster --with-mhash" "--enable-cluster --without-mhash" "--disable-cluster"; do
-	for a2 in "--enable-debug" "--disable-debug"; do
+	for a1 in "--enable-cluster" "--disable-cluster"; do
+#	for a2 in "--enable-debug" "--disable-debug"; do
 	for a3 in "--enable-paranoid=0" "--enable-paranoid=1" "--enable-paranoid=2" ; do
 	for a4 in "--with-capabilities" "--without-capabilities"; do
 	for a5 in "--enable-socket" "--disable-socket"; do
 	for a6 in "--enable-socket-library" "--disable-socket-library"; do
 	for a7 in "--enable-highload-locks" ""; do
-	for a8 in "--with-libcgroup" "--without-libcgroup"; do
+#	for a8 in "--with-libcgroup" "--without-libcgroup"; do
 #	for a9 in "--with-libseccomp" "--without-libseccomp"; do
 		arg="$a0 $a1 $a2 $a3 $a4 $a5 $a6 $a7 $a8 $a9"
 		build_test "$arg"
+	done
+	done
+	done
+	done
+	done
+	done
 #	done
-	done
-	done
-	done
-	done
-	done
-	done
-	done
-	done
+#	done
+#	done
 
 	# clsync disabled, libclsync enabled
 	a0="--disable-clsync --enable-socket-library"
-	for a2 in "--enable-debug" "--disable-debug"; do
+#	for a2 in "--enable-debug" "--disable-debug"; do
 	for a3 in "--enable-paranoid=0" "--enable-paranoid=1" "--enable-paranoid=2" ; do
 		arg="$a0 $a1 $a2"
 		build_test "$arg"
-	done
+#	done
 	done
 
 	# clsync disabled, libclsync disabled
@@ -145,8 +145,9 @@ if true; then
 	export CFLAGS="$CFLAGS --coverage -O0"
 	export PATH="$(pwd):$PATH"
 	build_test --enable-cluster --enable-debug --enable-paranoid=2 --with-capabilities --without-mhash
-	run_example rsyncdirect --thread-splitting
 	run_example rsyncdirect
+	run_example rsyncdirect --splitting=thread
+	run_example rsyncdirect --splitting=process
 	run_example rsyncshell
 #	run_example rsyncso
 	#run_example so
