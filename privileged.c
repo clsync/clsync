@@ -39,7 +39,7 @@
 #endif
 
 #include <unistd.h>			// execvp()
-
+#include <glib.h>			// g_atomic_int_set()
 
 #ifdef UNSHARE_SUPPORT
 # include <sched.h>			// unshare()
