@@ -1,5 +1,6 @@
 [![Build Status](https://travis-ci.org/xaionaro/clsync.png?branch=master)](https://travis-ci.org/xaionaro/clsync)
 [![Coverage Status](https://coveralls.io/repos/xaionaro/clsync/badge.png)](https://coveralls.io/r/xaionaro/clsync)
+[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/xaionaro/clsync?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 clsync
 ======
