@@ -666,15 +666,23 @@ and/or
 .BR chmod (1)]
 than reasonable signature will be "uid,gid".
 
-Full example: clsync \-w5 \-t5 \-T5 \-x1 \-W /var/www/site.example.org/root \-Mdirect \-Schown \-\-uid 0 \-\-gid 0 \-Ysyslog \-b1 \-\-modification\-signature uid,gid \-\- \-\-from=root www\-data:www\-data %INCLUDE\-LIST%
+Full example: clsync \-w5 \-t5 \-T5 \-x1 \-W /var/www/site.example.org/root
+\-Mdirect \-Schown \-\-uid 0 \-\-gid 0 \-Ysyslog \-b1
+\-\-modification\-signature uid,gid \-\- \-\-from=root www\-data:www\-data
+%INCLUDE\-LIST%
 .RE
 .B "bi\-directional syncing"
 .RS
-If you're going to setup bi\-directional syncing then you may use \-\-modification\-signature "*" to prevent sync loop between servers.
+If you're going to setup bi\-directional syncing then you may use
+\-\-modification\-signature "*" to prevent sync loop between servers.
 .RE
 .B Not enough CPU
 .RS
-If rsync eats too many CPU with rechecking hashsums of files on their dry open()/close() due to some hacky script (for example "chown -R www-data:www-data" in cron) then you can use \-\-modification\-signature "dev,ino,mode,uid,gid,rdev,size,atime,mtime" (without "blksize", "blocks", "nlink" and "ctime")
+If rsync eats too many CPU with rechecking hashsums of files on their dry
+open()/close() due to some hacky script (for example "chown -R
+www-data:www-data" in cron) then you can use \-\-modification\-signature
+"dev,ino,mode,uid,gid,rdev,size,atime,mtime" (without "blksize", "blocks",
+"nlink" and "ctime")
 .RE
 .RE
 
@@ -930,7 +938,10 @@ but also syncs events collected while the initial syncing.
 
 Unlike
 .I \-\-only\-initialsync
-this option uses FS monitor subsystem to monitor for new events while the initial syncing. This may reduce performance. On the other hand this way may be used to be sure, that everything is synced at the moment before clsync will exit.
+this option uses FS monitor subsystem to monitor for new events while the
+initial syncing. This may reduce performance. On the other hand this way
+may be used to be sure, that everything is synced at the moment before clsync
+will exit.
 
 Is not set by default.
 .RE
@@ -1225,7 +1236,8 @@ with
 
 If there's a
 .BR capabilities (7)
-support then the default value is "nobody" (or "65534" if "nobody" not found), otherwise the option is not set by default;
+support then the default value is "nobody" (or "65534" if "nobody" not found),
+otherwise the option is not set by default;
 .PP
 .RE
 
@@ -1239,7 +1251,8 @@ with
 
 If there's a
 .BR capabilities (7)
-support then the default value is "nogroup" (or "65534" if "nogroup" not found), otherwise the option is not set by default;
+support then the default value is "nogroup" (or "65534" if "nogroup" not
+found), otherwise the option is not set by default;
 .PP
 .RE
 
@@ -2011,14 +2024,17 @@ loads
 .I sync-handler
 as a shared library with
 .BR dlopen (3)
-and calls function "int clsyncapi_rsync(const char *inclist, const char *exclist)" from it
+and calls function "int clsyncapi_rsync(const char *inclist, const char
+*exclist)" from it
 for every sync.
 .br
 .B inclist
-is a path to file with rules for "\-\-include\-from" option of rsync. This argument is always not NULL.
+is a path to file with rules for "\-\-include\-from" option of rsync.
+This argument is always not NULL.
 .br
 .B exclist
-is a path to file with rules for "\-\-exclude\-from" option of rsync. This argument is NULL if
+is a path to file with rules for "\-\-exclude\-from" option of rsync.
+This argument is NULL if
 .B \-\-rsync\-prefer\-include
 is set.
 .br
@@ -2523,36 +2539,46 @@ clsync -w0 -t0 -T0 -Mrsyncdirect -W/path/to/source_dir -D/path/to/destination_di
 
 .B Making two directories synchronous:
 .RS
-clsync -Mrsyncdirect --background -z /var/run/clsync0.pid --output syslog -Mrsyncdirect -W/path/to/dir1 -D/path/to/dir2 --modification-signature '*'
+clsync -Mrsyncdirect --background -z /var/run/clsync0.pid --output syslog
+-Mrsyncdirect -W/path/to/dir1 -D/path/to/dir2 --modification-signature '*'
 .br
-clsync -Mrsyncdirect --background -z /var/run/clsync1.pid --output syslog -Mrsyncdirect -W/path/to/dir2 -D/path/to/dir1 --modification-signature '*'
+clsync -Mrsyncdirect --background -z /var/run/clsync1.pid --output syslog
+-Mrsyncdirect -W/path/to/dir2 -D/path/to/dir1 --modification-signature '*'
 .RE
 
 .B Fixing privileges of a web-site:
 .RS
-clsync -w3 -t3 -T3 -x1 -W/var/www/site.example.org/root -Mdirect -Schown --uid 0 --gid 0 -Ysyslog -b1 --modification-signature uid,gid -- --from=root www-data:www-data %INCLUDE-LIST%
+clsync -w3 -t3 -T3 -x1 -W/var/www/site.example.org/root -Mdirect -Schown --uid
+0 --gid 0 -Ysyslog -b1 --modification-signature uid,gid -- --from=root
+www-data:www-data %INCLUDE-LIST%
 .RE
 
 .B "'Atomic' sync:"
 .RS
-clsync --exit-on-no-events --max-iterations=20 --mode=rsyncdirect -W/var/www_new -Srsync -- %RSYNC-ARGS% /var/www_new/ /var/www/
+clsync --exit-on-no-events --max-iterations=20 --mode=rsyncdirect
+-W/var/www_new -Srsync -- %RSYNC-ARGS% /var/www_new/ /var/www/
 .RE
 
 .B Moving a web-server:
 .RS
-clsync --exit-on-no-events --max-iterations=20 --pre-exit-hook=/root/stop-here.sh --exit-hook=/root/start-there.sh --mode=rsyncdirect --ignore-exitcode=23,24 --retries=3 -W /var/www -S rsync -- %RSYNC-ARGS% /var/www/ rsync://clsync@another-host/var/www/
+clsync --exit-on-no-events --max-iterations=20
+--pre-exit-hook=/root/stop-here.sh --exit-hook=/root/start-there.sh
+--mode=rsyncdirect --ignore-exitcode=23,24 --retries=3 -W /var/www -S rsync
+-- %RSYNC-ARGS% /var/www/ rsync://clsync@another-host/var/www/
 .RE
 
 .B Copying files to slave-nodes using
 .BR pdcp (1):
 .RS
-clsync -Msimple -S pdcp -W /opt/global -b -Y syslog -- -a %INCLUDE-LIST% %INCLUDE-LIST%
+clsync -Msimple -S pdcp -W /opt/global -b -Y syslog -- -a %INCLUDE-LIST%
+%INCLUDE-LIST%
 .RE
 
 .B Copying files to slave-nodes using
 .BR uftp (1):
 .RS
-clsync -Mdirect -S uftp -W/opt/global --background=1 --output=syslog -- -M 248.225.233.1 %INCLUDE-LIST%
+clsync -Mdirect -S uftp -W/opt/global --background=1 --output=syslog -- -M
+248.225.233.1 %INCLUDE-LIST%
 .RE
 
 .B A dry running to see
@@ -2565,7 +2591,8 @@ clsync -Mrsyncdirect -S echo -W/path/to/source_dir -D/path/to/destination_dir
 .B An another dry running to look how clsync will call
 .BR pdcp (1):
 .RS
-clsync -Msimple -S echo -W /opt/global -b0 -- pdcp -a %INCLUDE-LIST% %INCLUDE-LIST%
+clsync -Msimple -S echo -W /opt/global -b0 -- pdcp -a %INCLUDE-LIST%
+%INCLUDE-LIST%
 .RE
 
 More working examples you can try out in "/usr/share/doc/clsync/examples/"

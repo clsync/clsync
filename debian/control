@@ -33,6 +33,7 @@ Description: examples and other documentation for clsync
  multi-threading.
 
 Package: clsync-dev
+Section: libdevel
 Architecture: any
 Depends: ${misc:Depends}
 Description: development files for clsync
@@ -42,7 +43,7 @@ Description: development files for clsync
  features as separate queue for big files, regex file filter,
  multi-threading.
 
-Package: libclsync
+Package: libclsync0
 Architecture: any
 Pre-Depends: multiarch-support
 Depends: ${shlibs:Depends}, ${misc:Depends}
@@ -54,6 +55,7 @@ Description: clsync control socket library
  multi-threading.
 
 Package: libclsync-dev
+Section: libdevel
 Architecture: any
 Depends: ${misc:Depends}
 Description: development files for libclsync
