@@ -1,1 +1,6 @@
-usr/share/doc/clsync/*
+usr/share/doc/clsync/CONTRIB
+usr/share/doc/clsync/DEVELOPING
+usr/share/doc/clsync/examples/*
+usr/share/doc/clsync/PROTOCOL
+usr/share/doc/clsync/README.md
+usr/share/doc/clsync/TODO

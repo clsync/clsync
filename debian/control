@@ -5,7 +5,7 @@ Maintainer: Artyom A Anikeev <anikeev@ut.mephi.ru>
 Uploaders: Barak A. Pearlmutter <bap@debian.org>, Dmitry Yu Okunev <dyokunev@ut.mephi.ru>
 Build-Depends: debhelper (>= 9), libglib2.0-dev (>= 2.0.0),
 	       dh-autoreconf
-Standards-Version: 3.9.4
+Standards-Version: 3.9.6
 Homepage: http://ut.mephi.ru/oss
 Vcs-Git: git://anonscm.debian.org/collab-maint/clsync.git
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=collab-maint/clsync.git
@@ -13,7 +13,7 @@ Vcs-Browser: http://anonscm.debian.org/gitweb/?p=collab-maint/clsync.git
 Package: clsync
 Recommends: rsync
 Architecture: any
-Depends: ${misc:Depends}
+Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: live sync tool based on inotify, written in GNU C
  Clsync recursively watches for source directory and executes external
  program to sync the changes. Clsync is adapted to use together with rsync.
@@ -22,6 +22,7 @@ Description: live sync tool based on inotify, written in GNU C
  multi-threading.
 
 Package: clsync-doc
+Section: doc
 Architecture: any
 Depends: ${misc:Depends}
 Description: examples and other documentation for clsync
