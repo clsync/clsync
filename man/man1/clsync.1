@@ -684,9 +684,12 @@ open()/close() due to some hacky script (for example "chown -R
 www-data:www-data" in cron)
 .br
 .B then
-you can use \-\-modification\-signature
+you can use
+.RS
+\-\-modification\-signature
 "dev,ino,mode,uid,gid,rdev,size,atime,mtime" (without "blksize", "blocks",
 "nlink" and "ctime")
+.RE
 .RE
 .RE
 
