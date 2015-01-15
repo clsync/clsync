@@ -366,18 +366,18 @@ int thread_gc(ctx_t *ctx_p) {
 	int thread_num;
 	time_t tm = time(NULL);
 	debug(3, "tm == %i; thread %p", tm, pthread_self());
-	if(!ctx_p->flags[THREADING])
+	if (!ctx_p->flags[THREADING])
 		return 0;
 
 	threadsinfo_t *threadsinfo_p = thread_info_lock();
 #ifdef PARANOID
-	if(threadsinfo_p == NULL)
+	if (threadsinfo_p == NULL)
 		return thread_info_unlock(errno);
 #endif
 
 	debug(2, "There're %i threads.", threadsinfo_p->used);
 	thread_num=-1;
-	while(++thread_num < threadsinfo_p->used) {
+	while (++thread_num < threadsinfo_p->used) {
 		int err;
 		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[thread_num];
 
@@ -385,10 +385,10 @@ int thread_gc(ctx_t *ctx_p) {
 			thread_num, threadinfo_p->thread_num, threadinfo_p->state, threadinfo_p->expiretime, tm, threadinfo_p->exitcode, 
 			threadinfo_p->errcode, threadinfo_p, threadinfo_p->pthread);
 
-		if(threadinfo_p->state == STATE_EXIT)
+		if (threadinfo_p->state == STATE_EXIT)
 			continue;
 
-		if(threadinfo_p->expiretime && (threadinfo_p->expiretime <= tm)) {
+		if (threadinfo_p->expiretime && (threadinfo_p->expiretime <= tm)) {
 			if(pthread_tryjoin_np(threadinfo_p->pthread, NULL)) {	// TODO: check this pthread_tryjoin_np() on error returnings
 				error("Debug3: thread_gc(): Thread #%i is alive too long: %lu <= %lu (started at %lu)", thread_num, threadinfo_p->expiretime, tm, threadinfo_p->starttime);
 				return thread_info_unlock(ETIME);
@@ -396,7 +396,7 @@ int thread_gc(ctx_t *ctx_p) {
 		}
 
 #ifndef VERYPARANOID
-		if(threadinfo_p->state != STATE_TERM) {
+		if (threadinfo_p->state != STATE_TERM) {
 			debug(3, "Thread #%i is busy, skipping (#0).", thread_num);
 			continue;
 		}
@@ -406,9 +406,9 @@ int thread_gc(ctx_t *ctx_p) {
 		debug(3, "Trying to join thread #%i: %p", thread_num, threadinfo_p->pthread);
 
 #ifndef VERYPARANOID
-		switch((err=pthread_join(threadinfo_p->pthread, NULL))) {
+		switch ((err=pthread_join(threadinfo_p->pthread, NULL))) {
 #else
-		switch((err=pthread_tryjoin_np(threadinfo_p->pthread, NULL))) {
+		switch ((err=pthread_tryjoin_np(threadinfo_p->pthread, NULL))) {
 			case EBUSY:
 				debug(3, "Thread #%i is busy, skipping (#1).", thread_num);
 				continue;
@@ -425,14 +425,15 @@ int thread_gc(ctx_t *ctx_p) {
 
 		}
 
-		if(threadinfo_p->errcode) {
+		if (threadinfo_p->errcode) {
 			error("Got error from thread #%i: errcode %i.", thread_num, threadinfo_p->errcode);
+			thread_info_unlock(0);
 			thread_del_bynum(thread_num);
-			return thread_info_unlock(threadinfo_p->errcode);
+			return threadinfo_p->errcode;
 		}
 
 		thread_info_unlock(0);
-		if(thread_del_bynum(thread_num))
+		if (thread_del_bynum(thread_num))
 			return errno;
 		thread_info_lock();
 	}
@@ -446,16 +447,16 @@ int thread_cleanup(ctx_t *ctx_p) {
 	threadsinfo_t *threadsinfo_p = thread_info_lock();
 
 #ifdef PARANOID
-	if(threadsinfo_p == NULL)
+	if (threadsinfo_p == NULL)
 		return thread_info_unlock(errno);
 #endif
 
 	// Waiting for threads:
 	debug(1, "There're %i opened threads. Waiting.", threadsinfo_p->used);
-	while(threadsinfo_p->used) {
+	while (threadsinfo_p->used) {
 //		int err;
 		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[--threadsinfo_p->used];
-		if(threadinfo_p->state == STATE_EXIT)
+		if (threadinfo_p->state == STATE_EXIT)
 			continue;
 		//pthread_kill(threadinfo_p->pthread, SIGTERM);
 		debug(1, "killing pid %i with SIGTERM", threadinfo_p->child_pid);
@@ -468,19 +469,19 @@ int thread_cleanup(ctx_t *ctx_p) {
 				warning("Got error from callback function.", strerror(err), err);
 */
 		char **ptr = threadinfo_p->argv;
-		while(*ptr)
+		while (*ptr)
 			free(*(ptr++));
 		free(threadinfo_p->argv);
 	}
 	debug(3, "All threads are closed.");
 
 	// Freeing
-	if(threadsinfo_p->allocated) {
+	if (threadsinfo_p->allocated) {
 		free(threadsinfo_p->threads);
 		free(threadsinfo_p->threadsstack);
 	}
 
-	if(threadsinfo_p->mutex_init) {
+	if (threadsinfo_p->mutex_init) {
 		int i=0;
 		while(i < PTHREAD_MUTEX_MAX) {
 			pthread_mutex_destroy(&threadsinfo_p->mutex[i]);

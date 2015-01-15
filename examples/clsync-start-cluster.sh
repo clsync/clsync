@@ -1,5 +1,8 @@
 #!/bin/sh
 
+echo "Is not implemented, yet!" >&2
+
+exit 1
 IFACE="$1"
 
 if [ "$IFACE" = "" ]; then
