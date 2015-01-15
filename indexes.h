@@ -26,6 +26,11 @@
 #include "error.h"
 #include "malloc.h"
 
+struct fileinfo {
+	stat64_t lstat;
+};
+typedef struct fileinfo fileinfo_t;
+
 struct indexes {
 	GHashTable *wd2fpath_ht;			// watching descriptor -> file path
 	GHashTable *fpath2wd_ht;			// file path -> watching descriptor

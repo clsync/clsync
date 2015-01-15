@@ -3,6 +3,7 @@
 #include <errno.h>
 
 // Required header:
+#include <clsync/compilerflags.h>
 #include <clsync/clsync.h>
 
 // Optional headers:
@@ -10,10 +11,10 @@
 #include <clsync/error.h>
 #include <clsync/ctx.h>
 
-struct ctx *ctx_p         = NULL;
-struct indexes *indexes_p = NULL;
+static struct ctx *ctx_p         = NULL;
+static struct indexes *indexes_p = NULL;
 
-char   *argv[11]   = {NULL};
+static const char *argv[11]   = {NULL};
 
 // Optional function, you can erase it.
 int clsyncapi_init(struct ctx *_ctx_p, struct indexes *_indexes_p) {
@@ -22,17 +23,17 @@ int clsyncapi_init(struct ctx *_ctx_p, struct indexes *_indexes_p) {
 	ctx_p = _ctx_p;
 	indexes_p = _indexes_p;
 
-	if(ctx_p->destdir == NULL) {
+	if (ctx_p->destdir == NULL) {
 		error("dest-dir is not set.");
 		return EINVAL;
 	}
 
-	if(ctx_p->flags[RSYNCPREFERINCLUDE]) {
+	if (ctx_p->flags[RSYNCPREFERINCLUDE]) {
 		error("clsync-synchandler-rsyncso.so cannot be used in conjunction with \"--rsync-prefer-include\" option.");
 		return EINVAL;
 	}
 
-	if(ctx_p->flags[THREADING]) {
+	if (ctx_p->flags[THREADING]) {
 		error("this handler is not pthread-safe.");
 		return EINVAL;
 	}
@@ -52,12 +53,12 @@ int clsyncapi_init(struct ctx *_ctx_p, struct indexes *_indexes_p) {
 int clsyncapi_rsync(const char *inclistfile, const char *exclistfile) {
 	debug(1, "inclistfile == \"%s\"; exclistfile == \"%s\"", inclistfile, exclistfile);
 
-	argv[3] = (char *)exclistfile;
-	argv[5] = (char *)inclistfile;
+	argv[3] = exclistfile;
+	argv[5] = inclistfile;
 
-	if(ctx_p->flags[DEBUG] >= 3) {
+	if (ctx_p->flags[DEBUG] >= 3) {
 		int i=0;
-		while(argv[i] != NULL) {
+		while (argv[i] != NULL) {
 			debug(3, "argv[%i] == \"%s\"", i, argv[i]);
 			i++;
 		}
@@ -65,7 +66,7 @@ int clsyncapi_rsync(const char *inclistfile, const char *exclistfile) {
 
 	// Forking
 	int pid = clsyncapi_fork(ctx_p);
-	switch(pid) {
+	switch (pid) {
 		case -1: 
 			error("Cannot fork().");
 			return errno;
@@ -75,7 +76,7 @@ int clsyncapi_rsync(const char *inclistfile, const char *exclistfile) {
 	}
 
 	int status;
-	if(waitpid(pid, &status, 0) != pid) {
+	if (waitpid(pid, &status, 0) != pid) {
 		error("Cannot waitid().");
 		return errno;
 	}

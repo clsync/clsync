@@ -68,6 +68,8 @@
 #include <libgen.h>
 #include <pthread.h>
 
+#define CLSYNC_ITSELF
+
 #include "configuration.h"
 #ifdef HAVE_CONFIG_H
 #	include "config.h"

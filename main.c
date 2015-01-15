@@ -2488,6 +2488,7 @@ int main(int _argc, char *_argv[]) {
 			error("Got error while realpath() on \"%s\" [#1].", ctx_p->destdir);
 			ret = errno;
 		}
+		debug(5, "rdestdir == \"%s\"", rdestdir);
 
 		if (!ret) {
 			parse_parameter(ctx_p, DESTDIR, rdestdir, PS_CORRECTION);
@@ -2521,6 +2522,17 @@ int main(int _argc, char *_argv[]) {
 			else
 				ctx_p->rulfpathsize = 1;
 		}
+	}
+
+	if (ctx_p->handlerfpath != NULL) {
+		char *rhandlerfpath = realpath(ctx_p->handlerfpath, NULL);
+		if (rhandlerfpath == NULL) {
+			error("Got error while realpath() on \"%s\" [#0].", ctx_p->handlerfpath);
+			ret = errno;
+		}
+		debug(5, "rhandlerfpath == \"%s\"", rhandlerfpath);
+		ctx_p->handlerfpath = rhandlerfpath;
+
 	}
 
 	debug(9, "chdir(\"%s\");", ctx_p->watchdir);
@@ -2792,7 +2804,7 @@ int main(int _argc, char *_argv[]) {
 		} 
 	}
 
-	debug(1, "%s [%s] (%p) -> %s [%s]", ctx_p->watchdir, ctx_p->watchdirwslash, ctx_p->watchdirwslash, ctx_p->destdir?ctx_p->destdir:"", ctx_p->destdirwslash?ctx_p->destdirwslash:"");
+	debug(1, "%s [%s] (%p) -> %s [%s] (%p)", ctx_p->watchdir, ctx_p->watchdirwslash, ctx_p->watchdirwslash, ctx_p->destdir?ctx_p->destdir:"", ctx_p->destdirwslash?ctx_p->destdirwslash:"", ctx_p->destdirwslash);
 
 	{
 		int rc = ctx_check(ctx_p);

@@ -3799,7 +3799,7 @@ int sync_run(ctx_t *ctx_p) {
 
 		// dlopen()
 		void *synchandler_handle = dlopen(ctx_p->handlerfpath, RTLD_NOW|RTLD_LOCAL);
-		if(synchandler_handle == NULL) {
+		if (synchandler_handle == NULL) {
 			error("Cannot load shared object file \"%s\": %s", ctx_p->handlerfpath, dlerror());
 			return -1;
 		}
@@ -3807,16 +3807,16 @@ int sync_run(ctx_t *ctx_p) {
 		// resolving init, sync and deinit functions' handlers
 		ctx_p->handler_handle = synchandler_handle;
 		ctx_p->handler_funct.init   = (api_funct_init)  dlsym(ctx_p->handler_handle, API_PREFIX"init");
-		if(ctx_p->flags[MODE] == MODE_RSYNCSO) {
+		if (ctx_p->flags[MODE] == MODE_RSYNCSO) {
 			ctx_p->handler_funct.rsync  = (api_funct_rsync)dlsym(ctx_p->handler_handle, API_PREFIX"rsync");
-			if(ctx_p->handler_funct.rsync == NULL) {
+			if (ctx_p->handler_funct.rsync == NULL) {
 				char *dlerror_str = dlerror();
 				error("Cannot resolve symbol "API_PREFIX"rsync in shared object \"%s\": %s",
 					ctx_p->handlerfpath, dlerror_str != NULL ? dlerror_str : "No error description returned.");
 			}
 		} else {
 			ctx_p->handler_funct.sync   =  (api_funct_sync)dlsym(ctx_p->handler_handle, API_PREFIX"sync");
-			if(ctx_p->handler_funct.sync == NULL) {
+			if (ctx_p->handler_funct.sync == NULL) {
 				char *dlerror_str = dlerror();
 				error("Cannot resolve symbol "API_PREFIX"sync in shared object \"%s\": %s",
 					ctx_p->handlerfpath, dlerror_str != NULL ? dlerror_str : "No error description returned.");
@@ -3825,8 +3825,8 @@ int sync_run(ctx_t *ctx_p) {
 		ctx_p->handler_funct.deinit = (api_funct_deinit)dlsym(ctx_p->handler_handle, API_PREFIX"deinit");
 
 		// running init function
-		if(ctx_p->handler_funct.init != NULL)
-			if((ret = ctx_p->handler_funct.init(ctx_p, &indexes))) {
+		if (ctx_p->handler_funct.init != NULL)
+			if ((ret = ctx_p->handler_funct.init(ctx_p, &indexes))) {
 				error("Cannot init sync-handler module.");
 				return ret;
 			}
@@ -3834,7 +3834,7 @@ int sync_run(ctx_t *ctx_p) {
 
 	// Initializing rand-generator if it's required
 
-	if(ctx_p->listoutdir)
+	if (ctx_p->listoutdir)
 		srand(time(NULL));
 
 	if (!ctx_p->flags[ONLYINITSYNC]) {

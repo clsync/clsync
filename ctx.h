@@ -395,11 +395,5 @@ struct ctx {
 };
 typedef struct ctx ctx_t;
 
-
-struct fileinfo {
-	stat64_t lstat;
-};
-typedef struct fileinfo fileinfo_t;
-
 #endif
 

@@ -62,9 +62,11 @@
 
 #endif
 
-#ifndef O_PATH
-#	warning O_PATH is not set
-#	define O_PATH 0
+#ifdef CLSYNC_ITSELF
+#	ifndef O_PATH
+#		warning O_PATH is not set
+#		define O_PATH 0
+#	endif
 #endif
 
 #endif // __PORT_HACKS_H

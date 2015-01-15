@@ -2,7 +2,9 @@ ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = examples
 
 if CLSYNC
-bin_PROGRAMS = clsync
+bin_PROGRAMS = clsync gencompilerflags
+
+gencompilerflags_SOURCES = gencompilerflags.c
 
 clsync_SOURCES = calc.c cluster.c error.c fileutils.c glibex.c		\
 	indexes.c main.c malloc.c rules.c stringex.c sync.c		\
@@ -76,7 +78,12 @@ if SOCKET
 clsync_SOURCES += socket.c control.c program.h
 endif
 
-main.o: revision.h
+gencompilerflags_CFLAGS = $(clsync_CFLAGS)
+
+main.o: compilerflags.h
+
+compilerflags.h: gencompilerflags
+	./gencompilerflags > compilerflags.h
 
 dist_man_MANS = man/man1/clsync.1
 endif
@@ -108,11 +115,14 @@ libclsync_includedir = $(includedir)/libclsync
 if CLSYNC
 clsync_include_HEADERS = \
 	clsync.h \
+	port-hacks.h \
 	configuration.h \
 	ctx.h \
 	error.h \
 	indexes.h \
-	malloc.h
+	malloc.h \
+	compilerflags.h
+
 if SOCKET
 clsync_include_HEADERS += \
 	socket.h
@@ -134,7 +144,7 @@ if LIBCLSYNC
 pkgconfig_DATA = pkgconfig/libclsync.pc
 endif
 
-CLEANFILES = revision.h
+CLEANFILES = compilerflags.h gencompilerflags
 if CLSYNC
 CLEANFILES += examples/rules
 clean-local:
