@@ -678,9 +678,13 @@ If you're going to setup bi\-directional syncing then you may use
 .RE
 .B Not enough CPU
 .RS
-If rsync eats too many CPU with rechecking hashsums of files on their dry
+.B If
+rsync eats too many CPU with rechecking hashsums of files while their dry
 open()/close() due to some hacky script (for example "chown -R
-www-data:www-data" in cron) then you can use \-\-modification\-signature
+www-data:www-data" in cron)
+.br
+.B then
+you can use \-\-modification\-signature
 "dev,ino,mode,uid,gid,rdev,size,atime,mtime" (without "blksize", "blocks",
 "nlink" and "ctime")
 .RE
