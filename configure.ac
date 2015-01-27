@@ -89,13 +89,12 @@ AM_CONDITIONAL([LIBCLSYNC], [test "x$enable_socket_library" = "xyes"])
 
 dnl --enable-unshare
 AC_ARG_ENABLE(unshare,
-AS_HELP_STRING(--enable-unshare,
-[enable support of unshare(), default: yes]), [], [enable_unshare="yes"])
+AS_HELP_STRING(--disable-unshare,
+[disable support of unshare(), default: enabled]))
 
-HAVE_UNSHARE=0
-AS_IF([ test "x$enable_unshare" = "xyes" ],
+AS_IF([ test "x$enable_unshare" != "xno" ],
 [
-	AC_CHECK_FUNC([unshare], [HAVE_UNSHARE=1], [AC_MSG_FAILURE([Cannot find function unshare()])])
+    AC_CHECK_FUNC([unshare], [HAVE_UNSHARE=1])
 ])
 
 dnl --enable-highload-locks
