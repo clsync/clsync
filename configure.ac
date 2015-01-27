@@ -169,7 +169,7 @@ dnl libcgroup check
 AC_ARG_WITH(libcgroup,
 	AS_HELP_STRING(--with-libcgroup,
 		[Enable cgroup support via libcgroup; values: no, check, yes; default: check]),
-	[],
+	,
 	[with_libcgroup=check]
 )
 
@@ -194,8 +194,7 @@ case "$with_libcgroup" in
 				AC_CHECK_HEADER(libcgroup.h, [], [AC_MSG_FAILURE([Cannot find libcgroup.h])])
 				LDFLAGS="${LDFLAGS} -lcgroup"
 				HAVE_LIBCGROUP=1
-			],
-			[]
+			]
 		)
 		;;
 esac
@@ -299,20 +298,22 @@ case "$with_kqueue" in
 			[
 				HAVE_KQUEUE=2
 			],
-			AC_CHECK_LIB([kqueue], [kqueue],
-				[
-					AC_CHECK_HEADER(sys/event.h, [
-						LDFLAGS="${LDFLAGS} -lkqueue"
-						HAVE_KQUEUE=1
-					])
-				],
-			)
+			[
+				AC_CHECK_LIB([kqueue], [kqueue],
+					[
+						AC_CHECK_HEADER(sys/event.h, [
+							LDFLAGS="${LDFLAGS} -lkqueue"
+							HAVE_KQUEUE=1
+						])
+					]
+				)
+			]
 		)
 		;;
 	native)
 		AC_CHECK_FUNC([kqueue],
 			[
-				AC_CHECK_HEADER(sys/event.h, [], [AC_MSG_FAILURE([Cannot find sys/event.h])])
+				AC_CHECK_HEADER(sys/event.h, , [AC_MSG_FAILURE([Cannot find sys/event.h])])
 				HAVE_KQUEUE=2
 			],
 			[
@@ -324,7 +325,7 @@ case "$with_kqueue" in
 	lib)
 		AC_CHECK_LIB([kqueue], [kqueue],
 			[
-				AC_CHECK_HEADER(sys/event.h, [], [AC_MSG_FAILURE([Cannot find sys/event.h])])
+				AC_CHECK_HEADER(sys/event.h, , [AC_MSG_FAILURE([Cannot find sys/event.h])])
 				LDFLAGS="${LDFLAGS} -lkqueue"
 				HAVE_KQUEUE=1
 			],
@@ -342,14 +343,16 @@ case "$with_inotify" in
 			[
 				HAVE_INOTIFY=2
 			],
-			AC_CHECK_LIB([inotify], [inotify_init],
-				[
-					AC_CHECK_HEADER(sys/inotify.h, [
-						LDFLAGS="${LDFLAGS} -linotify"
-						HAVE_INOTIFY=1
-					])
-				],
-			)
+			[
+				AC_CHECK_LIB([inotify], [inotify_init],
+					[
+						AC_CHECK_HEADER(sys/inotify.h, [
+							LDFLAGS="${LDFLAGS} -linotify"
+							HAVE_INOTIFY=1
+						])
+					]
+				)
+			]
 		)
 		;;
 	native)
@@ -404,14 +407,16 @@ case "$with_bsm" in
 			[
 				HAVE_BSM=2
 			],
-			AC_CHECK_LIB([bsm], [au_fetch_tok],
-				[
-					AC_CHECK_HEADER(bsm/libbsm.h, [
-						LDFLAGS="${LDFLAGS} -lbsm"
-						HAVE_BSM=1
-					])
-				],
-			)
+			[
+				AC_CHECK_LIB([bsm], [au_fetch_tok],
+					[
+						AC_CHECK_HEADER(bsm/libbsm.h, [
+							LDFLAGS="${LDFLAGS} -lbsm"
+							HAVE_BSM=1
+						])
+					]
+				)
+			]
 		)
 		;;
 	lib)
@@ -454,8 +459,6 @@ case "$with_libseccomp" in
 		], [], [[#include <seccomp.h>]])
 		;;
 esac
-AS_IF([test "$HAVE_CAPABILITIES" != ""], [
-])
 
 AM_CONDITIONAL([HAVE_KQUEUE],       [test "x$HAVE_KQUEUE"       != "x"])
 AM_CONDITIONAL([HAVE_INOTIFY],      [test "x$HAVE_INOTIFY"      != "x"])
