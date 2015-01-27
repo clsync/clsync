@@ -262,7 +262,7 @@ dnl tre check
 #		;;
 #esac
 
-dnl kqueue/inotify/bsm
+dnl kqueue/inotify/gio/bsm
 
 AC_ARG_WITH(kqueue,
 	AS_HELP_STRING(--with-kqueue,
@@ -476,7 +476,9 @@ AM_CONDITIONAL([HAVE_SECCOMP],      [test "x$HAVE_SECCOMP"      != "x"])
 AM_CONDITIONAL([HAVE_TRE],          [test "x$HAVE_TRE"          != "x"])
 AM_CONDITIONAL([HAVE_LIBCGROUP],    [test "x$HAVE_LIBCGROUP"    != "x"])
 
-AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' ], [AC_MSG_FAILURE([kqueue, inotify and bsm are not supported on this system])])
+AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' -a  "$HAVE_GIO" = ''],
+[AC_MSG_FAILURE([At least one monitoring engine must be enabled!
+Available (depending on system): inotify, kqueue, gio, bsm])])
 
 LIBS="${GLIB_LIBS} ${LIBS}"
 AM_CPPFLAGS="${GLIB_CFLAGS}"
