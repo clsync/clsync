@@ -87,6 +87,17 @@ AS_HELP_STRING(--enable-socket-library,
 [build libclsync socket library, default: no]))
 AM_CONDITIONAL([LIBCLSYNC], [test "x$enable_socket_library" = "xyes"])
 
+dnl --enable-unshare
+AC_ARG_ENABLE(unshare,
+AS_HELP_STRING(--enable-unshare,
+[enable support of unshare(), default: yes]), [], [enable_unshare="yes"])
+
+HAVE_UNSHARE=0
+AS_IF([ test "x$enable_unshare" = "xyes" ],
+[
+	AC_CHECK_FUNC([unshare], [HAVE_UNSHARE=1], [AC_MSG_FAILURE([Cannot find function unshare()])])
+])
+
 dnl --enable-highload-locks
 AC_ARG_ENABLE(highload-locks,
 AS_HELP_STRING(--enable-highload-locks,
@@ -154,9 +165,6 @@ AC_CHECK_FUNC([getmntent], [HAVE_GETMNTENT=1])
 
 dnl searching for pivot_root
 AC_CHECK_FUNC([pivot_root], [HAVE_PIVOTROOT=1])
-
-dnl searching for unshare
-AC_CHECK_FUNC([unshare], [HAVE_UNSHARE=1])
 
 dnl libcgroup check
 AC_ARG_WITH(libcgroup,
