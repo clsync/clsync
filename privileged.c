@@ -1747,7 +1747,9 @@ int privileged_init(ctx_t *ctx_p)
 
 	SAFE ( pthread_mutex_lock(pthread_mutex_runner_p),		return errno;);
 
+# ifdef UNSHARE_SUPPORT
 	unshare(CLONE_NEWIPC);
+# endif
 
 	switch (ctx_p->flags[SPLITTING]) {
 		case SM_THREAD: {
@@ -1792,11 +1794,13 @@ int privileged_init(ctx_t *ctx_p)
 	}
 	critical_on(!helper_isalive());
 
+# ifdef UNSHARE_SUPPORT
 	// The rest routines
 	if (ctx_p->flags[DETACH_NETWORK] == DN_NONPRIVILEGED) {
 		SAFE ( cap_enable(CAP_TO_MASK(CAP_SYS_ADMIN)),	return errno; );
 		SAFE ( unshare(CLONE_NEWNET),			return errno; );
 	}
+# endif
 	SAFE ( cap_drop(ctx_p, 0),				return errno; );
 
 	debug(4, "Waiting for the privileged thread to get prepared");
