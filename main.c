@@ -1731,18 +1731,18 @@ int configs_parse(ctx_t *ctx_p, paramsource_t paramsource) {
 		char **config_path_p = config_paths, *config_path_real = xmalloc(PATH_MAX);
 		size_t config_path_real_size=PATH_MAX;
 
-		char *homedir = getenv("HOME");
-		size_t homedir_len = strlen(homedir);
+		char  *homedir     = getenv("HOME");
+		size_t homedir_len = (homedir == NULL ? 0 :strlen(homedir));
 
-		while(*config_path_p != NULL) {
+		while (*config_path_p != NULL) {
 			size_t config_path_len = strlen(*config_path_p);
 
-			if(config_path_len+homedir_len+3 > config_path_real_size) {
+			if (config_path_len+homedir_len+3 > config_path_real_size) {
 				config_path_real_size = config_path_len+homedir_len+3;
 				config_path_real      = xmalloc(config_path_real_size);
 			}
 
-			if(*config_path_p[0] != '/') {
+			if ((*config_path_p[0] != '/') && (homedir_len >= 0)) {
 				memcpy(config_path_real, homedir, homedir_len);
 				config_path_real[homedir_len] = '/';
 				memcpy(&config_path_real[homedir_len+1], *config_path_p, config_path_len+1);
@@ -1750,7 +1750,7 @@ int configs_parse(ctx_t *ctx_p, paramsource_t paramsource) {
 				memcpy(config_path_real, *config_path_p, config_path_len+1);
 
 			debug(1, "Trying config-file \"%s\" (case #1)", config_path_real);
-			if(!g_key_file_load_from_file(gkf, config_path_real, G_KEY_FILE_NONE, NULL)) {
+			if (!g_key_file_load_from_file(gkf, config_path_real, G_KEY_FILE_NONE, NULL)) {
 				debug(1, "Cannot open/parse file \"%s\"", config_path_real);
 				config_path_p++;
 				continue;
