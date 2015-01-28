@@ -2526,12 +2526,16 @@ int main(int _argc, char *_argv[]) {
 
 	if (ctx_p->handlerfpath != NULL) {
 		char *rhandlerfpath = realpath(ctx_p->handlerfpath, NULL);
+/*
 		if (rhandlerfpath == NULL) {
 			error("Got error while realpath() on \"%s\" [#0].", ctx_p->handlerfpath);
 			ret = errno;
 		}
 		debug(5, "rhandlerfpath == \"%s\"", rhandlerfpath);
-		ctx_p->handlerfpath = rhandlerfpath;
+		ctx_p->handlerfpath = rhandlerfpath;*/
+
+		if (rhandlerfpath != NULL) 
+			ctx_p->handlerfpath = rhandlerfpath;
 
 	}
 
