@@ -1821,8 +1821,6 @@ Is replaced by integer of events IDs.
 Is replaced by absolute path of a file/dir to be synced.
 .RE
 .RE
-
-Not recommended. Not well tested.
 .RE
 
 case
@@ -1832,11 +1830,6 @@ Executes for every sync:
 .RS
 .I sync\-handler sync\-handler\-arguments
 .RE
-
-.I sync\-handler
-is supposed to be a path to
-.BR cp "-like"
-utility.
 
 Default
 .I sync\-handler\-arguments
@@ -1852,8 +1845,6 @@ Additional substitutions:
 Is replaced by a list of relative paths of files/dirs to be synced.
 .RE
 .RE
-
-Recommended case.
 .RE
 
 case
