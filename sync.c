@@ -3595,19 +3595,21 @@ void sync_sigchld() {
 int *sync_sighandler_exitcode_p = NULL;
 int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 	int signal = 0, ret;
+	sigset_t sigset_full;
 	ctx_t *ctx_p		 = sighandler_arg_p->ctx_p;
 //	indexes_t *indexes_p	 = sighandler_arg_p->indexes_p;
 	pthread_t pthread_parent = sighandler_arg_p->pthread_parent;
-	sigset_t *sigset_p	 = sighandler_arg_p->sigset_p;
+//	sigset_t *sigset_p	 = sighandler_arg_p->sigset_p;
 	int *exitcode_p		 = sighandler_arg_p->exitcode_p;
 
 	sync_sighandler_exitcode_p = exitcode_p;
 
 	sethandler_sigchld(sync_sigchld);
 
+	sigfillset(&sigset_full);
 	while (state_p == NULL || ((ctx_p->state != STATE_TERM) && (ctx_p->state != STATE_EXIT))) {
-		debug(3, "waiting for signal");
-		ret = sigwait(sigset_p, &signal);
+		debug(3, "waiting for signal (is sigset filled == %i)", sigismember(&sigset_full, SIGTERM));
+		ret = sigwait(&sigset_full, &signal);
 
 		if (state_p == NULL) {
 
