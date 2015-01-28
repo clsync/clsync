@@ -4,8 +4,8 @@
 #
 Summary:	Live sync tool based on inotify
 Name: 		clsync
-Version:	0.4.1
-Release:	1
+Version:	@VERSION@
+Release:	@BUILDNUM@
 License: 	GPL-3+
 Group:		Applications/System
 URL: 		https://github.com/xaionaro/clsync
