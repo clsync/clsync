@@ -1680,11 +1680,6 @@ int privileged_init(ctx_t *ctx_p)
 #endif
 
 #ifdef CAPABILITIES_SUPPORT
-# ifdef HL_LOCKS
-	if (ncpus == 1)
-		hl_shutdown(HLLOCK_HANDLER);
-# endif
-
 	if (ctx_p->flags[SPLITTING] == SM_OFF) {
 #endif
 
@@ -1792,6 +1787,12 @@ int privileged_init(ctx_t *ctx_p)
 		default:
 			critical("Invalid ctx_p->flags[SPLITTING]: %i", ctx_p->flags[SPLITTING]);
 	}
+
+# ifdef HL_LOCKS
+	if (ncpus == 1)
+		hl_shutdown(HLLOCK_HANDLER);
+# endif
+
 	critical_on(!helper_isalive());
 
 # ifdef UNSHARE_SUPPORT
