@@ -99,9 +99,9 @@ AS_IF([ test "x$enable_unshare" != "xno" ],
 
 dnl --enable-highload-locks
 AC_ARG_ENABLE(highload-locks,
-AS_HELP_STRING(--enable-highload-locks,
-[enable locks for high loaded instances (it requires more CPU, but it's faster) for --thread-splitting [not well tested, can cause deadlocks with 100% CPU utilization], default: no]))
-AM_CONDITIONAL([HLLOCKS], [test "x$enable_highload_locks" = "xyes"])
+AS_HELP_STRING(--disable-highload-locks,
+[disable locks for high loaded instances with --splitting={thread,process} [which are not enough tested and can cause deadlocks with 100% CPU utilization]]))
+AM_CONDITIONAL([HLLOCKS], [test "x$enable_highload_locks" != "xno"])
 
 dnl --enable-debug
 AC_ARG_ENABLE(debug,
