@@ -1959,6 +1959,25 @@ int fileischanged(ctx_t *ctx_p, indexes_t *indexes_p, const char *path_rel, stat
 	return 1;
 }
 
+static inline int sync_indexes_fpath2ei_addfixed(ctx_t *ctx_p, indexes_t *indexes_p, const char *fpath, eventinfo_t *evinfo) {
+	static const char fpath_dot[] = ".";
+	const char *fpath_fixed;
+
+	fpath_fixed = fpath;
+	switch (ctx_p->flags[MODE]) {
+		case MODE_DIRECT:
+
+			// If fpath is empty (that means CWD) then assign it to "."
+			if (!*fpath)
+				fpath_fixed = fpath_dot;
+			break;
+		default:
+			break;
+	}
+	
+	return indexes_fpath2ei_add(indexes_p, strdup(fpath_fixed), evinfo);
+}
+
 int sync_prequeue_loadmark
 (
 		int monitored,
@@ -2145,7 +2164,8 @@ int sync_prequeue_loadmark
 	     );
 
 	if (isnew)
-		indexes_fpath2ei_add(indexes_p, strdup(path_rel), evinfo);
+		// Fix the path (if required) and call indexes_fpath2ei_add() to remeber the new object to be synced
+		sync_indexes_fpath2ei_addfixed(ctx_p, indexes_p, path_rel, evinfo);
 
 	return 0;
 }
@@ -2288,7 +2308,9 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 
 	if (isnew) {
 		debug(4, "Collecting \"%s\"", fpath);
-		indexes_fpath2ei_add(indexes_p, strdup(fpath), evinfo_idx);
+
+		// Fix the path (if required) and call indexes_fpath2ei_add() to remeber the new object to be synced
+		sync_indexes_fpath2ei_addfixed(ctx_p, indexes_p, fpath, evinfo_idx);
 	} else
 		free(fpath);
 
