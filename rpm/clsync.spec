@@ -1,3 +1,20 @@
+#
+# Copyright (C) 2015 Enrique Martinez <enmaca@hotmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
 Summary:	Live sync tool based on inotify
 Name: 		clsync
 Version:	0.4.1
@@ -52,7 +69,7 @@ cat > %{buildroot}/etc/clsync/clsync.conf <<EOF
 # This configuration is a simple test
 [default]
 watch-dir = /var/tmp/clsync/from
-rules-file = /etc/clsync/rules/sample
+rules-file = /etc/clsync/rules/default
 destination-dir = /var/tmp/clsync/to
 mode = rsyncdirect
 sync-handler = /usr/bin/rsync
@@ -62,7 +79,7 @@ full-initialsync = 1
 retries = 3
 EOF
 
-cat > %{buildroot}/etc/clsync/rules/sample <<EOF
+cat > %{buildroot}/etc/clsync/rules/default <<EOF
 -d^[Dd]ont[Ss]ync\$
 +*.*
 EOF
@@ -78,8 +95,10 @@ rm -rf %{buildroot}
 %dir /var/tmp/clsync/from
 %dir /var/tmp/clsync/to
 %dir /var/run/clsync
-%config(noreplace) /etc/init.d/clsync 
-/etc/clsync/*
+%config(noreplace) /etc/clsync/clsync.conf
+/etc/clsync/rules/default
+/etc/init.d/clsync
+
 
 %files devel
 %{_includedir}/clsync/clsync.h

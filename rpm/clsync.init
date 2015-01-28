@@ -1,5 +1,20 @@
 #! /bin/sh
 #
+# Copyright (C) 2015 Enrique Martinez <enmaca@hotmail.com>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
 # clsync
 # chkconfig:    2345 98 02
 # pidfile:     /var/run/clsync/clsync.pid
@@ -24,25 +39,35 @@ RETVAL=0
 # See how we were called.
 case "$1" in
 start)
-echo -n "Starting clsync: "
-daemon $CLSYNCCMD --pid-file /var/run/clsync/clsync.pid
-RETVAL=$?
-echo
-[ $RETVAL = 0 ] && touch /var/lock/subsys/nosearch_cached
-;;
+	echo -n "Starting clsync: "
+	daemon $CLSYNCCMD --pid-file /var/run/clsync/clsync.pid
+	RETVAL=$?
+	echo
+	[ $RETVAL = 0 ] && touch /var/lock/subsys/nosearch_cached
+	;;
 stop)
-echo -n "Stopping clsync: "
-killproc -p /var/run/clsync/clsync.pid
-RETVAL=$?
-echo
-[ $RETVAL = 0 ] && rm -f /var/lock/subsys/clsync
-;;
+	echo -n "Stopping clsync: "
+	killproc -p /var/run/clsync/clsync.pid
+	RETVAL=$?
+	echo
+	[ $RETVAL = 0 ] && rm -f /var/lock/subsys/clsync
+	;;
 restart)
-$0 stop
-$0 start
-;;
+	$0 stop
+	$0 start
+	;;
+reload)
+	echo -n "Reloading clsync: "
+	killproc -p /var/run/clsync/clsync.pid clsync -HUP
+	RETVAL=$?
+	echo
+	;;
+status)
+	status -p /var/run/clsync/clsync.pid clsync
+	RETVAL=$?
+	;;
 *)
-echo "Usage: $0 {start|stop}"
+echo "Usage: $0 (start|stop|reload|status)"
 exit 1
 esac
 
