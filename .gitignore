@@ -1,10 +1,12 @@
 # dynamical headers:
 /revision.h
+/compilerflags.h
 
 # complied:
 *.o
 *.lo
 *.la
+/gencompilerflags
 /clsync
 /clsync-debug
 /.libs
