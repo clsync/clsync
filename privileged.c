@@ -59,7 +59,7 @@
 #include "privileged.h"
 
 #ifdef SECCOMP_SUPPORT
-# include <seccomp.h>			// __NR_*
+# include <syscall.h>			// __NR_*
 # include <sys/prctl.h>			// prctl()
 # include <linux/filter.h>		// struct sock_filter
 # include <linux/seccomp.h>		// SECCOMP_RET_*

@@ -144,6 +144,51 @@ AS_IF(
 )
 AS_IF([test $paranoid -eq 2], [CPPFLAGS="${CPPFLAGS} -DVERYPARANOID"])
 
+dnl searching for seccomp
+AC_ARG_ENABLE(seccomp,
+	AS_HELP_STRING(--enable-seccomp,
+		[Enable seccomp support be able to forbid extra syscalls; values: no, check, yes; default: check]),
+	,
+	[enable_seccomp=check]
+)
+
+case "$enable_seccomp" in
+	yes)
+		AC_CHECK_TYPES([struct seccomp_data], [HAVE_SECCOMP=1], [AC_MSG_FAILURE([Cannot find valid linux/seccomp.h])], [[#include <linux/seccomp.h>]])
+		;;
+	check)
+		AC_CHECK_TYPES([struct seccomp_data], [HAVE_SECCOMP=1], ,                                                      [[#include <linux/seccomp.h>]])
+		;;
+esac
+
+dnl capabilities check
+AC_ARG_ENABLE(capabilities,
+	AS_HELP_STRING(--enable-capabilities,
+		[Enable linux capabilities support; values: no, check, yes; default: check]),
+	,
+	[enable_capabilities=check]
+)
+
+case "$enable_capabilities" in
+	yes)
+		AC_CHECK_FUNC([capset],
+			[
+				AC_CHECK_HEADER(sys/capability.h, [HAVE_CAPABILITIES=2], [AC_MSG_FAILURE([Cannot find sys/capability.h])])
+			],
+			[
+				AC_MSG_FAILURE([There is no capabilities support on this system])
+			]
+		)
+		;;
+	check)
+		AC_CHECK_FUNC([capset],
+			[
+				AC_CHECK_HEADER(sys/capability.h, [HAVE_CAPABILITIES=2])
+			]
+		)
+		;;
+esac
+
 # Checks for programs.
 AC_PROG_CC_C99
 AC_PROG_INSTALL
@@ -194,34 +239,6 @@ case "$with_libcgroup" in
 				AC_CHECK_HEADER(libcgroup.h, [], [AC_MSG_FAILURE([Cannot find libcgroup.h])])
 				LDFLAGS="${LDFLAGS} -lcgroup"
 				HAVE_LIBCGROUP=1
-			]
-		)
-		;;
-esac
-
-dnl capabilities check
-AC_ARG_WITH(capabilities,
-	AS_HELP_STRING(--with-capabilities,
-		[Enable linux capabilities support; values: no, check, yes; default: check]),
-	[],
-	[with_capabilities=check]
-)
-
-case "$with_capabilities" in
-	yes)
-		AC_CHECK_FUNC([capset],
-			[
-				AC_CHECK_HEADER(sys/capability.h, [HAVE_CAPABILITIES=2], [AC_MSG_FAILURE([Cannot find sys/capability.h])])
-			],
-			[
-				AC_MSG_FAILURE([There is no capabilities support on this system])
-			]
-		)
-		;;
-	check)
-		AC_CHECK_FUNC([capset],
-			[
-				AC_CHECK_HEADER(sys/capability.h, [HAVE_CAPABILITIES=2])
 			]
 		)
 		;;
@@ -436,29 +453,6 @@ esac
 #AC_CHECK_PROG([HAVE_DTRACEPIPE], [dtrace], [found])
 
 AS_IF([test "$HAVE_INOTIFY" != ""], [AC_CHECK_FUNC([inotify_init1], [], [INOTIFY_OLD=1])])
-
-dnl searching for seccomp
-AC_ARG_WITH(libseccomp,
-	AS_HELP_STRING(--with-libseccomp,
-		[Enable seccomp support be able to forbid extra syscalls; values: no, check, yes; default: check]),
-	[],
-	[with_libseccomp=check]
-)
-
-case "$with_libseccomp" in
-	yes)
-		AC_CHECK_TYPES([scmp_filter_ctx],                   [],               [AC_MSG_FAILURE([Cannot find valid seccomp.h])],       [[#include <seccomp.h>]])
-		AC_CHECK_DECLS([seccomp_syscall_resolve_name_arch], [],               [AC_MSG_FAILURE([Cannot find valid seccomp.h])],       [[#include <seccomp.h>]])
-		AC_CHECK_TYPES([struct seccomp_data],               [HAVE_SECCOMP=1], [AC_MSG_FAILURE([Cannot find valid linux/seccomp.h])], [[#include <linux/seccomp.h>]])
-		;;
-	check)
-		AC_CHECK_TYPES([scmp_filter_ctx], [
-			AC_CHECK_DECLS([seccomp_syscall_resolve_name_arch], [
-				AC_CHECK_TYPES([struct seccomp_data], [HAVE_SECCOMP=1], [], [[#include <linux/seccomp.h>]])
-			], [], [[#include <seccomp.h>]])
-		], [], [[#include <seccomp.h>]])
-		;;
-esac
 
 AM_CONDITIONAL([HAVE_KQUEUE],       [test "x$HAVE_KQUEUE"       != "x"])
 AM_CONDITIONAL([HAVE_INOTIFY],      [test "x$HAVE_INOTIFY"      != "x"])
