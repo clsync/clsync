@@ -8,4 +8,4 @@ before_install:
 script:
  - ./.travis.sh
 after_success:
- - coveralls -x c --exclude examples --exclude debian --exclude gentoo --exclude freebsd --exclude m4 --exclude autom4te.cache --exclude man --exclude conf*.dir --exclude cluster.c
+ - coveralls -x c --exclude examples --exclude debian --exclude gentoo --exclude freebsd --exclude m4 --exclude autom4te.cache --exclude man --exclude conf*.dir --exclude cluster.c --exclude calc.c --exclude mon_bsm.c --exclude mon_gio.c --exclude mon_kqueue.c --exclude mon_dtracepipe.c --exclude cgroup.c --exclude fileutils.c --exclude error.c --exclude pthreadex.c --exclude privileged.c --exclude malloc.c
