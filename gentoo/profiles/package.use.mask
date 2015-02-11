@@ -1,2 +1,0 @@
-# Features are still under development and not working properly
-app-admin/clsync caps cluster

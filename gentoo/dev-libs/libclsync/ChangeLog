@@ -1,9 +1,0 @@
-# ChangeLog for app-admin/clsync
-# Copyright 1999-2014 Gentoo Foundation; Distributed under the GPL v2
-# $Header: $
-
-*clsync-0.2.1 (16 May 2014)
-
-  16 May 2014; Andrew Savchenko <bircoph@gmail.com> +ChangeLog,
-  +libclsync-0.0.0.ebuild, +libclsync-9999.ebuild:
-  Initial ebuild.
