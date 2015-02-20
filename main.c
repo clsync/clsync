@@ -808,15 +808,33 @@ static int synchandler_arg1(char *arg, size_t arg_len, void *_ctx_p) {
 	return synchandler_arg(arg, arg_len, _ctx_p, SHARGS_INITIAL);
 }
 
-int parse_customsignals(ctx_t *ctx_p, char *arg) {
+/* strtol wrapper with error checks */
+static inline long xstrtol(const char *str, int *err) {
+	long res;
+	char *endptr;
+
+	res = strtol(str, &endptr, 0);
+	if (errno || *endptr) {
+		error("argument \"%s\" can't be parsed as a number", str);
+		*err = EINVAL;
+	}
+	return res;
+}
+
+static inline int parse_customsignals(ctx_t *ctx_p, char *arg) {
 	char *ptr = arg, *start = arg;
+	int ret = 0;
 	unsigned int signal;
 	do {
 		switch (*ptr) {
 			case 0:
 			case ',':
 			case ':':
-				signal = (unsigned int)atoi(start);
+				signal = (unsigned int)xstrtol(start, &ret);
+				if (ret) {
+					errno = ret;
+					return errno;
+				}
 				if (signal == 0) {
 					// flushing the setting
 					int i = 0;
@@ -883,7 +901,8 @@ int parse_customsignals(ctx_t *ctx_p, char *arg) {
 	return 0;
 }
 
-int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t paramsource) {
+static int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t paramsource) {
+	int ret = 0;
 #ifdef _DEBUG_FORCE
 	fprintf(stderr, "Force-Debug: parse_parameter(): %i: %i = \"%s\"\n", paramsource, param_id, arg);
 #endif
@@ -962,7 +981,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			ctx_p->flags[param_id]++;
 
 			if (pwd == NULL) {
-				ctx_p->uid = (unsigned int)atol(arg);
+				ctx_p->uid = (unsigned int)xstrtol(arg, &ret);
 				break;
 			}
 
@@ -974,7 +993,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			ctx_p->flags[param_id]++;
 
 			if (grp == NULL) {
-				ctx_p->gid = (unsigned int)atol(arg);
+				ctx_p->gid = (unsigned int)xstrtol(arg, &ret);
 				break;
 			}
 
@@ -1028,7 +1047,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			ctx_p->flags[param_id]++;
 
 			if (pwd == NULL) {
-				ctx_p->synchandler_uid = (unsigned int)atol(arg);
+				ctx_p->synchandler_uid = (unsigned int)xstrtol(arg, &ret);
 				break;
 			}
 
@@ -1040,7 +1059,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			ctx_p->flags[param_id]++;
 
 			if (grp == NULL) {
-				ctx_p->synchandler_gid = (unsigned int)atol(arg);
+				ctx_p->synchandler_gid = (unsigned int)xstrtol(arg, &ret);
 				break;
 			}
 
@@ -1233,7 +1252,7 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			ctx_p->pidfile		= arg;
 			break;
 		case RETRIES:
-			ctx_p->retries		= (unsigned int)atol(arg);
+			ctx_p->retries		= (unsigned int)xstrtol(arg, &ret);
 			break;
 		case THREADING: {
 			char *value, *arg_orig = arg;
@@ -1279,22 +1298,22 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			ctx_p->cluster_mcastipaddr	= arg;
 			break;
 		case CLUSTERMCASTIPPORT:
-			ctx_p->cluster_mcastipport	= (uint16_t)atoi(arg);
+			ctx_p->cluster_mcastipport	= (uint16_t)xstrtol(arg, &ret);
 			break;
 		case CLUSTERTIMEOUT:
-			ctx_p->cluster_timeout		= (unsigned int)atol(arg);
+			ctx_p->cluster_timeout		= (unsigned int)xstrtol(arg, &ret);
 			break;
 		case CLUSTERNODENAME:
 			ctx_p->cluster_nodename		= arg;
 			break;
 		case CLUSTERHDLMIN:
-			ctx_p->cluster_hash_dl_min	= (uint16_t)atoi(arg);
+			ctx_p->cluster_hash_dl_min	= (uint16_t)xstrtol(arg, &ret);
 			break;
 		case CLUSTERHDLMAX:
-			ctx_p->cluster_hash_dl_max	= (uint16_t)atoi(arg);
+			ctx_p->cluster_hash_dl_max	= (uint16_t)xstrtol(arg, &ret);
 			break;
 		case CLUSTERSDLMAX:
-			ctx_p->cluster_scan_dl_max	= (uint16_t)atoi(arg);
+			ctx_p->cluster_scan_dl_max	= (uint16_t)xstrtol(arg, &ret);
 			break;
 #endif
 		case OUTLISTSDIR:
@@ -1334,16 +1353,16 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			break;
 		}
 		case SYNCDELAY: 
-			ctx_p->syncdelay		= (unsigned int)atol(arg);
+			ctx_p->syncdelay		= (unsigned int)xstrtol(arg, &ret);
 			break;
 		case DELAY:
-			ctx_p->_queues[QUEUE_NORMAL].collectdelay  = (unsigned int)atol(arg);
+			ctx_p->_queues[QUEUE_NORMAL].collectdelay  = (unsigned int)xstrtol(arg, &ret);
 			break;
 		case BFILEDELAY:
-			ctx_p->_queues[QUEUE_BIGFILE].collectdelay = (unsigned int)atol(arg);
+			ctx_p->_queues[QUEUE_BIGFILE].collectdelay = (unsigned int)xstrtol(arg, &ret);
 			break;
 		case BFILETHRESHOLD:
-			ctx_p->bfilethreshold = (unsigned long)atol(arg);
+			ctx_p->bfilethreshold = (unsigned long)xstrtol(arg, &ret);
 			break;
 		case CANCEL_SYSCALLS: {
 			char *subopts = arg;
@@ -1412,10 +1431,10 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			break;
 		}
 		case RSYNCINCLIMIT:
-			ctx_p->rsyncinclimit = (unsigned int)atol(arg);
+			ctx_p->rsyncinclimit = (unsigned int)xstrtol(arg, &ret);
 			break;
 		case SYNCTIMEOUT:
-			ctx_p->synctimeout   = (unsigned int)atol(arg);
+			ctx_p->synctimeout   = (unsigned int)xstrtol(arg, &ret);
 			break;
 		case PREEXITHOOK:
 			if (strlen(arg)) {
@@ -1611,13 +1630,13 @@ int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t pa
 			if (arg == NULL)
 				ctx_p->flags[param_id]++;
 			else
-				ctx_p->flags[param_id] = atoi(arg);
+				ctx_p->flags[param_id] = xstrtol(arg, &ret);
 #ifdef _DEBUG_FORCE
 			fprintf(stderr, "Force-Debug: flag %i is set to %i\n", param_id&0xff, ctx_p->flags[param_id]);
 #endif
 			break;
 	}
-	return 0;
+	return ret;
 }
 
 int arguments_parse(int argc, char *argv[], struct ctx *ctx_p) {
