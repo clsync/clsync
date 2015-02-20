@@ -116,7 +116,7 @@ static const struct option long_options[] =
 	{"cgroup-group-name",	required_argument,	NULL,	CG_GROUPNAME},
 #endif
 	{"threading",		required_argument,	NULL,	THREADING},
-	{"retries",		optional_argument,	NULL,	RETRIES},
+	{"retries",		required_argument,	NULL,	RETRIES},
 	{"ignore-failures",	optional_argument,	NULL,	IGNOREFAILURES},
 	{"exit-on-sync-skipping",optional_argument,	NULL,	EXITONSYNCSKIP},
 	{"output",		required_argument,	NULL,	OUTPUT_METHOD},
