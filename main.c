@@ -2419,8 +2419,7 @@ int main(int _argc, char *_argv[]) {
 			if (!ret)
 				ret = errno;
 		} else {
-			if (ctx_p->flags[EXCLUDEMOUNTPOINTS])
-				ctx_p->st_dev = stat64.st_dev;
+			ctx_p->st_dev = stat64.st_dev;
 /*
 			if ((stat64.st_mode & S_IFMT) == S_IFLNK) {
 				// The proplems may be due to FTS_PHYSICAL option of fts_open() in sync_initialsync_rsync_walk(),
