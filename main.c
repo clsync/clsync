@@ -2038,6 +2038,14 @@ int ctx_check(ctx_t *ctx_p) {
 		ret = errno = EINVAL;
 		error("Option \"--synclist-simplify\" with nodes \"rsyncdirect\" and \"rsyncshell\" are incompatible.");
 	}
+#ifdef GIO_SUPPORT
+# ifdef SECCOMP_SUPPORT
+	if ((ctx_p->flags[MONITOR] == NE_GIO) && (ctx_p->flags[SECCOMP_FILTER])) {
+		ret = errno = EINVAL;
+		error("GIO is not compatible with seccomp filter (\"--monitor=gio\" and \"--seccomp-filter\" are incompatible)");
+	}
+# endif
+#endif
 
 #ifdef FANOTIFY_SUPPORT
 	if (ctx_p->flags[MONITOR] == NE_FANOTIFY)
