@@ -1351,12 +1351,15 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 		if (ctx_p->flags[EXCLUDEMOUNTPOINTS] && node->fts_info==FTS_D) {
 			if (rsync_and_prefer_excludes) {
 				if (node->fts_statp->st_dev != ctx_p->st_dev) {
+					debug(3, "Excluding \"%s\" due to location on other device: node->fts_statp->st_dev [0x%o] != ctx_p->st_dev [0x%o]", path_rel, node->fts_statp->st_dev, ctx_p->st_dev);
 					if (queue_id == QUEUE_AUTO) {
 						int i=0;
 						while (i<QUEUE_MAX)
 							indexes_addexclude(indexes_p, strdup(path_rel), EVIF_CONTENTRECURSIVELY, i++);
 					} else
 						indexes_addexclude(indexes_p, strdup(path_rel), EVIF_CONTENTRECURSIVELY, queue_id);
+
+					fts_set(tree, node, FTS_SKIP);
 				}
 			} else
 			if (!ctx_p->flags[RSYNCPREFERINCLUDE])

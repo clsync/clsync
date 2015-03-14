@@ -2413,7 +2413,6 @@ int main(int _argc, char *_argv[]) {
 		}
 		debug(5, "rwatchdir == \"%s\"", rwatchdir);
 
-/*
 		stat64_t stat64={0};
 		if (lstat64(ctx_p->watchdir, &stat64)) {
 			error("Cannot lstat64() on \"%s\"", ctx_p->watchdir);
@@ -2422,6 +2421,7 @@ int main(int _argc, char *_argv[]) {
 		} else {
 			if (ctx_p->flags[EXCLUDEMOUNTPOINTS])
 				ctx_p->st_dev = stat64.st_dev;
+/*
 			if ((stat64.st_mode & S_IFMT) == S_IFLNK) {
 				// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
 				// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
@@ -2475,8 +2475,8 @@ int main(int _argc, char *_argv[]) {
 				free(watchdir_resolved_part);
 #endif // VERYPARANOID else
 			}
-		}
 */
+		}
 
 		if (!ret) {
 			parse_parameter(ctx_p, WATCHDIR, rwatchdir, PS_CORRECTION);
