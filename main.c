@@ -2423,7 +2423,7 @@ int main(int _argc, char *_argv[]) {
 				ctx_p->st_dev = stat64.st_dev;
 /*
 			if ((stat64.st_mode & S_IFMT) == S_IFLNK) {
-				// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
+				// The proplems may be due to FTS_PHYSICAL option of fts_open() in sync_initialsync_rsync_walk(),
 				// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
 				// it disables filters, because exclude-list will be empty.
 #ifdef VERYPARANOID
@@ -2442,11 +2442,11 @@ int main(int _argc, char *_argv[]) {
 					ret = EINVAL;
 				} else {
 					char *watchdir_resolved;
-#ifdef VERYPARANOID
+# ifdef PARANOID
 					if (ctx_p->watchdirsize)
 						if (ctx_p->watchdir != NULL)
 							free(ctx_p->watchdir);
-#endif
+# endif
 
 					size_t watchdir_resolved_part_len = strlen(watchdir_resolved_part);
 					ctx_p->watchdirsize = watchdir_resolved_part_len+1;	// Not true for case of relative symlink
