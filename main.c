@@ -813,6 +813,7 @@ static inline long xstrtol(const char *str, int *err) {
 	long res;
 	char *endptr;
 
+	errno = 0;
 	res = strtol(str, &endptr, 0);
 	if (errno || *endptr) {
 		error("argument \"%s\" can't be parsed as a number", str);
