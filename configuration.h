@@ -37,16 +37,46 @@
 #define MAXPERMITTEDHOOKFILES		(1<<8)
 
 #ifdef __CLSYNC_COMMON_H
-#	define DEFAULT_NOTIFYENGINE	NE_UNDEFINED
-#	ifdef __linux__
-#		undef  DEFAULT_NOTIFYENGINE
-#		define DEFAULT_NOTIFYENGINE	NE_INOTIFY
+#	ifndef DEFAULT_NOTIFYENGINE
+#		ifdef __linux__
+#			ifdef INOTIFY_SUPPORT
+#				define DEFAULT_NOTIFYENGINE	NE_INOTIFY
+#			endif
+#		endif
 #	endif
-#	ifdef __FreeBSD__
-#		undef  DEFAULT_NOTIFYENGINE
-#		define DEFAULT_NOTIFYENGINE	NE_KQUEUE
+#	ifndef DEFAULT_NOTIFYENGINE
+#		ifdef __FreeBSD__
+#			ifdef KQUEUE_SUPPORT
+#				define DEFAULT_NOTIFYENGINE	NE_KQUEUE
+#			endif
+#		endif
+#	endif
+#	ifndef DEFAULT_NOTIFYENGINE
+#		ifdef INOTIFY_SUPPORT
+#			define DEFAULT_NOTIFYENGINE	NE_INOTIFY
+#		endif
+#	endif
+#	ifndef DEFAULT_NOTIFYENGINE
+#		ifdef GIO_SUPPORT
+#			define DEFAULT_NOTIFYENGINE	NE_GIO
+#		endif
+#	endif
+#	ifndef DEFAULT_NOTIFYENGINE
+#		ifdef KQUEUE_SUPPORT
+#			define DEFAULT_NOTIFYENGINE	NE_KQUEUE
+#		endif
+#	endif
+#	ifndef DEFAULT_NOTIFYENGINE
+#		ifdef BSM_SUPPORT
+#			define DEFAULT_NOTIFYENGINE	NE_BSM
+#		endif
+#	endif
+#	ifndef DEFAULT_NOTIFYENGINE
+#		warning No default monitor subsystem is set
+#		define  DEFAULT_NOTIFYENGINE		NE_UNDEFINED
 #	endif
 #endif
+
 #define DEFAULT_RULES_PERM		RA_ALL
 #define DEFAULT_COLLECTDELAY		30
 #define DEFAULT_SYNCDELAY		(DEFAULT_COLLECTDELAY)

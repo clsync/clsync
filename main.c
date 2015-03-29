@@ -813,6 +813,7 @@ static inline long xstrtol(const char *str, int *err) {
 	long res;
 	char *endptr;
 
+	errno = 0;
 	res = strtol(str, &endptr, 0);
 	if (errno || *endptr) {
 		error("argument \"%s\" can't be parsed as a number", str);
@@ -2050,6 +2051,14 @@ int ctx_check(ctx_t *ctx_p) {
 		ret = errno = EINVAL;
 		error("Option \"--synclist-simplify\" with nodes \"rsyncdirect\" and \"rsyncshell\" are incompatible.");
 	}
+#ifdef GIO_SUPPORT
+# ifdef SECCOMP_SUPPORT
+	if ((ctx_p->flags[MONITOR] == NE_GIO) && (ctx_p->flags[SECCOMP_FILTER])) {
+		ret = errno = EINVAL;
+		error("GIO is not compatible with seccomp filter (\"--monitor=gio\" and \"--seccomp-filter\" are incompatible)");
+	}
+# endif
+#endif
 
 #ifdef FANOTIFY_SUPPORT
 	if (ctx_p->flags[MONITOR] == NE_FANOTIFY)
@@ -2417,17 +2426,16 @@ int main(int _argc, char *_argv[]) {
 		}
 		debug(5, "rwatchdir == \"%s\"", rwatchdir);
 
-/*
 		stat64_t stat64={0};
 		if (lstat64(ctx_p->watchdir, &stat64)) {
 			error("Cannot lstat64() on \"%s\"", ctx_p->watchdir);
 			if (!ret)
 				ret = errno;
 		} else {
-			if (ctx_p->flags[EXCLUDEMOUNTPOINTS])
-				ctx_p->st_dev = stat64.st_dev;
+			ctx_p->st_dev = stat64.st_dev;
+/*
 			if ((stat64.st_mode & S_IFMT) == S_IFLNK) {
-				// The proplems may be due to FTS_PHYSICAL option of ftp_open() in sync_initialsync_rsync_walk(),
+				// The proplems may be due to FTS_PHYSICAL option of fts_open() in sync_initialsync_rsync_walk(),
 				// so if the "watch dir" is just a symlink it doesn't walk recursivly. For example, in "-R" case
 				// it disables filters, because exclude-list will be empty.
 #ifdef VERYPARANOID
@@ -2446,11 +2454,11 @@ int main(int _argc, char *_argv[]) {
 					ret = EINVAL;
 				} else {
 					char *watchdir_resolved;
-#ifdef VERYPARANOID
+# ifdef PARANOID
 					if (ctx_p->watchdirsize)
 						if (ctx_p->watchdir != NULL)
 							free(ctx_p->watchdir);
-#endif
+# endif
 
 					size_t watchdir_resolved_part_len = strlen(watchdir_resolved_part);
 					ctx_p->watchdirsize = watchdir_resolved_part_len+1;	// Not true for case of relative symlink
@@ -2479,8 +2487,8 @@ int main(int _argc, char *_argv[]) {
 				free(watchdir_resolved_part);
 #endif // VERYPARANOID else
 			}
-		}
 */
+		}
 
 		if (!ret) {
 			parse_parameter(ctx_p, WATCHDIR, rwatchdir, PS_CORRECTION);

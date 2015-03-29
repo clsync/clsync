@@ -106,6 +106,7 @@
 	SECCOMP_ALLOW_ACCUM_SYSCALL(rt_sigprocmask),			\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(rt_sigaction),			\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(nanosleep),				\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(shmdt),				\
 
 
 /* Syscalls allowed to non-privileged thread */
@@ -1881,9 +1882,11 @@ int privileged_deinit(ctx_t *ctx_p)
 		}
 		case SM_PROCESS: {
 			int status;
-			__privileged_kill_child_itself(helper_pid, SIGKILL);
-			debug(9, "waitpid(%u, ...)", helper_pid);
-			waitpid(helper_pid, &status, 0);
+			if (!ctx_p->flags[SECCOMP_FILTER]) {
+				__privileged_kill_child_itself(helper_pid, SIGKILL);
+				debug(9, "waitpid(%u, ...)", helper_pid);
+				waitpid(helper_pid, &status, 0);
+			}
 			shm_free((void *)cmd_p);
 			shm_free((void *)cmd_ret_p);
 # ifdef HL_LOCKS
