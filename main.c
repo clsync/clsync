@@ -832,7 +832,10 @@ static inline int parse_customsignals(ctx_t *ctx_p, char *arg) {
 			case 0:
 			case ',':
 			case ':':
-				signal = (unsigned int)xstrtol(start, &ret);
+				// TODO: use xstrtol() instead of atoi()
+
+				//signal = (unsigned int)xstrtol(start, &ret);
+				signal = (unsigned int)atoi(start);
 				if (ret) {
 					errno = ret;
 					return errno;
