@@ -1513,7 +1513,19 @@ static int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsour
 				ctx_p->destproto = NULL;
 			}
 
-			if (sep != NULL) {
+			ctx_p->destdir	 = arg;
+
+			if (sep == NULL) {
+				char *at_ptr = strchr(arg, '@');
+				char *cl_ptr = strchr(arg, ':');
+				if (at_ptr != NULL && cl_ptr != NULL && at_ptr < cl_ptr) {
+					ctx_p->destproto = strdup("rsync+ssh");
+					debug(5, "Destination proto is: %s (case #0)", ctx_p->destproto);
+				}
+				break;
+			}
+
+			{
 				char *ptr = arg;
 				while (ptr < sep) {
 					if (*ptr<'a' || *ptr>'z')
@@ -1526,9 +1538,9 @@ static int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsour
 					memcpy(ctx_p->destproto, arg, len);
 					ctx_p->destproto[len] = 0;
 				}
+				debug(5, "Destination proto is: %s (case #1)", ctx_p->destproto);
 			}
 
-			ctx_p->destdir	 = arg;
 			break;
 		}
 		case SOCKETPATH:
