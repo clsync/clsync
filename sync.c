@@ -3002,11 +3002,21 @@ int sync_idle(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 	// Checking if we can sync
 
-	if(ctx_p->flags[STANDBYFILE]) {
+	if (ctx_p->flags[STANDBYFILE]) {
 		struct stat st;
-		if(!stat(ctx_p->standbyfile, &st)) {
+		if (!stat(ctx_p->standbyfile, &st)) {
+			state_t state_old;
+
+			state_old = ctx_p->state;
+			ctx_p->state = STATE_HOLDON;
+			main_status_update(ctx_p);
+
 			debug(1, "Found standby file. Holding over syncs. Sleeping "XTOSTR(SLEEP_SECONDS)" second.");
 			sleep(SLEEP_SECONDS);
+
+			ctx_p->state = state_old;
+			main_status_update(ctx_p);
+
 			return 0;
 		}
 	}

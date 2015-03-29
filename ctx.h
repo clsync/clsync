@@ -261,6 +261,7 @@ enum state_enum {
 	STATE_TERM,
 	STATE_THREAD_GC,
 	STATE_INITSYNC,
+	STATE_HOLDON,
 	STATE_UNKNOWN
 };
 typedef enum state_enum state_t;

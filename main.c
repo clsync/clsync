@@ -357,6 +357,7 @@ static char *const status_descr[] = {
 	[STATE_TERM]		= "terminating",
 	[STATE_THREAD_GC]	= "thread gc",
 	[STATE_INITSYNC]	= "initsync",
+	[STATE_HOLDON]		= "hold on",
 	NULL
 };
 
