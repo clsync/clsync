@@ -149,7 +149,7 @@ int parse_rules_fromfile(ctx_t *ctx_p) {
 					rule->objtype = S_IFDIR;
 					break;
 				case 'w':	// accept or reject walking to directory
-					if(
+					if (
 						(ctx_p->flags[MODE] == MODE_RSYNCDIRECT) ||
 						(ctx_p->flags[MODE] == MODE_RSYNCSHELL)  ||
 						(ctx_p->flags[MODE] == MODE_RSYNCSO)
@@ -161,7 +161,7 @@ int parse_rules_fromfile(ctx_t *ctx_p) {
 					rule->mask    = RA_WALK;
 					break;
 				default:
-					error("Warning: Cannot parse the rule <%s>", &line[-1]);
+					warning("Cannot parse the rule <%s>", &line[-1]);
 					i--;	// Canceling new rule
 					continue;
 			}
@@ -250,7 +250,7 @@ int parse_rules_fromfile(ctx_t *ctx_p) {
 								g_hash_table_insert(autowrules_ht, strdup(expr), GINT_TO_POINTER(1));
 
 							}
-						} while(end != NULL);
+						} while (end != NULL);
 					}
 				}
 			}
@@ -258,7 +258,7 @@ int parse_rules_fromfile(ctx_t *ctx_p) {
 	}
 
 l_parse_rules_fromfile_end:
-	if(size)
+	if (size)
 		free(line_buf);
 
 	fclose(f);
