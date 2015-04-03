@@ -1260,6 +1260,26 @@ found), otherwise the option is not set by default;
 .PP
 .RE
 
+.B \-\-privileged\-uid
+.I sync\-handler\-uid
+.RS
+An user ID to be used for the privileged process
+.BR "" "(see " "--splitting=process" ")".
+
+The default value is "$UID".
+.PP
+.RE
+
+.B \-\-privileged\-gid
+.I sync\-handler\-gid
+.RS
+A group ID to be used for the privileged process
+.BR "" "(see " "--splitting=process" ")".
+
+The default value is "$GID".
+.PP
+.RE
+
 .B \-\-sync\-handler\-uid
 .I sync\-handler\-uid
 .RS
@@ -1269,7 +1289,8 @@ An user ID to be used for
 See
 .BR \-\-preserve\-capabilities .
 
-The default value is "$UID".
+The default value is same as for 
+.BR \-\-privileged-uid .
 .PP
 .RE
 
@@ -1282,7 +1303,8 @@ A group ID to be used for
 See
 .BR \-\-preserve\-capabilities .
 
-The default value is "$GID".
+The default value is same as for 
+.BR \-\-privileged-gid .
 .PP
 .RE
 

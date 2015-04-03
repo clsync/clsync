@@ -79,6 +79,8 @@ static const struct option long_options[] =
 	{"pid-file",		required_argument,	NULL,	PIDFILE},
 	{"uid",			required_argument,	NULL,	UID},
 	{"gid",			required_argument,	NULL,	GID},
+	{"privileged-uid",	required_argument,	NULL,	PRIVILEGEDUID},
+	{"privileged-gid",	required_argument,	NULL,	PRIVILEGEDGID},
 	{"sync-handler-uid",	required_argument,	NULL,	SYNCHANDLERUID},
 	{"sync-handler-gid",	required_argument,	NULL,	SYNCHANDLERGID},
 	{"chroot",		required_argument,	NULL,	CHROOT},
@@ -1047,6 +1049,30 @@ static int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsour
 			break;
 		}
 # endif
+		case PRIVILEGEDUID: {
+			struct passwd *pwd = getpwnam(arg);
+			ctx_p->flags[param_id]++;
+
+			if (pwd == NULL) {
+				ctx_p->privileged_uid = (unsigned int)xstrtol(arg, &ret);
+				break;
+			}
+
+			ctx_p->privileged_uid = pwd->pw_uid;
+			break;
+		}
+		case PRIVILEGEDGID: {
+			struct group *grp = getgrnam(arg);
+			ctx_p->flags[param_id]++;
+
+			if (grp == NULL) {
+				ctx_p->privileged_gid = (unsigned int)xstrtol(arg, &ret);
+				break;
+			}
+
+			ctx_p->privileged_gid = grp->gr_gid;
+			break;
+		}
 		case SYNCHANDLERUID: {
 			struct passwd *pwd = getpwnam(arg);
 			ctx_p->flags[param_id]++;
@@ -2339,8 +2365,6 @@ int main(int _argc, char *_argv[]) {
 #ifdef CAPABILITIES_SUPPORT
 	ctx_p->flags[CAP_PRESERVE]		 = CAP_PRESERVE_TRY;
 	ctx_p->caps				 = DEFAULT_PRESERVE_CAPABILITIES;
-	ctx_p->synchandler_uid			 = getuid();
-	ctx_p->synchandler_gid			 = getgid();
 	ctx_p->flags[CAPS_INHERIT]		 = DEFAULT_CAPS_INHERIT;
 	ctx_p->flags[DETACH_IPC]		 = DEFAULT_DETACH_IPC;
 	parse_parameter(ctx_p, LABEL, strdup(DEFAULT_LABEL), PS_DEFAULTS);
@@ -2372,6 +2396,16 @@ int main(int _argc, char *_argv[]) {
 		nret = configs_parse(ctx_p, PS_CONFIG);
 		if(nret) ret = nret;
 	}
+
+	if (!ctx_p->flags[PRIVILEGEDUID])
+		ctx_p->privileged_uid = getuid();
+	if (!ctx_p->flags[PRIVILEGEDGID])
+		ctx_p->privileged_gid = getgid();
+
+	if (!ctx_p->flags[SYNCHANDLERUID])
+		ctx_p->synchandler_uid = ctx_p->privileged_uid;
+	if (!ctx_p->flags[SYNCHANDLERGID])
+		ctx_p->synchandler_gid = ctx_p->privileged_gid;
 
 #ifdef CGROUP_SUPPORT
 	if (ctx_p->cg_groupname == NULL) {
@@ -2819,26 +2853,24 @@ int main(int _argc, char *_argv[]) {
 
 	if (ctx_p->flags[GID]) {
 		int rc;
-		debug(3, "Trying to drop gid to %i", ctx_p->gid);
-		rc = setgid(ctx_p->gid);
+		debug(3, "Trying to drop effective gid to %i", ctx_p->gid);
+		rc = setegid(ctx_p->gid);
 
 		if (rc && (ctx_p->flags[GID] != UGID_PRESERVE)) {
-			error("Cannot setgid(%u)", ctx_p->gid);
+			error("Cannot setegid(%u)", ctx_p->gid);
 			ret = errno;
 		}
-		if (!rc) debug(4, "success");
 	}
 
 	if (ctx_p->flags[UID]) {
 		int rc;
-		debug(3, "Trying to drop uid to %i", ctx_p->uid);
-		rc = setuid(ctx_p->uid);
+		debug(3, "Trying to drop effective uid to %i", ctx_p->uid);
+		rc = seteuid(ctx_p->uid);
 
 		if (rc && (ctx_p->flags[UID] != UGID_PRESERVE)) {
-			error("Cannot setuid(%u)", ctx_p->uid);
+			error("Cannot seteuid(%u)", ctx_p->uid);
 			ret = errno;
 		}
-		if (!rc) debug(4, "success");
 	}
 
 	if (main_statusfile_f == NULL && ctx_p->statusfile != NULL) {

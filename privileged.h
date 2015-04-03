@@ -123,7 +123,8 @@ extern int privileged_check();
 
 extern int (*_privileged_kill_child)(
 		pid_t pid,
-		int sig
+		int   sig,
+		char  ignoreerrors
 	);
 
 extern int (*_privileged_fork_execvp)(

@@ -3673,15 +3673,15 @@ int sync_sighandler(sighandler_arg_t *sighandler_arg_p) {
 				while (ctx_p->children) { // Killing children if non-pthread mode or/and (mode=="so" or mode=="rsyncso")
 					pid_t child_pid = ctx_p->child_pid[--ctx_p->children];
 
-					if (privileged_kill_child(child_pid, signal) == ENOENT)
+					if (privileged_kill_child(child_pid, signal, 0) == ENOENT)
 						continue;
 					if (signal != SIGQUIT)
-						if (privileged_kill_child(child_pid, SIGQUIT) == ENOENT)
+						if (privileged_kill_child(child_pid, SIGQUIT, 0) == ENOENT)
 							continue;
 					if (signal != SIGTERM)
-						if (privileged_kill_child(child_pid, SIGTERM) == ENOENT)
+						if (privileged_kill_child(child_pid, SIGTERM, 0) == ENOENT)
 							continue;
-					if (privileged_kill_child(child_pid, SIGKILL) == ENOENT)
+					if (privileged_kill_child(child_pid, SIGKILL, 0) == ENOENT)
 						continue;
 				}
 				break;

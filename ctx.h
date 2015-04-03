@@ -128,6 +128,8 @@ enum flags_enum {
 	CANCEL_SYSCALLS		= 44|OPTION_LONGOPTONLY,
 	EXITONSYNCSKIP		= 45|OPTION_LONGOPTONLY,
 	DETACH_IPC		= 46|OPTION_LONGOPTONLY,
+	PRIVILEGEDUID		= 47|OPTION_LONGOPTONLY,
+	PRIVILEGEDGID		= 48|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -300,6 +302,8 @@ struct ctx {
 	size_t pid_str_len;
 	uid_t uid;
 	gid_t gid;
+	uid_t privileged_uid;
+	gid_t privileged_gid;
 	uid_t synchandler_uid;
 	gid_t synchandler_gid;
 #ifdef CAPABILITIES_SUPPORT

@@ -133,6 +133,8 @@ int nonprivileged_seccomp_init(ctx_t *ctx_p) {
 		.filter = filter_w_mprotect_table,
 	};
 
+	debug(5, "enabling the seccomp");
+
 	filter_p = (ctx_p->flags[PERMIT_MPROTECT] ? &filter_w_mprotect : &filter);
 
 	SAFE (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0),			return -1);
@@ -143,7 +145,7 @@ int nonprivileged_seccomp_init(ctx_t *ctx_p) {
 #endif
 
 int (*privileged_fork_execvp)(const char *file, char *const argv[]);
-int (*privileged_kill_child)(pid_t pid, int sig);
+int (*privileged_kill_child)(pid_t pid, int sig, char ignoreerrors);
 
 #ifdef CAPABILITIES_SUPPORT
 pid_t		helper_pid = 0;
@@ -219,6 +221,7 @@ struct pa_fork_execvp_arg {
 struct pa_kill_child_arg {
 	pid_t pid;
 	int   signal;
+	char  ignoreerrors;
 };
 
 struct pa_waitpid_arg {
@@ -444,13 +447,14 @@ int cap_drop(ctx_t *ctx_p, __u32 caps) {
 }
 
 #endif
-int __privileged_kill_child_itself(pid_t child_pid, int signal) {
+int __privileged_kill_child_itself(pid_t child_pid, int signal, char ignoreerrors) {
 	// Checking if it's a child
 	if (waitpid(child_pid, NULL, WNOHANG)>=0) {
 		debug(3, "Sending signal %u to child process with pid %u.",
 			signal, child_pid);
 		if (kill(child_pid, signal)) {
-			error("Got error while kill(%u, %u)", child_pid, signal);
+			if (!ignoreerrors)
+				error("Got error while kill(%u, %u)", child_pid, signal);
 			return errno;
 		}
 
@@ -534,14 +538,18 @@ int privileged_execvp_check_arguments(struct pa_options *opts, const char *u_fil
 		critical_on (!argc);
 
 		// Checking the execution file
-		if (pa_strcmp(argv[0], u_file, isexpanded[0]))
-			continue;
+		if (pa_strcmp(argv[0], u_file, isexpanded[0])) {
+			debug(1, "The file to be executed didn't match (argv[0] != u_file): \"%s\" != \"%s\"", argv[0], u_file);
+			break;
+		}
 
 		// Checking arguments
 		i = 1;
 		while (i < argc) {
-			if (pa_strcmp(argv[i], u_argv[i], isexpanded[i]))
+			if (pa_strcmp(argv[i], u_argv[i], isexpanded[i])) {
+				debug(1, "An argument #%i didn't match (argv[%i] != u_argv[%i]): \"%s\" != \"%s\"", argv[i], argv[i]);
 				break;
+			}
 			i++;
 		}
 
@@ -577,6 +585,7 @@ int privileged_execvp_check_arguments(struct pa_options *opts, const char *u_fil
 		}
 	}
 
+	debug(1, "a_i == %i; SHARGS_MAX == %i; u_argc == %i", SHARGS_MAX, a_i, u_argc);
 	critical("Arguments are wrong. This should happend only on hacking attack.");
 	return EPERM;
 }
@@ -1017,8 +1026,16 @@ int privileged_handler(ctx_t *ctx_p)
 						error("Cannot fork().");
 						break;
 					case  0:
-						debug(4, "setgid(%u) == %i", exec_gid, setgid(exec_gid));
-						debug(4, "setuid(%u) == %i", exec_uid, setuid(exec_uid));
+#ifdef ANTIPARANOID
+						if (ctx_p->privileged_gid != exec_gid)
+#endif
+							debug(4, "setgid(%u) == %i", exec_gid, setgid(exec_gid));
+
+#ifdef ANTIPARANOID
+						if (ctx_p->privileged_uid != exec_uid)
+#endif
+							debug(4, "setuid(%u) == %i", exec_uid, setuid(exec_uid));
+
 						debug(3, "execvp(\"%s\", argv)", file);
 						exit(execvp(file, argv));
 				}
@@ -1029,7 +1046,7 @@ int privileged_handler(ctx_t *ctx_p)
 			case PA_KILL_CHILD: {
 				debug(20, "PA_KILL_CHILD");
 				struct pa_kill_child_arg *arg_p = (void *)&cmd_p->arg.kill_child;
-				cmd_ret_p->ret = (void *)(long)__privileged_kill_child_itself(arg_p->pid, arg_p->signal);
+				cmd_ret_p->ret = (void *)(long)__privileged_kill_child_itself(arg_p->pid, arg_p->signal, arg_p->ignoreerrors);
 				break;
 			}
 # ifdef CGROUP_SUPPORT
@@ -1544,12 +1561,13 @@ int __privileged_fork_setuid_execvp_threadsplit(
 	return (long)ret;
 }
 
-int __privileged_kill_child_wrapper(pid_t pid, int signal)
+int __privileged_kill_child_wrapper(pid_t pid, int signal, char ignoreerrors)
 {
 	void *ret = (void *)(long)-1;
 
-	cmd_p->arg.kill_child.pid    = pid;
-	cmd_p->arg.kill_child.signal = signal;
+	cmd_p->arg.kill_child.pid          = pid;
+	cmd_p->arg.kill_child.signal       = signal;
+	cmd_p->arg.kill_child.ignoreerrors = ignoreerrors;
 
 	privileged_action(
 # ifdef HL_LOCK_TRIES_AUTO
@@ -1781,12 +1799,41 @@ int privileged_init(ctx_t *ctx_p)
 
 			// Running the privileged helper
 			SAFE ( (helper_pid = fork_helper()) == -1,	return errno);
-			if (!helper_pid)
+			if (!helper_pid) {
+				if (ctx_p->privileged_gid != ctx_p->gid) {
+//					SAFE ( cap_enable(CAP_TO_MASK(CAP_SETGID)), return errno; );
+
+					debug(3, "[privileged] Trying to set real gid to %i (ctx_p->privileged_gid)", ctx_p->privileged_gid);
+					SAFE( setgid(ctx_p->privileged_gid),	return errno);
+				}
+
+				if (ctx_p->privileged_uid != ctx_p->uid) {
+//					SAFE ( cap_enable(CAP_TO_MASK(CAP_SETUID)), return errno; );
+
+					debug(3, "[privileged] Trying to set real uid to %i (ctx_p->privileged_uid)", ctx_p->privileged_uid);
+					SAFE( setuid(ctx_p->privileged_uid),	return errno);
+				}
+
 				exit(privileged_handler(ctx_p));
+			}
 			break;
 		}
 		default:
 			critical("Invalid ctx_p->flags[SPLITTING]: %i", ctx_p->flags[SPLITTING]);
+	}
+
+	if (ctx_p->flags[GID] || ctx_p->flags[UID])
+		SAFE( seteuid(0), return errno);
+
+	if (ctx_p->flags[GID]) {
+		SAFE( setegid(0), return errno);
+		debug(3, "[non-privileged] Trying to drop real gid %i (ctx_p->gid)", getgid(), ctx_p->gid);
+		SAFE( setgid(ctx_p->gid), return errno );
+	}
+
+	if (ctx_p->flags[UID]) {
+		debug(3, "[non-privileged] Trying to drop real uid %i (ctx_p->uid)", getuid(), ctx_p->uid);
+		SAFE( setuid(ctx_p->uid), return errno );
 	}
 
 # ifdef HL_LOCKS
@@ -1883,9 +1930,10 @@ int privileged_deinit(ctx_t *ctx_p)
 		case SM_PROCESS: {
 			int status;
 			if (!ctx_p->flags[SECCOMP_FILTER]) {
-				__privileged_kill_child_itself(helper_pid, SIGKILL);
-				debug(9, "waitpid(%u, ...)", helper_pid);
-				waitpid(helper_pid, &status, 0);
+				if (!__privileged_kill_child_itself(helper_pid, SIGKILL, 1)) {
+					debug(9, "waitpid(%u, ...)", helper_pid);
+					waitpid(helper_pid, &status, 0);
+				}
 			}
 			shm_free((void *)cmd_p);
 			shm_free((void *)cmd_ret_p);
