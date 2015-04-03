@@ -153,10 +153,10 @@ int parse_rules_fromfile(ctx_t *ctx_p) {
 						(ctx_p->flags[MODE] == MODE_RSYNCDIRECT) ||
 						(ctx_p->flags[MODE] == MODE_RSYNCSHELL)  ||
 						(ctx_p->flags[MODE] == MODE_RSYNCSO)
-					) {
-						error("Warning: Used \"w\" rule in \"--rsync\" case."
+					)
+						warning("Used \"w\" rule in \"--rsync\" case."
 							" This may cause unexpected problems.");
-					}
+
 					rule->objtype = S_IFDIR;
 					rule->mask    = RA_WALK;
 					break;
