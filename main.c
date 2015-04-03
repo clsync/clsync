@@ -1010,9 +1010,18 @@ static int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsour
 #ifdef CAPABILITIES_SUPPORT
 # ifdef SECCOMP_SUPPORT
 		case SECURESPLITTING: {
-			ctx_p->flags[CHECK_EXECVP_ARGS]++;
-			ctx_p->flags[SECCOMP_FILTER]++;
-			ctx_p->flags[FORBIDDEVICES]++;
+			if (ctx_p->flags_values_raw[CHECK_EXECVP_ARGS] == NULL)
+				ctx_p->flags[CHECK_EXECVP_ARGS]++;
+
+			if (ctx_p->flags_values_raw[SECCOMP_FILTER] == NULL)
+				ctx_p->flags[SECCOMP_FILTER]++;
+
+			if (ctx_p->flags_values_raw[FORBIDDEVICES] == NULL)
+				ctx_p->flags[FORBIDDEVICES]++;
+
+			if (ctx_p->flags_values_raw[SPLITTING] != NULL)
+				break;
+
 			arg = "process";
 		}
 		case SPLITTING: {
@@ -2154,6 +2163,11 @@ int ctx_check(ctx_t *ctx_p) {
 					ret = errno;
 			}
 		}
+	}
+
+	if (ctx_p->flags[CHECK_EXECVP_ARGS] && (ctx_p->flags[MODE] == MODE_DIRECT)) {
+		ret = errno = EINVAL;
+		error("Options --check-execvp-arguments/--secure-splitting cannot be used in conjuction with --mode=direct (see \"man 1 clsync\": --check-execvp-arguments).");
 	}
 
 #if 0

@@ -107,6 +107,7 @@
 	SECCOMP_ALLOW_ACCUM_SYSCALL(rt_sigaction),			\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(nanosleep),				\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(shmdt),				\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(clone),		/* for --threading */		\
 
 
 /* Syscalls allowed to non-privileged thread */
@@ -531,19 +532,19 @@ int privileged_execvp_check_arguments(struct pa_options *opts, const char *u_fil
 		argv       = args[a_i].v;
 		isexpanded = args[a_i].isexpanded;
 
-		// Checking the number of arguments
+		debug(8, "Checking the number of arguments: %i <> %i", argc, u_argc);
 		if (argc != u_argc)
 			continue;
 
 		critical_on (!argc);
 
-		// Checking the execution file
+		debug(8, "Checking the execution file: \"%s\" <> \"%s\"; isexpanded == %i", argv[0], u_file, isexpanded[0]);
 		if (pa_strcmp(argv[0], u_file, isexpanded[0])) {
 			debug(1, "The file to be executed didn't match (argv[0] != u_file): \"%s\" != \"%s\"", argv[0], u_file);
 			break;
 		}
 
-		// Checking arguments
+		debug(8, "Checking arguments");
 		i = 1;
 		while (i < argc) {
 			if (pa_strcmp(argv[i], u_argv[i], isexpanded[i])) {

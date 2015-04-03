@@ -1473,6 +1473,8 @@ Is set to "off" by default.
 .B \-\-check\-execvp\-arguments
 .RS
 .B [Requires \-\-splitting=[thread|process]]
+.br
+.B [Blocks \-\-mode=direct]
 
 Enables execvp() arguments recheck in the privileged process (in case of their
 substitution to any exploit-given arguments).
@@ -1481,6 +1483,10 @@ This option doesn't utilize a lot of CPU resources but forbids run-time
 changing of
 .I sync\-handler\-arguments
 and hook file paths.
+
+This option cannot be used in conjuction with
+.BR \-\-mode "=direct"
+due to an arbitrary number of arguments in this mode.
 
 Is not set by default.
 .RE
@@ -2542,6 +2548,15 @@ Not described yet.
 .B Mirroring a directory:
 .RS
 clsync -Mrsyncdirect -W/path/to/source_dir -D/path/to/destination_dir
+.RE
+
+.B Syncing 'authorized_keys' files:
+.RS
+mkdir -p /etc/clsync/rules
+.br
+printf "+w^$\n+w^[^/]+$\n+w^[^/]+/.ssh$\n+f^[^/]+/.ssh/authorized_keys$\n-*" > /etc/clsync/rules/authorized_files_only
+.br
+clsync -Mdirect -Scp -W/mnt/master/home/ -D/home -R/etc/clsync/rules/authorized_files_only -- -Pfp --parents %INCLUDE-LIST% %destination-dir%
 .RE
 
 .B Mirroring a directory, but faster:
