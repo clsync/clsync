@@ -1784,8 +1784,16 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 		path_rel = sync_path_abs2rel(ctx_p, node->fts_path, -1, &path_rel_len, path_rel);
 		ruleaction_t perm = rules_search_getperm(path_rel, S_IFDIR, rules_p, RA_WALK, NULL);
 
+		debug(3, "perm == 0x%o", perm);
+
 		if (!(perm&RA_WALK)) {
-			fts_set(tree, node, FTS_SKIP);
+			debug(2, "setting an FTS_SKIP on the directory");
+			if (fts_set(tree, node, FTS_SKIP))
+				warning("Got error while fts_set(tree, node, FTS_SKIP): %s", path_rel);
+		}
+
+		if (!(perm&RA_MONITOR)) {
+			debug(2, "don't mark the directory");
 			continue;
 		}
 
