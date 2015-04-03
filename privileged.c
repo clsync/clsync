@@ -893,7 +893,7 @@ int privileged_handler(ctx_t *ctx_p)
 		if (!hl_lock_p->enabled || !hl_wait(
 			HLLOCK_HANDLER
 #  ifdef HL_LOCK_TRIES_AUTO
-			, (long)hl_lock_p->tries
+			, hl_lock_p->tries[HLLOCK_HANDLER]
 #  endif
 		)) {
 			if (opts->isprocsplitting)
