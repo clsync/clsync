@@ -7,7 +7,7 @@
 *.la
 /clsync
 /clsync-debug
-/.libs
+.libs/
 
 #debian:
 /debian/clsync/
@@ -41,11 +41,13 @@ to/
 /doc/
 *.swp
 tmp
+/compilerflags.h
+/gencompilerflags
 
 # autotools build debris
-/.deps/
-/Makefile
-/Makefile.in
+.deps/
+Makefile
+Makefile.in
 /aclocal.m4
 /autom4te.cache/
 /compile
@@ -57,8 +59,6 @@ tmp
 /config.cache
 /configure
 /depcomp
-/examples/Makefile
-/examples/Makefile.in
 /install-sh
 /libtool
 /ltmain.sh
