@@ -13,6 +13,8 @@ override_dh_auto_install:
 	dh_auto_install
 	sed -i "/dependency_libs/ s/'.*'/''/" $$(find debian/tmp -name '*.la')
 	-rm --verbose debian/tmp/usr/share/doc/clsync/LICENSE
+	-rm --verbose debian/tmp/usr/bin/gencompilerflags
+	-rm --verbose debian/tmp/usr/include/clsync/compilerflags.h
 
 override_dh_install:
 	dh_install --list-missing
