@@ -1,8 +1,18 @@
-clsync (0.4-1) unstable; urgency=low
+clsync (0.4-1) unstable; urgency=medium
 
+  [ Dmitry Yu Okunev ]
   * A lot of fixes
 
- -- Dmitry Yu Okunev <dyokunev@ut.mephi.ru>  Thu, 6 Nov 2014 10:17:49 +0300
+  [ Barak A. Pearlmutter ]
+  * Merge upstream, in particular debian/ tweaks
+  * don't install compile-time stuff that shouldn't be
+  * bump debian standards version, no changes necessary
+  * update debian/watch file, mangle upstream -rc
+  * update .gitignore
+  * correct some spelling errors
+  * man dash hyphen slash patch
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Fri, 08 May 2015 10:43:41 +0100
 
 clsync (0.3-1) unstable; urgency=medium
 
