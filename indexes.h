@@ -26,6 +26,11 @@
 #include "error.h"
 #include "malloc.h"
 
+struct fileinfo {
+	stat64_t lstat;
+};
+typedef struct fileinfo fileinfo_t;
+
 struct indexes {
 	GHashTable *wd2fpath_ht;			// watching descriptor -> file path
 	GHashTable *fpath2wd_ht;			// file path -> watching descriptor
@@ -35,6 +40,10 @@ struct indexes {
 	GHashTable *fpath2ei_coll_ht[QUEUE_MAX];	// "file path -> event information" aggregation hashtable for every queue
 	GHashTable *out_lines_aggr_ht;			// output lines aggregation hashtable
 	GHashTable *nonthreaded_syncing_fpath2ei_ht;	// events that are synchronized in signle-mode (non threaded)
+	GHashTable *fileinfo_ht;			// to search "fileinfo" structures (that contains secondary sorts of things about any files/dirs)
+#ifdef CLUSTER_SUPPORT
+	GHashTable *nodenames_ht;			// node_name -> node_id
+#endif
 };
 typedef struct indexes indexes_t;
 
@@ -161,6 +170,22 @@ static inline int indexes_outaggr_add(indexes_t *indexes_p, char *outline, event
 	g_hash_table_replace(indexes_p->out_lines_aggr_ht, outline, GINT_TO_POINTER(flags));
 
 	debug(3, "indexes_outaggr_aggr(indexes_p, \"%s\").", outline);
+	return 0;
+}
+
+static inline fileinfo_t *indexes_fileinfo(indexes_t *indexes_p, const char *fpath) {
+	return (fileinfo_t *)g_hash_table_lookup(indexes_p->fileinfo_ht, fpath);
+}
+
+static inline int indexes_fileinfo_add(indexes_t *indexes_p, const char *fpath_const, fileinfo_t *fi) {
+	size_t fpathlen = strlen(fpath_const);
+	debug(4, "indexes_add_wd(indexes_p, \"%s\", %p)", fpath_const, fpathlen);
+
+	char *fpath = xmalloc(fpathlen+1);
+	memcpy(fpath, fpath_const, fpathlen+1);
+
+	g_hash_table_insert(indexes_p->fileinfo_ht, fpath, fi);
+
 	return 0;
 }
 

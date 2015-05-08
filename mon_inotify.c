@@ -18,10 +18,10 @@
  */
 
 #include "common.h"
-#include "port-hacks.h"
 #include "error.h"
 #include "sync.h"
 #include "indexes.h"
+#include "privileged.h"
 #include "mon_inotify.h"
 
 enum event_bits {
@@ -31,18 +31,11 @@ enum event_bits {
 };
 
 struct recognize_event_return {
-	union {
-		struct {
-			eventobjtype_t objtype_old:16;
-			eventobjtype_t objtype_new:16;
-		} v;
-		uint32_t i;
-	} u;
+	eventobjtype_t objtype_old;
+	eventobjtype_t objtype_new;
 };
 
-static inline uint32_t recognize_event(uint32_t event) {
-	struct recognize_event_return r = {{{0}}};
-
+static inline void recognize_event(struct recognize_event_return *r, uint32_t event) {
 	eventobjtype_t type;
 	int is_created;
 	int is_deleted;
@@ -53,27 +46,21 @@ static inline uint32_t recognize_event(uint32_t event) {
 
 	debug(4, "type == %x; is_created == %x; is_deleted == %x", type, is_created, is_deleted);
 
-	r.u.v.objtype_old = type;
-	r.u.v.objtype_new = type;
+	r->objtype_old = (is_created ? EOT_DOESNTEXIST : type);
+	r->objtype_new = (is_deleted ? EOT_DOESNTEXIST : type);
 
-	if (is_created)
-		r.u.v.objtype_old = EOT_DOESNTEXIST;
-
-	if (is_deleted)
-		r.u.v.objtype_new = EOT_DOESNTEXIST;
-
-	return r.u.i;
+	return;
 }
 
 int inotify_add_watch_dir(ctx_t *ctx_p, indexes_t *indexes_p, const char *const accpath) {
 	int inotify_d = (int)(long)ctx_p->fsmondata;
-	return inotify_add_watch(inotify_d, accpath, INOTIFY_MARKMASK);
+	return privileged_inotify_add_watch(inotify_d, accpath, INOTIFY_MARKMASK, PC_INOTIFY_ADD_WATCH_DIR);
 }
 
 int inotify_wait(ctx_t *ctx_p, struct indexes *indexes_p, struct timeval *tv_p) {
 	int inotify_d = (int)(long)ctx_p->fsmondata;
 
-	debug(3, "select with timeout %li secs.", tv_p->tv_sec);
+	debug(3, "select with timeout %li secs (fd == %u).", tv_p->tv_sec, inotify_d);
 	fd_set rfds;
 	FD_ZERO(&rfds);
 	FD_SET(inotify_d, &rfds);
@@ -121,7 +108,7 @@ int inotify_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 			// Removing stale wd-s
 
-			if(event->mask & IN_IGNORED) {
+			if (event->mask & IN_IGNORED) {
 				debug(2, "Cleaning up info about watch descriptor %i.", event->wd);
 				indexes_remove_bywd(indexes_p, event->wd);
 				INOTIFY_HANDLE_CONTINUE;
@@ -131,7 +118,7 @@ int inotify_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 			char *fpath = indexes_wd2fpath(indexes_p, event->wd);
 
-			if(fpath == NULL) {
+			if (fpath == NULL) {
 				debug(2, "Event %p on stale watch (wd: %i).", (void *)(long)event->mask, event->wd);
 				INOTIFY_HANDLE_CONTINUE;
 			}
@@ -152,25 +139,24 @@ int inotify_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 
 			// Getting infomation about file/dir/etc
 
-			stat64_t lstat;
+			struct  recognize_event_return r = {0};
+			recognize_event(&r, event->mask);
+
+			stat64_t lstat, *lstat_p;
 			mode_t st_mode;
 			size_t st_size;
-			if (lstat64(path_full, &lstat)) {
-				debug(2, "Cannot lstat64(\"%s\", lstat). Seems, that the object disappeared.", path_full);
-				if(event->mask & IN_ISDIR)
-					st_mode = S_IFDIR;
-				else
-					st_mode = S_IFREG;
+			if ((r.objtype_new == EOT_DOESNTEXIST) || (ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT) || lstat64(path_full, &lstat)) {
+				debug(2, "Cannot lstat64(\"%s\", lstat). Seems, that the object had been deleted (%i) or option \"--cancel-syscalls mon_stat\" (%i) is set.", path_full, r.objtype_new == EOT_DOESNTEXIST, ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT);
+				st_mode = (event->mask & IN_ISDIR ? S_IFDIR : S_IFREG);
 				st_size = 0;
+				lstat_p = NULL;
 			} else {
 				st_mode = lstat.st_mode;
 				st_size = lstat.st_size;
+				lstat_p = &lstat;
 			}
 
-			struct  recognize_event_return r;
-			r.u.i = recognize_event(event->mask);
-
-			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, path_full, NULL, r.u.v.objtype_old, r.u.v.objtype_new, event->mask, event->wd, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
+			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, path_full, NULL, lstat_p, r.objtype_old, r.objtype_new, event->mask, event->wd, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
 				count = -1;
 				goto l_inotify_handle_end;
 			}
@@ -184,10 +170,10 @@ int inotify_handle(ctx_t *ctx_p, indexes_t *indexes_p) {
 	}
 
 l_inotify_handle_end:
-	if(path_full != NULL)
+	if (path_full != NULL)
 		free(path_full);
 
-	if(path_rel != NULL)
+	if (path_rel != NULL)
 		free(path_rel);
 
 	return count;

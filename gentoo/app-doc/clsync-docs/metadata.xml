@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "http://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+<maintainer>
+  <email>bircoph@gmail.com</email>
+  <name>Andrew Savchenko</name>
+</maintainer>
+<longdescription>
+  Install doxygen generated API docs for  <pkg>app-admin/clsync</pkg> and
+  <pkg>dev-libs/libclsync</pkg> packages.
+</longdescription>
+</pkgmetadata>

@@ -1,7 +1,10 @@
 language: c
 before_install:
- - sudo apt-get install libcap-dev libglib2.0-dev libmhash-dev libkqueue.*
+ - sudo apt-get update
+ - sudo apt-get install libcap-dev libglib2.0-dev libmhash-dev libkqueue.* libcgroup-dev libseccomp-dev linux-libc-dev libkqueue-dev ccache
  - sudo pip install cpp-coveralls --use-mirrors
+ - sudo ln -s /usr/bin/ccache /usr/local/bin/gcc
+ - sudo ln -s /usr/bin/ccache /usr/local/bin/cc
 script:
  - ./.travis.sh
 after_success:

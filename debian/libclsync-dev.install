@@ -1,5 +1,4 @@
 usr/include/*/*.h
-
 usr/lib/*/libclsync*.a
 usr/lib/*/libclsync*.so
 usr/lib/*/pkgconfig/*.pc

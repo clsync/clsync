@@ -6,5 +6,5 @@ includedir=@includedir@
 Name: clsync
 Description: Live sync utility
 Version: @VERSION@
-Cflags: -pthread -I${includedir}/clsync/
+Cflags: -pthread -I${includedir}/libclsync/
 Libs: -L${libdir} -lclsync

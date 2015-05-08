@@ -22,8 +22,11 @@
 #ifdef HAVE_MHASH
 #include <mhash.h>
 
+#include "error.h"
+
 static inline uint32_t adler32_calc(const unsigned char *const data, uint32_t len) {
 	uint32_t adler32;
+	debug(70, "%p, %i -> mhash", data, len);
 
 	MHASH td = mhash_init(MHASH_ADLER32);
 	mhash(td, data, len);

@@ -18,6 +18,9 @@
  */
 
 
+#ifndef __PORT_HACKS_H
+#define __PORT_HACKS_H
+
 #ifndef ETIME
 #define ETIME ETIMEDOUT
 #endif
@@ -26,36 +29,45 @@
 #include <sys/stat.h>
 
 #ifndef __FreeBSD__
-typedef struct stat64 stat64_t;
+	typedef struct stat64 stat64_t;
 #endif
 
 #ifdef __FreeBSD__
 
-#define O_PATH 0
+#	define O_PATH 0
 
-typedef struct stat stat64_t;
-#include <pthread.h>
+	typedef struct stat stat64_t;
+#	include <pthread.h>
 
-static inline int pthread_tryjoin_np(pthread_t thread, void **retval) {
-	struct timespec abstime;
-	int rc;
+	static inline int pthread_tryjoin_np(pthread_t thread, void **retval) {
+		struct timespec abstime;
+		int rc;
 
-	abstime.tv_sec  = 0;
-	abstime.tv_nsec = 0;
+		abstime.tv_sec  = 0;
+		abstime.tv_nsec = 0;
 
-	extern int pthread_timedjoin_np(pthread_t thread, void **value_ptr, const struct timespec *abstime);
+		extern int pthread_timedjoin_np(pthread_t thread, void **value_ptr, const struct timespec *abstime);
 
-	rc = pthread_timedjoin_np(thread, retval, &abstime);
+		rc = pthread_timedjoin_np(thread, retval, &abstime);
 
-	if (rc == ETIMEDOUT)
-		rc = EBUSY;
+		if (rc == ETIMEDOUT)
+			rc = EBUSY;
 
-	return rc;
-}
+		return rc;
+	}
 
-static inline int lstat64(const char *pathname, struct stat *buf) {
-	return lstat(pathname, buf);
-}
+	static inline int lstat64(const char *pathname, struct stat *buf) {
+		return lstat(pathname, buf);
+	}
 
 #endif
+
+#ifdef CLSYNC_ITSELF
+#	ifndef O_PATH
+#		warning O_PATH is not set
+#		define O_PATH 0
+#	endif
+#endif
+
+#endif // __PORT_HACKS_H
 

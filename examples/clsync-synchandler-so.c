@@ -3,6 +3,7 @@
 #include <errno.h>
 
 // Required header:
+#include <clsync/compilerflags.h>
 #include <clsync/clsync.h>
 
 // Optional headers:

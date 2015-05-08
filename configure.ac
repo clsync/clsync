@@ -7,30 +7,37 @@ AC_CONFIG_SRCDIR([sync.c])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([1.11 foreign -Wall -Wno-portability])
 AC_CONFIG_HEADERS([config.h])
+AC_PROG_CC([gcc cc])
 AM_PROG_CC_C_O
 AC_PROG_CC_STDC
 AC_CONFIG_MACRO_DIR([m4])
+AC_PROG_LIBTOOL
+AM_PROG_LIBTOOL
 
 LT_INIT
 
 PKG_INSTALLDIR
 
 AC_CANONICAL_HOST
+
+m4_include(m4/ax_pthread.m4)
+AX_PTHREAD(
+	[
+		CC="$PTHREAD_CC"
+		LIBS="$LIBS $PTHREAD_LIBS"
+		CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
+		LDFLAGS="$LDFLAGS $PTHREAD_LDFLAGS"
+	], [
+		AC_MSG_ERROR([Pthread library not found. Please set PTHREAD_CFLAGS and PTHREAD_LIBS correctly for your setup])
+	]
+)
+
+
+HAVE_BACKTRACE=1
 case $host_os in
 	*bsd*)
 		AC_SEARCH_LIBS([backtrace], [execinfo], [],
-			[AC_MSG_ERROR("Unable to find libexecinfo")])
-
-		AC_CHECK_LIB(pthread, pthread_create)
-		PTHREAD_LIBS=-pthread
-		AC_SUBST(PTHREAD_LIBS)
-		;;
-
-	linux*)
-		AC_CHECK_LIB([pthread], [pthread_create],
-			[CPPFLAGS+=" -pthread" LDFLAGS+=" -pthread"],
-			[AC_MSG_ERROR("Pthread support is mandatory")])
-
+			[HAVE_BACKTRACE=])
 		;;
 esac
 
@@ -51,7 +58,6 @@ AS_HELP_STRING(--enable-cluster,
 [enable clustering support (not yet implemented), default: no]))
 
 AS_IF([test "x$enable_cluster" = "xyes"], [CPPFLAGS="${CPPFLAGS} -DCLUSTER_SUPPORT"
-
 	dnl mhash check
 	AC_ARG_WITH(mhash,
 	AS_HELP_STRING(--with-mhash,
@@ -63,6 +69,7 @@ AS_IF([test "x$enable_cluster" = "xyes"], [CPPFLAGS="${CPPFLAGS} -DCLUSTER_SUPPO
 		[AC_MSG_ERROR("Unable to find libmhash")])
 	])
 ])
+
 
 dnl --enable-socket
 AC_ARG_ENABLE(socket,
@@ -80,13 +87,29 @@ AS_HELP_STRING(--enable-socket-library,
 [build libclsync socket library, default: no]))
 AM_CONDITIONAL([LIBCLSYNC], [test "x$enable_socket_library" = "xyes"])
 
+dnl --enable-highload-locks
+AC_ARG_ENABLE(highload-locks,
+AS_HELP_STRING(--enable-highload-locks,
+[enable locks for high loaded instances (it requires more CPU, but it's faster) for --thread-splitting [not well tested, can cause deadlocks with 100% CPU utilization], default: no]))
+AM_CONDITIONAL([HLLOCKS], [test "x$enable_highload_locks" = "xyes"])
+
 dnl --enable-debug
 AC_ARG_ENABLE(debug,
 AS_HELP_STRING(--enable-debug,
-[enable debugging, default: no]))
+[enable debugging support, default: yes; value: no, yes, force]),
+[case "${enableval}" in
+	(0|"no")    debug=0 ;;
+	(1|"yes")   debug=1 ;;
+	(2|"force") debug=2 ;;
+	(*)         AC_MSG_ERROR([bad value ${enableval} for --enable-debug]) ;;
+esac],
+[debug=1])
 
-AS_IF([test "x$enable_debug" = "xyes"],
-[CFLAGS="${CFLAGS} -pipe -Wall -O0 -ggdb3" CPPFLAGS="${CPPFLAGS} -D_DEBUG"])
+AS_IF([ test "$debug" -ge 1 ],
+[CFLAGS="${CFLAGS} -pipe -Wall -O0 -ggdb3" CPPFLAGS="${CPPFLAGS} -D_DEBUG_SUPPORT"])
+
+AS_IF([ test "$debug" -ge 2 ],
+[CPPFLAGS="${CPPFLAGS} -D_DEBUG_FORCE"])
 
 dnl --paranoid
 AC_ARG_ENABLE(paranoid,
@@ -96,15 +119,19 @@ AS_HELP_STRING([--enable-paranoid],
 	(0|"no")    paranoid=0 ;;
 	(1|"yes")   paranoid=1 ;;
 	(2)         paranoid=2 ;;
-	(*)         AC_MSG_ERROR([bad value ${enableval} for --paranoid]) ;;
+	(*)         AC_MSG_ERROR([bad value ${enableval} for --enable-paranoid]) ;;
 esac],
 [paranoid=1])
 
-AS_IF([test $paranoid -ge 1],[
-CPPFLAGS="${CPPFLAGS} -D_FORTIFY_SOURCE=2 -DPARANOID"
-CFLAGS="${CFLAGS} -fstack-protector-all -Wall --param ssp-buffer-size=4 -fstack-check"
-LDFLAGS="${LDFLAGS} -Xlinker -zrelro"
-])
+AS_IF(
+	[test $paranoid -ge 1],
+	[
+		CPPFLAGS="${CPPFLAGS} -D_FORTIFY_SOURCE=2 -DPARANOID"
+		CFLAGS="${CFLAGS} -fstack-protector-all -Wall --param ssp-buffer-size=4"
+		LDFLAGS="${LDFLAGS} -Xlinker -zrelro"
+		AX_CHECK_COMPILE_FLAG([-fstack-check], [CFLAGS="${CFLAGS} -fstack-check"])
+	]
+)
 AS_IF([test $paranoid -eq 2], [CPPFLAGS="${CPPFLAGS} -DVERYPARANOID"])
 
 # Checks for programs.
@@ -119,22 +146,117 @@ AC_SEARCH_LIBS([dlopen], [dl], [LDFLAGS="${LDFLAGS} -rdynamic"],
 [AC_MSG_ERROR("Unable to find libdl")])
 
 dnl -lrt is needed on < glibc-2.17
-#AC_SEARCH_LIBS([clock_getres], [rt], [],
-#    [AC_MSG_ERROR("Unable to find librt; clock_getres() is needed")])
+AC_SEARCH_LIBS([clock_getres], [rt], [],
+    [AC_MSG_ERROR("Unable to find librt; clock_getres() is needed")])
+
+dnl searching for getmntent
+AC_CHECK_FUNC([getmntent], [HAVE_GETMNTENT=1])
+
+dnl searching for pivot_root
+AC_CHECK_FUNC([pivot_root], [HAVE_PIVOTROOT=1])
+
+dnl searching for unshare
+AC_CHECK_FUNC([unshare], [HAVE_UNSHARE=1])
+
+dnl libcgroup check
+AC_ARG_WITH(libcgroup,
+	AS_HELP_STRING(--with-libcgroup,
+		[Enable cgroup support via libcgroup; values: no, check, yes; default: check]),
+	[],
+	[with_libcgroup=check]
+)
+
+case "$with_libcgroup" in
+	yes)
+
+		AC_CHECK_LIB([cgroup], [cgroup_init],
+			[
+				AC_CHECK_HEADER(libcgroup.h, [], [AC_MSG_FAILURE([Cannot find libcgroup.h])])
+				LDFLAGS="${LDFLAGS} -lcgroup"
+				HAVE_LIBCGROUP=1
+			],
+			[
+				AC_MSG_FAILURE(
+					[Cannot find libcgroup])
+			]
+		)
+		;;
+	check)
+		AC_CHECK_LIB([cgroup], [cgroup_init],
+			[
+				AC_CHECK_HEADER(libcgroup.h, [], [AC_MSG_FAILURE([Cannot find libcgroup.h])])
+				LDFLAGS="${LDFLAGS} -lcgroup"
+				HAVE_LIBCGROUP=1
+			],
+			[]
+		)
+		;;
+esac
 
 dnl capabilities check
 AC_ARG_WITH(capabilities,
-AS_HELP_STRING(--with-capabilities,
-[enable linux capabilities support, default: disabled]))
-
-AS_IF(
-	[test "x$with_capabilities" = "xyes"],
-		[AC_CHECK_HEADER(
-			[sys/capability.h],
-			[CPPFLAGS="${CPPFLAGS} -DHAVE_CAPABILITIES"],
-			[AC_MSG_ERROR("Unable to find sys/capability.h")]
-		)]
+	AS_HELP_STRING(--with-capabilities,
+		[Enable linux capabilities support; values: no, check, yes; default: check]),
+	[],
+	[with_capabilities=check]
 )
+
+case "$with_capabilities" in
+	yes)
+		AC_CHECK_FUNC([capset],
+			[
+				AC_CHECK_HEADER(sys/capability.h, [HAVE_CAPABILITIES=2], [AC_MSG_FAILURE([Cannot find sys/capability.h])])
+			],
+			[
+				AC_MSG_FAILURE([There is no capabilities support on this system])
+			]
+		)
+		;;
+	check)
+		AC_CHECK_FUNC([capset],
+			[
+				AC_CHECK_HEADER(sys/capability.h, [HAVE_CAPABILITIES=2])
+			]
+		)
+		;;
+esac
+
+dnl tre check
+
+#AC_ARG_WITH(tre,
+#	AS_HELP_STRING(--with-tre,
+#		[Enable tre support be able to predict which directories should be scanned for excludes; values: no, check, yes; default: check]),
+#	[],
+#	[with_tre=check]
+#)
+#
+#case "$with_tre" in
+#	yes)
+#		AC_CHECK_LIB([tre], [tre_regaexec],
+#			[
+#				AC_CHECK_HEADER(tre/tre.h, [], [AC_MSG_FAILURE([Cannot find tre/tre.h])])
+#				LDFLAGS="${LDFLAGS} -ltre"
+#				HAVE_TRE=1
+#			],
+#			[
+#				AC_MSG_FAILURE(
+#					[Cannot find libtre])
+#			]
+#		)
+#		;;
+#	check)
+#		AC_CHECK_LIB([tre], [tre_regaexec],
+#			[
+#				AC_CHECK_HEADER(tre/tre.h, [], [AC_MSG_FAILURE([Cannot find tre/tre.h])])
+#				LDFLAGS="${LDFLAGS} -ltre"
+#				HAVE_TRE=1
+#			],
+#			[]
+#		)
+#		;;
+#esac
+
+dnl kqueue/inotify/bsm
 
 AC_ARG_WITH(kqueue,
 	AS_HELP_STRING(--with-kqueue,
@@ -150,9 +272,16 @@ AC_ARG_WITH(inotify,
 	[with_inotify=check]
 )
 
+AC_ARG_WITH(gio,
+	AS_HELP_STRING(--with-gio,
+		[Enable GIO support as FS monitor subsystem; values: no, lib, check; default: check]),
+	[],
+	[with_gio=check]
+)
+
 AC_ARG_WITH(bsm,
 	AS_HELP_STRING(--with-bsm,
-		[Enable BSM (Sun/*BSD audit) support as FS monitor subsystem; values: no, native, check; default: check]),
+		[Enable BSM (Sun/*BSD audit) support as FS monitor subsystem; values: no, lib, check; default: check]),
 	[],
 	[with_bsm=check]
 )
@@ -243,6 +372,25 @@ case "$with_inotify" in
 		;;
 esac
 
+case "$with_gio" in
+	check)
+		PKG_CHECK_MODULES(GIO,  [gio-2.0], [
+			HAVE_GIO=1
+			AC_SUBST([GIO_CFLAGS])
+			AC_SUBST([GIO_LIBS])
+		])
+		;;
+	lib)
+		PKG_CHECK_MODULES(GIO,  [gio-2.0], [
+			HAVE_GIO=1
+			AC_SUBST([GIO_CFLAGS])
+			AC_SUBST([GIO_LIBS])
+		], [
+			AC_MSG_FAILURE([Cannot find libgio-2.0])
+		])
+		;;
+esac
+
 case "$with_bsm" in
 	check)
 		AC_CHECK_FUNC([au_fetch_tok],
@@ -277,12 +425,46 @@ esac
 
 AS_IF([test "$HAVE_INOTIFY" != ""], [AC_CHECK_FUNC([inotify_init1], [], [INOTIFY_OLD=1])])
 
-AM_CONDITIONAL([HAVE_KQUEUE],    [test "$HAVE_KQUEUE"     != ""])
-AM_CONDITIONAL([HAVE_INOTIFY],   [test "$HAVE_INOTIFY"    != ""])
-AM_CONDITIONAL([INOTIFY_OLD],    [test "$INOTIFY_OLD"     != ""])
-AM_CONDITIONAL([HAVE_FANOTIFY],  [test "$HAVE_FANOTIFY"   != ""])
-AM_CONDITIONAL([HAVE_BSM],       [test "$HAVE_BSM"        != ""])
-AM_CONDITIONAL([HAVE_DTRACEPIPE],[test "$HAVE_DTRACEPIPE" != ""])
+dnl searching for seccomp
+AC_ARG_WITH(libseccomp,
+	AS_HELP_STRING(--with-libseccomp,
+		[Enable seccomp support be able to forbid extra syscalls; values: no, check, yes; default: check]),
+	[],
+	[with_libseccomp=check]
+)
+
+case "$with_libseccomp" in
+	yes)
+		AC_CHECK_TYPES([scmp_filter_ctx],                   [],               [AC_MSG_FAILURE([Cannot find valid seccomp.h])],       [[#include <seccomp.h>]])
+		AC_CHECK_DECLS([seccomp_syscall_resolve_name_arch], [],               [AC_MSG_FAILURE([Cannot find valid seccomp.h])],       [[#include <seccomp.h>]])
+		AC_CHECK_TYPES([struct seccomp_data],               [HAVE_SECCOMP=1], [AC_MSG_FAILURE([Cannot find valid linux/seccomp.h])], [[#include <linux/seccomp.h>]])
+		;;
+	check)
+		AC_CHECK_TYPES([scmp_filter_ctx], [
+			AC_CHECK_DECLS([seccomp_syscall_resolve_name_arch], [
+				AC_CHECK_TYPES([struct seccomp_data], [HAVE_SECCOMP=1], [], [[#include <linux/seccomp.h>]])
+			], [], [[#include <seccomp.h>]])
+		], [], [[#include <seccomp.h>]])
+		;;
+esac
+AS_IF([test "$HAVE_CAPABILITIES" != ""], [
+])
+
+AM_CONDITIONAL([HAVE_KQUEUE],       [test "x$HAVE_KQUEUE"       != "x"])
+AM_CONDITIONAL([HAVE_INOTIFY],      [test "x$HAVE_INOTIFY"      != "x"])
+AM_CONDITIONAL([INOTIFY_OLD],       [test "x$INOTIFY_OLD"       != "x"])
+AM_CONDITIONAL([HAVE_FANOTIFY],     [test "x$HAVE_FANOTIFY"     != "x"])
+AM_CONDITIONAL([HAVE_BSM],          [test "x$HAVE_BSM"          != "x"])
+AM_CONDITIONAL([HAVE_GIO],          [test "x$HAVE_GIO"          != "x"])
+AM_CONDITIONAL([HAVE_DTRACEPIPE],   [test "x$HAVE_DTRACEPIPE"   != "x"])
+AM_CONDITIONAL([HAVE_BACKTRACE],    [test "x$HAVE_BACKTRACE"    != "x"])
+AM_CONDITIONAL([HAVE_CAPABILITIES], [test "x$HAVE_CAPABILITIES" != "x"])
+AM_CONDITIONAL([HAVE_GETMNTENT],    [test "x$HAVE_GETMNTENT"    != "x"])
+AM_CONDITIONAL([HAVE_PIVOTROOT],    [test "x$HAVE_PIVOTROOT"    != "x"])
+AM_CONDITIONAL([HAVE_UNSHARE],      [test "x$HAVE_UNSHARE"      != "x"])
+AM_CONDITIONAL([HAVE_SECCOMP],      [test "x$HAVE_SECCOMP"      != "x"])
+AM_CONDITIONAL([HAVE_TRE],          [test "x$HAVE_TRE"          != "x"])
+AM_CONDITIONAL([HAVE_LIBCGROUP],    [test "x$HAVE_LIBCGROUP"    != "x"])
 
 AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' ], [AC_MSG_FAILURE([kqueue, inotify and bsm are not supported on this system])])
 

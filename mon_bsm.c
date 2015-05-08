@@ -27,6 +27,8 @@
 #include <bsm/libbsm.h>
 #include <bsm/audit_kevents.h>
 #include <glib.h>
+#include <sys/ioctl.h>
+#include <security/audit/audit_ioctl.h>
 
 struct bsm_event {
 	u_int16_t type;
@@ -38,7 +40,10 @@ struct bsm_event {
 struct mondata {
 	FILE *pipe;
 	int config_fd;
-	struct bsm_event event;
+	size_t event_count;
+	size_t event_count_wasinqueue;
+	size_t event_alloc;
+	struct bsm_event *event;
 };
 typedef struct mondata mondata_t;
 
@@ -48,24 +53,39 @@ enum event_bits {
 	UEM_DELETED	= 0x04,
 };
 
-struct recognize_event_return {
-	union {
-		struct {
-			struct {
-				eventobjtype_t objtype_old:16;
-				eventobjtype_t objtype_new:16;
-			} f;
-			struct {
-				eventobjtype_t objtype_old:16;
-				eventobjtype_t objtype_new:16;
-			} t;
-		} v;
-		uint64_t i;
-	} u;
+enum bsm_handle_type {
+	BSM_HANDLER_CALLWAIT,
+	BSM_HANDLER_ITERATE,
 };
 
-static inline uint64_t recognize_event(uint32_t event) {
-	struct recognize_event_return r = {{{{0}}}};
+struct recognize_event_return {
+	struct {
+		eventobjtype_t objtype_old;
+		eventobjtype_t objtype_new;
+	} f;
+	struct {
+		eventobjtype_t objtype_old;
+		eventobjtype_t objtype_new;
+	} t;
+};
+
+pthread_t       prefetcher_thread;
+pthread_mutex_t bsm_mutex_prefetcher = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t  bsm_cond_gotevent    = PTHREAD_COND_INITIALIZER;
+pthread_cond_t  bsm_cond_queueend    = PTHREAD_COND_INITIALIZER;
+
+int bsm_queue_len;
+
+int (*bsm_wait)(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *timeout_p);
+int (*bsm_handle)(struct ctx *ctx_p, struct indexes *indexes_p);
+
+extern int bsm_prefetcher(struct ctx *ctx_p);
+extern int bsm_wait_prefetched  (struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *timeout_p);
+extern int bsm_wait_noprefetch  (struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *timeout_p);
+extern int bsm_handle_prefetched(struct ctx *ctx_p, struct indexes *indexes_p);
+extern int bsm_handle_noprefetch(struct ctx *ctx_p, struct indexes *indexes_p);
+
+static inline void recognize_event(struct recognize_event_return *r, uint32_t event) {
 	int is_created, is_deleted, is_moved;
 	eventobjtype_t type;
 
@@ -115,29 +135,29 @@ static inline uint64_t recognize_event(uint32_t event) {
 			break;
 	}
 
-	r.u.v.f.objtype_old = type;
+	r->f.objtype_old = type;
 
 	if (is_moved) {
-		r.u.v.f.objtype_new = EOT_DOESNTEXIST;
-		r.u.v.t.objtype_old = EOT_DOESNTEXIST;
-		r.u.v.t.objtype_new = type;
+		r->f.objtype_new = EOT_DOESNTEXIST;
+		r->t.objtype_old = EOT_DOESNTEXIST;
+		r->t.objtype_new = type;
 
-		return r.u.i;
+		return;
 	}
 
-	r.u.v.f.objtype_new = type;
+	r->f.objtype_new = type;
 
 	if (is_created)
-		r.u.v.f.objtype_old = EOT_DOESNTEXIST;
+		r->f.objtype_old = EOT_DOESNTEXIST;
 
 	if (is_deleted)
-		r.u.v.f.objtype_new = EOT_DOESNTEXIST;
+		r->f.objtype_new = EOT_DOESNTEXIST;
 
-	return r.u.i;
+	return;
 }
 
 int auditd_restart() {
-	debug(1, "Running \""AUDIT_CONTROL_INITSCRIPT" restart\"");
+	debug(1, "Running \""AUDIT_CONTROL_INITSCRIPT" onerestart\"");
 
 	pid_t pid = fork();
 	switch (pid) {
@@ -145,9 +165,9 @@ int auditd_restart() {
 			error("Cannot fork().");
 			return -1;
 		case  0:
-			debug(5, "fork: execl(\""AUDIT_CONTROL_INITSCRIPT"\", \""AUDIT_CONTROL_INITSCRIPT"\", \"restart\", NULL);", pid);
-			execl(AUDIT_CONTROL_INITSCRIPT, AUDIT_CONTROL_INITSCRIPT, "restart", NULL);
-			error("fork: Cannot execute \""AUDIT_CONTROL_INITSCRIPT" restart\"");
+			debug(5, "fork: execl(\""AUDIT_CONTROL_INITSCRIPT"\", \""AUDIT_CONTROL_INITSCRIPT"\", \"onerestart\", NULL);", pid);
+			execl(AUDIT_CONTROL_INITSCRIPT, AUDIT_CONTROL_INITSCRIPT, "onerestart", NULL);
+			error("fork: Cannot execute \""AUDIT_CONTROL_INITSCRIPT" onerestart\"");
 			return -1;
 	}
 
@@ -160,7 +180,7 @@ int auditd_restart() {
 	int exitcode = WEXITSTATUS(status);
 
 	if (exitcode)
-		error("Got error while running \""AUDIT_CONTROL_INITSCRIPT" restart\"");
+		error("Got error while running \""AUDIT_CONTROL_INITSCRIPT" onerestart\"");
 
 	debug(4, "exitcode == %u", exitcode);
 	return exitcode;
@@ -267,6 +287,7 @@ int bsm_config_revert(mondata_t *mondata) {
 }
 
 int bsm_init(ctx_t *ctx_p) {
+	debug(9, "");
 
 	ctx_p->fsmondata = xcalloc(sizeof(mondata_t), 1);
 	mondata_t *mondata = ctx_p->fsmondata;
@@ -274,10 +295,39 @@ int bsm_init(ctx_t *ctx_p) {
 	if (bsm_config_setup(mondata) == -1)
 		BSM_INIT_ERROR;
 
+	debug(5, "Openning \""AUDITPIPE_PATH"\"");
 	FILE *pipe = fopen(AUDITPIPE_PATH, "r");
 	if (pipe == NULL) {
 		error("Cannot open \""AUDITPIPE_PATH"\" for reading.");
 		BSM_INIT_ERROR;
+	}
+
+	{
+		// Setting auditpipe queue length to be maximal
+
+		int fd;
+		u_int len;
+
+		fd = fileno(pipe);
+
+		if (ioctl(fd, AUDITPIPE_GET_QLIMIT_MAX, &len) < 0) {
+			error("Cannot read QLIMIT_MAX from auditpipe");
+			BSM_INIT_ERROR;
+		}
+
+		if (ioctl(fd, AUDITPIPE_SET_QLIMIT, &len) < 0) {
+			error("Cannot set QLIMIT through auditpipe");
+			BSM_INIT_ERROR;
+		}
+
+		if (ioctl(fd, AUDITPIPE_GET_QLIMIT, &len) < 0) {
+			error("Cannot read QLIMIT from auditpipe");
+			BSM_INIT_ERROR;
+		}
+
+		bsm_queue_len = len;
+
+		debug(5, "auditpipe QLIMIT -> %i", (int)len);
 	}
 	
 	if (setvbuf(pipe, NULL, _IONBF, 0)) {
@@ -287,27 +337,54 @@ int bsm_init(ctx_t *ctx_p) {
 
 	mondata->pipe = pipe;
 
-	return 0;
-}
-int bsm_wait(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *timeout_p) {
-	mondata_t *mondata = ctx_p->fsmondata;
-	struct timeval timeout_abs, tv_abs;
-	int dontwait = 0;
-	u_char *au_buf;
-	size_t  au_len;
-	size_t  au_parsed;
-	tokenstr_t tok;
-	struct bsm_event *event_p = &mondata->event;
+	switch (ctx_p->flags[MONITOR]) {
+		case NE_BSM:
+			bsm_wait   = bsm_wait_noprefetch;
+			bsm_handle = bsm_handle_noprefetch;
+			mondata->event = xcalloc(sizeof(*mondata->event), 1);
+			break;
+		case NE_BSM_PREFETCH:
+			pthread_mutex_init(&bsm_mutex_prefetcher, NULL);
+			pthread_cond_init (&bsm_cond_gotevent,    NULL);
+			pthread_cond_init (&bsm_cond_queueend,    NULL);
+			bsm_wait   = bsm_wait_prefetched;
+			bsm_handle = bsm_handle_prefetched;
 
-	if (timeout_p->tv_sec == 0 && timeout_p->tv_usec == 0)
-		dontwait = 1;
-
-	if (!dontwait) {
-		gettimeofday(&tv_abs, NULL);
-		timeradd(&tv_abs, timeout_p, &timeout_abs);
+			critical_on (pthread_create(&prefetcher_thread, NULL, (void *(*)(void *))bsm_prefetcher, ctx_p));
+			break;
+		default:
+			critical("Invalid ctx_p->flags[MONITOR]: %u", ctx_p->flags[MONITOR]);
 	}
 
-	int pipe_fd = fileno(mondata->pipe);
+	return 0;
+}
+
+int select_rfd(int fd, struct timeval *timeout_p) {
+	int rc;
+	debug(9, "%i, {%li, %li}", fd, timeout_p == NULL ? -1 : timeout_p->tv_sec, timeout_p == NULL ? 0 : timeout_p->tv_usec);
+	fd_set rfds;
+	FD_ZERO(&rfds);
+	FD_SET(fd, &rfds);
+	rc = select(fd+1, &rfds, NULL, NULL, timeout_p);
+	debug(9, "rc -> %i", rc);
+	return rc;
+}
+
+int bsm_fetch(ctx_t *ctx_p, indexes_t *indexes_p, struct bsm_event *event_p, int pipe_fd, struct timeval *timeout_p, struct timeval *timeout_abs_p) {
+	size_t  au_len;
+	size_t  au_parsed;
+	u_char *au_buf;
+	tokenstr_t tok;
+	int recalc_timeout;
+	static int dont_wait = 0;
+	struct timeval tv_abs;
+	struct timeval timeout_zero = {0};
+	mondata_t *mondata = ctx_p->fsmondata;
+
+	recalc_timeout = 0;
+	if (timeout_p != NULL)
+		if (timeout_p->tv_sec != 0 || timeout_p->tv_usec != 0)
+			recalc_timeout = 1;
 
 	while (42) {
 		int path_count;
@@ -320,40 +397,75 @@ int bsm_wait(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *timeo
 
 		// Getting a record
 		{
-			debug(3, "select() with timeout %li.%06li secs (dontwait == %u).", timeout_p->tv_sec, timeout_p->tv_usec, dontwait);
-			fd_set rfds;
-			FD_ZERO(&rfds);
-			FD_SET(pipe_fd, &rfds);
-			int rc = select(pipe_fd+1, &rfds, NULL, NULL, timeout_p);
+			int rc;
 
-			if (rc == 0 || rc == -1)
-				return rc;
+			rc = 0;
+			if (dont_wait) {
+				debug(4, "select() without waiting");
+				rc = select_rfd(pipe_fd, &timeout_zero);
+				if (rc == 0) {
+					dont_wait = 0;
+					mondata->event_count_wasinqueue = 0;
+					switch (ctx_p->flags[MONITOR]) {
+						case NE_BSM_PREFETCH:
+							pthread_cond_broadcast(&bsm_cond_queueend);
+							break;
+						default:
+							break;
+					}
+				} else
+				if (rc > 0) {
+					mondata->event_count_wasinqueue++;
+					if (mondata->event_count_wasinqueue+1 >= bsm_queue_len)
+						critical_or_warning(ctx_p->flags[EXITONSYNCSKIP], "The was too many events in BSM queue (reached kernel BSM queue limit: %u).", bsm_queue_len);
+				}
+			}
+
+			if (rc == 0) {
+				if (recalc_timeout == 2) {
+					debug(5, "old timeout_p->: tv_sec == %lu; tv_usec == %lu", timeout_p->tv_sec, timeout_p->tv_usec);
+					gettimeofday(&tv_abs, NULL);
+					if (timercmp(timeout_abs_p, &tv_abs, <))
+						timersub(timeout_abs_p, &tv_abs, timeout_p);
+					else
+						memset(timeout_p, 0, sizeof(*timeout_p));
+					debug(5, "new timeout_p->: tv_sec == %lu; tv_usec == %lu", timeout_p->tv_sec, timeout_p->tv_usec);
+				}
+
+				debug(3, "select() with timeout %li.%06li secs (recalc_timeout == %u).", 
+					timeout_p == NULL ? -1 : timeout_p->tv_sec,
+					timeout_p == NULL ?  0 : timeout_p->tv_usec,
+					recalc_timeout);
+
+				rc = select_rfd(pipe_fd, timeout_p);
+				if (rc > 0)
+					mondata->event_count_wasinqueue++;
+
+				if (recalc_timeout == 1)
+					recalc_timeout++;
+			}
+
+			critical_on ((rc == -1) && (errno != EINTR));
+			if (rc == 0 || rc == -1) {
+				debug(3, "rc == %i; errno == %i; return 0", rc, errno);
+				return 0;
+			}
+
+			dont_wait = 1;
 
 			au_len = au_read_rec(mondata->pipe, &au_buf);
-			if (au_len == -1) {
-				au_len = 0;
-				return -1;
-			}
-
-			if (!dontwait) {
-				debug(5, "old timeout_p->: tv_sec == %lu; tv_usec == %lu", timeout_p->tv_sec, timeout_p->tv_usec);
-				gettimeofday(&tv_abs, NULL);
-				if (timercmp(&timeout_abs, &tv_abs, <))
-					timersub(&timeout_abs, &tv_abs, timeout_p);
-				else
-					memset(timeout_p, 0, sizeof(*timeout_p));
-				debug(5, "new timeout_p->: tv_sec == %lu; tv_usec == %lu", timeout_p->tv_sec, timeout_p->tv_usec);
-			}
+			critical_on (au_len == -1);
 		}
 
 		// Parsing the record
+		au_parsed  = 0;
 		path_count = 0;
-		debug(3, "parsing the event");
+		debug(3, "parsing the event (au_parsed == %u; au_len == %u)", au_parsed, au_len);
 		while (au_parsed < au_len) {
+			critical_on (au_fetch_tok(&tok, &au_buf[au_parsed], au_len - au_parsed) == -1);
 
-			if (au_fetch_tok(&tok, &au_buf[au_parsed], au_len - au_parsed) == -1)
-				return -1;
 			au_parsed += tok.len;
+			debug(4, "au_fetch_tok(): au_parsed -> %u", tok.len);
 
 			switch (tok.id) {
 				case AUT_HEADER32:
@@ -409,62 +521,72 @@ int bsm_wait(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *timeo
 		// Cleanup
 		debug(4, "clean up");
 		free(au_buf);
-		au_buf    = NULL;
-		au_len    = 0;
-		au_parsed = 0;
 	}
 
+	critical ("This code shouldn't be reached");
 	return -1;
 }
-int bsm_handle(struct ctx *ctx_p, struct indexes *indexes_p) {
+enum bsm_handletype {
+	BSM_HANDLE_CALLWAIT,
+	BSM_HANDLE_ITERATE,
+};
+typedef enum bsm_handletype bsm_handletype_t;
+int bsm_handle_allevents(struct ctx *ctx_p, struct indexes *indexes_p, bsm_handletype_t how) {
+	debug(4, "");
 	static struct timeval tv={0};
 	mondata_t *mondata = ctx_p->fsmondata;
-	int count;
-	char   *path_rel	= NULL;
-	size_t  path_rel_len	= 0;
-	struct bsm_event *event_p = &mondata->event;
+	int count, event_num;
+	char   *path_rel	 = NULL;
+	size_t  path_rel_len	 = 0;
+	int left_count;
 
-	count = 0;
+	event_num = 0;
+	count     = 0;
 
 #ifdef PARANOID
 	g_hash_table_remove_all(indexes_p->fpath2ei_ht);
 #endif
 
 	do {
-		struct  recognize_event_return r;
+		struct  recognize_event_return r = {{0}};
 		char *path_stat;
-		struct stat st;
+		struct stat st, *st_p;
 		mode_t st_mode;
 		size_t st_size;
+		struct bsm_event *event_p = &mondata->event[event_num];
 
 #ifdef PARANOID
 		if (!*event_p->path && !*event_p->path_to) {
-			warning("bsm_handle() but no events are parsed.");
+			warning("no events are parsed (event_p == %p; mondata->event_count == %i).", event_p, mondata->event_count);
 			continue;
 		}
 #endif
 
-		r.u.i = recognize_event(event_p->type);
+		recognize_event(&r, event_p->type);
 
-		if (r.u.v.t.objtype_new != EOT_UNKNOWN) 
+		if (r.t.objtype_new != EOT_UNKNOWN) 
 			path_stat = event_p->path_to;
 		else 
 			path_stat = event_p->path;
 
-		if (lstat(path_stat, &st)) {
-			debug(2, "Cannot lstat64(\"%s\", st). Seems, that the object disappeared.", path_stat);
-			if(r.u.v.f.objtype_old == EOT_DIR || r.u.v.f.objtype_new == EOT_DIR)
+		if ((r.t.objtype_new == EOT_DOESNTEXIST) || (ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT) || lstat(path_stat, &st)) {
+			debug(2, "Cannot lstat64(\"%s\", st). Seems, that the object had been deleted (%i) or option \"--cancel-syscalls=mon_stat\" (%i) is set.", path_stat, r.t.objtype_new == EOT_DOESNTEXIST, ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT);
+			if (r.f.objtype_old == EOT_DIR || r.f.objtype_new == EOT_DIR)
 				st_mode = S_IFDIR;
 			else
 				st_mode = S_IFREG;
 			st_size = 0;
+
+			st_p    = NULL;
 		} else {
 			st_mode = st.st_mode;
 			st_size = st.st_size;
+
+			st_p    = &st;
 		}
 
 		if (*event_p->path) {
-			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, event_p->path, NULL, r.u.v.f.objtype_old, r.u.v.f.objtype_new, event_p->type, event_p->w_id, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
+			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, event_p->path, NULL, st_p, r.f.objtype_old, r.f.objtype_new, event_p->type, event_p->w_id, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
 				error("Got error while load_mark-ing into pre-queue \"%s\"", event_p->path);
 				count = -1;
 				*event_p->path = 0;
@@ -474,8 +596,8 @@ int bsm_handle(struct ctx *ctx_p, struct indexes *indexes_p) {
 			count++;
 		}
 
-		if ((r.u.v.t.objtype_new != EOT_UNKNOWN) && *event_p->path_to) {
-			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, event_p->path_to, NULL, r.u.v.t.objtype_old, r.u.v.t.objtype_new, event_p->type, event_p->w_id, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
+		if ((r.t.objtype_new != EOT_UNKNOWN) && *event_p->path_to) {
+			if (sync_prequeue_loadmark(1, ctx_p, indexes_p, event_p->path_to, NULL, st_p, r.t.objtype_old, r.t.objtype_new, event_p->type, event_p->w_id, st_mode, st_size, &path_rel, &path_rel_len, NULL)) {
 				error("Got error while load_mark-ing into pre-queue \"%s\"", event_p->path_to);
 				count = -1;
 				*event_p->path_to = 0;
@@ -484,7 +606,33 @@ int bsm_handle(struct ctx *ctx_p, struct indexes *indexes_p) {
 			*event_p->path_to = 0;
 			count++;
 		}
-	} while (bsm_wait(ctx_p, indexes_p, &tv) > 0);
+		switch (how) {
+			case BSM_HANDLE_CALLWAIT:
+				debug(15, "BSM_HANDLE_CALLWAIT");
+				left_count = bsm_wait(ctx_p, indexes_p, &tv);
+				break;
+			case BSM_HANDLE_ITERATE:
+				debug(15, "BSM_HANDLE_ITERATE");
+				event_num++;
+				left_count = mondata->event_count - event_num;
+				break;
+		}
+		debug(10, "left_count: %i; event_num: %i; mondata->event_count: %i", left_count, event_num, mondata->event_count);
+	} while (left_count > 0);
+	switch (how) {
+		case BSM_HANDLE_ITERATE:
+			if (event_num < mondata->event_count) {
+				memmove(
+					 mondata->event,
+					&mondata->event[event_num],
+					sizeof(*mondata->event)*(mondata->event_count - event_num)
+				);
+			}
+			mondata->event_count -= event_num;
+			break;
+		default:
+			break;
+	}
 
 	free(path_rel);
 #ifdef VERYPARANOID
@@ -496,11 +644,166 @@ int bsm_handle(struct ctx *ctx_p, struct indexes *indexes_p) {
 	// Moving events from local queue to global ones
 	sync_prequeue_unload(ctx_p, indexes_p);
 
-	debug(4, "Result count: %i", count);
+	debug(4, "Result processed count: %i (left, mondata->event_count == %i)", count, mondata->event_count);
 	if (count == -1)
 		return -1;
 
 	return count;
+}
+
+void bsm_prefetcher_sig_int(int signal) {
+	debug(2, "signal -> %i. Sending pthread_cond_broadcast() to bsm_cond_gotevent and bsm_cond_queueend.", signal);
+	pthread_cond_broadcast(&bsm_cond_gotevent);
+	pthread_cond_broadcast(&bsm_cond_queueend);
+	return;
+}
+
+static int bsm_prefetcher_running=2;
+int bsm_prefetcher(struct ctx *ctx_p) {
+	mondata_t *mondata   = ctx_p->fsmondata;
+	indexes_t *indexes_p = ctx_p->indexes_p;
+	struct bsm_event event, *event_p;
+
+	register_blockthread();
+	signal(SIGUSR_BLOPINT,  bsm_prefetcher_sig_int);
+
+	int pipe_fd = fileno(mondata->pipe);
+	mondata->event = xcalloc(sizeof(*mondata->event), ALLOC_PORTION);
+
+	bsm_prefetcher_running = 1;
+	while (bsm_prefetcher_running) {
+		if (bsm_fetch(ctx_p, indexes_p, &event, pipe_fd, NULL, NULL) > 0) {
+			// Pushing the event
+			debug(5, "We have an event. Pushing.");
+#ifdef PARANOID
+			critical_on (mondata->event_count >= BSM_QUEUE_LENGTH_MAX);
+#endif
+			if (mondata->event_count >= mondata->event_alloc) {
+				debug(2, "Increasing queue length: %u -> %u (limit is "XTOSTR(BSM_QUEUE_LENGTH_MAX)")", mondata->event_alloc, mondata->event_alloc+ALLOC_PORTION);
+				mondata->event_alloc += ALLOC_PORTION;
+				mondata->event = xrealloc(mondata->event, mondata->event_alloc*sizeof(*mondata->event));
+				memset(&mondata->event[mondata->event_count], 0, sizeof(*mondata->event)*(mondata->event_alloc - mondata->event_count));
+			}
+
+			pthread_mutex_lock(&bsm_mutex_prefetcher);
+			event_p = &mondata->event[mondata->event_count++];
+			memcpy(event_p, &event, sizeof(*event_p));
+			debug(2, "event_count -> %u (event_p == %p; event_p->path == \"%s\")", mondata->event_count, event_p, event_p->path);
+			pthread_cond_broadcast(&bsm_cond_gotevent);
+			pthread_mutex_unlock(&bsm_mutex_prefetcher);
+
+			memset(&event, 0, sizeof(event));
+		}
+	}
+
+	return 0;
+}
+int bsm_wait_prefetched(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *timeout_p) {
+	debug(3, "(ctx_p, indexes_p, %p {%u, %u})", timeout_p, timeout_p == NULL?-1:timeout_p->tv_sec, timeout_p == NULL?0:timeout_p->tv_usec);
+#ifdef PARANOID
+	critical_on (timeout_p == NULL);
+#endif
+	mondata_t *mondata = ctx_p->fsmondata;
+	struct timespec ts_abs;
+	struct timeval tv_abs, timeout_abs;
+
+#define INFINITETIME (3600 * 24 * 365 * 10) /* ~10 years */
+	if (timeout_p->tv_sec > INFINITETIME)
+		timeout_p->tv_sec = INFINITETIME;
+#undef INFINITETIME
+
+	gettimeofday(&tv_abs, NULL);
+	timeradd(&tv_abs, timeout_p, &timeout_abs);
+
+	ts_abs.tv_sec  = timeout_abs.tv_sec;
+	ts_abs.tv_nsec = timeout_abs.tv_usec*1000;
+
+	pthread_mutex_lock(&bsm_mutex_prefetcher);
+	if (mondata->event_count) {
+		debug(2, "Already have an event. mondata->event_count == %i", mondata->event_count);
+		pthread_mutex_unlock(&bsm_mutex_prefetcher);
+		return mondata->event_count;
+	}
+
+	if (timeout_p->tv_sec == 0 && timeout_p->tv_sec == 0) {
+		debug(2, "Zero timeout. Waiting for the current queue to be processed.")
+		pthread_cond_wait(&bsm_cond_queueend, &bsm_mutex_prefetcher);
+		pthread_mutex_unlock(&bsm_mutex_prefetcher);
+		debug(3, "return mondata->event_count == %i", mondata->event_count);
+		return mondata->event_count;
+	}
+
+//l_pthread_cond_timedwait_restart:
+	debug(10, "pthread_cond_timedwait(&bsm_cond_gotevent, &bsm_mutex_prefetcher, {%i, %i})", ts_abs.tv_sec, ts_abs.tv_nsec);
+	if ((errno = pthread_cond_timedwait(&bsm_cond_gotevent, &bsm_mutex_prefetcher, &ts_abs))) {
+		pthread_mutex_unlock(&bsm_mutex_prefetcher);
+		switch (errno) {
+			case ETIMEDOUT:
+#ifdef PARANOID
+				critical_on (mondata->event_count);
+#endif
+				debug(2, "Timed out -> no events (mondata->event_count == %i)", mondata->event_count);
+				return 0;
+/*			case EINTR:
+				debug(3, "pthread_cond_timedwait() -> EINTR. Restarting.");
+				goto l_pthread_cond_timedwait_restart;*/
+			default:
+				critical("Got unhandled error on pthread_cond_timedwait()");
+		}
+	}
+
+	pthread_mutex_unlock(&bsm_mutex_prefetcher);
+/*#ifdef PARANOID
+	critical_on (!mondata->event_count);
+#endif*/
+
+	debug(2, "%s. mondata->event_count == %i", mondata->event_count?"Got an event":"Got signal SIGUSR_BLOPINT", mondata->event_count);
+	return mondata->event_count;
+}
+int bsm_handle_prefetched(struct ctx *ctx_p, struct indexes *indexes_p) {
+	int count;
+	debug(8, "");
+
+	pthread_mutex_lock(&bsm_mutex_prefetcher);
+	count = bsm_handle_allevents(ctx_p, indexes_p, BSM_HANDLE_ITERATE);
+	pthread_mutex_unlock(&bsm_mutex_prefetcher);
+
+	return count;
+}
+int bsm_wait_noprefetch(struct ctx *ctx_p, struct indexes *indexes_p, struct timeval *timeout_p) {
+	debug(3, "(ctx_p, indexes_p, %p {%u, %u})", timeout_p, timeout_p == NULL?-1:timeout_p->tv_sec, timeout_p == NULL?0:timeout_p->tv_usec);
+	mondata_t *mondata = ctx_p->fsmondata;
+	struct timeval timeout_abs, tv_abs;
+	struct bsm_event *event_p = mondata->event;
+
+	if (timeout_p->tv_sec != 0 || timeout_p->tv_usec != 0) {
+		gettimeofday(&tv_abs, NULL);
+		timeradd(&tv_abs, timeout_p, &timeout_abs);
+	}
+
+	int pipe_fd = fileno(mondata->pipe);
+
+	if (*event_p->path) {
+		debug(2, "We already have an event. Return 1.");
+		return 1;
+	}
+
+	if (bsm_fetch(ctx_p, indexes_p, mondata->event, pipe_fd, timeout_p, &timeout_abs) == 0) {
+		debug(2, "No events. Return 0");
+		return 0;
+	}
+
+	if (*event_p->path) {
+		debug(2, "We have an event. Return 1.");
+		return 1;
+	}
+
+	critical ("This code shouldn't be reached");
+	return -1;
+}
+int bsm_handle_noprefetch(struct ctx *ctx_p, struct indexes *indexes_p) {
+	debug(3, "");
+	return bsm_handle_allevents(ctx_p, indexes_p, BSM_HANDLE_CALLWAIT);
 }
 int bsm_add_watch_dir(struct ctx *ctx_p, struct indexes *indexes_p, const char *const accpath) {
 	static int id = 1;
@@ -514,8 +817,15 @@ int bsm_add_watch_dir(struct ctx *ctx_p, struct indexes *indexes_p, const char *
 	return id++;
 }
 int bsm_deinit(ctx_t *ctx_p) {
+	void *ret;
 	int rc = 0;
 	mondata_t *mondata = ctx_p->fsmondata;
+
+	bsm_prefetcher_running = 0;
+	pthread_kill(prefetcher_thread, SIGUSR_BLOPINT);
+	pthread_cond_destroy (&bsm_cond_gotevent);
+	pthread_mutex_destroy(&bsm_mutex_prefetcher);
+	pthread_join(prefetcher_thread, &ret);
 
 	rc |= fclose(mondata->pipe);
 

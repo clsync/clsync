@@ -23,6 +23,7 @@ Description: live sync tool based on inotify, written in GNU C
 
 Package: libclsync0
 Architecture: any
+Pre-Depends: multiarch-support
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: clsync control socket library
  Clsync recursively watches for source directory and executes external

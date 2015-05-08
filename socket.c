@@ -17,6 +17,8 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "common.h"
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -68,12 +70,13 @@ static char *recv_ptrs[SOCKET_MAX];
 const char *const textmessage_args[SOCKCMD_MAXID] = {
 	[SOCKCMD_REQUEST_NEGOTIATION] 	= "%u",
 	[SOCKCMD_REQUEST_DUMP]	 	= "%s",
+	[SOCKCMD_REQUEST_SET]	 	= "%s\003/ %s\003/",
 	[SOCKCMD_REPLY_NEGOTIATION] 	= "%u",
-	[SOCKCMD_REPLY_ACK]		= "%03u %lu",
-	[SOCKCMD_REPLY_EINVAL]		= "%03u %lu",
+	[SOCKCMD_REPLY_ACK]		= "%u %lu",
+	[SOCKCMD_REPLY_EINVAL]		= "%u %lu",
 	[SOCKCMD_REPLY_VERSION]		= "%u %u %s",
 	[SOCKCMD_REPLY_INFO]		= "%s\003/ %s\003/ %x %x",
-	[SOCKCMD_REPLY_UNKNOWNCMD]	= "%03u %lu",
+	[SOCKCMD_REPLY_UNKNOWNCMD]	= "%u %lu",
 	[SOCKCMD_REPLY_INVALIDCMDID]	= "%lu",
 	[SOCKCMD_REPLY_EEXIST]		= "%s\003/",
 	[SOCKCMD_REPLY_EPERM]		= "%s\003/",
@@ -83,14 +86,15 @@ const char *const textmessage_args[SOCKCMD_MAXID] = {
 const char *const textmessage_descr[SOCKCMD_MAXID] = {
 	[SOCKCMD_REQUEST_NEGOTIATION]	= "Protocol version is %u.",
 	[SOCKCMD_REPLY_NEGOTIATION]	= "Protocol version is %u.",
-	[SOCKCMD_REPLY_ACK]		= "Acknowledged command: id == %03u; num == %lu.",
-	[SOCKCMD_REPLY_EINVAL]		= "Rejected command: id == %03u; num == %lu. Invalid arguments: %s.",
+	[SOCKCMD_REPLY_ACK]		= "Acknowledged command: id == %u; num == %lu.",
+	[SOCKCMD_REPLY_EINVAL]		= "Rejected command: id == %u; num == %lu. Invalid arguments: %s.",
 	[SOCKCMD_REPLY_LOGIN]		= "Enter your login and password, please.",
 	[SOCKCMD_REPLY_UNEXPECTEDEND]	= "Need to go, sorry. :)",
 	[SOCKCMD_REPLY_DIE]		= "Okay :(",
 	[SOCKCMD_REPLY_BYE]		= "Bye.",
 	[SOCKCMD_REPLY_VERSION]		= "clsync v%u.%u%s",
 	[SOCKCMD_REPLY_INFO]		= "config_block == \"%s\"; label == \"%s\"; flags == %x; flags_set == %x.",
+	[SOCKCMD_REPLY_SET]		= "Set",
 	[SOCKCMD_REPLY_DUMP]		= "Ready",
 	[SOCKCMD_REPLY_UNKNOWNCMD]	= "Unknown command.",
 	[SOCKCMD_REPLY_INVALIDCMDID]	= "Invalid command id. Required: 0 <= cmd_id < 1000.",
@@ -104,10 +108,10 @@ int socket_check_bysock(int sock) {
 	int error_code, ret;
 	socklen_t error_code_len = sizeof(error_code);
 
-	if((ret=getsockopt(sock, SOL_SOCKET, SO_ERROR, &error_code, &error_code_len))) {
+	if ((ret=getsockopt(sock, SOL_SOCKET, SO_ERROR, &error_code, &error_code_len))) {
 		return errno;
 	}
-	if(error_code) {
+	if (error_code) {
 		errno = error_code;
 		return error_code;
 	}
@@ -162,7 +166,7 @@ int socket_thread_delete(socket_sockthreaddata_t *threaddata_p) {
 
 	clsyncsockthreads_count--;
 
-	if(clsyncsockthreads_last == thread_id)
+	if (clsyncsockthreads_last == thread_id)
 		clsyncsockthreads_last = thread_id-1;
 
 	clsyncsockthread_busy[thread_id]=0;
@@ -197,8 +201,8 @@ clsyncsock_t *socket_listen_unix(const char *const socket_path) {
 
 	// checking the path
 	// already exists? - unlink
-	if(!access(socket_path, F_OK))
-		if(unlink(socket_path)) {
+	if (!access(socket_path, F_OK))
+		if (unlink(socket_path)) {
 			error("Cannot unlink() \"%s\".", 
 				socket_path);
 			close(s);
@@ -211,7 +215,7 @@ clsyncsock_t *socket_listen_unix(const char *const socket_path) {
 		memset(&addr, 0, sizeof(addr));
 		addr.sun_family = AF_UNIX;
 		strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path)-1);
-		if(bind(s, (struct sockaddr *)&addr, sizeof(addr))) {
+		if (bind(s, (struct sockaddr *)&addr, sizeof(addr))) {
 			error("Cannot bind() on address \"%s\".",
 				socket_path);
 			close(s);
@@ -220,7 +224,7 @@ clsyncsock_t *socket_listen_unix(const char *const socket_path) {
 	}
 
 	// starting to listening
-	if(listen(s, SOCKET_BACKLOG)) {
+	if (listen(s, SOCKET_BACKLOG)) {
 		error("Cannot listen() on address \"%s\".",
 			socket_path);
 		close(s);
@@ -240,7 +244,7 @@ clsyncsock_t *socket_connect_unix(const char *const socket_path) {
 		return NULL;
 
 	// checking the path
-	if(access(socket_path, F_OK)) {
+	if (access(socket_path, F_OK)) {
 		error("Cannot access() to \"%s\".", 
 			socket_path);
 		close(s);
@@ -253,7 +257,7 @@ clsyncsock_t *socket_connect_unix(const char *const socket_path) {
 		memset(&addr, 0, sizeof(addr));
 		addr.sun_family = AF_UNIX;
 		strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path)-1);
-		if(connect(s, (struct sockaddr *)&addr, sizeof(addr))) {
+		if (connect(s, (struct sockaddr *)&addr, sizeof(addr))) {
 			error("Cannot connect() to address \"%s\".",
 				socket_path);
 			close(s);
@@ -265,24 +269,23 @@ clsyncsock_t *socket_connect_unix(const char *const socket_path) {
 }
 #endif
 
-int socket_send(clsyncsock_t *clsyncsock, sockcmd_id_t cmd_id, ...) {
-	va_list ap;
+int _socket_send(clsyncsock_t *clsyncsock, uint64_t *cmd_num_p, sockcmd_id_t cmd_id, va_list ap)
+{
 	int ret;
 
-	va_start(ap, cmd_id);
 	char prebuf0[SOCKET_BUFSIZ], prebuf1[SOCKET_BUFSIZ], sendbuf[SOCKET_BUFSIZ];
 
 	ret = 0;
 
-	switch(clsyncsock->prot) {
+	switch (clsyncsock->prot) {
 		case 0:
-			switch(clsyncsock->subprot) {
+			switch (clsyncsock->subprot) {
 				case SUBPROT0_TEXT: {
 					va_list ap_copy;
 
 					debug(3, "%p %p %p", prebuf0, textmessage_args[cmd_id], ap_copy);
 
-					if(textmessage_args[cmd_id]) {
+					if (textmessage_args[cmd_id]) {
 						va_copy(ap_copy, ap);
 						vsprintf(prebuf0, textmessage_args[cmd_id], ap_copy);
 					} else
@@ -291,8 +294,14 @@ int socket_send(clsyncsock_t *clsyncsock, sockcmd_id_t cmd_id, ...) {
 					va_copy(ap_copy, ap);
 					vsprintf(prebuf1, textmessage_descr[cmd_id], ap);
 
-					size_t sendlen = sprintf(sendbuf, "%03u %s :%s\n", cmd_id, prebuf0, prebuf1);
+					size_t sendlen = sprintf(
+							sendbuf, 
+							"%lu %u %s :%s\n", 
+							(*cmd_num_p)++,
+							cmd_id, prebuf0, prebuf1
+						);
 
+					debug(5, "send(): \"%s\"", sendbuf);
 					send(clsyncsock->sock, sendbuf, sendlen, 0);
 					break;
 				}
@@ -311,8 +320,67 @@ int socket_send(clsyncsock_t *clsyncsock, sockcmd_id_t cmd_id, ...) {
 	}
 
 l_socket_send_end:
+	return ret;
+}
+
+int socket_reply(clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p, sockcmd_id_t cmd_id, ...)
+{
+	va_list ap;
+	int ret;
+	uint64_t cmd_num = sockcmd_p->cmd_num;
+
+	va_start(ap, cmd_id);
+	ret = _socket_send(clsyncsock_p, &cmd_num, cmd_id, ap);
 	va_end(ap);
 	return ret;
+}
+
+int socket_send(clsyncsock_t *clsyncsock_p, sockcmd_id_t cmd_id, ...)
+{
+	va_list ap;
+	int ret;
+
+	va_start(ap, cmd_id);
+	ret = _socket_send(clsyncsock_p, &clsyncsock_p->cmd_num, cmd_id, ap);
+	va_end(ap);
+	return ret;
+}
+
+int socket_send_cb(clsyncsock_t *clsyncsock_p, sockcmd_id_t cmd_id, clsyncsock_cb_funct_t cb, void *cb_arg, ...)
+{
+	if (clsyncsock_p->cbqueue_len >= CLSYNCSOCK_WINDOW) {
+		errno = EOVERFLOW;
+		error("Callback queue overflowed. Closing the socket.");
+		socket_close(clsyncsock_p);
+		return errno;
+	}
+
+	{
+		va_list ap;
+		int ret;
+		uint64_t cmd_num = clsyncsock_p->cmd_num;
+
+		va_start(ap, cb_arg);
+		ret = _socket_send(clsyncsock_p, &clsyncsock_p->cmd_num, cmd_id, ap);
+		va_end(ap);
+
+		if (!ret) {
+			clsynccbqueue_t *cbq = &clsyncsock_p->cbqueue[clsyncsock_p->cbqueue_len];
+			int id;
+
+			cbq->cmd_num		= cmd_num;
+			cbq->callback_funct	= cb;
+			cbq->callback_arg	= cb_arg;
+
+			id  =  cmd_num % (2*CLSYNCSOCK_WINDOW);
+			while (clsyncsock_p->cbqueue_cache[id] != NULL) id++;
+			clsyncsock_p->cbqueue_cache[id] = cbq;
+
+			clsyncsock_p->cbqueue_len++;
+		}
+
+		return ret;
+	}
 }
 
 static inline int socket_overflow_fix(char *buf, char **data_start_p, char **data_end_p) {
@@ -340,18 +408,20 @@ static inline int socket_overflow_fix(char *buf, char **data_start_p, char **dat
 #define PARSE_TEXT_DATA_SSCANF(dat_t, ...) {\
 	sockcmd_p->data = xmalloc(sizeof(dat_t));\
 	dat_t *d = (dat_t *)sockcmd_p->data;\
-	if(sscanf(args, textmessage_args[sockcmd_p->cmd_id], __VA_ARGS__) < min_args)\
+	if (sscanf(args, textmessage_args[sockcmd_p->cmd_id], __VA_ARGS__) < min_args)\
 		return EINVAL;\
 }
 
 static inline int parse_text_data(sockcmd_t *sockcmd_p, char *args, size_t args_len) {
-	if(!args_len)
+	debug(6, "(%p, %p, %u)", sockcmd_p, args, args_len);
+
+	if (!args_len)
 		return 0;
 
 	int min_args = 0;
 	const char *ptr = (const char *)textmessage_args[sockcmd_p->cmd_id];
 
-	if(ptr != NULL) {
+	if (ptr != NULL) {
 		while(*ptr) {
 			if(*ptr == '%') {
 				if(ptr[1] == '%')
@@ -363,13 +433,16 @@ static inline int parse_text_data(sockcmd_t *sockcmd_p, char *args, size_t args_
 		}
 	}
 
-	switch(sockcmd_p->cmd_id) {
+	switch (sockcmd_p->cmd_id) {
 		case SOCKCMD_REQUEST_NEGOTIATION:
 		case SOCKCMD_REPLY_NEGOTIATION:
 			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_negotiation_t, &d->prot, &d->subprot);
 			break;
 		case SOCKCMD_REQUEST_DUMP:
 			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_dump_t, &d->dir_path);
+			break;
+		case SOCKCMD_REQUEST_SET:
+			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_set_t, &d->key, &d->value);
 			break;
 		case SOCKCMD_REPLY_ACK:
 			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_ack_t, &d->cmd_id, &d->cmd_num);
@@ -378,12 +451,12 @@ static inline int parse_text_data(sockcmd_t *sockcmd_p, char *args, size_t args_
 			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_einval_t, &d->cmd_id, &d->cmd_num);
 			break;
 		case SOCKCMD_REPLY_VERSION:
-			if(args_len > sizeof(1<<8))
+			if (args_len > sizeof(1<<8))
 				args[args_len=1<<8] = 0;
 			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_version_t, &d->major, &d->minor, &d->revision);
 			break;
 		case SOCKCMD_REPLY_INFO:
-			if(args_len > sizeof(1<<8))
+			if (args_len > sizeof(1<<8))
 				args[args_len=1<<8] = 0;
 			PARSE_TEXT_DATA_SSCANF(sockcmd_dat_info_t, &d->config_block, &d->label, &d->flags, &d->flags_set);
 			break;
@@ -414,6 +487,7 @@ int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p) {
 	char *buf, *ptr, *start, *end;
 	int clsyncsock_sock;
 	size_t filled_length, rest_length, recv_length, filled_length_new;
+	errno = 0;
 
 	clsyncsock_sock = clsyncsock->sock;
 
@@ -427,11 +501,11 @@ int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p) {
 
 	debug(3, "buf==%p; start==%p; ptr==%p", buf, start, ptr);
 
-	while(1) {
+	while (1) {
 		filled_length = ptr-buf;
 		rest_length = SOCKET_BUFSIZ-filled_length-16;
 
-		if(rest_length <= 0) {
+		if (rest_length <= 0) {
 			if(!socket_overflow_fix(buf, &start, &ptr)) {
 				debug(1, "Got too big message. Ignoring.");
 				ptr = buf;
@@ -442,10 +516,15 @@ int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p) {
 		recv_length = recv(clsyncsock_sock, ptr, rest_length, 0);
 		filled_length_new = filled_length + recv_length;
 
-		if(recv_length <= 0)
+		debug(5, "recv_length == %u; filled_length_new == %u", recv_length, filled_length_new);
+
+		if (recv_length == 0)
+			return ECONNRESET;
+
+		if (recv_length < 0)
 			return errno;
 
-		switch(clsyncsock->prot) {
+		switch (clsyncsock->prot) {
 			case 0: {
 				// Checking if binary
 				uint16_t cmd_id_binary = *(uint16_t *)buf;
@@ -456,15 +535,30 @@ int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p) {
 							? SUBPROT0_BINARY : SUBPROT0_TEXT;
 
 				// Processing
-				switch(clsyncsock->subprot) {
+				switch (clsyncsock->subprot) {
 					case SUBPROT0_TEXT:
-						if((end=strchr(ptr, '\n'))!=NULL) {
-							if(sscanf(start, "%03u", (unsigned int *)&sockcmd_p->cmd_id) != 1)
-								return ENOMSG;
+						if ((end=strchr(ptr, '\n')) != NULL) {
+							if (sscanf(start, "%lu %u", &sockcmd_p->cmd_num, (unsigned int *)&sockcmd_p->cmd_id) != 2) {
+								*end = 0;
+								error("It's expected to parse \"%%lu %%u\" from \"%s\"", start);
+								*end = '\n';
+								return errno = ENOMSG;
+							}
 
-							char *str_args = &start[3+1];
-							parse_text_data(sockcmd_p, str_args, end-str_args);
+							char *str_args = start;
 
+							// Skipping the first number
+							while (*str_args >= '0' && *str_args <= '9') str_args++;
+							// Skipping the space
+							str_args++;
+							// Skipping the second number
+							while (*str_args >= '0' && *str_args <= '9') str_args++;
+							// Skipping the space
+							str_args++;
+
+							// Parsing the arguments
+							if (end > str_args)
+								parse_text_data(sockcmd_p, str_args, end-str_args);
 
 							// TODO Process message here
 
@@ -472,12 +566,12 @@ int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p) {
 						}
 						break;
 					default:
-						return ENOPROTOOPT;
+						return errno = ENOPROTOOPT;
 				}
 				break;
 			}
 			default:
-				return ENOPROTOOPT;
+				return errno = ENOPROTOOPT;
 		}
 
 		
@@ -496,7 +590,7 @@ l_socket_recv_end:
 
 	// No data buffered. Reset "start" and "ptr".
 
-	if(start == ptr) {
+	if (start == ptr) {
 		start = buf;
 		ptr   = buf;
 	}
@@ -506,18 +600,17 @@ l_socket_recv_end:
 	recv_stps[clsyncsock_sock] = start;
 	recv_ptrs[clsyncsock_sock] = ptr;
 
-	debug(3, "sockcmd_p->cmd_id == %i; buf==%p; ptr==%p; end==%p, filled=%p, buf_end==%p",
-		sockcmd_p->cmd_id, buf, ptr, end, &buf[filled_length_new], &buf[SOCKET_BUFSIZ]);
+	debug(3, "sockcmd_p->cmd_num == %lu; sockcmd_p->cmd_id == %i; buf==%p; ptr==%p; end==%p, filled=%p, buf_end==%p",
+		sockcmd_p->cmd_num, sockcmd_p->cmd_id, buf, ptr, end, &buf[filled_length_new], &buf[SOCKET_BUFSIZ]);
 
-	sockcmd_p->cmd_num++;
 	return 0;
 }
 
 int socket_sendinvalid(clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p) {
-	if(sockcmd_p->cmd_id >= 1000)
-		return socket_send(clsyncsock_p, SOCKCMD_REPLY_INVALIDCMDID, sockcmd_p->cmd_num);
+	if (sockcmd_p->cmd_id >= 1000)
+		return socket_reply(clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_INVALIDCMDID, sockcmd_p->cmd_num);
 	else
-		return socket_send(clsyncsock_p, SOCKCMD_REPLY_UNKNOWNCMD,   sockcmd_p->cmd_id, sockcmd_p->cmd_num);
+		return socket_reply(clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_UNKNOWNCMD,   sockcmd_p->cmd_id, sockcmd_p->cmd_num);
 }
 
 int socket_procclsyncsock(socket_sockthreaddata_t *arg) {
@@ -528,8 +621,6 @@ int socket_procclsyncsock(socket_sockthreaddata_t *arg) {
 	clsyncsock_t		*clsyncsock_p = arg->clsyncsock_p;
 	clsyncsock_procfunct_t   procfunct    = arg->procfunct;
 	//sockprocflags_t		 flags        = arg->flags;
-
-	sockcmd_p->cmd_num = -1;
 
 	enum auth_flags {
 		AUTHFLAG_ENTERED_LOGIN = 0x01,
@@ -542,51 +633,74 @@ int socket_procclsyncsock(socket_sockthreaddata_t *arg) {
 	arg->state = (arg->authtype == SOCKAUTH_NULL) ? CLSTATE_MAIN : CLSTATE_AUTH;
 	socket_send(clsyncsock_p, SOCKCMD_REQUEST_NEGOTIATION, clsyncsock_p->prot, clsyncsock_p->subprot);
 
-	while((arg->running && *arg->running) && (arg->state==CLSTATE_AUTH || arg->state==CLSTATE_MAIN)) {
+	while ((arg->running && *arg->running) && (arg->state==CLSTATE_AUTH || arg->state==CLSTATE_MAIN)) {
 		debug(3, "Iteration.");
 
 		// Receiving message
 		int ret;
-		if((ret = socket_recv(clsyncsock_p, sockcmd_p))) {
-			error("Got error while receiving a message from clsyncsock with sock %u: %s (errno: %u)", 
+		if ((ret = socket_recv(clsyncsock_p, sockcmd_p))) {
+			debug(2, "Got error while receiving a message from clsyncsock with sock %u. Ending the thread.", 
 				arg->clsyncsock_p->sock);
 			break;
 		}
 
+		// Checking for a callback for this answer
+		{
+			uint64_t cmd_num = sockcmd_p->cmd_num;
+			int i;
+
+			i  =  cmd_num % (2*CLSYNCSOCK_WINDOW);
+
+			while (clsyncsock_p->cbqueue_cache[i] != NULL) {
+				if (clsyncsock_p->cbqueue_cache[i]->cmd_num == cmd_num) { // Found!
+					clsynccbqueue_t *cbq;
+					cbq = clsyncsock_p->cbqueue_cache[i];
+
+					// Calling the callback function
+					cbq->callback_funct(arg, sockcmd_p, cbq->callback_arg);
+
+					// Removing from queue
+					memcpy(cbq, &clsyncsock_p->cbqueue[--clsyncsock_p->cbqueue_len], sizeof(*cbq));
+					clsyncsock_p->cbqueue_cache[i] = NULL;
+				}
+				i++;
+			}
+		}
+
 		// Processing the message
-		if(procfunct(arg, sockcmd_p))
-			switch(sockcmd_p->cmd_id) {
+		if (procfunct(arg, sockcmd_p))
+			switch (sockcmd_p->cmd_id) {
 				case SOCKCMD_REPLY_NEGOTIATION:
 				case SOCKCMD_REQUEST_NEGOTIATION: {
 					sockcmd_dat_negotiation_t *data = (sockcmd_dat_negotiation_t *)sockcmd_p->data;
-					switch(data->prot) {
+					switch (data->prot) {
 						case 0:
-							switch(data->subprot) {
+							switch (data->subprot) {
 								case SUBPROT0_TEXT:
 								case SUBPROT0_BINARY:
 									clsyncsock_p->subprot = data->subprot;
-									if(sockcmd_p->cmd_id == SOCKCMD_REQUEST_NEGOTIATION)
-										socket_send(clsyncsock_p, SOCKCMD_REPLY_NEGOTIATION, data->prot, data->subprot);
+									if (sockcmd_p->cmd_id == SOCKCMD_REQUEST_NEGOTIATION)
+										socket_reply(clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_NEGOTIATION, data->prot, data->subprot);
 									else {
-										socket_send(clsyncsock_p, SOCKCMD_REPLY_ACK,    sockcmd_p->cmd_id, sockcmd_p->cmd_num);
+										socket_reply(clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_ACK,    sockcmd_p->cmd_id, sockcmd_p->cmd_num);
 										debug(1, "Negotiated proto: %u %u", data->prot, data->subprot);
 									}
 									break;
 								default:
-									socket_send(clsyncsock_p, SOCKCMD_REPLY_EINVAL, sockcmd_p->cmd_id, sockcmd_p->cmd_num, "Incorrect subprotocol id");
+									socket_reply(clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_EINVAL, sockcmd_p->cmd_id, sockcmd_p->cmd_num, "Incorrect subprotocol id");
 							}
 							break;
 						default:
-							socket_send(clsyncsock_p, SOCKCMD_REPLY_EINVAL, sockcmd_p->cmd_id, sockcmd_p->cmd_num, "Incorrect protocol id");
+							socket_reply(clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_EINVAL, sockcmd_p->cmd_id, sockcmd_p->cmd_num, "Incorrect protocol id");
 					}
 					break;
 				}
 				case SOCKCMD_REQUEST_VERSION: {
-					socket_send(clsyncsock_p, SOCKCMD_REPLY_VERSION, VERSION_MAJ, VERSION_MIN, REVISION);
+					socket_reply(clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_VERSION, VERSION_MAJ, VERSION_MIN, REVISION);
 					break;
 				}
 				case SOCKCMD_REQUEST_QUIT: {
-					socket_send(clsyncsock_p, SOCKCMD_REPLY_BYE);
+					socket_reply(clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_BYE);
 					arg->state = CLSTATE_DYING;
 					break;
 				}
@@ -595,21 +709,21 @@ int socket_procclsyncsock(socket_sockthreaddata_t *arg) {
 					break;
 			}
 
-		if(sockcmd_p->data != NULL) {
+		if (sockcmd_p->data != NULL) {
 			free(sockcmd_p->data);
 			sockcmd_p->data = NULL;
 		}
 
 		// Check if the socket is still alive
-		if(socket_check(clsyncsock_p)) {
+		if (socket_check(clsyncsock_p)) {
 			debug(1, "clsyncsock socket error: %s", strerror(errno));
 			break;
 		}
 
 		// Sending prompt
-		switch(arg->state) {
+		switch (arg->state) {
 			case CLSTATE_AUTH:
-				if(!(auth_flags&AUTHFLAG_ENTERED_LOGIN))
+				if (!(auth_flags&AUTHFLAG_ENTERED_LOGIN))
 					socket_send(clsyncsock_p, SOCKCMD_REQUEST_LOGIN);
 				break;
 			default:
@@ -628,7 +742,7 @@ socket_sockthreaddata_t *socket_thread_new() {
 	pthread_mutex_lock(&socket_thread_mutex);
 	socket_sockthreaddata_t *threaddata_p = &sockthreaddata[clsyncsockthreads_num];
 
-	if(clsyncsockthreads_num >= SOCKET_MAX) {
+	if (clsyncsockthreads_num >= SOCKET_MAX) {
 		error("Warning: socket_thread_new(): Too many connection threads.");
 		errno = EUSERS;
 		pthread_mutex_unlock(&socket_thread_mutex);
@@ -639,12 +753,12 @@ socket_sockthreaddata_t *socket_thread_new() {
 
 	clsyncsockthread_busy[clsyncsockthreads_num]=1;
 	// TODO: SECURITY: Possible DoS-attack on huge "SOCKET_MAX" value. Fix it.
-	while(clsyncsockthread_busy[++clsyncsockthreads_num]);
+	while (clsyncsockthread_busy[++clsyncsockthreads_num]);
 
 #ifdef PARANOID
 	// Processing the events: checking if previous check were been made right
 
-	if(threaddata_p->state != CLSTATE_NONE) {
+	if (threaddata_p->state != CLSTATE_NONE) {
 		// This's not supposed to be
 		error("Internal-Error: socket_newconnarg(): connproc_arg->state != CLSTATE_NONE");
 		pthread_mutex_unlock(&socket_thread_mutex);

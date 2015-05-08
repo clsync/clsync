@@ -20,7 +20,7 @@ fi
 inherit autotools eutils
 
 DESCRIPTION="Control and monitoring library for clsync"
-HOMEPAGE="http://ut.mephi.ru/oss"
+HOMEPAGE="http://ut.mephi.ru/oss/clsync https://github.com/xaionaro/clsync"
 LICENSE="GPL-3+"
 SLOT="0"
 IUSE="debug doc extra-hardened hardened static-libs"
@@ -31,7 +31,7 @@ REQUIRED_USE="
 RDEPEND=""
 DEPEND="
 	virtual/pkgconfig
-	doc? ( app-doc/doxygen )
+	doc? ( app-doc/clsync-docs )
 "
 
 src_prepare() {
@@ -45,9 +45,12 @@ src_configure() {
 
 	econf \
 		--docdir="${EPREFIX}/usr/share/doc/${PF}" \
-		--disable-clsync \
 		--enable-socket-library \
+		--disable-clsync \
 		--enable-paranoid=${harden_level} \
+		--with-inotify=native \
+		--without-bsm \
+		--without-kqueue \
 		--disable-cluster \
 		--enable-socket \
 		$(use_enable debug) \
@@ -57,17 +60,16 @@ src_configure() {
 
 src_compile() {
 	emake
-	use doc && emake doc
 }
 
 src_install() {
 	emake DESTDIR="${D}" install
-	use doc && dohtml -r doc/html/*
 	prune_libtool_files
 	use static-libs || find "${ED}" -name "*.a" -delete || die "failed to remove static libs"
 
 	# remove unwanted docs
 	rm "${ED}/usr/share/doc/${PF}"/{LICENSE,TODO} || die "failed to cleanup docs"
+	rm -r "${ED}/usr/share/doc/${PF}/examples" || die "failed to remove examples"
 }
 
 pkg_postinst() {

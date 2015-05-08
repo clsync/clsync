@@ -17,7 +17,10 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "common.h"
+
 #include "calc.h"
+#include "error.h"
 
 #ifdef HAVE_MHASH
 #include <mhash.h>
@@ -36,7 +39,13 @@
 
 // Copied from http://en.wikipedia.org/wiki/Adler-32
 uint32_t adler32_calc(const unsigned char *const data, uint32_t len) { // where data is the location of the data in physical
-                                                           // memory and len is the length of the data in bytes
+                                                                       // memory and len is the length of the data in bytes
+
+	if (len&3)
+		warning("len [%i] & 3 == %i != 0. Wrong length (not a multiple of 4).", len, len&3);
+
+	debug(70, "%p, %i", data, len);
+
 	const int MOD_ADLER = 65521;
 	uint32_t a = 1, b = 0;
 	int32_t index;
@@ -44,6 +53,7 @@ uint32_t adler32_calc(const unsigned char *const data, uint32_t len) { // where 
 	// Process each byte of the data in order
 	for (index = 0; index < len; ++index)
 	{
+		debug(80, "%5i: %02x %02x %02x", index, data[index], a, b);
 		a = (a + data[index]) % MOD_ADLER;
 		b = (b + a) % MOD_ADLER;
 	}

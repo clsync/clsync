@@ -1,3 +1,5 @@
+#ifndef __CONFIGURATION_H
+#define __CONFIGURATION_H
 
 
 #ifndef BUFSIZ
@@ -12,6 +14,8 @@
 
 // clsync should be used, if there's more than 5-10 nodes. So the limit in 255 is quite enough. :)
 #define MAXNODES			((1<<8)-1)
+
+#define MAXSIGNALNUM			(1<<9)
 
 // max user/group lengths
 #define USER_LEN			(1<<8)
@@ -29,13 +33,18 @@
 // children count limit
 #define MAXCHILDREN			(1<<8)
 
+#define MAXMOUNTPOINTS			(1<<8)
+#define MAXPERMITTEDHOOKFILES		(1<<8)
+
 #ifdef __CLSYNC_COMMON_H
-#	if INOTIFY_SUPPORT
+#	define DEFAULT_NOTIFYENGINE	NE_UNDEFINED
+#	ifdef __linux__
+#		undef  DEFAULT_NOTIFYENGINE
 #		define DEFAULT_NOTIFYENGINE	NE_INOTIFY
-#	elif KQUEUE_SUPPORT
+#	endif
+#	ifdef __FreeBSD__
+#		undef  DEFAULT_NOTIFYENGINE
 #		define DEFAULT_NOTIFYENGINE	NE_KQUEUE
-#	else
-#		error No inotify/kqueue support, cannot compile working clsync
 #	endif
 #endif
 #define DEFAULT_RULES_PERM		RA_ALL
@@ -56,14 +65,14 @@
 #define DEFAULT_RETRIES			1
 #define DEFAULT_VERBOSE			3
 #define DEFAULT_DUMPDIR			"/tmp/clsync-dump-%label%"
+#define DEFAULT_DETACH_IPC		1
 
 #define FANOTIFY_FLAGS			(FAN_CLOEXEC|FAN_UNLIMITED_QUEUE|FAN_UNLIMITED_MARKS)
 #define FANOTIFY_EVFLAGS		(O_LARGEFILE|O_RDONLY|O_CLOEXEC)
 
 #define FANOTIFY_MARKMASK		(FAN_OPEN|FAN_MODIFY|FAN_CLOSE|FAN_ONDIR|FAN_EVENT_ON_CHILD)
 
-#define INOTIFY_FLAGS			0
-					//(FD_CLOEXEC)
+#define INOTIFY_FLAGS			(IN_CLOEXEC)
 
 #define INOTIFY_MARKMASK		(IN_ATTRIB|IN_CLOSE_WRITE|IN_CREATE|IN_DELETE|IN_DELETE_SELF|IN_MOVE_SELF|IN_MOVED_FROM|IN_MOVED_TO|IN_MODIFY|IN_DONT_FOLLOW)
 
@@ -75,14 +84,18 @@
 
 #define ALLOC_PORTION			(1<<10) /* 1  KiX */
 #define CLUSTER_WINDOW_BUFSIZE_PORTION	(1<<20) /* 1  MiB */
-#define CLUSTER_PACKET_MAXSIZE		(1<<24) /* 16 MiB */
+#define CLUSTER_PACKET_MAXSIZE		(1<<20) /* 1  MiB */
+#define CLUSTER_WINDOW_PCKTLIMIT	(1<<20) /* 1  Ki packets */
 
-#define CONFIG_PATHS 			{ ".clsync.conf", "/etc/clsync/clsync.conf", NULL } /* "~/.clsync.conf" and "/etc/clsync/clsync.conf" */
+#define CONFIG_PATHS 			{ ".clsync.conf", "/etc/clsync/clsync.conf", "/etc/clsync.conf", "/usr/local/etc/clsync/clsync.conf", "/usr/local/etc/clsync.conf", NULL } /* "~/.clsync.conf", "/etc/clsync/clsync.conf" ... */
 
 #define API_PREFIX			"clsyncapi_"
 
 #define DUMP_DIRMODE			0750
 #define DUMP_FILEMODE			0644
+
+#define DEFAULT_CP_PATH			"cp"
+#define	DEFAULT_RSYNC_PATH		"rsync"
 
 // size of event chain size to be processes at a time
 #define KQUEUE_EVENTLISTSIZE		256
@@ -98,7 +111,102 @@ minfree:0\n\
 naflags:fc,fd,fw,fm,cl\n\
 policy:cnt\n\
 filesz:1M\n\
+expire-after:20M\n\
 "
 
 #define DTRACE_PATH			"dtrace"
 
+#define PIVOT_AUTO_DIR			"/dev/shm/clsync-rootfs"
+#define	TMPDIR_TEMPLATE			"/tmp/clsync-XXXXXX"
+
+#define SYSLOG_BUFSIZ			(1<<16)
+#define SYSLOG_FLAGS			(LOG_PID|LOG_CONS)
+#define SYSLOG_FACILITY			LOG_DAEMON
+
+#define CLSYNCSOCK_WINDOW		(1<<8)
+
+#define DEFAULT_SYNCHANDLER_ARGS_SIMPLE		"sync \%label\% \%EVENT-MASK\% \%INCLUDE-LIST\%"
+#define DEFAULT_SYNCHANDLER_ARGS_DIRECT		"\%INCLUDE-LIST\% \%destination-dir\%/"
+#define DEFAULT_SYNCHANDLER_ARGS_SHELL_NR	"synclist \%label\% \%INCLUDE-LIST-PATH\%"
+#define DEFAULT_SYNCHANDLER_ARGS_SHELL_R	"initialsync \%label\% \%INCLUDE-LIST\%"
+#define DEFAULT_SYNCHANDLER_ARGS_RDIRECT_E	"-aH --delete --exclude-from \%EXCLUDE-LIST-PATH\% --include-from \%INCLUDE-LIST-PATH\% --exclude=* \%watch-dir\%/ \%destination-dir\%/"
+#define DEFAULT_SYNCHANDLER_ARGS_RDIRECT_I	"-aH --delete --include-from \%INCLUDE-LIST-PATH\% --exclude=* \%watch-dir\%/ \%destination-dir\%/"
+#define DEFAULT_SYNCHANDLER_ARGS_RSHELL_E	"rsynclist \%label% \%INCLUDE-LIST-PATH\% %EXCLUDE-LIST-PATH%"
+#define DEFAULT_SYNCHANDLER_ARGS_RSHELL_I	"rsynclist \%label% \%INCLUDE-LIST-PATH\%"
+
+#define RSYNC_ARGS_E	{ 		\
+		"-aH", 			\
+		"--delete", 		\
+		"--exclude-from",	\
+		"\%EXCLUDE-LIST-PATH\%",\
+		"--include-from",	\
+		"\%INCLUDE-LIST-PATH\%",\
+		"--exclude=*",		\
+		NULL }
+
+#define RSYNC_ARGS_I	{ 		\
+		"-aH", 			\
+		"--delete", 		\
+		"--include-from",	\
+		"\%INCLUDE-LIST-PATH\%",\
+		"--exclude=*",		\
+		NULL }
+
+#define DEFAULT_PRESERVE_CAPABILITIES	( CAP_TO_MASK(CAP_DAC_READ_SEARCH) | CAP_TO_MASK(CAP_SETUID) | CAP_TO_MASK(CAP_SETGID) | CAP_TO_MASK(CAP_KILL) )
+
+#define DEFAULT_USER			"nobody"
+#define DEFAULT_GROUP			"nogroup"
+#define DEFAULT_UID			65534
+#define DEFAULT_GID			65534
+#define DEFAULT_CAPS_INHERIT		CI_EMPTY
+#define DEFAULT_PIVOT_MODE		(PW_OFF)
+
+#define DEVZERO				"/dev/zero"
+
+// How long to wait on highloaded locks before fallback to mutexes
+// See: doc/devel/thread-splitting/highload-locks/clsync-graph-comma.odc
+// But optimal value can be very different on different systems
+#define HL_LOCK_TRIES_INITIAL		(1<<13)
+
+// Enable run-time auto-adjustment
+#define HL_LOCK_TRIES_AUTO
+// Iterations delay between adjustments (power of 2; 2^x)
+#define HL_LOCK_AUTO_INTERVAL		7	/* 128 */
+// Initial adjustment factor
+#define HL_LOCK_AUTO_K			1.1
+// Delay detection error threshold
+#define HL_LOCK_AUTO_THREADHOLD		0.2
+// Adjustment factor denominator
+#define HL_LOCK_AUTO_DECELERATION	1.1
+// Don't adjust if the factor is less than
+#define HL_LOCK_AUTO_K_FINISH		0.001
+// Upper limit
+#define HL_LOCK_AUTO_LIMIT_HIGH		(1<<20)
+
+//#define READWRITE_SIGNALLING
+
+#define CG_DEV_CONSOLE	"c 5:1"
+#define CG_DEV_ZERO	"c 1:5"
+#define CG_DEV_RANDOM	"c 1:8"
+#define CG_DEV_URANDOM	"c 1:9"
+#define CG_DEV_NULL	"c 1:3"
+
+#define CG_ALLOWED_DEVICES {		\
+		CG_DEV_CONSOLE	" rw",	\
+		CG_DEV_ZERO	" r",	\
+		CG_DEV_URANDOM	" r",	\
+		CG_DEV_RANDOM	" r",	\
+		CG_DEV_NULL	" w",	\
+		NULL			\
+	}
+
+#define DEFAULT_CG_GROUPNAME	"clsync/%PID%"
+
+// In nanoseconds
+#define OUTPUT_LOCK_TIMEOUT		(100*1000*1000)
+#define WAITPID_TIMED_GRANULARITY	 (30*1000*1000)
+
+#define BSM_QUEUE_LENGTH_MAX		(1024*1024)
+#define GIO_QUEUE_LENGTH_MAX		BSM_QUEUE_LENGTH_MAX
+
+#endif

@@ -1,8 +1,8 @@
-clsync (0.4~rc2-1) unstable; urgency=medium
+clsync (0.4-1) unstable; urgency=low
 
-  * New upstream version
+  * A lot of fixes
 
- -- Barak A. Pearlmutter <bap@debian.org>  Fri, 06 Jun 2014 16:13:20 +0100
+ -- Dmitry Yu Okunev <dyokunev@ut.mephi.ru>  Thu, 6 Nov 2014 10:17:49 +0300
 
 clsync (0.3-1) unstable; urgency=medium
 

@@ -1,5 +1,8 @@
 #!/bin/sh
 
+echo "Is not implemented, yet!" >&2
+
+exit 1
 IFACE="$1"
 
 if [ "$IFACE" = "" ]; then
@@ -22,5 +25,5 @@ cat > rules <<EOF
 +*.*
 EOF
 
-clsync -K example-cluster -c "$IPADDR" -M rsyncshell -L ./testdir/listdir -w 2 -p safe -t 5 -W ./testdir/from -S ./clsync-synchandler-rsync.sh -R rules $@
+clsync -K example-cluster -c "$IPADDR" -M rsyncshell -w 2 -p safe -t 5 -W ./testdir/from -S ./clsync-synchandler-rsync.sh -R rules $@
 

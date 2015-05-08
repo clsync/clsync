@@ -22,7 +22,8 @@ build_test() {
 	$MAKE clean
 	echo ">>> Testing with \"$@\""
 	# make sure we test paralled build as they tend to fail when single works
-	./configure $@ && $MAKE -j5 || {
+	#./configure -C $@ >/dev/null || rm -f config.cache && ./configure -C $@ >/dev/null && $MAKE -j5 >/dev/null || {
+	./configure $@ >/dev/null && $MAKE -j5 >/dev/null || {
 		echo "!!! test with \"$@\" configure options failed"
 		exit 1
 	}
@@ -40,18 +41,22 @@ run_example_cleanup_failure() {
 }
 
 # Run example script
+run_example_counter=0
 run_example() {
-	MODE="$1"
+	MODE="$1"; shift;
 
-	export CLSYNC_PIDFILE="/tmp/clsync-example-$MODE.pid"
+	export CLSYNC_PIDFILE="/tmp/clsync-example-$MODE.$$.${run_example_counter}.pid"
+
+	run_example_counter=$(( $run_example_counter + 1 ))
 
 	rm -rf "examples/testdir"/*/*
 	mkdir -p "examples/testdir/to" "examples/testdir/from"
 
 	trap run_example_cleanup_failure INT TERM
-	cd examples
-	bash -x clsync-start-"$MODE".sh --background --pid-file "$CLSYNC_PIDFILE" --config-file '/NULL/' -w1 -t1 -d1
-	cd -
+	(
+		cd examples
+		bash -x clsync-start-"$MODE".sh --background --pid-file "$CLSYNC_PIDFILE" --config-file '/NULL/' -w1 -t1 -d0 $@
+	)
 
 	sleep 1
 	mkdir -p examples/testdir/from/a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p/q/r/s/t/u/v/w/x/y/z/DIR
@@ -103,13 +108,16 @@ if true; then
 
 	# clsync enabled
 	a0="--enable-clsync"
-	for a1 in "--enable-cluster --with-mhash" "--enable-cluster --without-mhash" "--disable-cluster"; do
-	for a2 in "--enable-debug" "--disable-debug"; do
+	for a1 in "--enable-cluster" "--disable-cluster"; do
+#	for a2 in "--enable-debug" "--disable-debug"; do
 	for a3 in "--enable-paranoid=0" "--enable-paranoid=1" "--enable-paranoid=2" ; do
 	for a4 in "--with-capabilities" "--without-capabilities"; do
 	for a5 in "--enable-socket" "--disable-socket"; do
-	for a6 in "--enable-libclsync" "--disable-libclsync"; do
-		arg="$a0 $a1 $a2 $a3 $a4 $a5 $a6"
+	for a6 in "--enable-socket-library" "--disable-socket-library"; do
+	for a7 in "--enable-highload-locks" ""; do
+#	for a8 in "--with-libcgroup" "--without-libcgroup"; do
+#	for a9 in "--with-libseccomp" "--without-libseccomp"; do
+		arg="$a0 $a1 $a2 $a3 $a4 $a5 $a6 $a7 $a8 $a9"
 		build_test "$arg"
 	done
 	done
@@ -117,18 +125,21 @@ if true; then
 	done
 	done
 	done
+#	done
+#	done
+#	done
 
 	# clsync disabled, libclsync enabled
-	a0="--disable-clsync --enable-libclsync"
-	for a2 in "--enable-debug" "--disable-debug"; do
+	a0="--disable-clsync --enable-socket-library"
+#	for a2 in "--enable-debug" "--disable-debug"; do
 	for a3 in "--enable-paranoid=0" "--enable-paranoid=1" "--enable-paranoid=2" ; do
 		arg="$a0 $a1 $a2"
 		build_test "$arg"
-	done
+#	done
 	done
 
 	# clsync disabled, libclsync disabled
-	build_test "--disable-clsync --disable-libclsync"
+	build_test "--disable-clsync --disable-socket-library"
 
 fi
 
@@ -140,7 +151,10 @@ if true; then
 	export PATH="$(pwd):$PATH"
 	build_test --enable-cluster --enable-debug --enable-paranoid=2 --with-capabilities --without-mhash
 	run_example rsyncdirect
-	run_example rsyncshell
+	run_example rsyncdirect --splitting=thread --threading=off
+	run_example rsyncdirect --splitting=process --threading=off
+	run_example rsyncdirect --threading=safe
+#	run_example rsyncshell
 #	run_example rsyncso
 	#run_example so
 	#run_example cluster

@@ -17,6 +17,54 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <glib.h>	// GHashTable
+
+
+struct thread_callbackfunct_arg {
+	char *excfpath;
+	char *incfpath;
+};
+typedef struct thread_callbackfunct_arg thread_callbackfunct_arg_t;
+
+typedef int (*thread_callbackfunct_t)(ctx_t *ctx_p, thread_callbackfunct_arg_t *arg_p);
+struct threadinfo {
+	int				  thread_num;
+	uint32_t			  iteration;
+	thread_callbackfunct_t 		  callback;
+	thread_callbackfunct_arg_t 	 *callback_arg;
+	char				**argv;
+	pthread_t			  pthread;
+	int				  exitcode;
+	int				  errcode;
+	state_t				  state;
+	ctx_t				 *ctx_p;
+	time_t				  starttime;
+	time_t				  expiretime;
+	int				  child_pid;
+
+	GHashTable			 *fpath2ei_ht;		// file path -> event information
+
+	int				  try_n;
+
+	// for so-synchandler
+	int				  n;
+	api_eventinfo_t			 *ei;
+};
+typedef struct threadinfo threadinfo_t;
+
+struct threadsinfo {
+	pthread_mutex_t		  mutex[PTHREAD_MUTEX_MAX];
+	pthread_cond_t		  cond [PTHREAD_MUTEX_MAX];
+	char			  mutex_init;
+	int			  allocated;
+	int			  used;
+	threadinfo_t 		 *threads;
+	threadinfo_t 		**threadsstack;	// stack of threadinfo_t to be used on thread_new()
+	int			  stacklen;
+};
+typedef struct threadsinfo threadsinfo_t;
+
+
 extern int sync_run(struct ctx *ctx);
 extern int sync_dump(struct ctx *ctx, const char *const dest_dir);
 extern int sync_term(int exitcode);
@@ -33,6 +81,8 @@ extern int sync_prequeue_loadmark
 		const char *path_full,
 		const char *path_rel,
 
+		stat64_t *lstat_p,
+
 		eventobjtype_t objtype_old,
 		eventobjtype_t objtype_new,
 
@@ -47,5 +97,6 @@ extern int sync_prequeue_loadmark
 		struct eventinfo *evinfo
 	);
 extern int sync_prequeue_unload(struct ctx *ctx_p, struct indexes *indexes_p);
-extern int *state_p;
+extern const char *sync_parameter_get(const char *variable_name, void *_dosync_arg_p);
+extern pthread_t pthread_sighandler;
 

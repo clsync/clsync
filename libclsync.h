@@ -22,6 +22,7 @@
 struct clsyncproc {
 	clsyncsock_t 		*sock_p;
 	clsyncsock_procfunct_t	 procfunct;
+	void			*data;
 };
 typedef struct clsyncproc clsyncproc_t;
 

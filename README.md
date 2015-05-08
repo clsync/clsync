@@ -1,5 +1,6 @@
 [![Build Status](https://travis-ci.org/xaionaro/clsync.png?branch=master)](https://travis-ci.org/xaionaro/clsync)
 [![Coverage Status](https://coveralls.io/repos/xaionaro/clsync/badge.png)](https://coveralls.io/r/xaionaro/clsync)
+[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/xaionaro/clsync?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 clsync
 ======
@@ -19,36 +20,37 @@ Contents
 11. Support
 12. Developing
 13. Articles
+14. See also
 
 
 1. Name
 -------
 
-Why "clsync"? The first name of the utility was "insync" (due to inotify), but
-then I suggested to use "fanotify" instead of "inotify" and utility was been
-renamed to "fasync". After that I started to intensively write the program.
-However I faced with some problems in "fanotify", so I was have to temporary
-fallback to "inotify", then I decided that the best name is "Runtime Sync" or
-"Live Sync", but "rtsync" is a name of some corporation and "lsync" is busy
+Why "clsync"? The first name of the utility was "insync" (due to inotify) but
+then I suggested to use "fanotify" instead of "inotify" and utility has been
+renamed to "fasync". After that I started to intensively write the program and
+I faced with some problems in "fanotify". So I was have to temporary fallback
+to "inotify" then I decided that the best name is "Runtime Sync" or
+"Live Sync" but "rtsync" is a name of some corporation and "lsync" is busy
 by "[lsyncd](https://github.com/axkibe/lsyncd)". So I called it
-"clsync", that should be interpreted as "lsync, but on c" due to "lsyncd" that
+"clsync" that should be interpreted as "lsync but on c" due to "lsyncd" that
 written on "LUA" and may be used for the same purposes.
 
-UPD: Also I was have to add somekind of clustering support. It's multicast
+UPD: Also I was have to add somekind of clustering support. It's a multicast
 notifing subsystem to prevent loops on bidirection syncing. So "clsync" also
 can be interpreted as "cluster live sync". ;)
 
 2. Motivation
 -------------
 
-This utility was been writted for two purposes:
+This utility has been written for two purposes:
 - for making high availability clusters
 - for making backups of them
 
-To do HA cluster I've tried a lot of different solutions, like "simple 
+To do a HA cluster I've tried a lot of different solutions, like "simple 
 rsync by cron", "glusterfs", "ocfs2 over drbd", "common mirrorable external 
 storage", "incron + perl + rsync", "inosync", "lsyncd" and so on. When I 
-started to write the utility we was using "lsyncd", "ceph" and
+started to write the utility we were using "lsyncd", "ceph" and
 "ocfs2 over drbd". However all of this solutions doesn't arrange me, so I
 was have to write own utility for this purpose.
 
@@ -77,13 +79,13 @@ want to sync big files (`>1GiB`) so often as ordinary files.
 Sorry, if I'm wrong. Let me know if it is, please :). "lsyncd" - is really
 interesting and useful utility, just it's not appropriate for us.
 
-UPD.: Also clsync was used to replace incron/csync2/etc in HPC-clusters for
+UPD.: Also clsync had been used to replace incron/csync2/etc in HPC-clusters for
 syncing /etc/{passwd,shadow,group,shells} files.
 
 3. inotify vs fanotify:
 -----------------------
 
-It's said, that fanotify is much better, than inotify. So I started to write 
+It's said that fanotify is much better than inotify. So I started to write 
 this program with using of fanotify. However I encountered the problem, that
 fanotify was unable to catch some important events at the moment of writing
 the program, like "directory creation" or "file deletion". So I switched to
@@ -190,14 +192,19 @@ For really dummies or/and lazy users, there's a video demonstration:
 7. Other uses
 -------------
 
-Also, clsync may be used to do nearly atomic directory recursive copy.
-
 For example, command
 
     ionice -c 3 clsync -L /dev/shm/clsync --exit-on-no-events -x 23 -x 24 -M rsyncdirect -S $(which rsync) -W /path/from -D /path/to -d1
 
-may be used to copy "/path/from" into "/path/to" with sync up of changes made (in "/path/from") while the copying. It will copy new changes over and over until there will be no changes, and then clsync will exit.
+may be used to copy "/path/from" into "/path/to" with sync up of changes made (in "/path/from") while the copying. It will copy new changes over and over until there will be no changes, and then clsync will exit. It may be used as atomicity-like recursive copy.
 
+
+
+Or command
+
+    clsync -w5 -t5 -T5 -x1 -W /var/www/site.example.org/root -Mdirect -Schown --uid 0 --gid 0 -Ysyslog -b1 -- --from=root www-data:www-data %INCLUDE-LIST%
+
+may be used to fix files owner in runtime. This may be used as a temporary solution for fixing file privileges of misconfigured web-servers (it's well-known problem of apache users).
 
 8. Clustering
 -------------
@@ -230,6 +237,8 @@ split-brain, that can be solved two ways:
 Example of the script is just a script that calls "find" on both sides to
 determine which side has the latest changes :)
 
+UPD: I've added option "--modification-signature" that helps to prevent syncing file, that is not changed. You can easily use it to prevent sync-loops for bi-directional syncing.
+
 9. Known building issues
 ------------------------
 
@@ -241,19 +250,99 @@ next command:
 10. FreeBSD support
 -------------------
 
-clsync was been ported to FreeBSD.
+clsync has been ported to FreeBSD.
 
-FreeBSD doesn't support inotify, so there're 3 ways to use clsync on it:
+FreeBSD doesn't support inotify, so there're 3.5 ways to use clsync on it:
 * using [libinotify](https://github.com/dmatveev/libinotify-kqueue);
-* using BSM API;
+* using BSM API (with or without a prefetcher thread);
 * using kqueue/kevent directly.
 
-However:
-* kqueue/kevent doesn't allow to catch file creation events. However it allows to catch an event of directory content change (without details). So clsync waits for such events and rescans (non-recursively) the whole dir on each such event. This algorithm is not tested and may be buggy. Moreover kqueue/kevent requires to open a file descriptor for every watched file. So this way may eat a lot of CPU and file descriptors.
-* libinotify is not production ready. There may be problems with it. Moreover libinotify backends to kqueue API anyway. On the other hand inotify support is well tested in clsync, so this way should be stable (if libinotify is stable) in contrast to kqueue direct use.
-* Using of BSM API requires auditd reconfiguration. It may hopple to real audit. Moreover this's a global OS setting. And using of this way forces clsync to catch all FS events of the whole system.
+Here's an excerpt from the manpage:
 
-I recommend to use the BSM API at the moment. However when the libinotify will be production ready you should try that way.
+     Possible values:
+            inotify
+                   inotify(7) [Linux, (FreeBSD via libinotify)]
+    
+                   Native, fast, reliable and well tested Linux FS monitor subsystem.
+    
+                   There's no essential performance profit to use "inotify"  instead  of
+                   "kevent"  on FreeBSD using "libinotify". It backends to "kevent" any‐
+                   way.
+    
+                   FreeBSD users: The libinotify on FreeBSD is still not ready and unus‐
+                   able for clsync to sync a lot of files and directories.
+    
+            kqueue
+                   kqueue(2) [FreeBSD, (Linux via libkqueue)]
+    
+                   A  *BSD  kernel  event  notification  mechanism (inc. timer, sockets,
+                   files etc).
+    
+                   This monitor subsystem cannot determine file creation event,  but  it
+                   can determine a directory where something happened. So clsync is have
+                   to rescan whole dir every  time  on  any  content  change.  Moreover,
+                   kqueue  requires  an  open()  on  every watched file/dir. But FreeBSD
+                   doesn't allow to open() symlink itself (without following)  and  it's
+                   highly  invasively  to open() pipes and devices. So clsync just won't
+                   call open() on everything except regular files and directories.  Con‐
+                   sequently,  clsync  cannot  determine  if  something  changed in sym‐
+                   link/pipe/socket and so on.  However it still  can  determine  if  it
+                   will  be created or deleted by watching the parent directory and res‐
+                   caning it on every appropriate event.
+    
+                   Also this API requires to open every monitored file and directory. So
+                   it  may  produce  a  huge  amount  of  file descriptors. Be sure that
+                   kern.maxfiles is big enough (in FreeBSD).
+    
+                   CPU/HDD expensive way.
+    
+                   Not well tested. Use with caution!
+    
+                   Linux users: The libkqueue on Linux is not working. He-he :)
+    
+            bsm
+                   bsm(3) [FreeBSD]
+    
+                   Basic Security Module (BSM) Audit API.
+    
+                   This is not a FS monitor subsystem, actually. It's  just  an  API  to
+                   access  to  audit information (inc. logs).  clsync can setup audit to
+                   watch FS events and report it into log. After that clsync  will  just
+                   parse the log via auditpipe(4) [FreeBSD].
+    
+                   Reliable,  but  hacky  way.  It requires global audit reconfiguration
+                   that may hopple audit analysis.
+    
+                   Warning!  FreeBSD has a limit for queued events. In  default  FreeBSD
+                   kernel it's only 1024 events. So choose one of:
+                          - To patch the kernel to increase the limit.
+                          - Don't use clsync on systems with too many file events.
+                          - Use bsm_prefetch mode (but there's no guarantee in this case
+                          anyway).
+                   See also option --exit-on-sync-skip.
+    
+                   Not  well  tested.  Use   with   caution!    Also   file   /etc/secu‐
+                   rity/audit_control will be overwritten with:
+                          #clsync
+    
+                          dir:/var/audit
+                          flags:fc,fd,fw,fm,cl
+                          minfree:0
+                          naflags:fc,fd,fw,fm,cl
+                          policy:cnt
+                          filesz:1M
+                   unless it's already starts with "#clsync\n" ("\n" is a new line char‐
+                   acter).
+    
+            bsm_prefetch
+                   The same as bsm but all BSM events will be  prefetched  by  an  addi‐
+                   tional  thread  to prevent BSM queue overflow. This may utilize a lot
+                   of memory on systems with a high FS events frequency.
+    
+                   However the thread may be not fast enough to unload  the  kernel  BSM
+                   queue. So it may overflow anyway.
+    
+     The default value on Linux is "inotify". The default value on FreeBSD is "kqueue".
 
 I hope you will send me bugreports to make me able to improve the FreeBSD support :)
 
@@ -282,6 +371,14 @@ Russian:
 - [syncing to many nodes](https://gitlab.ut.mephi.ru/ut/articles/blob/master/clsync/inotify-to-many-nodes)
 - [atomic sync](https://gitlab.ut.mephi.ru/ut/articles/blob/master/clsync/atomicsync)
 
+LVEE (Russian):
+- [clsync - live sync utility (abstract)](http://lvee.org/en/abstracts/118) [presentation](http://lvee.org/uploads/image_upload/file/337/winter_2014_15_clsync.pdf)
+- [clsync progress: security and porting to freebsd](http://lvee.org/en/abstracts/138)
+
+14. See also
+------------
+
+- [lrsync](https://github.com/xaionaro/lrsync)
 
 
                                                -- Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C

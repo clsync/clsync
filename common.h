@@ -67,12 +67,8 @@
 #include <netinet/in.h>
 #include <libgen.h>
 #include <pthread.h>
-#include <glib.h>
 
-#ifdef HAVE_CAPABILITIES
-#	include <sys/capability.h>	// for capset()/capget() for --preserve-file-access
-#	include <sys/prctl.h>		// for prctl() for --preserve-fil-access
-#endif
+#define CLSYNC_ITSELF
 
 #include "configuration.h"
 #ifdef HAVE_CONFIG_H
@@ -80,6 +76,8 @@
 #endif
 
 #include "clsync.h"
+#include "port-hacks.h"
+#include "posix-hacks.h"
 #include "ctx.h"
 #include "program.h"
 
@@ -117,20 +115,46 @@
 #	endif
 #endif
 
+#ifndef offsetof
+#	define offsetof(a, b) __builtin_offsetof(a, b)
+#endif
+
+// clang defines "__GNUC__", but not compatible with gnuc. Fixing.
+#ifdef __clang__
+#	ifdef __GNUC__
+#		undef __GNUC__
+#	endif
+#endif
 
 #define TOSTR(a) # a
 #define XTOSTR(a) TOSTR(a)
 
 #define COLLECTDELAY_INSTANT ((unsigned int)~0)
 
+
+#define MSG_SECURITY_PROBLEM(a) "Security problem: "a". Don't use this application until the bug will be fixed. Report about the problem to: "AUTHOR
+
 #define require_strlen_le(str, limit) \
 	if (strlen(str) >= limit)\
 		critical("length of "TOSTR(str)" (\"%s\") >= "TOSTR(limit));\
 
+#define SAFE(code, onfail) ({\
+	long _SAFE_rc;\
+	if ((_SAFE_rc = code)) {\
+		error("Got error while "TOSTR(code));\
+		onfail;\
+	} \
+	_SAFE_rc;\
+})
+
 enum paramsource_enum {
 	PS_UNKNOWN	 = 0,
 	PS_ARGUMENT,
-	PS_CONFIG
+	PS_CONFIG,
+	PS_CONTROL,
+	PS_DEFAULTS,
+//	PS_REHASH,
+	PS_CORRECTION,
 };
 typedef enum paramsource_enum paramsource_t;
 
@@ -141,22 +165,11 @@ enum notifyengine_enum {
 	NE_INOTIFY,
 	NE_KQUEUE,
 	NE_BSM,
+	NE_BSM_PREFETCH,
 	NE_DTRACEPIPE,
+	NE_GIO,
 };
 typedef enum notifyengine_enum notifyengine_t;
-
-#define STATE_STARTING(state_p) (state_p == NULL)
-enum state_enum {
-	STATE_EXIT 	= 0,
-	STATE_STARTING,
-	STATE_RUNNING,
-	STATE_REHASH,
-	STATE_TERM,
-	STATE_THREAD_GC,
-	STATE_INITSYNC,
-	STATE_UNKNOWN
-};
-typedef enum state_enum state_t;
 
 enum threadingmode {
 	PM_OFF	= 0,
@@ -164,6 +177,13 @@ enum threadingmode {
 	PM_FULL
 };
 typedef enum threadingmode threadingmode_t;
+
+enum splittingmode_enum {
+	SM_OFF		= 0,
+	SM_THREAD,
+	SM_PROCESS,
+};
+typedef enum splittingmode_enum splittingmode_t;
 
 /*
 struct excludeinfo {
@@ -187,32 +207,6 @@ struct eventinfo {
 };
 typedef struct eventinfo eventinfo_t;
 
-
-typedef int (*thread_callbackfunct_t)(ctx_t *ctx_p, char **argv);
-struct threadinfo {
-	int			  thread_num;
-	uint32_t		  iteration;
-	thread_callbackfunct_t 	  callback;
-	char 			**argv;
-	pthread_t		  pthread;
-	int			  exitcode;
-	int			  errcode;
-	state_t			  state;
-	ctx_t			 *ctx_p;
-	time_t			  starttime;
-	time_t			  expiretime;
-	int			  child_pid;
-
-	GHashTable		 *fpath2ei_ht;		// file path -> event information
-
-	int			  try_n;
-
-	// for so-synchandler
-	int			  n;
-	api_eventinfo_t		 *ei;
-};
-typedef struct threadinfo threadinfo_t;
-
 enum pthread_mutex_id {
 	PTHREAD_MUTEX_STATE,
 	PTHREAD_MUTEX_SELECT,
@@ -220,18 +214,6 @@ enum pthread_mutex_id {
 	PTHREAD_MUTEX_MAX
 };
 
-
-struct threadsinfo {
-	pthread_mutex_t		  mutex[PTHREAD_MUTEX_MAX];
-	pthread_cond_t		  cond [PTHREAD_MUTEX_MAX];
-	char			  mutex_init;
-	int			  allocated;
-	int			  used;
-	threadinfo_t 		 *threads;
-	threadinfo_t 		**threadsstack;	// stack of threadinfo_t to be used on thread_new()
-	int			  stacklen;
-};
-typedef struct threadsinfo threadsinfo_t;
 
 struct dosync_arg {
 	int evcount;
@@ -245,6 +227,12 @@ struct dosync_arg {
 	api_eventinfo_t *api_ei;
 	int api_ei_count;
 	char buf[BUFSIZ+1];
+
+// for be read by sync_parameter_get():
+	const char *include_list[MAXARGUMENTS+2];
+	size_t      include_list_count;
+	const char *list_type_str;
+	const char *evmask_str;
 };
 
 struct doubleentry {
