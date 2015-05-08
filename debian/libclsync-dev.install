@@ -1,2 +1,4 @@
-usr/include/libclsync/socket.h
-usr/include/libclsync/libclsync.h
+usr/include/*/*.h
+usr/lib/*/libclsync*.a
+usr/lib/*/libclsync*.so
+usr/lib/*/pkgconfig/*.pc

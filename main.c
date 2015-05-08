@@ -2844,7 +2844,7 @@ int main(int _argc, char *_argv[]) {
 
 
 #ifdef CAPABILITIES_SUPPORT
-	debug(1, "Preserving Linux capabilites");
+	debug(1, "Preserving Linux capabilities");
 
 	// Tell kernel not clear capabilities when dropping root 
 	if (prctl(PR_SET_KEEPCAPS, 1) < 0) {
