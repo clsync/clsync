@@ -7,7 +7,7 @@
 .SH NAME
 clsync \- live sync tool, written in GNU C
 .SH SYNOPSIS
-.B clsync [ ... ] -- [ sync\-handler\-arguments ]
+.B clsync [ ... ] \-\- [ sync\-handler\-arguments ]
 .SH DESCRIPTION
 .B clsync
 executes
@@ -48,9 +48,9 @@ simple, direct, shell, rsyncdirect, rsyncshell
 
 To set
 .I sync\-handler\-arguments
-in config file use '--'. An example:
+in config file use '\-\-'. An example:
 .RS
--- = -aH --exclude-from %EXCLUDE-LIST% --include-from=%INCLUDE-LIST% --exclude '*' %watch-dir%/ %destination-dir%/
+\-\- = \-aH \-\-exclude\-from %EXCLUDE\-LIST% \-\-include\-from=%INCLUDE\-LIST% \-\-exclude '*' %watch\-dir%/ %destination\-dir%/
 .RE
  
 .B \-W, \-\-watch\-dir
@@ -674,7 +674,7 @@ If you're going to setup bi\-directional syncing then you may use \-\-modificati
 .RE
 .B Not enough CPU
 .RS
-If rsync eats too many CPU with rechecking hashsums of files on their dry open()/close() due to some hacky script (for example "chown -R www-data:www-data" in cron) then you can use \-\-modification\-signature "dev,ino,mode,uid,gid,rdev,size,atime,mtime" (without "blksize", "blocks", "nlink" and "ctime")
+If rsync eats too many CPU with rechecking hashsums of files on their dry open()/close() due to some hacky script (for example "chown \-R www-data:www-data" in cron) then you can use \-\-modification\-signature "dev,ino,mode,uid,gid,rdev,size,atime,mtime" (without "blksize", "blocks", "nlink" and "ctime")
 .RE
 .RE
 
@@ -808,7 +808,7 @@ Is not set by default.
 .PP
 .B \-A, \-\-auto\-add\-rules\-w
 .RS
-Forces clsync to create a "w\-rule" for every non-"w-rule" (see
+Forces clsync to create a "w-rule" for every non-"w-rule" (see
 .BR RULES ).
 
 Not recommended to use in modes "rsyncdirect", "rsyncshell" and "rsyncso"
@@ -1012,7 +1012,7 @@ Directory to write clsync's instance information by signal 29 (see
 .BR SIGNALS ")."
 The directory shouldn't exists before dumping.
 
-Is set to "/tmp/clsync-dump-%label%" by default.
+Is set to "/tmp/clsync\-dump\-%label%" by default.
 .RE
 
 .PP
@@ -1411,7 +1411,7 @@ Creates a separate thread for privileged operations.
 It's highly recommended to enable
 .B \-\-seccomp\-filter
 in this case. But that will forbid
-.BR --threading .
+.BR \-\-threading .
 .RE
 .B process
 .RS
@@ -1581,13 +1581,13 @@ Possible values:
 .RS
 .B auto
 .RS
-Creates a directory "/dev/shm/clsync-rootfs",
+Creates a directory "/dev/shm/clsync\-rootfs",
 .BR unshare "(2)-ing the mount namespace, " mount (2)-s
 the
 .I chroot\-directory
 to the directory and then
 .BR pivot_root "(2)-ing, " chroot "(2)-ing and " umount (2)-ing
-old rootfs. Directory "/dev/shm/clsync-rootfs" won't be deleted after
+old rootfs. Directory "/dev/shm/clsync\-rootfs" won't be deleted after
 .B clsync
 finish.
 .RE
@@ -1615,7 +1615,7 @@ Don't
 
 The default value is "off". If
 .B \-\-chroot
-is used then recommended value is "auto-ro".
+is used then recommended value is "auto\-ro".
 .RE
 
 .B \-\-mountpoints
@@ -1715,18 +1715,18 @@ Recommendations to improve the perfomance:
 - Disable thread/process splitting.
 .br
 - Don't use clsync rules (use rules on sync-handler side) or/and use option
-"--full-initialsync"
+"\-\-full\-initialsync"
 .br
-- Use option "-B0".
+- Use option "\-B0".
 .br
-- Use option "--cancel-syscalls=mon_stat".
+- Use option "\-\-cancel\-syscalls=mon_stat".
 .br
-- Use option "-p safe" or "-p full".
+- Use option "\-p safe" or "\-p full".
 .br
-- Disable debugging with "-d0" or better disable debugging support at all
-with "./configure" option "--enable-debug=no"
+- Disable debugging with "\-d0" or better disable debugging support at all
+with "./configure" option "\-\-enable\-debug=no"
 .br
-- Don't use option "--exclude-mount-points"
+- Don't use option "\-\-exclude\-mount\-points"
 .br
 - Free memory for disk cache
 .br
@@ -1825,7 +1825,7 @@ Default
 .I sync\-handler\-arguments
 are:
 .RS
-%INCLUDE\-LIST% %destination-dir%/
+%INCLUDE\-LIST% %destination\-dir%/
 .RE
 
 Additional substitutions:
@@ -1912,14 +1912,14 @@ Default
 are:
 .RS
 \-aH \-\-delete \-\-exclude\-from %EXCLUDE\-LIST\-PATH% \-\-include\-from
-%INCLUDE\-LIST\-PATH% --exclude='*' %watch-dir%/ %destination-dir%/
+%INCLUDE\-LIST\-PATH% \-\-exclude='*' %watch\-dir%/ %destination\-dir%/
 .RE
 if option
-.I \-\-rsync-\-prefer\-include
+.I \-\-rsync\-\-prefer\-include
 is not set and
 .RS
-\-aH \-\-delete \-\-include\-from %INCLUDE\-LIST\-PATH% --exclude='*'
-%watch-dir%/ %destination-dir%/
+\-aH \-\-delete \-\-include\-from %INCLUDE\-LIST\-PATH% \-\-exclude='*'
+%watch\-dir%/ %destination\-dir%/
 .RE
 if the option is set
 
@@ -1941,7 +1941,7 @@ Is replaced by the path of the exclude list file
 .RS
 Is replaced by default
 .IR sync\-handler\-arguments ", but"
-without "%watch-dir%/ %destination-dir%/"
+without "%watch\-dir%/ %destination\-dir%/"
 .RE
 .RE
 
@@ -2032,7 +2032,7 @@ To fork the process should be used function
 "pid_t clsyncapi_fork(ctx_t *)" instead of "pid_t fork()" to make clsync
 be able to kill the child.
 
-See example file "clsync-synchandler-rsyncso.c".
+See example file "clsync\-synchandler\-rsyncso.c".
 
 Recommended case.
 .RE
@@ -2144,7 +2144,7 @@ To fork the process should be used function
 "pid_t clsyncapi_fork(options_t *)" instead of "pid_t fork()" to make clsync
 be able to kill the child.
 
-See example file "clsync-synchandler-so.c".
+See example file "clsync\-synchandler\-so.c".
 
 Recommended case.
 .RE
@@ -2283,7 +2283,7 @@ Syncing pwdb files and sshd_config (non-rsync case with option
 .br
 	+f^/ssh/sshd_config$
 .br
-	-*
+	\-*
 .RE
 
 Syncing pwdb files and sshd_config (rsync case):
@@ -2300,7 +2300,7 @@ Syncing pwdb files and sshd_config (rsync case):
 .br
 	+d^/ssh$
 .br
-	-*
+	\-*
 .RE
 
 Syncing /srv/lxc tree (rsync case):
@@ -2331,7 +2331,7 @@ kills children)
 16 \- interrupts sleep()/select() and wait() [for debugging and internal uses]
 
 29 \- dump information to
-.IR dump-dir
+.IR dump\-dir
 [for debugging]
 
 If you need to kill clsync but leave children then you can use 9-th (KILL)
@@ -2508,69 +2508,69 @@ Not described yet.
 
 .B Mirroring a directory:
 .RS
-clsync -Mrsyncdirect -W/path/to/source_dir -D/path/to/destination_dir
+clsync \-Mrsyncdirect \-W/path/to/source_dir \-D/path/to/destination_dir
 .RE
 
 .B Mirroring a directory, but faster:
 .RS
-clsync -w5 -t5 -T5 -Mrsyncdirect -W/path/to/source_dir -D/path/to/destination_dir
+clsync \-w5 \-t5 \-T5 \-Mrsyncdirect \-W/path/to/source_dir \-D/path/to/destination_dir
 .RE
 
 .B Instant mirroring of a directory:
 .RS
-clsync -w0 -t0 -T0 -Mrsyncdirect -W/path/to/source_dir -D/path/to/destination_dir
+clsync \-w0 \-t0 \-T0 \-Mrsyncdirect \-W/path/to/source_dir \-D/path/to/destination_dir
 .RE
 
 .B Making two directories synchronous:
 .RS
-clsync -Mrsyncdirect --background -z /var/run/clsync0.pid --output syslog -Mrsyncdirect -W/path/to/dir1 -D/path/to/dir2 --modification-signature '*'
+clsync \-Mrsyncdirect \-\-background \-z /var/run/clsync0.pid \-\-output syslog \-Mrsyncdirect \-W/path/to/dir1 \-D/path/to/dir2 \-\-modification\-signature '*'
 .br
-clsync -Mrsyncdirect --background -z /var/run/clsync1.pid --output syslog -Mrsyncdirect -W/path/to/dir2 -D/path/to/dir1 --modification-signature '*'
+clsync \-Mrsyncdirect \-\-background \-z /var/run/clsync1.pid \-\-output syslog \-Mrsyncdirect \-W/path/to/dir2 \-D/path/to/dir1 \-\-modification\-signature '*'
 .RE
 
 .B Fixing privileges of a web-site:
 .RS
-clsync -w3 -t3 -T3 -x1 -W/var/www/site.example.org/root -Mdirect -Schown --uid 0 --gid 0 -Ysyslog -b1 --modification-signature uid,gid -- --from=root www-data:www-data %INCLUDE-LIST%
+clsync \-w3 \-t3 \-T3 \-x1 \-W/var/www/site.example.org/root \-Mdirect \-Schown \-\-uid 0 \-\-gid 0 \-Ysyslog \-b1 \-\-modification\-signature uid,gid \-\- \-\-from=root www\-data:www\-data %INCLUDE\-LIST%
 .RE
 
 .B "'Atomic' sync:"
 .RS
-clsync --exit-on-no-events --max-iterations=20 --mode=rsyncdirect -W/var/www_new -Srsync -- %RSYNC-ARGS% /var/www_new/ /var/www/
+clsync \-\-exit\-on\-no\-events \-\-max\-iterations=20 \-\-mode=rsyncdirect \-W/var/www_new \-Srsync \-\- %RSYNC\-ARGS% /var/www_new/ /var/www/
 .RE
 
 .B Moving a web-server:
 .RS
-clsync --exit-on-no-events --max-iterations=20 --pre-exit-hook=/root/stop-here.sh --exit-hook=/root/start-there.sh --mode=rsyncdirect --ignore-exitcode=23,24 --retries=3 -W /var/www -S rsync -- %RSYNC-ARGS% /var/www/ rsync://clsync@another-host/var/www/
+clsync \-\-exit\-on\-no\-events \-\-max\-iterations=20 \-\-pre\-exit\-hook=/root/stop\-here.sh \-\-exit\-hook=/root/start\-there.sh \-\-mode=rsyncdirect \-\-ignore\-exitcode=23,24 \-\-retries=3 \-W /var/www \-S rsync \-\- %RSYNC\-ARGS% /var/www/ rsync://clsync@another-host/var/www/
 .RE
 
 .B Copying files to slave-nodes using
 .BR pdcp (1):
 .RS
-clsync -Msimple -S pdcp -W /opt/global -b -Y syslog -- -a %INCLUDE-LIST% %INCLUDE-LIST%
+clsync \-Msimple \-S pdcp \-W /opt/global \-b \-Y syslog \-\- \-a %INCLUDE\-LIST% %INCLUDE\-LIST%
 .RE
 
 .B Copying files to slave-nodes using
 .BR uftp (1):
 .RS
-clsync -Mdirect -S uftp -W/opt/global --background=1 --output=syslog -- -M 248.225.233.1 %INCLUDE-LIST%
+clsync \-Mdirect \-S uftp \-W/opt/global \-\-background=1 \-\-output=syslog \-\- \-M 248.225.233.1 %INCLUDE\-LIST%
 .RE
 
 .B A dry running to see
 .BR rsync (1)
 .B arguments that clsync will use:
 .RS
-clsync -Mrsyncdirect -S echo -W/path/to/source_dir -D/path/to/destination_dir
+clsync \-Mrsyncdirect \-S echo \-W/path/to/source_dir \-D/path/to/destination_dir
 .RE
 
 .B An another dry running to look how clsync will call
 .BR pdcp (1):
 .RS
-clsync -Msimple -S echo -W /opt/global -b0 -- pdcp -a %INCLUDE-LIST% %INCLUDE-LIST%
+clsync \-Msimple \-S echo \-W /opt/global \-b0 \-\- pdcp \-a %INCLUDE\-LIST% %INCLUDE\-LIST%
 .RE
 
 More working examples you can try out in "/usr/share/doc/clsync/examples/"
 directory. Copy this directory somewhere (e.g. into "/tmp"). And try to run
-"clsync-start-rsync.sh" in there. Any files/directories modifications in
+"clsync\-start\-rsync.sh" in there. Any files/directories modifications in
 "testdir/from" will be synced to "testdir/to" in a few seconds.
 .RE
 .SH AUTHOR
