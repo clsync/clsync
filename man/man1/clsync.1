@@ -1283,7 +1283,7 @@ to preserve "CAP_DAC_READ_SEARCH", "CAP_SETUID" or/and "CAP_SETGID" [see
 .BR capabilities (7)]
 Linux capability for process using
 .BR fts "(3), " inotify "(7) and " execve "(2)."
-This allows to preserve enough FS privileges to watch a file tree and execute
+This allows the preservation of enough FS privileges to watch a file tree and execute
 the
 .I sync\-handler
 with required uid and gid [see 
@@ -1530,7 +1530,7 @@ Is set to "0" by default if \-\-splitting is set. Otherwise "1".
 .RS
 .B "[Requires \-\-splitting=process]"
 
-Forbid writting or reading to/from shared memory when it shouldn't be.
+Forbid writing or reading to/from shared memory when it shouldn't be.
 .BR mprotect (2)
 is used for the protection.
 

@@ -386,7 +386,7 @@ int cap_enable(__u32 caps) {
 
 	cap_hdr.version = _LINUX_CAPABILITY_VERSION;
 	if (capget(&cap_hdr, &cap_dat) < 0) {
-		error("Cannot get capabilites with capget()");
+		error("Cannot get capabilities with capget()");
 		return errno;
 	}
 
@@ -402,14 +402,14 @@ int cap_enable(__u32 caps) {
 }
 
 int cap_drop(ctx_t *ctx_p, __u32 caps) {
-	debug(1, "Dropping all Linux capabilites but 0x%x", caps);
+	debug(1, "Dropping all Linux capabilities but 0x%x", caps);
 
 	struct __user_cap_header_struct	cap_hdr = {0};
 	struct __user_cap_data_struct	cap_dat = {0};
 
 	cap_hdr.version = _LINUX_CAPABILITY_VERSION;
 	if (capget(&cap_hdr, &cap_dat) < 0) {
-		error_or_debug((ctx_p->flags[CAP_PRESERVE] != CAP_PRESERVE_TRY) ? -1 : 3, "Cannot get capabilites with capget()");
+		error_or_debug((ctx_p->flags[CAP_PRESERVE] != CAP_PRESERVE_TRY) ? -1 : 3, "Cannot get capabilities with capget()");
 		return errno;
 	}
 	debug(3, "old: cap.eff == 0x%04x; cap.prm == 0x%04x; cap.inh == 0x%04x.",
