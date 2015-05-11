@@ -148,7 +148,7 @@ if true; then
 
 	# Functionality test
 
-	build_test --enable-cluster --enable-debug --enable-paranoid=2 --enable-capabilities --without-mhash
+	build_test --enable-cluster --enable-debug --enable-paranoid=0 --enable-capabilities --without-mhash
 	run_example rsyncdirect
 	run_example rsyncdirect --splitting=thread --threading=off
 	run_example rsyncdirect --splitting=process --threading=off
