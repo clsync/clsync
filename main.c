@@ -2962,12 +2962,35 @@ int main(int _argc, char *_argv[]) {
 	if (ctx_p->pidfile != NULL) {
 		debug(2, "Trying to open the pidfile \"%s\"", ctx_p->pidfile);
 		pid_t pid = getpid();
+
 		FILE *pidfile = fopen(ctx_p->pidfile, "w");
 		if (pidfile == NULL) {
-			error("Cannot open file \"%s\" to write a pid there",
-				ctx_p->pidfile);
-			ret = errno;
-		} else {
+			// If error
+			if (errno == EACCES) {
+				int fd;
+				uid_t euid = geteuid();
+				gid_t egid = getegid();
+
+				debug(1, "Don't have permissions to open file \"%s\". Trying seteuid(0)+open()+fchown()+close()+seteuid(%i)", ctx_p->pidfile, euid);
+
+				errno  = 0;
+				if (!errno) SAFE ( seteuid(0),							ret = errno );
+				if (!errno) SAFE ( (fd = open(ctx_p->pidfile, O_CREAT|O_WRONLY, 0644)) == -1,	ret = errno );
+				if (!errno) SAFE ( fchown(fd, euid, egid),					ret = errno );
+				if (!errno) SAFE ( close(fd),							ret = errno );
+				if (!errno) SAFE ( seteuid(euid),						ret = errno );
+
+				pidfile = fopen(ctx_p->pidfile, "w");
+			}
+
+			if (pidfile == NULL) {
+				error("Cannot open file \"%s\" to write a pid there",
+					ctx_p->pidfile);
+				ret = errno;
+			}
+		}
+
+		if (pidfile != NULL) {
 			if (fprintf(pidfile, "%u", pid) < 0) {
 				error("Cannot write pid into file \"%s\"",
 					ctx_p->pidfile);
@@ -2986,9 +3009,15 @@ int main(int _argc, char *_argv[]) {
 
 	if (ctx_p->pidfile != NULL) {
 		if (unlink(ctx_p->pidfile)) {
-			error("Cannot unlink pidfile \"%s\"",
-				ctx_p->pidfile);
-			ret = errno;
+			FILE *pidfile;
+
+			debug(1, "Cannot unlink pidfile \"%s\": %s. Just truncating the file.",
+				ctx_p->pidfile, strerror(errno));
+
+			SAFE ( (pidfile = fopen(ctx_p->pidfile, "w")) == NULL,	ret = errno );
+
+			if (pidfile != NULL)
+				fclose(pidfile);
 		}
 	}
 
