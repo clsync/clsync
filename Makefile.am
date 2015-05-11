@@ -103,7 +103,7 @@ REVISION=$(shell [ -d .git ] &&\
 		'\".'$$(($$(git log 2>/dev/null \
 			| grep -c ^commit \
 			| tr -d "\n" \
-			)-994 \
+			)-1083 \
 		))'\"' \
 	) || echo -n '\"-release\"' )
 
