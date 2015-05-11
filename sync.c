@@ -2569,14 +2569,14 @@ static inline int rsync_outline(FILE *outf, char *outline, eventinfo_flags_t fla
 
 	if (flags & EVIF_RECURSIVELY) {
 		debug(3, "Recursively \"%s\": Writing to rsynclist: \"%s/***\".", outline, outline);
-		fprintf(outf, "%s/***\n", outline);
+		critical_on ( fprintf(outf, "%s/***\n", outline) <= 0 );
 	} else
 	if (flags & EVIF_CONTENTRECURSIVELY) {
 		debug(3, "Content-recursively \"%s\": Writing to rsynclist: \"%s/**\".", outline, outline);
-		fprintf(outf, "%s/**\n", outline);
+		critical_on ( fprintf(outf, "%s/**\n", outline)  <= 0 );
 	} else {
 		debug(3, "Non-recursively \"%s\": Writing to rsynclist: \"%s\".", outline, outline);
-		fprintf(outf, "%s\n", outline);
+		critical_on ( fprintf(outf, "%s\n", outline)     <= 0 );
 	}
 
 	return 0;
@@ -2690,7 +2690,7 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 		g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, rsync_aggrout, dosync_arg_p);
 
 	if (dosync_arg_p->outf != NULL) {
-		fclose(dosync_arg_p->outf);
+		critical_on(fclose(dosync_arg_p->outf));
 		dosync_arg_p->outf = NULL;
 	}
 
@@ -2851,10 +2851,11 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 		(ctx_p->flags[MODE] == MODE_RSYNCDIRECT) ||
 		(ctx_p->flags[MODE] == MODE_RSYNCSO)
 	)) {
-		if (ctx_p->flags[SYNCLISTSIMPLIFY])
-			fprintf(outf, "%s\n", fpath);
-		else 
-			fprintf(outf, "sync %s %i %s\n", ctx_p->label, evinfo->evmask, fpath);
+		if (ctx_p->flags[SYNCLISTSIMPLIFY]) {
+			critical_on ( fprintf(outf, "%s\n", fpath) <= 0 );
+		} else  {
+			critical_on ( fprintf(outf, "sync %s %i %s\n", ctx_p->label, evinfo->evmask, fpath) <= 0);
+		}
 		return;
 	}
 
@@ -2947,7 +2948,7 @@ int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
 #endif
 					g_hash_table_foreach_remove(indexes_p->exc_fpath_ht, sync_idle_dosync_collectedevents_rsync_exclistpush, &dosync_arg);
 					g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, rsync_aggrout, &dosync_arg);
-					fclose(dosync_arg.outf);
+					critical_on(fclose(dosync_arg.outf));
 #ifdef VERYPARANOID
 					require_strlen_le(dosync_arg.outf_path, PATH_MAX);
 #endif
