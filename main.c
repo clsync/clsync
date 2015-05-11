@@ -483,7 +483,7 @@ pid_t fork_helper() {
 }
 
 int version() {
-	info(PROGRAM" v%i.%i"REVISION"\n\t"AUTHOR"\n\nCompiled with options"
+	info(PROGRAM" v%i.%i.%i"REVISION"\n\t"AUTHOR"\n\nCompiled with options"
 #ifdef _DEBUG_SUPPORT
 		" -D_DEBUG_SUPPORT"
 #endif
@@ -538,7 +538,7 @@ int version() {
 #ifdef HL_LOCKS
 		" -DHL_LOCKS"
 #endif
-		, VERSION_MAJ, VERSION_MIN);
+		, VERSION_MAJ, VERSION_MID, VERSION_MIN);
 	exit(0);
 }
 
