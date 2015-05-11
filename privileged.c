@@ -824,7 +824,10 @@ int privileged_handler(ctx_t *ctx_p)
 {
 # ifdef READWRITE_SIGNALLING
 	char buf[1] = {0};
+# else
+	struct timespec wait_timeout = {0};
 # endif
+
 	int setup = 0;
 	uid_t exec_uid = 65535;
 	gid_t exec_gid = 65535;
@@ -901,9 +904,29 @@ int privileged_handler(ctx_t *ctx_p)
 				critical_on(!parent_isalive());
 # endif
 # ifdef READWRITE_SIGNALLING
+#  warning		READWRITE_SIGNALLING can cause process hanging on clsync shutdown
 			read_inf(priv_read_fd, buf, 1);
 # else
-			critical_on (pthread_cond_wait(pthread_cond_privileged_p, pthread_mutex_privileged_p));
+			int rc;
+			while (1) {
+				rc = pthread_cond_timedwait(pthread_cond_privileged_p, pthread_mutex_privileged_p, &wait_timeout);
+				if (!rc)
+					break;
+				if (rc != ETIMEDOUT)
+					critical("Got error while pthread_cond_timedwait()");
+				debug(10, "pthread_cond_timedwait() timed out");
+
+				if (opts->isprocsplitting)
+					exit_on(!parent_isalive());
+
+				{
+					debug(20, "Resetting wait_timeout");
+					struct timeval now;
+					gettimeofday(&now, NULL);
+					wait_timeout.tv_sec	= now.tv_sec  + SLEEP_SECONDS;
+					wait_timeout.tv_nsec	= now.tv_usec * 1000;
+				}
+			}
 # endif
 # ifdef HL_LOCKS
 			if (hl_lock_p->enabled)

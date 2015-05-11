@@ -41,3 +41,5 @@ extern int parent_isalive();
 extern int sethandler_sigchld(void (*handler)());
 extern pid_t waitpid_timed(pid_t child_pid, int *status_p, long sec, long nsec);
 
+#define exit_on(cond) { debug(30, "exit_on: checking: %s", TOSTR(cond)); if (unlikely(cond)) { debug(1, "Exiting due to: "TOSTR(cond)); exit(0); } }
+
