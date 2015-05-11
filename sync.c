@@ -1308,6 +1308,9 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 	char  *path_rel		= NULL;
 	size_t path_rel_len	= 0;
 
+#ifdef VERYPARANOID
+	errno = 0;
+#endif
 	while ((node = privileged_fts_read(tree, PC_SYNC_INIIALSYNC_WALK_FTS_READ))) {
 		switch (node->fts_info) {
 			// Duplicates:
@@ -1733,6 +1736,9 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 	char  *path_rel		= NULL;
 	size_t path_rel_len	= 0;
 
+#ifdef VERYPARANOID
+	errno = 0;
+#endif
 	while ((node = privileged_fts_read(tree, PC_SYNC_MARK_WALK_FTS_READ))) {
 #ifdef CLUSTER_SUPPORT
 		int ret;

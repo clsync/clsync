@@ -32,10 +32,10 @@ build_test() {
 # Cleanup functions for run_example()
 run_example_cleanup_success() {
 	rm -rf "examples/testdir"/{to,from}/*
-	pkill -F "$CLSYNC_PIDFILE"
+	sudo pkill -F "$CLSYNC_PIDFILE"
 }
 run_example_cleanup_failure() {
-	pkill -F "$CLSYNC_PIDFILE" 2>/dev/null
+	sudo pkill -F "$CLSYNC_PIDFILE" 2>/dev/null
 	echo "$@" >&2
 	exit 1
 }
@@ -144,11 +144,10 @@ if true; then
 fi
 
 if true; then
-
-	# Test coverage
-
-	export CFLAGS="$CFLAGS --coverage -O0"
 	export PATH="$(pwd):$PATH"
+
+	# Functionality test
+
 	build_test --enable-cluster --enable-debug --enable-paranoid=2 --enable-capabilities --without-mhash
 	run_example rsyncdirect
 	run_example rsyncdirect --splitting=thread --threading=off

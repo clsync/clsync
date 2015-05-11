@@ -25,5 +25,5 @@ cat > rules <<EOF
 +*.*
 EOF
 
-clsync -K example-cluster -c "$IPADDR" -M rsyncshell -w 2 -p safe -t 5 -W ./testdir/from -S ./clsync-synchandler-rsync.sh -R rules $@
+sudo $(which clsync) -K example-cluster -c "$IPADDR" -M rsyncshell -w 2 -p safe -t 5 -W ./testdir/from -S ./clsync-synchandler-rsync.sh -R rules $@
 

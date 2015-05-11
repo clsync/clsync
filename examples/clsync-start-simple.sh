@@ -7,5 +7,5 @@ cat > rules <<EOF
 +*.*
 EOF
 
-clsync -K example-simple -M simple -w2 -t5 -W ./testdir/from -S $(which echo) -R rules $@
+sudo $(which clsync) -K example-simple -M simple -w2 -t5 -W ./testdir/from -S $(which echo) -R rules $@
 

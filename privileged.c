@@ -108,6 +108,10 @@
 	SECCOMP_ALLOW_ACCUM_SYSCALL(nanosleep),				\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(shmdt),				\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(clone),		/* for --threading */		\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(set_robust_list),	/* for --threading? */		\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(madvise),				\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(exit),				\
+
 
 
 /* Syscalls allowed to non-privileged thread */
@@ -938,7 +942,7 @@ int privileged_handler(ctx_t *ctx_p)
 			mprotect((void *)cmd_ret_p,	sizeof(*cmd_ret_p),	PROT_WRITE);
 		}
 
-		debug(10, "Got command %u", cmd_p->action);
+		debug(10, "Got command %u (euid:egid => %i:%i)", cmd_p->action, geteuid(), getegid());
 
 		if (!setup && cmd_p->action != PA_SETUP)
 			critical("A try to use commands before PA_SETUP");
@@ -952,6 +956,7 @@ int privileged_handler(ctx_t *ctx_p)
 				critical_on(pa_setup(opts, cmd_p->arg.ctx_p, &exec_uid, &exec_gid));
 				mprotect(opts, sizeof(*opts), PROT_READ);
 				use_args_check = cmd_p->arg.ctx_p->flags[CHECK_EXECVP_ARGS];
+				cap_drop(ctx_p, ctx_p->caps);	// TODO: Find out why "permission denined" without this line
 				setup++;
 				critical_on(errno);
 				break;
@@ -1847,7 +1852,7 @@ int privileged_init(ctx_t *ctx_p)
 	}
 
 	if (ctx_p->flags[GID] || ctx_p->flags[UID])
-		SAFE( seteuid(0), return errno);
+		SAFE( seteuid(0), {error("Not enough permission to start a privileged thread/fork"); return errno;});
 
 	if (ctx_p->flags[GID]) {
 		SAFE( setegid(0), return errno);

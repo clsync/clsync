@@ -417,8 +417,10 @@ int parent_isalive() {
 	debug(12, "parent_pid == %u", parent_pid);
 
 	if ((rc=kill(parent_pid, 0))) {
-		debug(1, "kill(%u, 0) => %i", parent_pid, rc);
-		return 0;
+		if (errno == ESRCH) {
+			debug(1, "kill(%u, 0) => %i; errno => %s", parent_pid, rc, strerror(errno));
+			return 0;
+		}
 	}
 
 	return 1;

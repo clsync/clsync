@@ -7,5 +7,5 @@ cat > rules <<EOF
 +*.*
 EOF
 
-clsync -K example-rsync -l test -M rsyncshell -w2 -p safe -t5 -W ./testdir/from -S ./clsync-synchandler-rsyncshell.sh -R rules $@
+sudo $(which clsync) -K example-rsync -l test -M rsyncshell -w2 -p safe -t5 -W ./testdir/from -S ./clsync-synchandler-rsyncshell.sh -R rules $@
 
