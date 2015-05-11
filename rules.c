@@ -181,6 +181,7 @@ int parse_rules_fromfile(ctx_t *ctx_p) {
 			line--;
 			linelen++;
 
+#ifdef AUTORULESW
 			if(*line != 'w') {
 				// processing --auto-add-rules-w
 				if(ctx_p->flags[AUTORULESW] && (sign == RS_PERMIT)) {
@@ -254,6 +255,7 @@ int parse_rules_fromfile(ctx_t *ctx_p) {
 					}
 				}
 			}
+#endif
 		}
 	}
 

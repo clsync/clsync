@@ -146,7 +146,9 @@ static const struct option long_options[] =
 	{"lists-dir",		required_argument,	NULL,	OUTLISTSDIR},
 	{"have-recursive-sync",	optional_argument,	NULL,	HAVERECURSIVESYNC},
 	{"synclist-simplify",	optional_argument,	NULL,	SYNCLISTSIMPLIFY},
+#ifdef AUTORULESW
 	{"auto-add-rules-w",	optional_argument,	NULL,	AUTORULESW},
+#endif
 	{"rsync-inclimit",	required_argument,	NULL,	RSYNCINCLIMIT},
 	{"rsync-prefer-include",optional_argument,	NULL,	RSYNCPREFERINCLUDE},
 	{"ignore-exitcode",	required_argument,	NULL,	IGNOREEXITCODE},
@@ -2047,6 +2049,7 @@ int ctx_check(ctx_t *ctx_p) {
 	)
 		warning("Option \"--rsyncpreferinclude\" is useless if mode is not \"rsyncdirect\", \"rsyncshell\" or \"rsyncso\".");
 
+#ifdef AUTORULESW
 	if (
 		(
 			ctx_p->flags[MODE] == MODE_RSYNCDIRECT ||
@@ -2056,6 +2059,7 @@ int ctx_check(ctx_t *ctx_p) {
 		&& ctx_p->flags[AUTORULESW]
 	)
 		warning("Option \"--auto-add-rules-w\" in modes \"rsyncdirect\", \"rsyncshell\" and \"rsyncso\" may cause unexpected problems.");
+#endif
 
 /*
 	if(ctx_p->flags[HAVERECURSIVESYNC] && (ctx_p->listoutdir == NULL)) {

@@ -477,135 +477,135 @@ Sets the control socket mode [see
 Is not set by default.
 .RE
 
-.B \-c, \-\-cluster\-iface
-.I interface\-ip
-.RS
-.B Not implemented, yet.
-
-.B DANGEROUS OPTION. This functionality wasn't tested well. You can lost your data.
-
-Enables inter-node notifing subsystem to prevent sync looping between nodes.
-This's very useful features that provides ability of birectional sync of the
-same directory between two or more nodes.
-.I interface-ip
-is an IP-address already assigned to the interface that will be used for
-multicast notifing.
-
-Not enabled by default.
-
-To find out the IP-address on interface "eth0", you can use for example next
-command:
-
-ip a s eth0 | awk '{if($1=="inet") {gsub("/.*", "", $2); print $2}}'
-
-Is not set by default.
-.RE
-
-.PP
-.B \-m, \-\-cluster\-ip
-.I multicast\-ip
-.RS
-.B Not implemented yet.
-
-Sets IP-address for multicast group.
-
-This option can be used only in conjunction with
-.BR \-\-cluster\-interface .
-
-Use IP-addresses from 224.0.0.0/4 for this option.
-
-The default value is "227.108.115.121". [(128+"c")."l"."s"."y"]
-.RE
-
-.PP
-.B \-P, \-\-cluster\-port
-.I multicast\-port
-.RS
-.B Not implemented yet.
-
-Sets UDP-port number for multicast messages.
-
-This option can be used only in conjunction with
-.BR \-\-cluster\-interface .
-
-.I multicast\-port
-should be greater than 0 and less than 65535.
-
-The default value is "40079". [("n" << 8) + "c"]
-.RE
-
-.PP
-.B \-W, \-\-cluster\-timeout
-.I cluster\-timeout
-.RS
-.B Not implemented yet.
-
-Sets timeout (in milliseconds) of waiting answer from another nodes of the
-cluster. If there's no answer from some node, it will be excluded.
-
-The default value is "1000". [1 second]
-.RE
-
-.PP
-.B \-n, \-\-cluster\-node\-name
-.I cluster\-node\-name
-.RS
-.B Not implemented yet.
-
-Sets the name of this node in the cluster. It will be used in action
-scripts of another nodes (see 
-.BR "SYNC HANDLER MODES" ).
-
-The default value is $(uname \-n).
-.RE
-
-.PP
-.B \-n, \-\-cluster\-node\-id
-.I cluster\-node\-id
-.RS
-.B Not implemented yet.
-
-Sets an ID for this node in the cluster. It's used for messaging between
-cluster nodes.
-
-Use value "-1" to choose it automatically.
-
-The default value is "-1".
-.RE
-
-.PP
-.B \-o, \-\-cluster\-hash\-dl\-min
-.I hash\-dirlevel\-min
-.RS
-Sets minimal directory level for ctime hashing (see
-.BR CLUSTERING ).
-
-The default value is "1".
-.RE
-
-.PP
-.B \-O, \-\-cluster\-hash\-dl\-max
-.I hash\-dirlevel\-max
-.RS
-.B Not implemented yet.
-
-Sets maximal directory level for ctime hashing (see
-.BR CLUSTERING ).
-
-The default value is "16".
-.RE
-
-.PP
-.B \-\-cluster\-scan\-dl\-max
-.I scan\-dirlevel\-max
-.RS
-.B Not implemented yet.
-
-Sets maximal directory level for ctime scanning (see
-.BR CLUSTERING ).
-
-The default value is "32".
-.RE
+.\" .B \-c, \-\-cluster\-iface
+.\" .I interface\-ip
+.\" .RS
+.\" .B Not implemented, yet.
+.\" 
+.\" .B DANGEROUS OPTION. This functionality wasn't tested well. You can lost your data.
+.\" 
+.\" Enables inter-node notifing subsystem to prevent sync looping between nodes.
+.\" This's very useful features that provides ability of birectional sync of the
+.\" same directory between two or more nodes.
+.\" .I interface-ip
+.\" is an IP-address already assigned to the interface that will be used for
+.\" multicast notifing.
+.\" 
+.\" Not enabled by default.
+.\" 
+.\" To find out the IP-address on interface "eth0", you can use for example next
+.\" command:
+.\" 
+.\" ip a s eth0 | awk '{if($1=="inet") {gsub("/.*", "", $2); print $2}}'
+.\" 
+.\" Is not set by default.
+.\" .RE
+.\" 
+.\" .PP
+.\" .B \-m, \-\-cluster\-ip
+.\" .I multicast\-ip
+.\" .RS
+.\" .B Not implemented yet.
+.\" 
+.\" Sets IP-address for multicast group.
+.\" 
+.\" This option can be used only in conjunction with
+.\" .BR \-\-cluster\-interface .
+.\" 
+.\" Use IP-addresses from 224.0.0.0/4 for this option.
+.\" 
+.\" The default value is "227.108.115.121". [(128+"c")."l"."s"."y"]
+.\" .RE
+.\" 
+.\" .PP
+.\" .B \-P, \-\-cluster\-port
+.\" .I multicast\-port
+.\" .RS
+.\" .B Not implemented yet.
+.\" 
+.\" Sets UDP-port number for multicast messages.
+.\" 
+.\" This option can be used only in conjunction with
+.\" .BR \-\-cluster\-interface .
+.\" 
+.\" .I multicast\-port
+.\" should be greater than 0 and less than 65535.
+.\" 
+.\" The default value is "40079". [("n" << 8) + "c"]
+.\" .RE
+.\" 
+.\" .PP
+.\" .B \-W, \-\-cluster\-timeout
+.\" .I cluster\-timeout
+.\" .RS
+.\" .B Not implemented yet.
+.\" 
+.\" Sets timeout (in milliseconds) of waiting answer from another nodes of the
+.\" cluster. If there's no answer from some node, it will be excluded.
+.\" 
+.\" The default value is "1000". [1 second]
+.\" .RE
+.\" 
+.\" .PP
+.\" .B \-n, \-\-cluster\-node\-name
+.\" .I cluster\-node\-name
+.\" .RS
+.\" .B Not implemented yet.
+.\" 
+.\" Sets the name of this node in the cluster. It will be used in action
+.\" scripts of another nodes (see 
+.\" .BR "SYNC HANDLER MODES" ).
+.\" 
+.\" The default value is $(uname \-n).
+.\" .RE
+.\" 
+.\" .PP
+.\" .B \-n, \-\-cluster\-node\-id
+.\" .I cluster\-node\-id
+.\" .RS
+.\" .B Not implemented yet.
+.\" 
+.\" Sets an ID for this node in the cluster. It's used for messaging between
+.\" cluster nodes.
+.\" 
+.\" Use value "-1" to choose it automatically.
+.\" 
+.\" The default value is "-1".
+.\" .RE
+.\" 
+.\" .PP
+.\" .B \-o, \-\-cluster\-hash\-dl\-min
+.\" .I hash\-dirlevel\-min
+.\" .RS
+.\" Sets minimal directory level for ctime hashing (see
+.\" .BR CLUSTERING ).
+.\" 
+.\" The default value is "1".
+.\" .RE
+.\" 
+.\" .PP
+.\" .B \-O, \-\-cluster\-hash\-dl\-max
+.\" .I hash\-dirlevel\-max
+.\" .RS
+.\" .B Not implemented yet.
+.\" 
+.\" Sets maximal directory level for ctime hashing (see
+.\" .BR CLUSTERING ).
+.\" 
+.\" The default value is "16".
+.\" .RE
+.\" 
+.\" .PP
+.\" .B \-\-cluster\-scan\-dl\-max
+.\" .I scan\-dirlevel\-max
+.\" .RS
+.\" .B Not implemented yet.
+.\" 
+.\" Sets maximal directory level for ctime scanning (see
+.\" .BR CLUSTERING ).
+.\" 
+.\" The default value is "32".
+.\" .RE
 
 .PP
 .B \-\-standby\-file
@@ -814,16 +814,16 @@ case
 Is not set by default.
 .RE
 
-.PP
-.B \-A, \-\-auto\-add\-rules\-w
-.RS
-Forces clsync to create a "w-rule" for every non-"w-rule" (see
-.BR RULES ).
-
-Not recommended to use in modes "rsyncdirect", "rsyncshell" and "rsyncso"
-
-Is not set by default.
-.RE
+.\" .PP
+.\" .B \-A, \-\-auto\-add\-rules\-w
+.\" .RS
+.\" Forces clsync to create a "w-rule" for every non-"w-rule" (see
+.\" .BR RULES ).
+.\" 
+.\" Not recommended to use in modes "rsyncdirect", "rsyncshell" and "rsyncso"
+.\" 
+.\" Is not set by default.
+.\" .RE
 
 .PP
 .B \-\-rsync\-inclimit
@@ -2308,19 +2308,19 @@ Syncing pwdb files and sshd_config (non-rsync case):
 	\-*
 .RE
 
-Syncing pwdb files and sshd_config (non-rsync case with option
-.IR \-\-auto\-add\-rules\-w ):
-.RS
-	+f^/passwd$
-.br
-	+f^/group$
-.br
-	+f^/shadow$
-.br
-	+f^/ssh/sshd_config$
-.br
-	\-*
-.RE
+.\" Syncing pwdb files and sshd_config (non-rsync case with option
+.\" .IR \-\-auto\-add\-rules\-w ):
+.\" .RS
+.\" 	+f^/passwd$
+.\" .br
+.\" 	+f^/group$
+.\" .br
+.\" 	+f^/shadow$
+.\" .br
+.\" 	+f^/ssh/sshd_config$
+.\" .br
+.\" 	\-*
+.\" .RE
 
 Syncing pwdb files and sshd_config (rsync case):
 .RS
