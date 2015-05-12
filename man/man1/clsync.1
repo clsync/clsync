@@ -2226,7 +2226,7 @@ of the
 program (for example, rsync has options "\-\-exclude", "\-\-exclude\-from" and
 "\-\-filter") or use disable any "recursive" syncs in
 .B clsync
-(and remove "-av" option of rsync if it's used). To disable recursive syncs
+(and remove "\-av" option of rsync if it's used). To disable recursive syncs
 you can use:
 .RS
 .B simple
@@ -2553,11 +2553,11 @@ clsync \-Mrsyncdirect \-W/path/to/source_dir \-D/path/to/destination_dir
 
 .B Syncing 'authorized_keys' files:
 .RS
-mkdir -p /etc/clsync/rules
+mkdir \-p /etc/clsync/rules
 .br
 printf "+w^$\n+w^[^/]+$\n+w^[^/]+/.ssh$\n+f^[^/]+/.ssh/authorized_keys$\n-*" > /etc/clsync/rules/authorized_files_only
 .br
-clsync -Mdirect -Scp -W/mnt/master/home/ -D/home -R/etc/clsync/rules/authorized_files_only -- -Pfp --parents %INCLUDE-LIST% %destination-dir%
+clsync \-Mdirect \-Scp \-W/mnt/master/home/ \-D/home \-R/etc/clsync/rules/authorized_files_only \-\- \-Pfp \-\-parents %INCLUDE\-LIST% %destination\-dir%
 .RE
 
 .B Mirroring a directory, but faster:
