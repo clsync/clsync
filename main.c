@@ -2763,7 +2763,8 @@ int main(int _argc, char *_argv[]) {
 
 		}
 
-#ifdef GETMNTENT_SUPPORT
+#ifdef UNSHARE_SUPPORT
+# ifdef GETMNTENT_SUPPORT
 		if (ctx_p->mountpoints && (ent_f != NULL)) {
 			// Getting mount-points to be umounted
 			while (NULL != (ent = getmntent(ent_f))) {
@@ -2792,6 +2793,7 @@ int main(int _argc, char *_argv[]) {
 
 			endmntent(ent_f);
 		}
+# endif
 #endif
 		if (ctx_p->chroot_dir != NULL) {
 #ifdef PIVOTROOT_OPT_SUPPORT
