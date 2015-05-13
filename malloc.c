@@ -101,11 +101,11 @@ void *malloc_align(size_t size) {
 # endif
 
 	total_size  = size;
-# ifdef PARANOID
+
+	// Rounding total_size up to a number of times pagesize
 	total_size += pagesize-1;
 	total_size /= pagesize;
 	total_size *= pagesize;
-# endif
 
 	if (posix_memalign(&ret, pagesize, total_size))
 		critical("(%li): Cannot allocate memory.", size);
@@ -136,7 +136,7 @@ void *calloc_align(size_t nmemb, size_t size) {
 }
 
 char *strdup_protect(const char *src, int prot) {
-	size_t len = strlen(src);
+	size_t len = strlen(src)+1;
 	char *dst  = malloc_align(len);
 	strcpy(dst, src);
 	if (mprotect(dst, len, prot))
