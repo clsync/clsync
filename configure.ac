@@ -65,7 +65,7 @@ AS_IF([test "x$enable_cluster" = "xyes"], [CPPFLAGS="${CPPFLAGS} -DCLUSTER_SUPPO
 
 	AS_IF([test "x$with_mhash" = "xno"], [], [
 	AC_CHECK_HEADER([mhash.h], [], [AC_MSG_ERROR("Unable to find mhash.h")])
-	AC_SEARCH_LIBS([mhash_init], [mhash], [CPPFLAGS="${CPPFLAGS} -DHAVE_MHASH"],
+	AC_SEARCH_LIBS([mhash_init], [mhash], [CPPFLAGS="${CPPFLAGS} -DHAVE_MHASH"; LDFLAGS="${LDFLAGS} -lmhash"],
 		[AC_MSG_ERROR("Unable to find libmhash")])
 	])
 ])

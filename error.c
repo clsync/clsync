@@ -22,8 +22,6 @@
  * to be slow but convenient functions.
  */
 
-#include "common.h"
-
 #include <stdlib.h>
 #include <execinfo.h>
 #include <stdio.h>
@@ -32,6 +30,12 @@
 #include <stdarg.h>
 #include <syslog.h>
 #include <pthread.h>	/* pthread_self() */
+#include <sys/types.h>	/* getpid() */
+#include <unistd.h>	/* getpid() */
+
+
+#include "configuration.h"
+
 #include "error.h"
 #include "pthreadex.h"	/* pthread_*_shared() */
 

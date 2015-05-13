@@ -36,44 +36,46 @@
 #define MAXMOUNTPOINTS			(1<<8)
 #define MAXPERMITTEDHOOKFILES		(1<<8)
 
-#ifdef __CLSYNC_COMMON_H
-#	ifndef DEFAULT_NOTIFYENGINE
-#		ifdef __linux__
+#ifndef PIC
+#	ifdef __CLSYNC_COMMON_H
+#		ifndef DEFAULT_NOTIFYENGINE
+#			ifdef __linux__
+#				ifdef INOTIFY_SUPPORT
+#					define DEFAULT_NOTIFYENGINE	NE_INOTIFY
+#				endif
+#			endif
+#		endif
+#		ifndef DEFAULT_NOTIFYENGINE
+#			ifdef __FreeBSD__
+#				ifdef KQUEUE_SUPPORT
+#					define DEFAULT_NOTIFYENGINE	NE_KQUEUE
+#				endif
+#			endif
+#		endif
+#		ifndef DEFAULT_NOTIFYENGINE
 #			ifdef INOTIFY_SUPPORT
 #				define DEFAULT_NOTIFYENGINE	NE_INOTIFY
 #			endif
 #		endif
-#	endif
-#	ifndef DEFAULT_NOTIFYENGINE
-#		ifdef __FreeBSD__
+#		ifndef DEFAULT_NOTIFYENGINE
+#			ifdef GIO_SUPPORT
+#				define DEFAULT_NOTIFYENGINE	NE_GIO
+#			endif
+#		endif
+#		ifndef DEFAULT_NOTIFYENGINE
 #			ifdef KQUEUE_SUPPORT
 #				define DEFAULT_NOTIFYENGINE	NE_KQUEUE
 #			endif
 #		endif
-#	endif
-#	ifndef DEFAULT_NOTIFYENGINE
-#		ifdef INOTIFY_SUPPORT
-#			define DEFAULT_NOTIFYENGINE	NE_INOTIFY
+#		ifndef DEFAULT_NOTIFYENGINE
+#			ifdef BSM_SUPPORT
+#				define DEFAULT_NOTIFYENGINE	NE_BSM
+#			endif
 #		endif
-#	endif
-#	ifndef DEFAULT_NOTIFYENGINE
-#		ifdef GIO_SUPPORT
-#			define DEFAULT_NOTIFYENGINE	NE_GIO
+#		ifndef DEFAULT_NOTIFYENGINE
+#			error No monitor subsystem supported
+#			define  DEFAULT_NOTIFYENGINE		NE_UNDEFINED
 #		endif
-#	endif
-#	ifndef DEFAULT_NOTIFYENGINE
-#		ifdef KQUEUE_SUPPORT
-#			define DEFAULT_NOTIFYENGINE	NE_KQUEUE
-#		endif
-#	endif
-#	ifndef DEFAULT_NOTIFYENGINE
-#		ifdef BSM_SUPPORT
-#			define DEFAULT_NOTIFYENGINE	NE_BSM
-#		endif
-#	endif
-#	ifndef DEFAULT_NOTIFYENGINE
-#		error No monitor subsystem supported
-#		define  DEFAULT_NOTIFYENGINE		NE_UNDEFINED
 #	endif
 #endif
 
