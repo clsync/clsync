@@ -106,8 +106,10 @@ static const struct option long_options[] =
 	{"permit-mprotect",	optional_argument,	NULL,	PERMIT_MPROTECT},
 	{"shm-mprotect",	optional_argument,	NULL,	SHM_MPROTECT},
 #endif
-#ifdef GETMNTENT_SUPPORT
+#ifdef UNSHARE_SUPPORT
+# ifdef GETMNTENT_SUPPORT
 	{"mountpoints",		required_argument,	NULL,	MOUNTPOINTS},
+# endif
 #endif
 #ifdef CAPABILITIES_SUPPORT
 	{"preserve-capabilities",required_argument,	NULL,	CAP_PRESERVE},
@@ -1241,7 +1243,8 @@ static int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsour
 			break;
 		}
 #endif
-#ifdef GETMNTENT_SUPPORT
+#ifdef UNSHARE_SUPPORT
+# ifdef GETMNTENT_SUPPORT
 		case MOUNTPOINTS: {
 			char *ptr;
 			if (paramsource == PS_CONTROL) {
@@ -1287,6 +1290,7 @@ static int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsour
 			}
 			break;
 		}
+# endif
 #endif
 		case PIDFILE:
 			if (paramsource == PS_CONTROL) {
@@ -1879,8 +1883,12 @@ int ctx_check(ctx_t *ctx_p) {
 		error("\"--pivot-root\" cannot be used without \"--chroot\"");
 	}
 
+# ifdef UNSHARE_SUPPORT
+#  ifdef GETMNTENT_SUPPORT
 	if ((ctx_p->flags[PIVOT_ROOT] != PW_OFF) && (ctx_p->mountpoints))
 		warning("\"--mountpoints\" is set while \"--pivot-root\" is set, too");
+#  endif
+# endif
 #endif
 
 #ifdef VERYPARANOID
@@ -2670,7 +2678,8 @@ int main(int _argc, char *_argv[]) {
 	ctx_p->state = STATE_STARTING;
 
 	{
-#ifdef GETMNTENT_SUPPORT
+#ifdef UNSHARE_SUPPORT
+# ifdef GETMNTENT_SUPPORT
 		struct mntent *ent;
 		FILE *ent_f;
 
@@ -2683,10 +2692,9 @@ int main(int _argc, char *_argv[]) {
 				ret = errno;
 			}
 		}
-#endif
+# endif
 
-#ifdef UNSHARE_SUPPORT
-#define unshare_wrapper(a) \
+# define unshare_wrapper(a) \
 		if (unshare(a)) {\
 			error("Got error from unshare("TOSTR(a)")");\
 			ret = errno;\
@@ -2707,7 +2715,7 @@ int main(int _argc, char *_argv[]) {
 		}
 		if (ctx_p->flags[DETACH_NETWORK] == DN_EVERYWHERE)
 			unshare_wrapper(CLONE_NEWNET);
-#undef unshare_wrapper
+# undef unshare_wrapper
 #endif
 
 		if (ctx_p->chroot_dir != NULL) {

@@ -387,9 +387,11 @@ struct ctx {
 	int   permitted_hookfiles;
 #endif
 
-#ifdef GETMNTENT_SUPPORT
+#ifdef UNSHARE_SUPPORT
+# ifdef GETMNTENT_SUPPORT
 	char *mountpoint[MAXMOUNTPOINTS+1];
 	int   mountpoints;
+# endif
 #endif
 
 	synchandler_args_t synchandler_args[SHARGS_MAX];
