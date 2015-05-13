@@ -25,6 +25,8 @@ build_test() {
 	#./configure -C $@ >/dev/null || rm -f config.cache && ./configure -C $@ >/dev/null && $MAKE -j5 >/dev/null || {
 	./configure $@ >/dev/null && $MAKE -j5 >/dev/null || {
 		echo "!!! test with \"$@\" configure options failed"
+		cat config.log
+		echo "!!! test with \"$@\" configure options failed"
 		exit 1
 	}
 }
