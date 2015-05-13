@@ -72,7 +72,7 @@
 #		endif
 #	endif
 #	ifndef DEFAULT_NOTIFYENGINE
-#		warning No default monitor subsystem is set
+#		error No monitor subsystem supported
 #		define  DEFAULT_NOTIFYENGINE		NE_UNDEFINED
 #	endif
 #endif
