@@ -2173,7 +2173,7 @@ int ctx_check(ctx_t *ctx_p) {
 
 	if (ctx_p->flags[CHECK_EXECVP_ARGS] && (ctx_p->flags[MODE] == MODE_DIRECT)) {
 		ret = errno = EINVAL;
-		error("Options --check-execvp-arguments/--secure-splitting cannot be used in conjuction with --mode=direct (see \"man 1 clsync\": --check-execvp-arguments).");
+		error("Options --check-execvp-arguments/--secure-splitting cannot be used in conjunction with --mode=direct (see \"man 1 clsync\": --check-execvp-arguments).");
 	}
 
 #if 0

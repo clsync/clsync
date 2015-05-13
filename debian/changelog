@@ -1,3 +1,9 @@
+clsync (0.4.1-1) unstable; urgency=medium
+
+  * New upstream release with a lot of fixes
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Tue, 12 May 2015 08:53:54 +0100
+
 clsync (0.4-1) unstable; urgency=medium
 
   [ Dmitry Yu Okunev ]

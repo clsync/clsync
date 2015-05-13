@@ -4,6 +4,11 @@
 .\" Thanks to oldlaptop [https://github.com/oldlaptop] for help with spelling
 .\"
 .TH CLSYNC 1 "JULY 2013" Linux "User Manuals"
+.de URL
+\\$2 \(laURL: \\$1 \(ra\\$3
+..
+.if \n[.g] .mso www.tmac
+
 .SH NAME
 clsync \- live sync tool, written in GNU C
 .SH SYNOPSIS
@@ -1481,7 +1486,7 @@ changing of
 .I sync\-handler\-arguments
 and hook file paths.
 
-This option cannot be used in conjuction with
+This option cannot be used in conjunction with
 .BR \-\-mode "=direct"
 due to an arbitrary number of arguments in this mode.
 
@@ -2221,7 +2226,7 @@ of the
 program (for example, rsync has options "\-\-exclude", "\-\-exclude\-from" and
 "\-\-filter") or use disable any "recursive" syncs in
 .B clsync
-(and remove "-av" option of rsync if it's used). To disable recursive syncs
+(and remove "\-av" option of rsync if it's used). To disable recursive syncs
 you can use:
 .RS
 .B simple
@@ -2431,8 +2436,7 @@ this may happend, for example in next cases:
 .B \-\-threading=full
 and rsync with
 .BR \-\-backup .
-See a bugreport by URL:
-.IR https://bugzilla.samba.org/show_bug.cgi?id=10081 .
+.URL https://bugzilla.samba.org/show_bug.cgi?id=10081 "See a bugreport" .
 
 .RE
 
@@ -2549,11 +2553,11 @@ clsync \-Mrsyncdirect \-W/path/to/source_dir \-D/path/to/destination_dir
 
 .B Syncing 'authorized_keys' files:
 .RS
-mkdir -p /etc/clsync/rules
+mkdir \-p /etc/clsync/rules
 .br
 printf "+w^$\n+w^[^/]+$\n+w^[^/]+/.ssh$\n+f^[^/]+/.ssh/authorized_keys$\n-*" > /etc/clsync/rules/authorized_files_only
 .br
-clsync -Mdirect -Scp -W/mnt/master/home/ -D/home -R/etc/clsync/rules/authorized_files_only -- -Pfp --parents %INCLUDE-LIST% %destination-dir%
+clsync \-Mdirect \-Scp \-W/mnt/master/home/ \-D/home \-R/etc/clsync/rules/authorized_files_only \-\- \-Pfp \-\-parents %INCLUDE\-LIST% %destination\-dir%
 .RE
 
 .B Mirroring a directory, but faster:
@@ -2622,8 +2626,8 @@ directory. Copy this directory somewhere (e.g. into "/tmp"). And try to run
 Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 .SH SUPPORT
 You can get support on official IRC-channel in Freenode "#clsync" or on
-github's issue tracking system of repository
-"https://github.com/xaionaro/clsync".
+github's issue tracking system of
+.URL https://github.com/xaionaro/clsync "the clsync repository" .
 
 Don't be afraid to ask about clsync configuration, ;). 
 .SH "SEE ALSO"
