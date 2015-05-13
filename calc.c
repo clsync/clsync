@@ -41,8 +41,10 @@
 uint32_t adler32_calc(const unsigned char *const data, uint32_t len) { // where data is the location of the data in physical
                                                                        // memory and len is the length of the data in bytes
 
+/*
 	if (len&3)
 		warning("len [%i] & 3 == %i != 0. Wrong length (not a multiple of 4).", len, len&3);
+*/
 
 	debug(70, "%p, %i", data, len);
 

@@ -17,7 +17,6 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-
 #ifndef __PORT_HACKS_H
 #define __PORT_HACKS_H
 
@@ -28,17 +27,14 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#ifndef __FreeBSD__
-	typedef struct stat64 stat64_t;
-#endif
-
-#ifdef __FreeBSD__
+#if __FreeBSD__ || __FreeBSD_kernel__
+#	include <sys/syslimits.h>
 
 #	define O_PATH 0
 
-	typedef struct stat stat64_t;
 #	include <pthread.h>
 
+#	ifdef THREADING_SUPPORT
 	static inline int pthread_tryjoin_np(pthread_t thread, void **retval) {
 		struct timespec abstime;
 		int rc;
@@ -55,11 +51,19 @@
 
 		return rc;
 	}
+#	endif
 
+#	ifndef __USE_LARGEFILE64
+	typedef struct stat stat64_t;
 	static inline int lstat64(const char *pathname, struct stat *buf) {
 		return lstat(pathname, buf);
 	}
+#	else
+	typedef struct stat64 stat64_t;
+#	endif
 
+#else
+	typedef struct stat64 stat64_t;
 #endif
 
 #ifdef CLSYNC_ITSELF

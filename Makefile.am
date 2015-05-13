@@ -16,6 +16,9 @@ clsync_SOURCES = calc.c cluster.c error.c fileutils.c glibex.c		\
 clsync_CFLAGS  = $(AM_CFLAGS)
 clsync_LDFLAGS = $(AM_LDFLAGS)
 
+if HAVE_PTHREAD_TIMEDJOIN_NP
+clsync_CFLAGS  += -DTHREADING_SUPPORT
+endif
 if HAVE_KQUEUE
 clsync_CFLAGS  += -DKQUEUE_SUPPORT
 clsync_SOURCES += mon_kqueue.c mon_kqueue.h

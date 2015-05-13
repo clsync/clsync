@@ -27,6 +27,7 @@
 #include <pthread.h>
 #include <stdint.h>
 
+#include "port-hacks.h"
 #include "clsync.h"
 #include "ctx.h"
 

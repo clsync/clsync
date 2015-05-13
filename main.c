@@ -119,7 +119,9 @@ static const struct option long_options[] =
 	{"forbid-devices",	optional_argument,	NULL,	FORBIDDEVICES},
 	{"cgroup-group-name",	required_argument,	NULL,	CG_GROUPNAME},
 #endif
+#ifdef THREADING_SUPPORT
 	{"threading",		required_argument,	NULL,	THREADING},
+#endif
 	{"retries",		required_argument,	NULL,	RETRIES},
 	{"ignore-failures",	optional_argument,	NULL,	IGNOREFAILURES},
 	{"exit-on-sync-skipping",optional_argument,	NULL,	EXITONSYNCSKIP},
@@ -307,12 +309,14 @@ static char *const socketauth[] = {
 	NULL
 };
 
+#ifdef THREADING_SUPPORT
 static char *const threading_modes[] = {
 	[PM_OFF]		= "off",
 	[PM_SAFE]		= "safe",
 	[PM_FULL]		= "full",
 	NULL
 };
+#endif
 
 #ifdef CAPABILITIES_SUPPORT
 static char *const splitting_modes[] = {
@@ -536,6 +540,9 @@ int version() {
 #endif
 #ifdef TRE_SUPPORT
 		" -DTRE_SUPPORT"
+#endif
+#ifdef THREADING_SUPPORT
+		" -DTHREADING_SUPPORT"
 #endif
 #ifdef HL_LOCKS
 		" -DHL_LOCKS"
@@ -1302,6 +1309,7 @@ static int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsour
 		case RETRIES:
 			ctx_p->retries		= (unsigned int)xstrtol(arg, &ret);
 			break;
+#ifdef THREADING_SUPPORT
 		case THREADING: {
 			char *value, *arg_orig = arg;
 
@@ -1320,6 +1328,7 @@ static int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsour
 
 			break;
 		}
+#endif
 		case OUTPUT_METHOD: {
 			char *value, *arg_orig = arg;
 
@@ -1891,18 +1900,18 @@ int ctx_check(ctx_t *ctx_p) {
 # endif
 #endif
 
-#ifdef VERYPARANOID
-	if ((ctx_p->retries != 1) && ctx_p->flags[THREADING]) {
-		ret = errno = EINVAL;
-		error("\"--retries\" values should be equal to \"1\" for this \"--threading\" value.");
-	}
-#endif
-
 	if (ctx_p->flags[STANDBYFILE] && (ctx_p->flags[MODE] == MODE_SIMPLE)) {
 		ret = errno = EINVAL;
 		error("Sorry but option \"--standby-file\" cannot be used in mode \"simple\", yet.");
 	}
 
+#ifdef THREADING_SUPPORT
+# ifdef VERYPARANOID
+	if ((ctx_p->retries != 1) && ctx_p->flags[THREADING]) {
+		ret = errno = EINVAL;
+		error("\"--retries\" values should be equal to \"1\" for this \"--threading\" value.");
+	}
+# endif
 	if (ctx_p->flags[THREADING] && ctx_p->flags[ONLYINITSYNC]) {
 		ret = errno = EINVAL;
 		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--only-initialsync\".");
@@ -1924,6 +1933,7 @@ int ctx_check(ctx_t *ctx_p) {
 		ret = errno = EINVAL;
 		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--splitting=thread\".");
 	}
+#endif
 	if (ctx_p->flags[SKIPINITSYNC] && ctx_p->flags[EXITONNOEVENTS]) {
 		ret = errno = EINVAL;
 		error("Conflicting options: \"--skip-initialsync\" and \"--exit-on-no-events\" cannot be used together.");

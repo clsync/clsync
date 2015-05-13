@@ -54,6 +54,9 @@ int main() {
 #ifdef TRE_SUPPORT
 		"#define TRE_SUPPORT\n"
 #endif
+#ifdef THREADING_SUPPORT
+		"#define THREADING_SUPPORT\n"
+#endif
 #ifdef HL_LOCKS
 		"#define HL_LOCKS\n"
 #endif

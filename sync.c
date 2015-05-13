@@ -85,7 +85,9 @@ static inline void finish_iteration(ctx_t *ctx_p) {
 	if (ctx_p->iteration_num < ~0) // ~0 is the max value for unsigned variables
 		ctx_p->iteration_num++;
 
+#ifdef THREADING_SUPPORT
 	if (!ctx_p->flags[THREADING])
+#endif
 		setenv_iteration(ctx_p->iteration_num); 
 
 	debug(3, "next iteration: %u/%u", 
@@ -198,6 +200,7 @@ threadsinfo_t *thread_info() {	// TODO: optimize this
 	return &threadsinfo;
 }
 
+#ifdef THREADING_SUPPORT
 #define thread_info_lock() _thread_info_lock(__FUNCTION__)
 static inline threadsinfo_t *_thread_info_lock(const char *const function_name) {
 	threadsinfo_t *threadsinfo_p = thread_info();
@@ -498,6 +501,7 @@ int thread_cleanup(ctx_t *ctx_p) {
 	debug(3, "done.");
 	return thread_info_unlock(0);
 }
+#endif
 
 volatile state_t *state_p = NULL;
 volatile int exitcode = 0;
@@ -549,6 +553,7 @@ int exec_argv(char **argv, int *child_pid) {
 	return exitcode;
 }
 
+#ifdef THREADING_SUPPORT
 static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode ) {
 	int err=0;
 	threadinfo_p->exitcode = exitcode;
@@ -580,6 +585,7 @@ static inline int thread_exit(threadinfo_t *threadinfo_p, int exitcode ) {
 	debug(3, "thread %p is sending signal to sighandler to call GC", threadinfo_p->pthread);
 	return pthread_kill(pthread_sighandler, SIGUSR_THREAD_GC);
 }
+#endif
 
 static inline void so_call_sync_finished(int n, api_eventinfo_t *ei) {
 	int i = 0;
@@ -602,6 +608,7 @@ static inline void so_call_sync_finished(int n, api_eventinfo_t *ei) {
 	return;
 }
 
+#ifdef THREADING_SUPPORT
 int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 	debug(3, "thread_num == %i; threadinfo_p == %p; i_p->pthread %p; thread %p", 
 			threadinfo_p->thread_num, threadinfo_p, threadinfo_p->pthread, pthread_self());
@@ -642,11 +649,14 @@ int so_call_sync_thread(threadinfo_t *threadinfo_p) {
 
 	return rc;
 }
+#endif
 
 static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_eventinfo_t *ei) {
 	debug(2, "n == %i", n);
 
+#ifdef THREADING_SUPPORT
 	if (!SHOULD_THREAD(ctx_p)) {
+#endif
 		int rc=0, ret=0, err=0;
 		int try_n=0, try_again;
 		state_t status = STATE_UNKNOWN;
@@ -691,6 +701,7 @@ static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_ev
 
 		so_call_sync_finished(n, ei);
 		return ret;
+#ifdef THREADING_SUPPORT
 	}
 
 	threadinfo_t *threadinfo_p = thread_new();
@@ -716,7 +727,7 @@ static inline int so_call_sync(ctx_t *ctx_p, indexes_t *indexes_p, int n, api_ev
 	}
 	debug(3, "thread %p", threadinfo_p->pthread);
 	return 0;
-
+#endif
 }
 
 static inline int so_call_rsync_finished(ctx_t *ctx_p, const char *inclistfile, const char *exclistfile) {
@@ -747,6 +758,7 @@ static inline int so_call_rsync_finished(ctx_t *ctx_p, const char *inclistfile, 
 	return ret0 == 0 ? ret1 : ret0;
 }
 
+#ifdef THREADING_SUPPORT
 int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 	debug(3, "thread_num == %i; threadinfo_p == %p; i_p->pthread %p; thread %p", 
 			threadinfo_p->thread_num, threadinfo_p, threadinfo_p->pthread, pthread_self());
@@ -791,11 +803,14 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 
 	return rc;
 }
+#endif
 
 static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *inclistfile, const char *exclistfile) {
 	debug(2, "inclistfile == \"%s\"; exclistfile == \"%s\"", inclistfile, exclistfile);
 
+#ifdef THREADING_SUPPORT
 	if (!SHOULD_THREAD(ctx_p)) {
+#endif
 		debug(3, "ctx_p->handler_funct.rsync == %p", ctx_p->handler_funct.rsync);
 
 //		indexes_p->nonthreaded_syncing_fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
@@ -842,6 +857,7 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 		if ((ret_cleanup=so_call_rsync_finished(ctx_p, inclistfile, exclistfile)))
 			return rc ? rc : ret_cleanup;
 		return rc;
+#ifdef THREADING_SUPPORT
 	}
 
 	threadinfo_t *threadinfo_p = thread_new();
@@ -868,13 +884,17 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 	}
 	debug(3, "thread %p", threadinfo_p->pthread);
 	return 0;
-
+#endif
 }
 
 // === SYNC_EXEC() === {
 
 //#define SYNC_EXEC(...)      (SHOULD_THREAD(ctx_p) ? sync_exec_thread      : sync_exec     )(__VA_ARGS__)
+#ifdef THREADING_SUPPORT
 #define SYNC_EXEC_ARGV(...) (SHOULD_THREAD(ctx_p) ? sync_exec_argv_thread : sync_exec_argv)(__VA_ARGS__)
+#else
+#define SYNC_EXEC_ARGV(...) sync_exec_argv(__VA_ARGS__)
+#endif
 
 #define debug_argv_dump(level, argv)\
 	if (unlikely(ctx_p->flags[DEBUG] >= level))\
@@ -1083,6 +1103,7 @@ static inline int sync_exec(ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackf
 }
 */
 
+#ifdef THREADING_SUPPORT
 int __sync_exec_thread(threadinfo_t *threadinfo_p) {
 	char **argv		= threadinfo_p->argv;
 	ctx_t *ctx_p		= threadinfo_p->ctx_p;
@@ -1166,6 +1187,7 @@ static inline int sync_exec_thread(ctx_t *ctx_p, indexes_t *indexes_p, thread_ca
 	return sync_exec_argv_thread(ctx_p, indexes_p, callback, callback_arg_p, argv);
 }
 */
+#endif
 
 // } === SYNC_EXEC() ===
 
@@ -1627,7 +1649,9 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 					NULL,
 					argv);
 
+#ifdef THREADING_SUPPORT
 				if (!SHOULD_THREAD(ctx_p))	// If it's a thread then it will free the argv in GC. If not a thread then we have to free right here.
+#endif
 					argv_free(argv);
 
 				return sync_initialsync_finish(ctx_p, initsync, ret);
@@ -1914,7 +1938,9 @@ static inline int sync_dosync_exec(ctx_t *ctx_p, indexes_t *indexes_p, const cha
 		NULL, NULL,
 		argv);
 	
+#ifdef THREADING_SUPPORT
 	if (!SHOULD_THREAD(ctx_p))	// If it's a thread then it will free the argv in GC. If not a thread then we have to free right here.
+#endif
 		argv_free(argv);
 	return rc;
 
@@ -2254,9 +2280,13 @@ int _sync_islocked(threadinfo_t *threadinfo_p, void *_fpath) {
 }
 
 static inline int sync_islocked(const char *const fpath) {
+#ifdef THREADING_SUPPORT
 	int rc = threads_foreach(_sync_islocked, STATE_RUNNING, (void *)fpath);
 	debug(3, "<%s>: %u", fpath, rc);
 	return rc;
+#else
+	return 0;
+#endif
 }
 
 void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
@@ -2740,7 +2770,9 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 				callback_arg_p,
 				argv);
 
+#ifdef THREADING_SUPPORT
 			if (!SHOULD_THREAD(ctx_p))	// If it's a thread then it will free the argv in GC. If not a thread then we have to free right here.
+#endif
 				argv_free(argv);
 			return rc;
 		}
@@ -3009,11 +3041,14 @@ int apievinfo2rsynclist(indexes_t *indexes_p, FILE *listfile, int n, api_eventin
 }
 
 int sync_idle(ctx_t *ctx_p, indexes_t *indexes_p) {
+	int ret;
 
 	// Collecting garbage
 
-	int ret=thread_gc(ctx_p);
+#ifdef THREADING_SUPPORT
+	ret=thread_gc(ctx_p);
 	if(ret) return ret;
+#endif
 
 	// Checking if we can sync
 
@@ -3094,6 +3129,7 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 	delay = MAX(delay, synctime_delay);
 	delay = delay > 0 ? delay : 0;
 
+#ifdef THREADING_SUPPORT
 	if (ctx_p->flags[THREADING]) {
 		time_t _thread_nextexpiretime = thread_nextexpiretime();
 		debug(3, "thread_nextexpiretime == %i", _thread_nextexpiretime);
@@ -3105,6 +3141,7 @@ int notify_wait(ctx_t *ctx_p, indexes_t *indexes_p) {
 			delay = MIN(delay, thread_expiredelay);
 		}
 	}
+#endif
 
 	if ((!delay) || (ctx_p->state != STATE_RUNNING))
 		return 0;
@@ -3210,10 +3247,12 @@ int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 		switch (ctx_p->state) {
 			case STATE_THREAD_GC:
 				main_status_update(ctx_p);
+#ifdef THREADING_SUPPORT
 				if (thread_gc(ctx_p)) {
 					ctx_p->state = STATE_EXIT;
 					break;
 				}
+#endif
 				ctx_p->state = STATE_RUNNING;
 				SYNC_LOOP_CONTINUE_UNLOCK;
 			case STATE_INITSYNC:
@@ -3416,14 +3455,22 @@ int sync_switch_state(ctx_t *ctx_p, pthread_t pthread_parent, int newstate) {
 	debug(4, "pthread_mutex_unlock( pthread_mutex_select )");
 	pthread_mutex_unlock(pthread_mutex_select);
 
+#ifdef THREADING_SUPPORT
 	return thread_info_unlock(0);
+#else
+	return 0;
+#endif
 
 l_sync_parent_interrupt_end:
 
 	*state_p = newstate;
 	pthread_kill(pthread_parent, SIGUSR_BLOPINT);
 
+#ifdef THREADING_SUPPORT
 	return thread_info_unlock(0);
+#else
+	return 0;
+#endif
 }
 
 /* === DUMP === */
@@ -3595,7 +3642,9 @@ int sync_dump(ctx_t *ctx_p, const char *const dir_path) {
 		queue_id++;
 	}
 
+#ifdef THREADING_SUPPORT
 	threads_foreach(sync_dump_thread, STATE_RUNNING, &arg);
+#endif
 
 l_sync_dump_end:
 	dirfd_obj = DUMP_DIRFD_ROOT;
@@ -3990,7 +4039,9 @@ int sync_run(ctx_t *ctx_p) {
 
 	// Killing children
 
+#ifdef THREADING_SUPPORT
 	thread_cleanup(ctx_p);
+#endif
 
 	debug(2, "Deinitializing the FS monitor subsystem");
 	switch (ctx_p->flags[MONITOR]) {

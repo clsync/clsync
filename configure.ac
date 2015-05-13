@@ -210,6 +210,9 @@ AC_CHECK_FUNC([getmntent], [HAVE_GETMNTENT=1])
 dnl searching for pivot_root
 AC_CHECK_FUNC([pivot_root], [HAVE_PIVOTROOT=1])
 
+dnl searching for pthread_timedjoin_np
+AC_CHECK_FUNC([pthread_timedjoin_np], [HAVE_PTHREAD_TIMEDJOIN_NP=1])
+
 dnl libcgroup check
 AC_ARG_WITH(libcgroup,
 	AS_HELP_STRING(--with-libcgroup,
@@ -469,6 +472,7 @@ AM_CONDITIONAL([HAVE_UNSHARE],      [test "x$HAVE_UNSHARE"      != "x"])
 AM_CONDITIONAL([HAVE_SECCOMP],      [test "x$HAVE_SECCOMP"      != "x"])
 AM_CONDITIONAL([HAVE_TRE],          [test "x$HAVE_TRE"          != "x"])
 AM_CONDITIONAL([HAVE_LIBCGROUP],    [test "x$HAVE_LIBCGROUP"    != "x"])
+AM_CONDITIONAL([HAVE_PTHREAD_TIMEDJOIN_NP], [test "x$HAVE_PTHREAD_TIMEDJOIN_NP" != "x"])
 
 AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' -a  "$HAVE_GIO" = ''],
 [AC_MSG_FAILURE([At least one monitoring engine must be enabled!

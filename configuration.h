@@ -46,7 +46,7 @@
 #			endif
 #		endif
 #		ifndef DEFAULT_NOTIFYENGINE
-#			ifdef __FreeBSD__
+#			if __FreeBSD__ | __FreeBSD_kernel__
 #				ifdef KQUEUE_SUPPORT
 #					define DEFAULT_NOTIFYENGINE	NE_KQUEUE
 #				endif

@@ -1,7 +1,7 @@
 #!/bin/sh -x
 
-FROM="./testdir/from"
-TO="./testdir/to"
+FROM="`pwd`"
+TO="`pwd`/../to"
 
 ACTION="$1"
 LABEL="$2"

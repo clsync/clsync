@@ -25,5 +25,14 @@ cat > rules <<EOF
 +*.*
 EOF
 
-sudo $(which clsync) -K example-cluster -c "$IPADDR" -M rsyncshell -w 2 -p safe -t 5 -W ./testdir/from -S ./clsync-synchandler-rsync.sh -R rules $@
+case "$(uname -s)" in
+	GNU/kFreeBSD)
+		OPTS=''
+		;;
+	*)
+		OPTS='-p safe'
+		;;
+esac
+
+sudo $(which clsync) -K example-cluster -c "$IPADDR" -M rsyncshell -w 2 -t 5 -W ./testdir/from -S ./clsync-synchandler-rsync.sh -R rules $OPTS $@
 
