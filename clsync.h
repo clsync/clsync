@@ -24,10 +24,6 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#ifndef CLSYNC_ITSELF
-#	include <clsync/port-hacks.h>
-#endif
-
 #define CLSYNC_API_VERSION 2
 
 enum eventobjtype {
