@@ -33,7 +33,7 @@
 #include <sys/types.h>	/* getpid() */
 #include <unistd.h>	/* getpid() */
 
-
+#include "macros.h"
 #include "configuration.h"
 
 #include "error.h"
