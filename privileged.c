@@ -1054,19 +1054,28 @@ int privileged_handler(ctx_t *ctx_p)
 					case -1: 
 						error("Cannot fork().");
 						break;
-					case  0:
+					case  0: {
+						int rc;
+						(void)rc;	// anti-warning on ./configure --enable-debug=no
 #ifdef ANTIPARANOID
 						if (ctx_p->privileged_gid != exec_gid)
 #endif
-							debug(4, "setgid(%u) == %i", exec_gid, setgid(exec_gid));
+						{
+							rc = setgid(exec_gid);
+							debug(4, "setgid(%u) == %i", exec_gid, rc);
+						}
 
 #ifdef ANTIPARANOID
 						if (ctx_p->privileged_uid != exec_uid)
 #endif
-							debug(4, "setuid(%u) == %i", exec_uid, setuid(exec_uid));
+						{
+							rc = setuid(exec_uid);
+							debug(4, "setuid(%u) == %i", exec_uid, rc);
+						}
 
 						debug(3, "execvp(\"%s\", argv)", file);
 						exit(execvp(file, argv));
+					}
 				}
 				cmd_ret_p->ret = (void *)(long)pid;
 				debug(21, "/PA_FORK_EXECVP");
@@ -1640,12 +1649,20 @@ int __privileged_fork_execvp(const char *file, char *const argv[])
 		case -1: 
 			error("Cannot fork().");
 			return -1;
-		case  0:
-			debug(4, "setgid(%u) == %i", __privileged_fork_execvp_gid, setgid(__privileged_fork_execvp_gid));
-			debug(4, "setuid(%u) == %i", __privileged_fork_execvp_uid, setuid(__privileged_fork_execvp_uid));
+		case  0: {
+			int rc;
+			(void)rc;	// anti-warning on ./configure --enable-debug=no
+
+			rc = setgid(__privileged_fork_execvp_gid);
+			debug(4, "setgid(%u) == %i", __privileged_fork_execvp_gid, rc);
+
+			rc = setuid(__privileged_fork_execvp_uid);
+			debug(4, "setuid(%u) == %i", __privileged_fork_execvp_uid, rc);
+
 			errno = 0;
 			execvp(file, argv);
 			exit(errno);
+		}
 	}
 
 	return pid;
