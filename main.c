@@ -97,7 +97,7 @@ static const struct option long_options[] =
 	{"secure-splitting",	no_argument,		NULL,	SECURESPLITTING},
 # endif
 	{"splitting",		required_argument,	NULL,	SPLITTING},
-	{"check-execvp-args",	optional_argument,	NULL,	CHECK_EXECVP_ARGS},
+	{"check-execvp-arguments",optional_argument,	NULL,	CHECK_EXECVP_ARGS},
 	{"add-permitted-hook-files",required_argument,	NULL,	ADDPERMITTEDHOOKFILES},
 # ifdef SECCOMP_SUPPORT
 	{"seccomp-filter",	optional_argument,	NULL,	SECCOMP_FILTER},
