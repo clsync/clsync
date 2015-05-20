@@ -64,7 +64,15 @@
 # include <linux/filter.h>		// struct sock_filter
 # include <linux/seccomp.h>		// SECCOMP_RET_*
 
-#define syscall_nr (offsetof(struct seccomp_data, nr))
+# ifndef __NR_shmdt
+#  ifdef __i386__
+#   warning [security] Caution! __NR_shmdt is not defined. Setting it to -222.
+#   define __NR_shmdt -222
+#  endif
+# endif
+
+
+# define syscall_nr (offsetof(struct seccomp_data, nr))
 
 /* Read: http://www.rawether.net/support/bpfhelp.htm */
 # define SECCOMP_COPY_SYSCALL_TO_ACCUM				\
@@ -84,19 +92,14 @@
 	SECCOMP_ALLOW_ACCUM_SYSCALL(futex),				\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(inotify_init1),			\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(alarm),				\
-	SECCOMP_ALLOW_ACCUM_SYSCALL(stat),		/* unused */	\
-	SECCOMP_ALLOW_ACCUM_SYSCALL(fstat),		/* unused */	\
-	SECCOMP_ALLOW_ACCUM_SYSCALL(lstat),				\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(open),				\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(write),				\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(close),				\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(wait4),				\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(unlink),				\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(tgkill),				\
-	SECCOMP_ALLOW_ACCUM_SYSCALL(clock_gettime),			\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(rt_sigreturn),			\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(brk),				\
-	SECCOMP_ALLOW_ACCUM_SYSCALL(mmap),				\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(munmap),				\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(wait4),				\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(rmdir),				\
@@ -111,18 +114,39 @@
 	SECCOMP_ALLOW_ACCUM_SYSCALL(set_robust_list),	/* for --threading? */		\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(madvise),				\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(exit),				\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(clock_gettime),			\
 
+# ifdef __i386__
+#  define FILTER_TABLE_ARCHDEPENDED			/* unused */	\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(fstat64),				\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(lstat64),				\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(stat64),				\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(time),				\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(mmap2),				\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(gettimeofday),			\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(_newselect),			\
+
+# else
+#  define FILTER_TABLE_ARCHDEPENDED					\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(fstat),		/* unused */	\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(lstat),				\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(stat),		/* unused */	\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(mmap),				\
+
+# endif
 
 
 /* Syscalls allowed to non-privileged thread */
 static struct sock_filter filter_table[] = {
 	SECCOMP_COPY_SYSCALL_TO_ACCUM,
 	FILTER_TABLE_NONPRIV
+	FILTER_TABLE_ARCHDEPENDED
 	SECCOMP_DENY,
 };
 static struct sock_filter filter_w_mprotect_table[] = {
 	SECCOMP_COPY_SYSCALL_TO_ACCUM,
 	FILTER_TABLE_NONPRIV
+	FILTER_TABLE_ARCHDEPENDED
 	SECCOMP_ALLOW_ACCUM_SYSCALL(mprotect),
 	SECCOMP_DENY,
 };
