@@ -685,7 +685,6 @@ int pa_unsetup(struct pa_options *opts) {
 	free(opts->exithookfile);
 	free(opts->preexithookfile);
 	free(opts->label);
-#endif
 
 	{
 		int a_i = 0;
@@ -707,6 +706,7 @@ int pa_unsetup(struct pa_options *opts) {
 			i++;
 		}
 	}
+#endif
 
 	return 0;
 }
