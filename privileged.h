@@ -119,7 +119,7 @@ extern int privileged_check();
 
 # define privileged_check(...)			{}
 
-# define privileged_lstat64			lstat64
+# define privileged_lstat64(a,b,c)		lstat64(a,b)
 # define privileged_fts_open(a,b,c,d)		fts_open(a,b,c)
 # define privileged_fts_read(a,b)		fts_read(a)
 # define privileged_fts_close(a,b)		fts_close(a)
