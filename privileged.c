@@ -1304,12 +1304,19 @@ static inline int privileged_action(
 
 # ifdef HL_LOCKS
 	if (hl_lock_p->enabled) {
-		while (!hl_isanswered(HLLOCK_HANDLER))
+		long long counter = 0;
+
+		while (!hl_isanswered(HLLOCK_HANDLER)) {
 			if (!helper_isalive_cache) {
 				debug(1, "The privileged thread/process is dead (#2). Ignoring the command.");
 				rc = ENOENT;
 				goto privileged_action_end;
 			}
+			if (++counter > HL_LOCK_NONPRIV_TRIES) {
+				sleep(SLEEP_SECONDS);
+				counter = 0;
+			}
+		}
 
 #  ifdef HL_LOCK_TRIES_AUTO
 		if (isadjusting) {
