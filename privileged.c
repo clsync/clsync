@@ -330,6 +330,7 @@ struct cmd_ret {
 	volatile struct pa_ret		 ret_buf;
 	volatile void			*ret;
 	volatile int			 _errno;
+	volatile int			 processing_longcmd;
 };
 volatile struct cmd		*cmd_p;
 volatile struct cmd_ret		*cmd_ret_p;
@@ -1162,7 +1163,9 @@ int privileged_handler(ctx_t *ctx_p)
 			case PA_WAITPID: {
 				struct pa_waitpid_arg *arg_p = (void *)&cmd_p->arg.waitpid;
 				debug(20, "PA_WAITPID(%u, 0x%o)", arg_p->pid, arg_p->options);
-				cmd_ret_p->ret = (void *)(long)waitpid(arg_p->pid, &arg_p->status, arg_p->options);
+				cmd_ret_p->processing_longcmd = 1;
+				cmd_ret_p->ret                = (void *)(long)waitpid(arg_p->pid, &arg_p->status, arg_p->options);
+				cmd_ret_p->processing_longcmd = 0;
 				break;
 			}
 			default:
@@ -1235,10 +1238,8 @@ static inline int privileged_action(
 				rc = ENOENT;
 				goto privileged_action_end;
 			}
-			if (++counter > HL_LOCK_NONPRIV_TRIES) {
+			if (cmd_ret_p->processing_longcmd && ++counter > HL_LOCK_NONPRIV_TRIES)
 				sleep(SLEEP_SECONDS);
-				counter = 0;
-			}
 		}
 	} else {
 #  endif
@@ -1312,10 +1313,8 @@ static inline int privileged_action(
 				rc = ENOENT;
 				goto privileged_action_end;
 			}
-			if (++counter > HL_LOCK_NONPRIV_TRIES) {
+			if (cmd_ret_p->processing_longcmd && ++counter > HL_LOCK_NONPRIV_TRIES)
 				sleep(SLEEP_SECONDS);
-				counter = 0;
-			}
 		}
 
 #  ifdef HL_LOCK_TRIES_AUTO

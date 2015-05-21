@@ -215,7 +215,7 @@ expire-after:20M\n\
 // Upper limit
 #define HL_LOCK_AUTO_LIMIT_HIGH		(1<<20)
 
-#define HL_LOCK_NONPRIV_TRIES		(HL_LOCK_AUTO_LIMIT_HIGH << 6)
+#define HL_LOCK_NONPRIV_TRIES		(HL_LOCK_AUTO_LIMIT_HIGH << 8)
 
 //#define READWRITE_SIGNALLING
 
