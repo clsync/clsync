@@ -1227,12 +1227,19 @@ static inline int privileged_action(
 	debug(10, "Waiting the privileged thread/process to get prepared for signal");
 #  ifdef HL_LOCKS
 	if (hl_lock_p->enabled) {
-		while (!hl_isanswered(HLLOCK_HANDLER))
+		long long counter = 0;
+
+		while (!hl_isanswered(HLLOCK_HANDLER)) {
 			if (!helper_isalive_cache) {
 				debug(1, "The privileged thread/process is dead (#0). Ignoring the command.");
 				rc = ENOENT;
 				goto privileged_action_end;
 			}
+			if (++counter > HL_LOCK_NONPRIV_TRIES) {
+				sleep(SLEEP_SECONDS);
+				counter = 0;
+			}
+		}
 	} else {
 #  endif
 		critical_on(!helper_isalive_cache);

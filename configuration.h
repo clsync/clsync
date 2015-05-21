@@ -215,6 +215,8 @@ expire-after:20M\n\
 // Upper limit
 #define HL_LOCK_AUTO_LIMIT_HIGH		(1<<20)
 
+#define HL_LOCK_NONPRIV_TRIES		HL_LOCK_AUTO_LIMIT_HIGH
+
 //#define READWRITE_SIGNALLING
 
 #define CG_DEV_CONSOLE	"c 5:1"
@@ -240,5 +242,6 @@ expire-after:20M\n\
 
 #define BSM_QUEUE_LENGTH_MAX		(1024*1024)
 #define GIO_QUEUE_LENGTH_MAX		BSM_QUEUE_LENGTH_MAX
+
 
 #endif
