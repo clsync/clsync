@@ -35,8 +35,17 @@ enum priv_callid {
 	PC_SYNC_MARK_WALK_FTS_CLOSE,
 	PC_INOTIFY_ADD_WATCH_DIR,
 
+	PC_MON_HANDLE_LSTAT64,
+
 	PC_MAX
 };
+
+extern int (*_privileged_lstat64)		(
+		const char *path, stat64_t *buf
+# ifdef HL_LOCK_TRIES_AUTO
+		, int callid
+# endif
+	);
 
 extern FTS *(*_privileged_fts_open)		(
 		char * const *path_argv,
@@ -87,11 +96,13 @@ extern pid_t (*_privileged_waitpid)		(pid_t pid, int *status, int options);
 extern int privileged_check();
 
 # ifdef HL_LOCK_TRIES_AUTO
+#  define privileged_lstat64(a,b,c)		_privileged_lstat64(a,b,c)
 #  define privileged_fts_open(a,b,c,d)		_privileged_fts_open(a,b,c,d)
 #  define privileged_fts_read(a,b)		_privileged_fts_read(a,b)
 #  define privileged_fts_close(a,b)		_privileged_fts_close(a,b)
 #  define privileged_inotify_add_watch(a,b,c,d)	_privileged_inotify_add_watch(a,b,c,d)
 # else
+#  define privileged_lstat64(a,b,c)		_privileged_lstat64(a,b)
 #  define privileged_fts_open(a,b,c,d)		_privileged_fts_open(a,b,c)
 #  define privileged_fts_read(a,b)		_privileged_fts_read(a)
 #  define privileged_fts_close(a,b)		_privileged_fts_close(a)
@@ -108,6 +119,7 @@ extern int privileged_check();
 
 # define privileged_check(...)			{}
 
+# define privileged_lstat64			lstat64
 # define privileged_fts_open(a,b,c,d)		fts_open(a,b,c)
 # define privileged_fts_read(a,b)		fts_read(a)
 # define privileged_fts_close(a,b)		fts_close(a)

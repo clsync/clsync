@@ -201,6 +201,8 @@ enum privileged_action {
 
 	PA_DIE,
 
+	PA_LSTAT64,
+
 	PA_FTS_OPEN,
 	PA_FTS_READ,
 	PA_FTS_CLOSE,
@@ -217,6 +219,11 @@ enum privileged_action {
 	PA_CLSYNC_CGROUP_DEINIT,
 
 	PA_WAITPID,
+};
+
+struct pa_lstat64_arg {
+	char		 path_buf[PATH_MAX];
+	const char	*path;
 };
 
 struct pa_fts_open_arg {
@@ -260,6 +267,7 @@ struct pa_waitpid_arg {
 };
 
 struct pa_arg {
+	struct pa_lstat64_arg		 lstat64;
 	struct pa_fts_open_arg		 fts_open;
 	struct pa_inotify_add_watch_arg	 inotify_add_watch;
 	struct pa_inotify_rm_watch_arg	 inotify_rm_watch;
@@ -316,7 +324,7 @@ struct pa_fts_read_ret {
 	char		fts_name[PATH_MAX];
 };
 struct pa_ret {
-	struct stat		stat;
+	stat64_t		stat64;
 	struct pa_fts_read_ret	fts_read;
 };
 struct cmd {
@@ -369,6 +377,13 @@ struct pa_options {
 	int   isprocsplitting;
 	int   shm_mprotect;
 };
+
+int (*_privileged_lstat64)		(
+		const char *path, stat64_t *buf
+# ifdef HL_LOCK_TRIES_AUTO
+		, int callid
+# endif
+	);
 
 FTS *(*_privileged_fts_open)		(
 		char * const *path_argv,
@@ -999,6 +1014,18 @@ int privileged_handler(ctx_t *ctx_p)
 				debug(20, "PA_DIE");
 				helper_isrunning = 0;
 				break;
+			case PA_LSTAT64: {
+				volatile struct pa_lstat64_arg *arg_p = &cmd_p->arg.lstat64;
+				stat64_t *ret_buf = (void *)&cmd_ret_p->ret_buf.stat64;
+				volatile const char *path =	opts->isprocsplitting 	?
+								arg_p->path_buf 	:
+								arg_p->path;
+
+				debug(20, "PA_LSTAT64 (%s)", path);
+				cmd_ret_p->ret = (void *)(long)lstat64((const char *)path, ret_buf);
+				debug(21, "/PA_LSTAT64 => %i", (int)(long)cmd_ret_p->ret);
+				break;
+			}
 			case PA_FTS_OPEN: {
 				volatile struct pa_fts_open_arg *arg_p = &cmd_p->arg.fts_open;
 				char *const *path_argv_p =(void *)(
@@ -1374,6 +1401,54 @@ privileged_action_end:
 	pthread_mutex_unlock(pthread_mutex_action_entrance_p);
 
 	return rc;
+}
+
+int __privileged_lstat64_procsplit(
+		const char *path, stat64_t *buf
+# ifdef HL_LOCK_TRIES_AUTO
+		, int callid
+# endif
+	)
+{
+	void *ret = (void *)(long)-1;
+
+	strcpy((char *)cmd_p->arg.lstat64.path_buf, path);
+
+	privileged_action(
+# ifdef HL_LOCK_TRIES_AUTO
+			callid,
+# endif
+			PA_LSTAT64,
+			&ret
+		);
+
+	memcpy(buf, (void *)&cmd_ret_p->ret_buf.stat64, sizeof(stat64_t));
+
+	return (long)ret;
+}
+
+int __privileged_lstat64_threadsplit(
+		const char *path, stat64_t *buf
+# ifdef HL_LOCK_TRIES_AUTO
+		, int callid
+# endif
+	)
+{
+	void *ret = (void *)(long)-1;
+
+	cmd_p->arg.lstat64.path = path;
+
+	privileged_action(
+# ifdef HL_LOCK_TRIES_AUTO
+			callid,
+# endif
+			PA_LSTAT64,
+			&ret
+		);
+
+	memcpy(buf, (void *)&cmd_ret_p->ret_buf.stat64, sizeof(stat64_t));
+
+	return (long)ret;
 }
 
 FTS *__privileged_fts_open_procsplit(
@@ -1802,6 +1877,7 @@ int privileged_init(ctx_t *ctx_p)
 		_privileged_kill_child		= __privileged_kill_child_itself;
 
 #ifdef CAPABILITIES_SUPPORT
+		_privileged_lstat64		= (typeof(_privileged_lstat64))			lstat64;
 		_privileged_fts_open		= (typeof(_privileged_fts_open))		fts_open;
 		_privileged_fts_read		= (typeof(_privileged_fts_read))		fts_read;
 		_privileged_fts_close		= (typeof(_privileged_fts_close))		fts_close;
@@ -1859,6 +1935,7 @@ int privileged_init(ctx_t *ctx_p)
 
 	switch (ctx_p->flags[SPLITTING]) {
 		case SM_THREAD: {
+			_privileged_lstat64		= __privileged_lstat64_threadsplit;
 			_privileged_fts_open		= __privileged_fts_open_threadsplit;
 			_privileged_inotify_add_watch	= __privileged_inotify_add_watch_threadsplit;
 			_privileged_fork_execvp		= __privileged_fork_setuid_execvp_threadsplit;
@@ -1878,6 +1955,7 @@ int privileged_init(ctx_t *ctx_p)
 			break;
 		}
 		case SM_PROCESS: {
+			_privileged_lstat64		= __privileged_lstat64_procsplit;
 			_privileged_fts_open		= __privileged_fts_open_procsplit;
 			_privileged_inotify_add_watch	= __privileged_inotify_add_watch_procsplit;
 			_privileged_fork_execvp		= __privileged_fork_setuid_execvp_procsplit;
