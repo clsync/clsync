@@ -713,6 +713,39 @@ int pa_unsetup(struct pa_options *opts) {
 	return 0;
 }
 
+static int helper_isalive_cache;
+static inline int helper_isalive_proc() {
+	int rc;
+	debug(12, "helper_pid == %u", helper_pid);
+
+	if ((rc=waitpid(helper_pid, NULL, WNOHANG))>=0)
+		return helper_isalive_cache=1;
+
+	debug(1, "waitpid(%u, NULL, WNOHANG) => %i", helper_pid, rc);
+
+	return helper_isalive_cache=0;
+}
+static inline int helper_isalive_thread() {
+	int rc;
+	debug(12, "");
+
+	if ((rc=pthread_kill(privileged_thread, 0)))
+		return helper_isalive_cache=0;
+
+	debug(1, "pthread_kill(privileged_thread, 0) => %i", helper_pid, rc);
+
+	return helper_isalive_cache=1;
+}
+static inline int helper_isalive() {
+	return helper_pid ? helper_isalive_proc() : helper_isalive_thread();
+}
+
+int privileged_check() {
+	if (helper_pid)
+		critical_on(!helper_isalive_proc());
+	return 0;
+}
+
 # ifdef HL_LOCKS
 
 static inline int hl_isanswered(int lockid) {
@@ -728,11 +761,24 @@ static inline void hl_setstate(int lockid, hllock_state_t stateid) {
 }
 
 int hl_setstate_ifstate(int lockid, hllock_state_t stateid_new, hllock_state_t stateid_old_mask) {
+	static long long counter = 0;
 	volatile int *local_lock_p = &hl_lock_p->locallock_hl_setstate_ifstate;
 	debug(90, "%i, 0x%o, 0x%o", lockid, stateid_new, stateid_old_mask);
 
-	if (!g_atomic_int_dec_and_test(local_lock_p))
+	if (helper_pid || parent_pid) {
+		if (((++counter) & 0xffffff) == 0) {
+			if (helper_pid) {
+				critical_on(!helper_isalive_proc());
+			} else {
+				critical_on(!parent_isalive());
+			}
+		}
+	}
+
+	if (!g_atomic_int_dec_and_test(local_lock_p)) {
+		g_atomic_int_inc(local_lock_p);
 		return 0;
+	}
 
 	if (!(hl_lock_p->state[lockid]&stateid_old_mask)) {
 		g_atomic_int_inc(local_lock_p);
@@ -811,39 +857,6 @@ void hl_shutdown(int lockid) {
 }
 
 # endif
-
-static int helper_isalive_cache;
-static inline int helper_isalive_proc() {
-	int rc;
-	debug(12, "helper_pid == %u", helper_pid);
-
-	if ((rc=waitpid(helper_pid, NULL, WNOHANG))>=0)
-		return helper_isalive_cache=1;
-
-	debug(1, "waitpid(%u, NULL, WNOHANG) => %i", helper_pid, rc);
-
-	return helper_isalive_cache=0;
-}
-static inline int helper_isalive_thread() {
-	int rc;
-	debug(12, "");
-
-	if ((rc=pthread_kill(privileged_thread, 0)))
-		return helper_isalive_cache=0;
-
-	debug(1, "pthread_kill(privileged_thread, 0) => %i", helper_pid, rc);
-
-	return helper_isalive_cache=1;
-}
-static inline int helper_isalive() {
-	return helper_pid ? helper_isalive_proc() : helper_isalive_thread();
-}
-
-int privileged_check() {
-	if (helper_pid)
-		critical_on(!helper_isalive_proc());
-	return 0;
-}
 
 int privileged_handler(ctx_t *ctx_p)
 {
