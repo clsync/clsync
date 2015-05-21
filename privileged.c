@@ -679,9 +679,13 @@ int pa_setup(struct pa_options *opts, ctx_t *ctx_p, uid_t *exec_uid_p, gid_t *ex
 }
 
 int pa_unsetup(struct pa_options *opts) {
+#ifdef TODO_FIX
+	// segfaults: gdb --args clsync -K lxc-brother-atomic-sync -l jabber --pre-exit-hook wlxc-stop --chroot= --pivot-root=off -d9 -b0 -Ystderr
+
 	free(opts->exithookfile);
 	free(opts->preexithookfile);
 	free(opts->label);
+#endif
 
 	{
 		int a_i = 0;
