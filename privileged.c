@@ -342,6 +342,7 @@ volatile struct hl_lock		*hl_lock_p;
 static inline void hl_lock_init(volatile struct hl_lock *hl_lock_p) {
 	debug(10, "");
 	hl_lock_p->enabled = 1;
+	hl_lock_p->locallock_hl_setstate_ifstate = 1;
 #  ifdef HL_LOCK_TRIES_AUTO
 	int i;
 	i = 0;
@@ -730,26 +731,17 @@ int hl_setstate_ifstate(int lockid, hllock_state_t stateid_new, hllock_state_t s
 	volatile int *local_lock_p = &hl_lock_p->locallock_hl_setstate_ifstate;
 	debug(90, "%i, 0x%o, 0x%o", lockid, stateid_new, stateid_old_mask);
 
-	if (*local_lock_p)
+	if (!g_atomic_int_dec_and_test(local_lock_p))
 		return 0;
-
-	debug(92, "%i", *local_lock_p);
-	g_atomic_int_inc(local_lock_p);
-	debug(92, "%i", *local_lock_p);
-	if (*local_lock_p != 1) {
-		g_atomic_int_dec_and_test(local_lock_p);
-		return 0;
-	}
 
 	if (!(hl_lock_p->state[lockid]&stateid_old_mask)) {
-		g_atomic_int_dec_and_test(local_lock_p);
+		g_atomic_int_inc(local_lock_p);
 		return 0;
 	}
 
 	debug(50, "success");
 	g_atomic_int_set(&hl_lock_p->state[lockid], stateid_new);
-	g_atomic_int_dec_and_test(local_lock_p);
-#undef local_lock
+	g_atomic_int_inc(local_lock_p);
 	return 1;
 }
 
