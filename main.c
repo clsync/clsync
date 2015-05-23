@@ -1933,6 +1933,12 @@ int ctx_check(ctx_t *ctx_p) {
 		ret = errno = EINVAL;
 		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--splitting=thread\".");
 	}
+# ifdef SECCOMP_SUPPORT
+	if (ctx_p->flags[THREADING] && ctx_p->flags[SECCOMP_FILTER]) {
+		ret = errno = EINVAL;
+		error("Conflicting options: This value of \"--threading\" cannot be used in conjunction with \"--seccomp-filter\".");
+	}
+# endif
 #endif
 	if (ctx_p->flags[SKIPINITSYNC] && ctx_p->flags[EXITONNOEVENTS]) {
 		ret = errno = EINVAL;
