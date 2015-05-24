@@ -144,23 +144,6 @@ AS_IF(
 )
 AS_IF([test $paranoid -eq 2], [CPPFLAGS="${CPPFLAGS} -DVERYPARANOID"])
 
-dnl searching for seccomp
-AC_ARG_ENABLE(seccomp,
-	AS_HELP_STRING(--enable-seccomp,
-		[Enable seccomp support be able to forbid extra syscalls; values: no, check, yes; default: check]),
-	,
-	[enable_seccomp=check]
-)
-
-case "$enable_seccomp" in
-	yes)
-		AC_CHECK_TYPES([struct seccomp_data], [HAVE_SECCOMP=1], [AC_MSG_FAILURE([Cannot find valid linux/seccomp.h])], [[#include <linux/seccomp.h>]])
-		;;
-	check)
-		AC_CHECK_TYPES([struct seccomp_data], [HAVE_SECCOMP=1], ,                                                      [[#include <linux/seccomp.h>]])
-		;;
-esac
-
 dnl capabilities check
 AC_ARG_ENABLE(capabilities,
 	AS_HELP_STRING(--enable-capabilities,
@@ -186,6 +169,26 @@ case "$enable_capabilities" in
 				AC_CHECK_HEADER(sys/capability.h, [HAVE_CAPABILITIES=2])
 			]
 		)
+		;;
+esac
+
+dnl searching for seccomp
+AC_ARG_ENABLE(seccomp,
+	AS_HELP_STRING(--enable-seccomp,
+		[Enable seccomp support be able to forbid extra syscalls (requires capabilities); values: no, check, yes; default: check]),
+	,
+	[enable_seccomp=check]
+)
+
+case "$enable_seccomp" in
+	yes)
+		AS_IF([test "$HAVE_CAPABILITIES" = ''], [AC_MSG_ERROR([Seccomp needs capabilities to be enabled])])
+		AC_CHECK_TYPES([struct seccomp_data], [HAVE_SECCOMP=1], [AC_MSG_FAILURE([Cannot find valid linux/seccomp.h])], [[#include <linux/seccomp.h>]])
+		;;
+	check)
+		AS_IF([test "$HAVE_CAPABILITIES" != ''], [
+		AC_CHECK_TYPES([struct seccomp_data], [HAVE_SECCOMP=1], ,                                                      [[#include <linux/seccomp.h>]])
+		])
 		;;
 esac
 
