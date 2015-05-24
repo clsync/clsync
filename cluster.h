@@ -19,6 +19,8 @@
 
 #ifdef CLUSTER_SUPPORT
 
+#include <glib.h>
+
 // Macros for reading messages
 
 #define CLUSTER_RESTDATALEN(clustercmd_p, data_type) \
