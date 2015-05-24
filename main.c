@@ -1862,6 +1862,13 @@ int ctx_check(ctx_t *ctx_p) {
 	struct utsname utsname;
 #endif
 
+#ifndef _DEBUG_SUPPORT
+	if (ctx_p->flags[DEBUG]) {
+		ret = errno = EINVAL;
+		error("Clsync was compiled without debugging support, please recompile with --enable-debug in order to be able to use debugging");
+	}
+#endif
+
 	if (ctx_p->socketpath != NULL) {
 #ifndef ENABLE_SOCKET
 		ret = EINVAL;
