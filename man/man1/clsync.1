@@ -2584,7 +2584,7 @@ clsync \-Mrsyncdirect \-W/path/to/source_dir \-D/path/to/destination_dir
 .RS
 mkdir \-p /etc/clsync/rules
 .br
-printf "+w^$\n+w^[^/]+$\n+w^[^/]+/.ssh$\n+f^[^/]+/.ssh/authorized_keys$\n-*" > /etc/clsync/rules/authorized_files_only
+printf "+w^$\\n+w^[^/]+$\\n+W^[^/]+/.ssh$\\n+f^[^/]+/.ssh/authorized_keys$\\n-*" > /etc/clsync/rules/authorized_files_only
 .br
 clsync \-Mdirect \-Scp \-W/mnt/master/home/ \-D/home \-R/etc/clsync/rules/authorized_files_only \-\- \-Pfp \-\-parents %INCLUDE\-LIST% %destination\-dir%
 .RE
