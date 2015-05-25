@@ -2023,7 +2023,7 @@ static inline int sync_indexes_fpath2ei_addfixed(ctx_t *ctx_p, indexes_t *indexe
 
 int sync_prequeue_loadmark
 (
-		int monitored,
+		int monitored,		// Is an event from event monitor handler (1 -- it is; 0 -- it doesn't)
 
 		ctx_t     *ctx_p,
 		indexes_t *indexes_p,
