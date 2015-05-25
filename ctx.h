@@ -188,7 +188,8 @@ typedef enum ruleactionsign_enum ruleactionsign_t;
 enum ruleaction_enum {
 	RA_NONE			 = 0x00,
 	RA_MONITOR		 = 0x01,
-	RA_WALK			 = 0x02,
+	RA_SYNC			 = 0x02,
+	RA_WALK			 = 0x04,
 	RA_ALL			 = 0x0f,
 };
 typedef enum ruleaction_enum ruleaction_t;

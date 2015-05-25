@@ -148,17 +148,33 @@ int parse_rules_fromfile(ctx_t *ctx_p) {
 				case 'd':
 					rule->objtype = S_IFDIR;
 					break;
-				case 'w':	// accept or reject walking to directory
+				case 'W':
+				case 'w':
+				case 'm':
+				case 's':
 					if (
 						(ctx_p->flags[MODE] == MODE_RSYNCDIRECT) ||
 						(ctx_p->flags[MODE] == MODE_RSYNCSHELL)  ||
 						(ctx_p->flags[MODE] == MODE_RSYNCSO)
 					)
-						warning("Used \"w\" rule in \"--rsync\" case."
+						warning("Used \"w\" or/and \"m\" or/and \"s\" rule in rsync \"--monitor\" case."
 							" This may cause unexpected problems.");
 
 					rule->objtype = S_IFDIR;
-					rule->mask    = RA_WALK;
+					switch (*line) {
+						case 'W':
+							rule->mask    = RA_WALK|RA_MONITOR;
+							break;
+						case 'w':
+							rule->mask    = RA_WALK;
+							break;
+						case 'm':
+							rule->mask    = RA_MONITOR;
+							break;
+						case 's':
+							rule->mask    = RA_SYNC;
+							break;
+					}
 					break;
 				default:
 					warning("Cannot parse the rule <%s>", &line[-1]);

@@ -1394,14 +1394,14 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 		mode_t st_mode = fts_no_stat ? (node->fts_info==FTS_D ? S_IFDIR : S_IFREG) : node->fts_statp->st_mode;
 
 		if (!skip_rules) {
-			ruleaction_t perm = rules_getperm(path_rel, st_mode, rules_p, RA_WALK|RA_MONITOR);
+			ruleaction_t perm = rules_getperm(path_rel, st_mode, rules_p, RA_WALK|RA_SYNC);
 
 			if (!(perm&RA_WALK)) {
 				debug(3, "Rejecting to walk into \"%s\".", path_rel);
 				fts_set(tree, node, FTS_SKIP);
 			}
 
-			if (!(perm&RA_MONITOR)) {
+			if (!(perm&RA_SYNC)) {
 				debug(3, "Excluding \"%s\".", path_rel);
 				if (rsync_and_prefer_excludes) {
 					if (queue_id == QUEUE_AUTO) {
@@ -2086,9 +2086,9 @@ int sync_prequeue_loadmark
 	ruleaction_t perm = RA_ALL;
 	if (st_mode) {
 		// Checking by filter rules
-		perm = rules_getperm(path_rel, st_mode, ctx_p->rules, RA_WALK|RA_MONITOR);
+		perm = rules_getperm(path_rel, st_mode, ctx_p->rules, RA_WALK|RA_MONITOR|RA_SYNC);
 
-		if(!(perm&(RA_MONITOR|RA_WALK))) {
+		if(!(perm&(RA_MONITOR|RA_WALK|RA_SYNC))) {
 			return 0;
 		}
 	}
@@ -2105,13 +2105,13 @@ int sync_prequeue_loadmark
 		if (is_created) {
 			int ret;
 
-			if (perm & RA_WALK) {
+			if (perm & (RA_WALK|RA_MONITOR)) {
 				if (path_full == NULL) {
 					*path_buf_p   = sync_path_rel2abs(ctx_p, path_rel,  -1, path_buf_len_p, *path_buf_p);
 					 path_full    = *path_buf_p;
 				}
 
-				if (monitored) {
+				if ((perm & RA_MONITOR) && monitored) {
 					ret = sync_mark_walk(ctx_p, path_full, indexes_p);
 					if(ret) {
 						debug(1, "Seems, that directory \"%s\" disappeared, while trying to mark it.", path_full);
@@ -2119,11 +2119,13 @@ int sync_prequeue_loadmark
 					}
 				}
 
-				ret = sync_initialsync(path_full, ctx_p, indexes_p, INITSYNC_SUBDIR);
-				if (ret) {
-					errno = ret;
-					error("Got error from sync_initialsync()");
-					return errno;
+				if (perm & RA_WALK) {
+					ret = sync_initialsync(path_full, ctx_p, indexes_p, INITSYNC_SUBDIR);
+					if (ret) {
+						errno = ret;
+						error("Got error from sync_initialsync()");
+						return errno;
+					}
 				}
 			}
 
@@ -2135,12 +2137,12 @@ int sync_prequeue_loadmark
 		}
 	}
 
-	if (!(perm&RA_WALK)) {
+	if (!(perm&RA_SYNC)) {
 		return 0;
 	}
 
 	if (!fileischanged(ctx_p, indexes_p, path_rel, lstat_p, is_deleted)) {
-		debug(4, "The file is not changed. Returning.");
+		debug(4, "The file/dir is not changed. Returning.");
 		return 0;
 	}
 
@@ -2174,7 +2176,7 @@ int sync_prequeue_loadmark
 		evinfo->seqid_max    = sync_seqid();
 	}
 
-	switch(ctx_p->flags[MONITOR]) {
+	switch (ctx_p->flags[MONITOR]) {
 #ifdef KQUEUE_SUPPORT
 		case NE_KQUEUE:
 #endif

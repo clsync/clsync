@@ -1,4 +1,4 @@
-.\" Sorry for my English 
+MONITOMONITORR.\" Sorry for my English 
 .\" --Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 .\"
 .\" Thanks to oldlaptop [https://github.com/oldlaptop] for help with spelling
@@ -2269,20 +2269,36 @@ Filter rules can be placed into
 with one rule per line.
 
 Rule format:
-.I [+\-][fdw*]regexp
+.I [+\-][fdWwms*]regexp
 
+.RS
 .I +
 \- means include;
+.br
 .I \-
 \- means exclude;
+.br
 .I f
 \- means file;
+.br
 .I d
-\- means directory;
+\- means directory (the same as an combination of "w" + "m" + "s");
+.br
 .I w
 \- means walking to directory;
+.br
+.I m
+\- means monitor events in the directory;
+.br
+.I s
+\- means sync the the directory if modified;
+.br
+.I W
+\- means walk + monitor the directory (the same as an combination of "w" + "m");
+.br
 .I *
 \- means all.
+.RE
 
 For example: \-*^/[Tt]est
 
@@ -2300,6 +2316,9 @@ More examples:
 
 Syncing pwdb files and sshd_config (non-rsync case):
 .RS
+.br
+	# which files to sync:
+.br
 	+f^/passwd$
 .br
 	+f^/group$
@@ -2308,9 +2327,17 @@ Syncing pwdb files and sshd_config (non-rsync case):
 .br
 	+f^/ssh/sshd_config$
 .br
-	+w^$
+	
 .br
-	+w^/ssh$
+	# walk and monitor next directories:
+.br
+	+W^$
+.br
+	+W^/ssh$
+.br
+	
+.br
+	# forbid the rest:
 .br
 	\-*
 .RE
