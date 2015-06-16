@@ -2319,13 +2319,13 @@ Syncing pwdb files and sshd_config (non-rsync case):
 .br
 	# which files to sync:
 .br
-	+f^/passwd$
+	+f^passwd$
 .br
-	+f^/group$
+	+f^group$
 .br
-	+f^/shadow$
+	+f^shadow$
 .br
-	+f^/ssh/sshd_config$
+	+f^ssh/sshd_config$
 .br
 	
 .br
@@ -2333,7 +2333,7 @@ Syncing pwdb files and sshd_config (non-rsync case):
 .br
 	+W^$
 .br
-	+W^/ssh$
+	+W^ssh$
 .br
 	
 .br
@@ -2345,30 +2345,30 @@ Syncing pwdb files and sshd_config (non-rsync case):
 .\" Syncing pwdb files and sshd_config (non-rsync case with option
 .\" .IR \-\-auto\-add\-rules\-w ):
 .\" .RS
-.\" 	+f^/passwd$
+.\" 	+f^passwd$
 .\" .br
-.\" 	+f^/group$
+.\" 	+f^group$
 .\" .br
-.\" 	+f^/shadow$
+.\" 	+f^shadow$
 .\" .br
-.\" 	+f^/ssh/sshd_config$
+.\" 	+f^ssh/sshd_config$
 .\" .br
 .\" 	\-*
 .\" .RE
 
 Syncing pwdb files and sshd_config (rsync case):
 .RS
-	+f^/passwd$
+	+f^passwd$
 .br
-	+f^/group$
+	+f^group$
 .br
-	+f^/shadow$
+	+f^shadow$
 .br
-	+f^/ssh/sshd_config$
+	+f^ssh/sshd_config$
 .br
 	+d^$
 .br
-	+d^/ssh$
+	+d^ssh$
 .br
 	\-*
 .RE
