@@ -26,7 +26,7 @@ int clsyncapi_init(struct ctx *_ctx_p, struct indexes *_indexes_p) {
 
 	if(ctx_p->destdir == NULL) {
 		errno = EINVAL;
-		error("dest-dir is not set.");
+		error("destination-dir is not set.");
 		return EINVAL;
 	}
 

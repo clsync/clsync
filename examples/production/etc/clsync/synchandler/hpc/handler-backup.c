@@ -36,13 +36,13 @@ int clsyncapi_init(struct ctx *_ctx_p, struct indexes *_indexes_p)
 
     if(!ctx_p->destdir) {
         errno = EINVAL;
-        error("handler: dest-dir is not set, aborting");
+        error("handler: destination-dir is not set, aborting");
         return EINVAL;
     }
 
     if(!ctx_p->destdir) {
         errno = EINVAL;
-        error("handler: dest-dir is not set, aborting");
+        error("handler: destination-dir is not set, aborting");
         return EINVAL;
     }
 

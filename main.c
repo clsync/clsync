@@ -2011,7 +2011,7 @@ int ctx_check(ctx_t *ctx_p) {
 
 	if ((ctx_p->flags[MODE] == MODE_RSYNCDIRECT) && (ctx_p->destdir == NULL)) {
 		ret = errno = EINVAL;
-		error("Mode \"rsyncdirect\" cannot be used without specifying \"--dest-dir\".");
+		error("Mode \"rsyncdirect\" cannot be used without specifying \"--destination-dir\".");
 	}
 
 #ifdef CLUSTER_SUPPORT
