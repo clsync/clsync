@@ -299,7 +299,7 @@ enum syscall_bitmask {
 
 #define CAP_PRESERVE_TRY (1<<16)
 
-#define FILETREECACHE_ENABLED(ctx_p) (ctx_p->filetree_cache != NULL)
+#define FILETREECACHE_ENABLED(ctx_p) (ctx_p->filetree_cache_path != NULL)
 
 struct filetree_cache_entry;
 struct filetree_cache_entry_data;

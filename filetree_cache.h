@@ -51,7 +51,9 @@ extern int filetree_cache_queuedel(ctx_t *ctx_p, const char *path);
 extern int filetree_cache_queueflush(ctx_t *ctx_p);
 
 static inline filetree_cache_entry_t *filetree_cache_get(ctx_t *ctx_p, const char *path) {
-	return indexes_filetreecache_get(ctx_p->indexes_p, path);
+	filetree_cache_entry_t *r = indexes_filetreecache_get(ctx_p->indexes_p, path);
+	debug(8, "\"%s\" => %p", path, r);
+	return r;
 }
 
 static inline char filetree_cache_comparestat(filetree_cache_entry_t *entry, stat64_t *stat) {	// TODO: Consider deduplication with fileutils.c:stat_diff()

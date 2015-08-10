@@ -1754,11 +1754,19 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 }
 
 int sync_initialsync_use_cache(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, initsync_t initsync) {
-	if (!FILETREECACHE_ENABLED(ctx_p))	// No cache available
+	debug(8, "\"%s\"", path);
+
+	if (!FILETREECACHE_ENABLED(ctx_p))			// No cache available
 		return sync_initialsync(path, ctx_p, indexes_p, initsync);
 
-	if (filetree_cache_get(ctx_p, path) == NULL)				// If due to some reason the root directory is absent in the cache
-		return sync_initialsync(path, ctx_p, indexes_p, initsync);
+	char *path_rel = sync_path_abs2rel(ctx_p, path, -1, NULL, NULL);
+
+	if (filetree_cache_get(ctx_p, path_rel) == NULL) {	// If due to some reason the root directory is absent in the cache
+		free(path_rel);
+		return sync_initialsync(path, ctx_p, indexes_p, initsync|INITSYNC_CACHE);
+	}
+
+	free(path_rel);
 
 	queue_id_t queue_id;
 	if (initsync == INITSYNC_FULL_INSTANT)
@@ -1842,15 +1850,16 @@ int sync_initialsync_use_cache(const char *path, ctx_t *ctx_p, indexes_t *indexe
 }
 
 int sync_initialsync_use_cache_iterations(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, initsync_t initsync) {
+	debug(8, "\"%s\"", path);
 	int rc = sync_initialsync_use_cache(path, ctx_p, indexes_p, initsync);
 	return sync_initialsync_finish(ctx_p, initsync, rc);
 }
 
-int sync_notify_mark(ctx_t *ctx_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p) {
-	debug(3, "(..., \"%s\", %i,...)", path, pathlen);
-	int wd = indexes_fpath2wd(indexes_p, path);
+int sync_notify_mark(ctx_t *ctx_p, const char *accpath, const char *path_abs, size_t path_abs_len, const char *path_rel, indexes_t *indexes_p) {	// TODO: remove path_abs (replace it with path_rel)
+	debug(3, "(..., \"%s\", %i,...)", path_abs, path_abs_len);
+	int wd = indexes_fpath2wd(indexes_p, path_abs);
 	if(wd != -1) {
-		debug(1, "\"%s\" is already marked (wd: %i). Skipping.", path, wd);
+		debug(1, "\"%s\" is already marked (wd: %i). Skipping.", path_abs, wd);
 		return wd;
 	}
 
@@ -1860,14 +1869,14 @@ int sync_notify_mark(ctx_t *ctx_p, const char *accpath, const char *path, size_t
 			return -2;
 
 		error("Cannot ctx_p->notifyenginefunct.add_watch_dir() on \"%s\".", 
-			path);
+			path_abs);
 		return -1;
 	}
 	debug(6, "endof ctx_p->notifyenginefunct.add_watch_dir(ctx_p, indexes_p, \"%s\")", accpath);
-	indexes_add_wd(indexes_p, wd, path, pathlen);
+	indexes_add_wd(indexes_p, wd, path_abs, path_abs_len);
 
 	if (FILETREECACHE_ENABLED(ctx_p)) {
-		filetree_cache_entry_t *entry = filetree_cache_get(ctx_p, path);
+		filetree_cache_entry_t *entry = filetree_cache_get(ctx_p, path_rel);
 		critical_on (entry == NULL);
 		entry->is_marked = 1;
 	}
@@ -1959,7 +1968,7 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 		}
 
 		path_rel = sync_path_abs2rel(ctx_p, node->fts_path, -1, &path_rel_len, path_rel);
-		ruleaction_t perm = rules_search_getperm(path_rel, S_IFDIR, rules_p, RA_WALK, NULL);
+		ruleaction_t perm = rules_search_getperm(path_rel, S_IFDIR, rules_p, RA_MONITOR, NULL);
 
 		debug(3, "perm == 0x%o", perm);
 
@@ -2007,7 +2016,7 @@ int sync_mark_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
 		}
 
 		debug(2, "marking \"%s\" (depth %u)", node->fts_path, node->fts_level);
-		int wd = sync_notify_mark(ctx_p, node->fts_accpath, node->fts_path, node->fts_pathlen, indexes_p);
+		int wd = sync_notify_mark(ctx_p, node->fts_accpath, node->fts_path, node->fts_pathlen, path_rel, indexes_p);
 		if (wd == -1) {
 			error_or_debug((ctx_p->state == STATE_STARTING) ?-1:2, "Got error while notify-marking \"%s\".", node->fts_path);
 			ret = errno;
@@ -2034,11 +2043,20 @@ l_sync_mark_walk_end:
 }
 
 int sync_mark_walk_use_cache(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_p) {
+	debug(8, "\"%s\"", dirpath);
+
 	if (!FILETREECACHE_ENABLED(ctx_p))
 		return sync_mark_walk(ctx_p, dirpath, indexes_p);
 
-	if (filetree_cache_get(ctx_p, dirpath) == NULL)				// If due to some reason the root directory is absent in the cache
+	char *dirpath_rel = sync_path_abs2rel(ctx_p, dirpath, -1, NULL, NULL);
+
+	if (filetree_cache_get(ctx_p, dirpath_rel) == NULL) {			// If due to some reason the root directory is absent in the cache
+		free(dirpath_rel);
 		return sync_mark_walk(ctx_p, dirpath, indexes_p);
+	}
+
+	rule_t *rules_p = ctx_p->rules;
+	free(dirpath_rel);
 
 	int i, cache_len;
 
@@ -2070,16 +2088,24 @@ int sync_mark_walk_use_cache(ctx_t *ctx_p, const char *dirpath, indexes_t *index
 		switch (st.st_mode&S_IFMT) {
 			case S_IFDIR: {	// a directory
 				int rc = 0;
+				char *path_abs = sync_path_rel2abs(ctx_p, entry->dat.path, -1, NULL, NULL);
 				if (is_changed) {
-					rc = sync_mark_walk(ctx_p, entry->dat.path, indexes_p);
+					rc = sync_mark_walk(ctx_p, path_abs, indexes_p);
 				} else {
-					int wd = sync_notify_mark(ctx_p, entry->dat.path, entry->dat.path, entry->dat.path_len, indexes_p);
-					if (wd == -1) {
-						error_or_debug((ctx_p->state == STATE_STARTING) ?-1:2, "Got error while notify-marking \"%s\".", entry->dat.path);
-						rc = errno;
+					ruleaction_t perm = rules_search_getperm(entry->dat.path, S_IFDIR, rules_p, RA_WALK, NULL);
+
+					if (!(perm&RA_MONITOR)) {
+						debug(2, "don't mark the directory");
+					} else {
+						int wd = sync_notify_mark(ctx_p, entry->dat.path, path_abs, strlen(path_abs), entry->dat.path, indexes_p);
+						if (wd == -1) {
+							error_or_debug((ctx_p->state == STATE_STARTING) ?-1:2, "Got error while notify-marking \"%s\".", entry->dat.path);
+							rc = errno;
+						}
+						debug(2, "watching descriptor is %i.", wd);
 					}
-					debug(2, "watching descriptor is %i.", wd);
 				}
+				free(path_abs);
 				if (rc) {
 					filetree_cache_queueflush(ctx_p);
 					return rc;
@@ -2898,7 +2924,7 @@ gboolean rsync_walkaggrout(gpointer outline_gp, gpointer flags_gp, gpointer arg_
 	}
 
 	if (FILETREECACHE_ENABLED(dosync_arg_p->ctx_p)) {
-		filetree_cache_entry_t *entry = filetree_cache_get(dosync_arg_p->ctx_p, outline);
+		filetree_cache_entry_t *entry = filetree_cache_get(dosync_arg_p->ctx_p, strlen(outline) > 0 ? &outline[1] : "");
 		critical_on (entry == NULL);
 		entry->is_synced = 1;
 	}
@@ -2920,7 +2946,7 @@ gboolean rsync_aggrout(gpointer outline_gp, gpointer flags_gp, gpointer arg_gp) 
 	}
 
 	if (FILETREECACHE_ENABLED(dosync_arg_p->ctx_p)) {
-		filetree_cache_entry_t *entry = filetree_cache_get(dosync_arg_p->ctx_p, outline);
+		filetree_cache_entry_t *entry = filetree_cache_get(dosync_arg_p->ctx_p, strlen(outline) > 0 ? &outline[1] : "");
 		critical_on (entry == NULL);
 		entry->is_synced = 1;
 	}
@@ -4191,6 +4217,23 @@ int sync_run(ctx_t *ctx_p) {
 		}
 	}
 
+	debug(9, "Loading file tree cache, if required");
+	if (FILETREECACHE_ENABLED(ctx_p)) {
+		ret = filetree_cache_load(ctx_p);
+		switch (ret) {
+			case ENOENT:
+				ret = 0;
+			case 0:
+				break;
+			default:
+				errno = ret;
+				error("Cannot load file-tree cache: \"%s\"", ctx_p->filetree_cache_path);
+				break;
+		}
+		if (ret)
+			return ret;
+	}
+
 	debug(9, "Loading dynamical libraries");
 	if (ctx_p->flags[MODE] == MODE_SO || ctx_p->flags[MODE] == MODE_RSYNCSO) {
 		/* security checks before dlopen */
@@ -4424,6 +4467,12 @@ int sync_run(ctx_t *ctx_p) {
 
 	// Cleaning up run-time routines
 	rsync_escape_cleanup();
+
+	debug(9, "Saving file tree cache if required");
+	if (FILETREECACHE_ENABLED(ctx_p)) {
+		if (ret == 0)
+			ret = filetree_cache_save(ctx_p);
+	}
 
 	// Removing hash-tables
 	{

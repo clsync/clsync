@@ -34,6 +34,7 @@ filetree_cache_flush (
 		char dontunlock
 	)
 {
+	debug(9, "");
 	pthread_mutex_lock(&filetree_cache_mutex);
 
 	if (ctx_p->filetree_cache == NULL)
@@ -57,6 +58,7 @@ _filetree_cache_add (
 		filetree_cache_entry_data_t *data_entry
 	)
 {
+	debug(8, "");
 	size_t entry_id = ctx_p->filetree_cache_len++;
 
 	if (ctx_p->filetree_cache_len >= ctx_p->filetree_cache_size) {
@@ -97,6 +99,7 @@ _filetree_cache_update (
 		filetree_cache_entry_data_t *entry_data_new
 	)
 {
+	debug(9, "");
 	if (entry_old == NULL) {
 		entry_old = filetree_cache_get(ctx_p, entry_data_new->path);
 		if (entry_old == NULL) {
@@ -119,6 +122,7 @@ filetree_cache_add (
 		filetree_cache_entry_data_t *data_entry
 	)
 {
+	debug(9, "");
 	pthread_mutex_lock(&filetree_cache_mutex);
 	int rc = _filetree_cache_add(ctx_p, data_entry);
 	pthread_mutex_unlock(&filetree_cache_mutex);
@@ -131,6 +135,7 @@ filetree_cache_update (
 		filetree_cache_entry_data_t *data_entry
 	)
 {
+	debug(9, "");
 	pthread_mutex_lock(&filetree_cache_mutex);
 	int rc = _filetree_cache_update(ctx_p, NULL, data_entry);
 	pthread_mutex_unlock(&filetree_cache_mutex);
@@ -144,6 +149,7 @@ filetree_cache_set (
 		filetree_cache_entry_data_t *data_entry
 	)
 {
+	debug(9, "");
 	int rc = 0;
 	pthread_mutex_lock(&filetree_cache_mutex);
 	filetree_cache_entry_t *entry_old = filetree_cache_get(ctx_p, data_entry->path);
@@ -163,6 +169,7 @@ _filetree_cache_del (
 		filetree_cache_entry_t *entry_del
 	)
 {
+	debug(9, "");
 	filetree_cache_entry_t *entry_move = &ctx_p->filetree_cache[--ctx_p->filetree_cache_len];
 
 	indexes_filetreecache_del(ctx_p->indexes_p,  entry_del->dat.path);
@@ -183,6 +190,7 @@ filetree_cache_del (
 		const char *path
 	)
 {
+	debug(9, "");
 	pthread_mutex_lock(&filetree_cache_mutex);
 	filetree_cache_entry_t *entry_del  = filetree_cache_get(ctx_p, path);
 #ifdef PARANOID
@@ -200,6 +208,7 @@ filetree_cache_queueadd (
 		stat64_t *st_p
 	)
 {
+	debug(9, "");
 	pthread_mutex_lock(&filetree_cache_mutex);
 	size_t queuedentry_id = ctx_p->filetree_cache_queued_add_len++;
 
@@ -220,6 +229,7 @@ filetree_cache_queuedel (
 		const char *path
 	)
 {
+	debug(9, "");
 	pthread_mutex_lock(&filetree_cache_mutex);
 	filetree_cache_entry_t *entry_del = filetree_cache_get(ctx_p, path);
 #ifdef PARANOID
@@ -236,6 +246,7 @@ filetree_cache_queueflush (
 		ctx_t *ctx_p
 	)
 {
+	debug(9, "");
 	pthread_mutex_lock(&filetree_cache_mutex);
 
 	size_t entry_id = 0;
@@ -265,17 +276,22 @@ filetree_cache_load (	// TODO: Implement mmap() support
 		ctx_t *ctx_p
 	)
 {
+	debug(8, "\"%s\"", ctx_p->filetree_cache_path);
 	filetree_cache_flush(ctx_p, 1);
 
 	stat64_t st;
 
 	int rc = lstat64(ctx_p->filetree_cache_path, &st);
-	if (rc == -1)
+	if (rc == -1) {
+		pthread_mutex_unlock(&filetree_cache_mutex);
 		return errno;
+	}
 
 	FILE *f = fopen(ctx_p->filetree_cache_path, "r");
-	if (f == NULL)
+	if (f == NULL) {
+		pthread_mutex_unlock(&filetree_cache_mutex);
 		return errno;
+	}
 
 	ctx_p->filetree_cache      = xmalloc(st.st_size);
 	ctx_p->filetree_cache_size = st.st_size / sizeof(*ctx_p->filetree_cache);
@@ -287,6 +303,7 @@ filetree_cache_load (	// TODO: Implement mmap() support
 #ifdef PARANOID
 			assert (errno != 0);
 #endif
+			pthread_mutex_unlock(&filetree_cache_mutex);
 			return errno;
 		}
 
@@ -294,8 +311,10 @@ filetree_cache_load (	// TODO: Implement mmap() support
 		i = 0;
 		while (i < r) {
 			rc = _filetree_cache_add(ctx_p, &buf[i++]);
-			if (rc)
+			if (rc) {
+				pthread_mutex_unlock(&filetree_cache_mutex);
 				return rc;
+			}
 		}
 	} while (!feof(f));
 
@@ -311,6 +330,8 @@ filetree_cache_save (	// TODO: Implement mmap() support [much faster]
 		ctx_t *ctx_p
 	)
 {
+	debug(8, "");
+
 	pthread_mutex_lock(&filetree_cache_mutex);
 
 	FILE *f = fopen(ctx_p->filetree_cache_path, "w");

@@ -2224,9 +2224,12 @@ int ctx_check(ctx_t *ctx_p) {
 	if (ctx_p->filetree_cache_path != NULL) {
 		if (access(ctx_p->filetree_cache_path, R_OK|W_OK) == -1) {
 			ret = errno;
-			if (errno == ENOENT)
-				if (access(dirname(ctx_p->filetree_cache_path), W_OK) == 0)
+			if (errno == ENOENT) {
+				char dir[PATH_MAX];
+				strncpy(dir, ctx_p->filetree_cache_path, PATH_MAX);
+				if (access(dirname(dir), W_OK) == 0)
 					ret = 0;
+			}
 			if (ret != 0) {
 				error("Cannot unable to access file tree cache file \"%s\"", ctx_p->filetree_cache_path);
 			}
@@ -3067,25 +3070,10 @@ int main(int _argc, char *_argv[]) {
 
 	debug(3, "Current errno is %i.", ret);
 
-	if (FILETREECACHE_ENABLED(ctx_p)) {
-		if (ret == 0) {
-			ret = filetree_cache_load(ctx_p);
-			if (ret == ENOENT)
-				ret = 0;
-			else
-				error("Cannot load file-tree cache: \"%s\"", ctx_p->filetree_cache);
-		}
-	}
-
 	// == RUNNING ==
 	if (ret == 0)
 		ret = sync_run(ctx_p);
 	// == /RUNNING ==
-
-	if (FILETREECACHE_ENABLED(ctx_p)) {
-		if (ret == 0)
-			ret = filetree_cache_save(ctx_p);
-	}
 
 	if (ctx_p->pidfile != NULL) {
 		if (unlink(ctx_p->pidfile)) {
