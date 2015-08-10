@@ -23,6 +23,7 @@
 struct thread_callbackfunct_arg {
 	char *excfpath;
 	char *incfpath;
+	char *walkfpath;
 };
 typedef struct thread_callbackfunct_arg thread_callbackfunct_arg_t;
 

@@ -1,7 +1,7 @@
 /*
     clsync - file tree sync utility based on inotify/kqueue
     
-    Copyright (C) 2013-2014 Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
+    Copyright (C) 2013-2015 Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
     
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -771,7 +771,7 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 		try_again=0;
 		threadinfo_p->try_n++;
 
-		rc = ctx_p->handler_funct.rsync(argv[0], argv[1]);
+		rc = ctx_p->handler_funct.rsync(argv[0], argv[1], argv[2]);
 		if ((err=exitcode_process(threadinfo_p->ctx_p, rc))) {
 			try_again = ((!ctx_p->retries) || (threadinfo_p->try_n < ctx_p->retries)) && (ctx_p->state != STATE_TERM) && (ctx_p->state != STATE_EXIT);
 			warning("Bad exitcode %i (errcode %i). %s.", rc, err, try_again?"Retrying":"Give up");
@@ -805,7 +805,7 @@ int so_call_rsync_thread(threadinfo_t *threadinfo_p) {
 }
 #endif
 
-static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *inclistfile, const char *exclistfile) {
+static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *walkinclist, const char *inclistfile, const char *exclistfile) {
 	debug(2, "inclistfile == \"%s\"; exclistfile == \"%s\"", inclistfile, exclistfile);
 
 #ifdef THREADING_SUPPORT
@@ -824,7 +824,7 @@ static inline int so_call_rsync(ctx_t *ctx_p, indexes_t *indexes_p, const char *
 			try_n++;
 
 			alarm(ctx_p->synctimeout);
-			rc = ctx_p->handler_funct.rsync(inclistfile, exclistfile);
+			rc = ctx_p->handler_funct.rsync(walkinclist, inclistfile, exclistfile);
 			alarm(0);
 
 			if ((err=exitcode_process(ctx_p, rc))) {
@@ -1282,7 +1282,7 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 	rule_t *rules_p = ctx_p->rules;
 	debug(2, "(ctx_p, \"%s\", indexes_p, %i, %i).", dirpath, queue_id, initsync);
 
-	char skip_rules = (initsync==INITSYNC_FULL) && ctx_p->flags[INITFULL];
+	char skip_rules = (initsync==INITSYNC_FULL_INSTANT) && ctx_p->flags[INITFULL];
 
 	char rsync_and_prefer_excludes =
 			(
@@ -1300,7 +1300,7 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 	char fts_no_stat =
 		(
 			(
-				initsync == INITSYNC_FULL
+				initsync == INITSYNC_FULL_INSTANT
 			) ||
 			(
 				ctx_p->_queues[QUEUE_NORMAL ].collectdelay ==
@@ -1415,6 +1415,39 @@ int sync_initialsync_walk(ctx_t *ctx_p, const char *dirpath, indexes_t *indexes_
 			}
 		}
 
+		if (FILETREECACHE_ENABLED(ctx_p)) {
+			stat64_t *st_p, st;
+			filetree_cache_entry_data_t entry_dat;
+			if (fts_no_stat) {
+				st_p = &entry_dat.stat;
+				lstat64(node->fts_path, st_p);
+			} else {
+				assign_stat64_stat(&st, node->fts_statp);
+				st_p = &st;
+				memcpy(&entry_dat.stat, st_p, sizeof(*st_p));
+			}
+
+			debug(3, "Checking if the object (\"%s\") metadata is cached", path_rel);
+			filetree_cache_entry_t *cache_entry = filetree_cache_get(ctx_p, path_rel);
+			if (cache_entry != NULL) {
+				debug(3, "The object (\"%s\") metadata is cached", path_rel);
+				if (!filetree_cache_comparestat(cache_entry, st_p)) {
+					debug(3, "The object is not changed (metadata equals to the cached one)");
+					if ((st_p->st_mode & S_IFMT) == S_IFDIR)
+						fts_set(tree, node, FTS_SKIP);
+					indexes_addexclude(indexes_p, strdup(path_rel), EVIF_NONE, queue_id);
+					continue;
+				}
+			}
+
+#ifdef SECURE
+			memset(&entry_dat.path, 0, sizeof(entry_dat.path));
+#endif
+			strncpy(entry_dat.path, path_rel, sizeof(entry_dat.path)-1);
+			entry_dat.path[sizeof(entry_dat.path)-1] = 0;
+			filetree_cache_set(ctx_p, &entry_dat);
+		}
+
 		if (!rsync_and_prefer_excludes) {
 			evinfo_initialevmask(ctx_p, &evinfo, node->fts_info==FTS_D);
 
@@ -1478,11 +1511,14 @@ const char *sync_parameter_get(const char *variable_name, void *_dosync_arg_p) {
 	debug(15, "(\"%s\", %p): 0x%x, \"%s\"", variable_name, _dosync_arg_p, ctx_p == NULL ? 0 : ctx_p->synchandler_argf, dosync_arg_p->evmask_str);
 #endif
 
-	if ((ctx_p == NULL || (ctx_p->synchandler_argf & SHFL_INCLUDE_LIST_PATH)) && !strcmp(variable_name, "INCLUDE-LIST-PATH"))
-		return dosync_arg_p->outf_path;
+	if ((ctx_p == NULL || (ctx_p->synchandler_argf & SHFL_INCLUDE_WALK_LIST_PATH))	&& !strcmp(variable_name, "INCLUDE-WALK-LIST-PATH"))
+		return dosync_arg_p->outf_path[DOSYNC_LIST_WALK];
 	else
-	if ((ctx_p == NULL || (ctx_p->synchandler_argf & SHFL_EXCLUDE_LIST_PATH)) && !strcmp(variable_name, "EXCLUDE-LIST-PATH"))
-		return dosync_arg_p->excf_path;
+	if ((ctx_p == NULL || (ctx_p->synchandler_argf & SHFL_INCLUDE_LIST_PATH))	&& !strcmp(variable_name, "INCLUDE-LIST-PATH"))
+		return dosync_arg_p->outf_path[DOSYNC_LIST_INCLUDE];
+	else
+	if ((ctx_p == NULL || (ctx_p->synchandler_argf & SHFL_EXCLUDE_LIST_PATH))	&& !strcmp(variable_name, "EXCLUDE-LIST-PATH"))
+		return dosync_arg_p->outf_path[DOSYNC_LIST_EXCLUDE];
 	else
 	if (!strcmp(variable_name, "TYPE"))
 		return dosync_arg_p->list_type_str;
@@ -1591,19 +1627,25 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 	debug(3, "(\"%s\", ctx_p, indexes_p, %i)", path, initsync);
 
 #ifdef CLUSTER_SUPPORT
-	if(initsync == INITSYNC_FULL) {
-		if(ctx_p->cluster_iface)
-			return cluster_initialsync();
+	switch (initsync) {
+		case INITSYNC_FULL_INSTANT:
+			if (ctx_p->cluster_iface)
+				return cluster_initialsync();
+			break;
+		case INITSYNC_FULL_NONINSTANT:
+			break;
+		default:
+			critical ("This cases is not implemented, yet");
 	}
 #endif
 
-	if (initsync == INITSYNC_FULL)
+	if (initsync & INITSYNC_INSTANT)
 		queue_id = QUEUE_INSTANT;
 	else
 		queue_id = QUEUE_NORMAL;
 
 	// non-RSYNC case:
-	if(
+	if (
 		!(
 			(ctx_p->flags[MODE]==MODE_RSYNCDIRECT)	||
 			(ctx_p->flags[MODE]==MODE_RSYNCSHELL)	||
@@ -1611,8 +1653,10 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 		)
 	) {
 		debug(3, "syncing \"%s\"", path);
+		if (FILETREECACHE_ENABLED(ctx_p))
+			critical("The file tree cache is implemented only for rsync-modes");
 
-		if(ctx_p->flags[HAVERECURSIVESYNC]) {
+		if (ctx_p->flags[HAVERECURSIVESYNC]) {
 			if(ctx_p->flags[MODE] == MODE_SO) {
 				api_eventinfo_t *ei = (api_eventinfo_t *)xmalloc(sizeof(*ei));
 #ifdef PARANIOD
@@ -1627,7 +1671,7 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 				ei->objtype_new = EOT_DIR;
 
 				ret = so_call_sync(ctx_p, indexes_p, 1, ei);
-				return sync_initialsync_finish(ctx_p, initsync, ret);
+				return 0;
 			} else {
 
 				struct dosync_arg dosync_arg;
@@ -1654,7 +1698,7 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 #endif
 					argv_free(argv);
 
-				return sync_initialsync_finish(ctx_p, initsync, ret);
+				return 0;
 			}
 		}
 #ifdef DOXYGEN
@@ -1665,12 +1709,12 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 		if(ret)
 			error("Cannot get synclist");
 
-		return sync_initialsync_finish(ctx_p, initsync, ret);
+		return 0;
 	}
 
 	// RSYNC case:
 
-	if(!ctx_p->flags[RSYNCPREFERINCLUDE]) {
+	if (!ctx_p->flags[RSYNCPREFERINCLUDE]) {
 		queueinfo_t *queueinfo = &ctx_p->_queues[queue_id];
 
 		if(!queueinfo->stime)
@@ -1679,7 +1723,11 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 
 		eventinfo_t *evinfo = (eventinfo_t *)xmalloc(sizeof(*evinfo));
 		memset(evinfo, 0, sizeof(*evinfo));
-		evinfo->flags |= EVIF_RECURSIVELY;
+		if (initsync & INITSYNC_FULL) {
+			evinfo->flags |= EVIF_RECURSIVELY;
+		} else if (initsync & INITSYNC_DIR) {
+			evinfo->flags |= EVIF_CONTENTRECURSIVELY;
+		}
 		evinfo->seqid_min = sync_seqid();
 		evinfo->seqid_max = evinfo->seqid_min;
 		evinfo->objtype_old  = EOT_DOESNTEXIST;
@@ -1689,7 +1737,7 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 		ret = sync_initialsync_walk(ctx_p, path, indexes_p, queue_id, initsync);
 		if(ret) {
 			error("Cannot get exclude what to exclude");
-			return sync_initialsync_finish(ctx_p, initsync, ret);
+			return 0;
 		}
 
 		debug(3, "queueing \"%s\" with int-flags %p", path, (void *)(unsigned long)evinfo->flags);
@@ -1697,12 +1745,88 @@ int sync_initialsync(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, inits
 		char *path_rel = sync_path_abs2rel(ctx_p, path, -1, NULL, NULL);
 
 		ret = indexes_queueevent(indexes_p, path_rel, evinfo, queue_id);
-		return sync_initialsync_finish(ctx_p, initsync, ret);
+		return 0;
 	}
 
 	// Searching for includes
 	ret = sync_initialsync_walk(ctx_p, path, indexes_p, queue_id, initsync);
-	return sync_initialsync_finish(ctx_p, initsync, ret);
+	return 0;
+}
+
+int sync_initialsync_use_cache(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, initsync_t initsync) {
+	if (ctx_p->filetree_cache_len == 0)	// No cache available
+		return sync_initialsync(path, ctx_p, indexes_p, initsync);
+
+	if (filetree_cache_get(ctx_p, path) == NULL)				// If due to some reason the root directory is absent in the cache
+		return sync_initialsync(path, ctx_p, indexes_p, initsync);
+
+	queue_id_t queue_id;
+	if (initsync == INITSYNC_FULL_INSTANT)
+		queue_id = QUEUE_INSTANT;
+	else
+		queue_id = QUEUE_NORMAL;
+
+	int i, cache_len;
+
+	i = 0;
+	cache_len = ctx_p->filetree_cache_len;
+
+	while (i < cache_len) {
+		stat64_t st;
+
+		filetree_cache_entry_t *entry = &ctx_p->filetree_cache[i++];
+
+		lstat64(entry->dat.path, &st);
+
+		if (entry->is_synced)
+			if (!filetree_cache_comparestat(entry, &st))
+				continue;
+
+		switch (st.st_mode&S_IFMT) {
+			case S_IFDIR: {	// a directory
+				int rc = sync_initialsync(path, ctx_p, indexes_p, (initsync & ~INITSYNC_FULL) | INITSYNC_DIR );
+				if (rc)
+					return rc;
+				break;
+			}
+			default: {	// not a directory
+				eventinfo_t evinfo;
+				evinfo_initialevmask(ctx_p, &evinfo, 0);
+
+				switch (ctx_p->flags[MODE]) {
+					case MODE_SIMPLE:
+						SAFE(sync_dosync(entry->dat.path, evinfo.evmask, ctx_p, indexes_p), debug(1, "fpath == \"%s\"; evmask == 0x%o", entry->dat.path, evinfo.evmask); return -1;);
+						memcpy(&entry->dat.stat, &st, sizeof(st));
+						continue;
+					default:
+						break;
+				}
+
+				evinfo.seqid_min    = sync_seqid();
+				evinfo.seqid_max    = evinfo.seqid_min;
+				evinfo.objtype_old  = ((entry->dat.stat.st_mode & S_IFMT) == S_IFDIR) ? EOT_DIR : EOT_FILE;
+				evinfo.objtype_new  = ((             st.st_mode & S_IFMT) == S_IFDIR) ? EOT_DIR : EOT_FILE;
+				evinfo.fsize        = st.st_size;
+				debug(3, "queueing \"%s\" with int-flags 0x%x", entry->dat.path, evinfo.flags);
+				int rc = sync_queuesync(entry->dat.path, &evinfo, ctx_p, indexes_p, queue_id);
+
+				if (rc) {
+					error("Got error while queueing \"%s\".", entry->dat.path);
+					return rc;
+				}
+
+				memcpy(&entry->dat.stat, &st, sizeof(st));
+				break;
+			}
+		}
+	}
+
+	return 0;
+}
+
+int sync_initialsync_use_cache_iterations(const char *path, ctx_t *ctx_p, indexes_t *indexes_p, initsync_t initsync) {
+	int rc = sync_initialsync_use_cache(path, ctx_p, indexes_p, initsync);
+	return sync_initialsync_finish(ctx_p, initsync, rc);
 }
 
 int sync_notify_mark(ctx_t *ctx_p, const char *accpath, const char *path, size_t pathlen, indexes_t *indexes_p) {
@@ -1970,14 +2094,14 @@ int sync_dosync(const char *fpath, uint32_t evmask, ctx_t *ctx_p, indexes_t *ind
 }
 
 int fileischanged(ctx_t *ctx_p, indexes_t *indexes_p, const char *path_rel, stat64_t *lstat_p, int is_deleted) {
-	if (lstat_p == NULL || !ctx_p->flags[MODSIGN])
+	if (lstat_p == NULL || (!ctx_p->flags[MODSIGN] && !FILETREECACHE_ENABLED(ctx_p)))
 		return 1;
 
 	debug(9, "Checking modification signature");
-	fileinfo_t *finfo = indexes_fileinfo(indexes_p, path_rel);
+	filetree_cache_entry_t *finfo = indexes_filetreecache_get(indexes_p, path_rel);
 	if (finfo != NULL) {
 		uint32_t diff;
-		if (!(diff=stat_diff(&finfo->lstat, lstat_p) & ctx_p->flags[MODSIGN])) {
+		if (!(diff = stat_diff(&finfo->dat.stat, lstat_p))) {
 			debug(8, "Modification signature: File not changed: \"%s\"", path_rel);
 			return 0;	// Skip file syncing if it's metadata not changed enough (according to "--modification-signature" setting)
 		}
@@ -1985,18 +2109,18 @@ int fileischanged(ctx_t *ctx_p, indexes_t *indexes_p, const char *path_rel, stat
 
 		if (is_deleted) {
 			debug(8, "Modification signature: Deleting information about \"%s\"", path_rel);
-			indexes_fileinfo_add(indexes_p, path_rel, NULL);
-			free(finfo);
+			filetree_cache_del(ctx_p, path_rel);
 		} else {
 			debug(8, "Modification signature: Updating information about \"%s\"", path_rel);
-			memcpy(&finfo->lstat, lstat_p, sizeof(finfo->lstat));
+			memcpy(&finfo->dat.stat, lstat_p, sizeof(finfo->dat.stat));
 		}
 	} else {
+		filetree_cache_entry_data_t finfodat;
 		debug(8, "There's no information about this file/dir: \"%s\". Just remembering the current state.", path_rel);
+
 		// Adding file/dir information
-		finfo = xmalloc(sizeof(*finfo));
-		memcpy(&finfo->lstat, lstat_p, sizeof(finfo->lstat));
-		indexes_fileinfo_add(indexes_p, path_rel, finfo);
+		filetree_cache_setdatato(&finfodat, path_rel, lstat_p);
+		filetree_cache_add(ctx_p, &finfodat);
 	}
 
 	return 1;
@@ -2120,10 +2244,10 @@ int sync_prequeue_loadmark
 				}
 
 				if (perm & RA_WALK) {
-					ret = sync_initialsync(path_full, ctx_p, indexes_p, INITSYNC_SUBDIR);
+					ret = sync_initialsync_use_cache_iterations(path_full, ctx_p, indexes_p, INITSYNC_FULL_NONINSTANT);
 					if (ret) {
 						errno = ret;
-						error("Got error from sync_initialsync()");
+						error("Got error from sync_initialsync_use_cache_iterations()");
 						return errno;
 					}
 				}
@@ -2396,26 +2520,39 @@ gboolean sync_trylocked(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) 
 }
 
 int sync_idle_dosync_collectedevents_cleanup(ctx_t *ctx_p, thread_callbackfunct_arg_t *arg_p) {
-	int ret0 = 0, ret1 = 0;
-	if(ctx_p->flags[DONTUNLINK]) 
-		return 0;
+	int ret0 = 0, ret1 = 0, ret2 = 0;
 
 	debug(3, "(ctx_p, {inc: %p, exc: %p}) thread %p", arg_p->incfpath, arg_p->excfpath, pthread_self());
 
 	if (arg_p->excfpath != NULL) {
-		debug(3, "unlink()-ing exclude-file: \"%s\"", arg_p->excfpath);
-		ret0 = unlink(arg_p->excfpath);
+		if (!ctx_p->flags[DONTUNLINK]) {
+			debug(3, "unlink()-ing exclude-file: \"%s\"", arg_p->excfpath);
+			ret0 = unlink(arg_p->excfpath);
+		}
+
 		free(arg_p->excfpath);
 	}
 
 	if (arg_p->incfpath != NULL) {
-		debug(3, "unlink()-ing include-file: \"%s\"", arg_p->incfpath);
-		ret1 = unlink(arg_p->incfpath);
+		if (!ctx_p->flags[DONTUNLINK])  {
+			debug(3, "unlink()-ing include-file: \"%s\"", arg_p->incfpath);
+			ret1 = unlink(arg_p->incfpath);
+		}
+
 		free(arg_p->incfpath);
 	}
 
+	if (arg_p->walkfpath != NULL) {
+		if (!ctx_p->flags[DONTUNLINK]) {
+			debug(3, "unlink()-ing walk-file: \"%s\"", arg_p->walkfpath);
+			ret2 = unlink(arg_p->walkfpath);
+		}
+
+		free(arg_p->walkfpath);
+	}
+
 	free(arg_p);
-	return ret0 ? ret0 : ret1;
+	return ret0 ? ret0 : (ret1 ? ret1 : ret2);
 }
 
 void sync_queuesync_wrapper(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) {
@@ -2500,7 +2637,7 @@ int sync_idle_dosync_collectedevents_uniqfname(ctx_t *ctx_p, char *fpath, char *
 
 	int counter = 0;
 	do {
-		snprintf(fpath, PATH_MAX, "%s/.clsync-%s.%u.%lu.%lu.%u", ctx_p->listoutdir, name, pid, (long)pthread_self(), (unsigned long)tm, rand());	// To be unique
+		snprintf(fpath, PATH_MAX, "%s/%s.%u.%lu.%lu.%u", ctx_p->listoutdir, name, pid, (long)pthread_self(), (unsigned long)tm, rand());	// To be unique
 		lstat64(fpath, &stat64);
 		if(counter++ > COUNTER_LIMIT) {
 			error("Cannot find unused filename for list-file. The last try was \"%s\".", fpath);
@@ -2512,9 +2649,25 @@ int sync_idle_dosync_collectedevents_uniqfname(ctx_t *ctx_p, char *fpath, char *
 	return 0;
 }
 
-int sync_idle_dosync_collectedevents_listcreate(struct dosync_arg *dosync_arg_p, char *name) {
-	debug(3, "Creating %s file", name);
-	char *fpath = dosync_arg_p->outf_path;
+int sync_idle_dosync_collectedevents_listcreate(struct dosync_arg *dosync_arg_p, dosync_listid_t listid) {
+	char *name;
+
+	switch (listid) {
+		case DOSYNC_LIST_WALK:
+			name = "walk";
+			break;
+		case DOSYNC_LIST_INCLUDE:
+			name = "include";
+			break;
+		case DOSYNC_LIST_EXCLUDE:
+			name = "exclude";
+			break;
+		default:
+			critical("Unknown listid: %i", listid);
+	}
+
+	debug(3, "Creating %s file (listid: %i)", name, listid);
+	char *fpath = dosync_arg_p->outf_path[listid];
 	ctx_t *ctx_p = dosync_arg_p->ctx_p;
 
 	int ret;
@@ -2523,15 +2676,15 @@ int sync_idle_dosync_collectedevents_listcreate(struct dosync_arg *dosync_arg_p,
 		return ret;
 	}
 
-	dosync_arg_p->outf = fopen(fpath, "w");
+	dosync_arg_p->outf[listid] = fopen(fpath, "w");
 
 	if (dosync_arg_p->outf == NULL) {
 		error("Cannot open \"%s\" as file for writing.", fpath);
 		return errno;
 	}
 
-	setbuffer(dosync_arg_p->outf, dosync_arg_p->buf, BUFSIZ);
-	debug(3, "Created list-file \"%s\"", fpath);
+	setbuffer(dosync_arg_p->outf[listid], dosync_arg_p->buf[listid], BUFSIZ);
+	debug(3, "Created list-file \"%s\" (%p)", fpath, dosync_arg_p->outf[listid]);
 	dosync_arg_p->linescount = 0;
 
 	return 0;
@@ -2600,29 +2753,29 @@ static inline int rsync_outline(FILE *outf, char *outline, eventinfo_flags_t fla
 #endif
 
 	if (flags & EVIF_RECURSIVELY) {
-		debug(3, "Recursively \"%s\": Writing to rsynclist: \"%s/***\".", outline, outline);
+		debug(3, "Recursively \"%s\": Writing to rsynclist (%p): \"%s/***\".", outline, outf, outline);
 		critical_on ( fprintf(outf, "%s/***\n", outline) <= 0 );
 	} else
 	if (flags & EVIF_CONTENTRECURSIVELY) {
-		debug(3, "Content-recursively \"%s\": Writing to rsynclist: \"%s/**\".", outline, outline);
+		debug(3, "Content-recursively \"%s\": Writing to rsynclist (%p): \"%s/**\".", outline, outf, outline);
 		critical_on ( fprintf(outf, "%s/**\n", outline)  <= 0 );
 	} else {
-		debug(3, "Non-recursively \"%s\": Writing to rsynclist: \"%s\".", outline, outline);
+		debug(3, "Non-recursively \"%s\": Writing to rsynclist (%p): \"%s\".", outline, outf, outline);
 		critical_on ( fprintf(outf, "%s\n", outline)     <= 0 );
 	}
 
 	return 0;
 }
 
-gboolean rsync_aggrout(gpointer outline_gp, gpointer flags_gp, gpointer arg_gp) {
+gboolean rsync_walkaggrout(gpointer outline_gp, gpointer flags_gp, gpointer arg_gp) {
 	struct dosync_arg *dosync_arg_p = (struct dosync_arg *)arg_gp;
 	char *outline		  = (char *)outline_gp;
-	FILE *outf		  = dosync_arg_p->outf;
-	eventinfo_flags_t flags	 = (eventinfo_flags_t)GPOINTER_TO_INT(flags_gp);
+	FILE *walkoutf		  = dosync_arg_p->outf[DOSYNC_LIST_WALK];
+	eventinfo_flags_t flags	  = (eventinfo_flags_t)GPOINTER_TO_INT(flags_gp);
 //	debug(3, "\"%s\"", outline);
 
 	int ret;
-	if((ret=rsync_outline(outf, outline, flags))) {
+	if ((ret = rsync_outline(walkoutf, outline, flags))) {
 		error("Got error from rsync_outline(). Exit.");
 		exit(ret);	// TODO: replace this with kill(0, ...)
 	}
@@ -2630,9 +2783,30 @@ gboolean rsync_aggrout(gpointer outline_gp, gpointer flags_gp, gpointer arg_gp) 
 	return TRUE;
 }
 
+gboolean rsync_aggrout(gpointer outline_gp, gpointer flags_gp, gpointer arg_gp) {
+	struct dosync_arg *dosync_arg_p = (struct dosync_arg *)arg_gp;
+	char *outline		  = (char *)outline_gp;
+	FILE *outf		  = dosync_arg_p->outf[DOSYNC_LIST_INCLUDE];
+	eventinfo_flags_t flags	 = (eventinfo_flags_t)GPOINTER_TO_INT(flags_gp);
+//	debug(3, "\"%s\"", outline);
+
+	int ret;
+	if ((ret = rsync_outline(outf, outline, flags))) {
+		error("Got error from rsync_outline(). Exit.");
+		exit(ret);	// TODO: replace this with kill(0, ...)
+	}
+
+	return TRUE;
+}
+
+
+/**
+ * @brief 			Push path to aggregated hash tables of output lines
+ */
+
 static inline int rsync_listpush(indexes_t *indexes_p, const char *fpath, size_t fpath_len, eventinfo_flags_t flags, int *linescount_p) {
 	char *fpathwslash;
-	if(fpath_len>0) {
+	if (fpath_len>0) {
 		// Prepending with the slash
 
 		fpathwslash = alloca(fpath_len+2);
@@ -2649,26 +2823,30 @@ static inline int rsync_listpush(indexes_t *indexes_p, const char *fpath, size_t
 
 	char *end=fpathwslash;
 
-	debug(3, "\"%s\": Adding to rsynclist: \"%s\" with flags %p.", 
+	debug(3, "\"%s\": Adding to rsync-inc-list: \"%s\" with flags %p.", 
 		fpathwslash, fpathwslash, (void *)(long)flags);
 	indexes_outaggr_add(indexes_p, strdup(fpathwslash), flags);
-	if(linescount_p != NULL)
+	if (linescount_p != NULL)
 		(*linescount_p)++;
 
-	while(end != NULL) {
-		if(*fpathwslash == 0x00)
+	while (end != NULL) {
+		if (*fpathwslash == 0x00)
 			break;
-		debug(3, "Non-recursively \"%s\": Adding to rsynclist: \"%s\".", fpathwslash, fpathwslash);
-		indexes_outaggr_add(indexes_p, strdup(fpathwslash), EVIF_NONE);
-		if(linescount_p != NULL)
+
+		if (linescount_p != NULL)
 			(*linescount_p)++;
+
 		end = strrchr(fpathwslash, '/');
-		if(end == NULL)
+		if (end == NULL)
 			break;
-		if(end - fpathwslash <= 0)
+		if (end - fpathwslash <= 0)
 			break;
 
 		*end = 0x00;
+
+		debug(3, "Non-recursively \"%s\": Adding to rsync-walk-list: \"%s\".", fpathwslash, fpathwslash);
+
+		indexes_walkoutaggr_add(indexes_p, strdup(fpathwslash));
 	};
 
 	return 0;
@@ -2677,7 +2855,7 @@ static inline int rsync_listpush(indexes_t *indexes_p, const char *fpath, size_t
 gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, gpointer flags_gp, gpointer arg_gp) {
 	struct dosync_arg *dosync_arg_p = (struct dosync_arg *)arg_gp;
 	char *fpath		  = (char *)fpath_gp;
-	FILE *excf		  = dosync_arg_p->outf;
+	FILE *excf		  = dosync_arg_p->outf[DOSYNC_LIST_EXCLUDE];
 	eventinfo_flags_t flags	  = GPOINTER_TO_INT(flags_gp);
 //	ctx_t *ctx_p 	  = dosync_arg_p->ctx_p;
 //	indexes_t *indexes_p	  = dosync_arg_p->indexes_p;
@@ -2700,7 +2878,7 @@ gboolean sync_idle_dosync_collectedevents_rsync_exclistpush(gpointer fpath_gp, g
 	fpathwslash = (char *)rsync_escape(fpathwslash);
 
 	int ret;
-	if((ret=rsync_outline(excf, fpathwslash, flags))) {
+	if ((ret = rsync_outline(excf, fpathwslash, flags))) {
 		error("Got error from rsync_outline(). Exit.");
 		exit(ret);	// TODO: replace this with kill(0, ...)
 	}
@@ -2718,12 +2896,19 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 		(ctx_p->flags[MODE] == MODE_RSYNCDIRECT) || 
 		(ctx_p->flags[MODE] == MODE_RSYNCSHELL)	 ||
 		(ctx_p->flags[MODE] == MODE_RSYNCSO)
-	)
-		g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, rsync_aggrout, dosync_arg_p);
+	) {
+		g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht,	rsync_aggrout,		dosync_arg_p);
+		g_hash_table_foreach_remove(indexes_p->out_walklines_aggr_ht,	rsync_walkaggrout,	dosync_arg_p);
+	}
 
-	if (dosync_arg_p->outf != NULL) {
-		critical_on(fclose(dosync_arg_p->outf));
-		dosync_arg_p->outf = NULL;
+	if (dosync_arg_p->outf[DOSYNC_LIST_WALK] != NULL) {
+		critical_on(fclose(dosync_arg_p->outf[DOSYNC_LIST_WALK]));
+		dosync_arg_p->outf[DOSYNC_LIST_WALK] = NULL;
+	}
+
+	if (dosync_arg_p->outf[DOSYNC_LIST_INCLUDE] != NULL) {
+		critical_on(fclose(dosync_arg_p->outf[DOSYNC_LIST_INCLUDE]));
+		dosync_arg_p->outf[DOSYNC_LIST_INCLUDE] = NULL;
 	}
 
 	if (dosync_arg_p->evcount > 0) {
@@ -2739,18 +2924,22 @@ int sync_idle_dosync_collectedevents_commitpart(struct dosync_arg *dosync_arg_p)
 
 		if (ctx_p->flags[MODE] == MODE_RSYNCSO) 
 			return so_call_rsync(
-				ctx_p, 
-				indexes_p, 
-				dosync_arg_p->outf_path, 
-				*(dosync_arg_p->excf_path) ? dosync_arg_p->excf_path : NULL);
+				ctx_p,
+				indexes_p,
+				  dosync_arg_p->outf_path[DOSYNC_LIST_WALK],
+				  dosync_arg_p->outf_path[DOSYNC_LIST_INCLUDE],
+				*(dosync_arg_p->outf_path[DOSYNC_LIST_EXCLUDE]) ? dosync_arg_p->outf_path[DOSYNC_LIST_EXCLUDE] : NULL);
 
 		callback_arg_p = xcalloc(1, sizeof(*callback_arg_p));
 
+		if (ctx_p->synchandler_argf & SHFL_INCLUDE_WALK_LIST_PATH)
+			callback_arg_p->walkfpath = strdup(dosync_arg_p->outf_path[DOSYNC_LIST_WALK]);
+
 		if (ctx_p->synchandler_argf & SHFL_INCLUDE_LIST_PATH)
-			callback_arg_p->incfpath = strdup(dosync_arg_p->outf_path);
+			callback_arg_p->incfpath = strdup(dosync_arg_p->outf_path[DOSYNC_LIST_INCLUDE]);
 
 		if (ctx_p->synchandler_argf & SHFL_EXCLUDE_LIST_PATH)
-			callback_arg_p->excfpath = strdup(dosync_arg_p->excf_path);
+			callback_arg_p->excfpath = strdup(dosync_arg_p->outf_path[DOSYNC_LIST_EXCLUDE]);
 
 		{
 			int rc;
@@ -2793,12 +2982,12 @@ void sync_inclist_rotate(ctx_t *ctx_p, struct dosync_arg *dosync_arg_p) {
 
 	if (ctx_p->synchandler_argf & SHFL_EXCLUDE_LIST_PATH) {
 		// TODO: optimize this out {
-		if ((ret=sync_idle_dosync_collectedevents_uniqfname(ctx_p, newexc_path, "exclist"))) {
+		if ((ret = sync_idle_dosync_collectedevents_uniqfname(ctx_p, newexc_path, "exclist"))) {
 			error("Cannot get unique file name.");
 			exit(ret);
 		}
-		if ((ret=fileutils_copy(dosync_arg_p->excf_path, newexc_path))) {
-			error("Cannot copy file \"%s\" to \"%s\".", dosync_arg_p->excf_path, newexc_path);
+		if ((ret = fileutils_copy(dosync_arg_p->outf_path[DOSYNC_LIST_EXCLUDE], newexc_path))) {
+			error("Cannot copy file \"%s\" to \"%s\".", dosync_arg_p->outf_path[DOSYNC_LIST_EXCLUDE], newexc_path);
 			exit(ret);
 		}
 		// }
@@ -2808,17 +2997,21 @@ void sync_inclist_rotate(ctx_t *ctx_p, struct dosync_arg *dosync_arg_p) {
 	}
 
 	if ((ret=sync_idle_dosync_collectedevents_commitpart(dosync_arg_p))) {
-		error("Cannot commit list-file \"%s\"", dosync_arg_p->outf_path);
+		error("Cannot commit list-file \"%s\"", dosync_arg_p->outf_path[DOSYNC_LIST_INCLUDE]);
 		exit(ret);	// TODO: replace with kill(0, ...);
+	}
+
+	if (ctx_p->synchandler_argf & SHFL_INCLUDE_WALK_LIST_PATH) {
+		critical("This case is not supported, yet");
 	}
 
 	if (ctx_p->synchandler_argf & SHFL_INCLUDE_LIST_PATH) {
 #ifdef VERYPARANOID
 		require_strlen_le(newexc_path, PATH_MAX);
 #endif
-		strcpy(dosync_arg_p->excf_path, newexc_path);		// TODO: optimize this out
+		strcpy(dosync_arg_p->outf_path[DOSYNC_LIST_EXCLUDE], newexc_path);		// TODO: optimize this out
 
-		if ((ret=sync_idle_dosync_collectedevents_listcreate(dosync_arg_p, "list"))) {
+		if ((ret = sync_idle_dosync_collectedevents_listcreate(dosync_arg_p, DOSYNC_LIST_INCLUDE))) {
 			error("Cannot create new list-file");
 			exit(ret);	// TODO: replace with kill(0, ...);
 		}
@@ -2832,7 +3025,7 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 	char *fpath		   =  (char *)fpath_gp;
 	eventinfo_t *evinfo	   =  (eventinfo_t *)evinfo_gp;
 	//int *evcount_p		  =&dosync_arg_p->evcount;
-	FILE *outf		   =  dosync_arg_p->outf;
+	FILE *outf		   =  dosync_arg_p->outf[DOSYNC_LIST_INCLUDE];
 	ctx_t *ctx_p 		   =  dosync_arg_p->ctx_p;
 	int *linescount_p	   = &dosync_arg_p->linescount;
 	indexes_t *indexes_p 	   =  dosync_arg_p->indexes_p;
@@ -2913,12 +3106,14 @@ int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
 	dosync_arg.ctx_p 	= ctx_p;
 	dosync_arg.indexes_p	= indexes_p;
 
-	char isrsyncpreferexclude = 
+	char isrsync = 
 		(
 			(ctx_p->flags[MODE] == MODE_RSYNCDIRECT) ||
 			(ctx_p->flags[MODE] == MODE_RSYNCSHELL)	 ||
 			(ctx_p->flags[MODE] == MODE_RSYNCSO)
-		) && (!ctx_p->flags[RSYNCPREFERINCLUDE]);
+		);
+
+	char isrsyncpreferexclude = isrsync && (!ctx_p->flags[RSYNCPREFERINCLUDE]);
 
 #ifdef PARANOID
 	if(ctx_p->listoutdir != NULL) {
@@ -2970,10 +3165,17 @@ int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
 		int ret;
 		if ((ctx_p->listoutdir != NULL) || (ctx_p->flags[MODE] == MODE_SO)) {
 			if (!(ctx_p->flags[MODE]==MODE_SO)) {
-				*(dosync_arg.excf_path) = 0x00;
+				if (isrsync) {
+					if ((ret = sync_idle_dosync_collectedevents_listcreate(&dosync_arg, DOSYNC_LIST_WALK))) {
+						error("Cannot create walk-list-file");
+						return ret;
+					}
+				}
+
+				*(dosync_arg.outf_path[DOSYNC_LIST_EXCLUDE]) = 0x00;
 				if (isrsyncpreferexclude) {
-					if ((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "exclist"))) {
-						error("Cannot create list-file");
+					if ((ret = sync_idle_dosync_collectedevents_listcreate(&dosync_arg, DOSYNC_LIST_EXCLUDE))) {
+						error("Cannot create exceptions-list-file");
 						return ret;
 					}
 
@@ -2982,17 +3184,15 @@ int sync_idle_dosync_collectedevents(ctx_t *ctx_p, indexes_t *indexes_p) {
 #endif
 					g_hash_table_foreach_remove(indexes_p->exc_fpath_ht, sync_idle_dosync_collectedevents_rsync_exclistpush, &dosync_arg);
 					g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, rsync_aggrout, &dosync_arg);
-					critical_on(fclose(dosync_arg.outf));
-#ifdef VERYPARANOID
-					require_strlen_le(dosync_arg.outf_path, PATH_MAX);
-#endif
-					strcpy(dosync_arg.excf_path, dosync_arg.outf_path);	// TODO: remove this strcpy()
+					critical_on(fclose(dosync_arg.outf[DOSYNC_LIST_EXCLUDE]));		// TODO: remove this
 				}
 
-				if ((ret=sync_idle_dosync_collectedevents_listcreate(&dosync_arg, "list"))) {
+				if ((ret = sync_idle_dosync_collectedevents_listcreate(&dosync_arg, DOSYNC_LIST_INCLUDE))) {
 					error("Cannot create list-file");
 					return ret;
 				}
+
+				debug (8, "FILE pointers: walk == %p; inc == %p", dosync_arg.outf[DOSYNC_LIST_WALK], dosync_arg.outf[DOSYNC_LIST_INCLUDE]);
 			}
 		}
 
@@ -3036,8 +3236,9 @@ int apievinfo2rsynclist(indexes_t *indexes_p, FILE *listfile, int n, api_eventin
 	}
 
 	struct dosync_arg dosync_arg = {0};
-	dosync_arg.outf = listfile;
-	g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht, rsync_aggrout, &dosync_arg);
+	dosync_arg.outf[DOSYNC_LIST_INCLUDE] = listfile;
+	g_hash_table_foreach_remove(indexes_p->out_lines_aggr_ht,     rsync_aggrout,     &dosync_arg);
+	g_hash_table_foreach_remove(indexes_p->out_walklines_aggr_ht, rsync_walkaggrout, &dosync_arg);
 
 	return 0;
 }
@@ -3266,7 +3467,7 @@ int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 				main_status_update(ctx_p);
 				pthread_cond_broadcast(&threadsinfo_p->cond[PTHREAD_MUTEX_STATE]);
 				pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE]);
-				ret = sync_initialsync(ctx_p->watchdir, ctx_p, indexes_p, INITSYNC_FULL);
+				ret = sync_initialsync_use_cache_iterations(ctx_p->watchdir, ctx_p, indexes_p, INITSYNC_FULL_INSTANT);
 				if(ret) return ret;
 
 				if(ctx_p->flags[ONLYINITSYNC]) {
@@ -3838,14 +4039,15 @@ int sync_run(ctx_t *ctx_p) {
 	{
 		int i;
 
-		ctx_p->indexes_p	  = &indexes;
+		ctx_p->indexes_p		= &indexes;
 
-		indexes.wd2fpath_ht	  = g_hash_table_new_full(g_direct_hash, g_direct_equal, 0,    0);
-		indexes.fpath2wd_ht	  = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
-		indexes.fpath2ei_ht	  = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, free);
-		indexes.exc_fpath_ht	  = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
-		indexes.out_lines_aggr_ht = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, 0);
-		indexes.fileinfo_ht	  = g_hash_table_new_full(g_str_hash,	 g_str_equal,	 free, free);
+		indexes.wd2fpath_ht		= g_hash_table_new_full(g_direct_hash,	g_direct_equal,	0,    0);
+		indexes.fpath2wd_ht		= g_hash_table_new_full(g_str_hash,	g_str_equal,	free, 0);
+		indexes.fpath2ei_ht		= g_hash_table_new_full(g_str_hash,	g_str_equal,	free, free);
+		indexes.exc_fpath_ht		= g_hash_table_new_full(g_str_hash,	g_str_equal,	free, 0);
+		indexes.out_lines_aggr_ht	= g_hash_table_new_full(g_str_hash,	g_str_equal,	free, 0);
+		indexes.out_walklines_aggr_ht	= g_hash_table_new_full(g_str_hash,	g_str_equal,	free, 0);
+		indexes.filetree_cache_ht	= g_hash_table_new_full(g_str_hash,	g_str_equal,	0,    0);
 		i=0;
 		while (i<QUEUE_MAX) {
 			switch (i) {
@@ -4104,7 +4306,8 @@ int sync_run(ctx_t *ctx_p) {
 		g_hash_table_destroy(indexes.fpath2ei_ht);
 		g_hash_table_destroy(indexes.exc_fpath_ht);
 		g_hash_table_destroy(indexes.out_lines_aggr_ht);
-		g_hash_table_destroy(indexes.fileinfo_ht);
+		g_hash_table_destroy(indexes.out_walklines_aggr_ht);
+		g_hash_table_destroy(indexes.filetree_cache_ht);
 		i = 0;
 		while (i<QUEUE_MAX) {
 			switch (i) {

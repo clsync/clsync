@@ -1,7 +1,7 @@
 /*
     clsync - file tree sync utility based on inotify/kqueue/bsm
 
-    Copyright (C) 2014  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
+    Copyright (C) 2013-2015 Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -24,7 +24,7 @@
 #	include <sys/capability.h>	// for capset()/capget() for --preserve-file-access
 #endif
 #if defined(__linux__) | defined(CAPABILITIES_SUPPORT)
-#	include <sys/prctl.h>		// for prctl() for --preserve-fil-access
+#	include <sys/prctl.h>		// for prctl() for --preserve-file-access
 #endif
 
 #include <pwd.h>	// getpwnam()
@@ -53,6 +53,7 @@
 #	include "cgroup.h"
 #endif
 #include "posix-hacks.h"
+#include "indexes.h"
 
 //#include "revision.h"
 
@@ -75,6 +76,8 @@ static const struct option long_options[] =
 	{"config-file",		required_argument,	NULL,	CONFIGFILE},
 	{"config-block",	required_argument,	NULL,	CONFIGBLOCK},
 	{"config-block-inherits",required_argument,	NULL,	CONFIGBLOCKINHERITS},
+	{"file-tree-cache",	required_argument,	NULL,	FILETREE_CACHE},
+	{"file-tree-cache-save-interval", required_argument, NULL, FILETREE_CACHE_SAVEINTERVAL},
 	{"custom-signals",	required_argument,	NULL,	CUSTOMSIGNALS},
 	{"pid-file",		required_argument,	NULL,	PIDFILE},
 	{"uid",			required_argument,	NULL,	UID},
@@ -620,12 +623,17 @@ const char *parameter_get_wmacro(const char *variable_name, void *_ctx_p) {
 
 	const char *r = sync_parameter_get(variable_name, &dosync_arg);
 
-	if (r == dosync_arg.outf_path) {
+	if (r == dosync_arg.outf_path[DOSYNC_LIST_WALK]) {
+		ctx_p->synchandler_argf |= SHFL_INCLUDE_WALK_LIST_PATH;
+		return NULL;
+	}
+
+	if (r == dosync_arg.outf_path[DOSYNC_LIST_INCLUDE]) {
 		ctx_p->synchandler_argf |= SHFL_INCLUDE_LIST_PATH;
 		return NULL;
 	}
 
-	if (r == dosync_arg.excf_path) {
+	if (r == dosync_arg.outf_path[DOSYNC_LIST_EXCLUDE]) {
 		ctx_p->synchandler_argf |= SHFL_EXCLUDE_LIST_PATH;
 		return NULL;
 	}
@@ -980,12 +988,18 @@ static int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsour
 			syntax();
 			break;
 		case CONFIGFILE:
-			ctx_p->config_path    = *arg ? arg : NULL;
+			ctx_p->config_path		= *arg ? arg : NULL;
 			break;
 		case CONFIGBLOCK:
-			ctx_p->config_block   = *arg ? arg : NULL;
+			ctx_p->config_block		= *arg ? arg : NULL;
 			break;
 		case CONFIGBLOCKINHERITS:
+			break;
+		case FILETREE_CACHE:
+			ctx_p->filetree_cache_path	= *arg ? arg : NULL;
+			break;
+		case FILETREE_CACHE_SAVEINTERVAL:
+			ctx_p->filetree_cache_interval	= (unsigned int)xstrtol(arg, &ret);
 			break;
 		case CUSTOMSIGNALS:
 			if (paramsource == PS_CONTROL) {
@@ -2207,6 +2221,18 @@ int ctx_check(ctx_t *ctx_p) {
 		error("Options --check-execvp-arguments/--secure-splitting cannot be used in conjunction with --mode=direct (see \"man 1 clsync\": --check-execvp-arguments).");
 	}
 
+	if (ctx_p->filetree_cache_path != NULL) {
+		if (access(ctx_p->filetree_cache_path, R_OK|W_OK) == -1) {
+			ret = errno;
+			if (errno == ENOENT)
+				if (access(dirname(ctx_p->filetree_cache_path), W_OK) == 0)
+					ret = 0;
+			if (ret != 0) {
+				error("Cannot unable to access file tree cache file \"%s\"", ctx_p->filetree_cache_path);
+			}
+		}
+	}
+
 #if 0
 	if (ctx_p->handlerfpath != NULL)
 		if (access(ctx_p->handlerfpath, X_OK) == -1) {
@@ -3041,10 +3067,25 @@ int main(int _argc, char *_argv[]) {
 
 	debug(3, "Current errno is %i.", ret);
 
+	if (FILETREECACHE_ENABLED(ctx_p)) {
+		if (ret == 0) {
+			ret = filetree_cache_load(ctx_p);
+			if (ret == ENOENT)
+				ret = 0;
+			else
+				error("Cannot load file-tree cache: \"%s\"", ctx_p->filetree_cache);
+		}
+	}
+
 	// == RUNNING ==
 	if (ret == 0)
-	         ret = sync_run(ctx_p);
+		ret = sync_run(ctx_p);
 	// == /RUNNING ==
+
+	if (FILETREECACHE_ENABLED(ctx_p)) {
+		if (ret == 0)
+			ret = filetree_cache_save(ctx_p);
+	}
 
 	if (ctx_p->pidfile != NULL) {
 		if (unlink(ctx_p->pidfile)) {

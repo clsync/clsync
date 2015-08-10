@@ -1,7 +1,7 @@
 /*
     clsync - file tree sync utility based on inotify
 
-    Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
+    Copyright (C) 2013-2015 Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -26,11 +26,6 @@
 #include "error.h"
 #include "malloc.h"
 
-struct fileinfo {
-	stat64_t lstat;
-};
-typedef struct fileinfo fileinfo_t;
-
 struct indexes {
 	GHashTable *wd2fpath_ht;			// watching descriptor -> file path
 	GHashTable *fpath2wd_ht;			// file path -> watching descriptor
@@ -38,14 +33,44 @@ struct indexes {
 	GHashTable *exc_fpath_ht;			// excluded file path
 	GHashTable *exc_fpath_coll_ht[QUEUE_MAX];	// excluded file path aggregation hashtable for every queue
 	GHashTable *fpath2ei_coll_ht[QUEUE_MAX];	// "file path -> event information" aggregation hashtable for every queue
+	GHashTable *out_walklines_aggr_ht;		// output lines aggregation for rsync walk list hashtable
 	GHashTable *out_lines_aggr_ht;			// output lines aggregation hashtable
 	GHashTable *nonthreaded_syncing_fpath2ei_ht;	// events that are synchronized in signle-mode (non threaded)
-	GHashTable *fileinfo_ht;			// to search "fileinfo" structures (that contains secondary sorts of things about any files/dirs)
+	GHashTable *filetree_cache_ht;			// file path -> file tree cache entry
 #ifdef CLUSTER_SUPPORT
 	GHashTable *nodenames_ht;			// node_name -> node_id
 #endif
 };
 typedef struct indexes indexes_t;
+
+
+static inline int indexes_filetreecache_flush(indexes_t *indexes_p) {
+	g_hash_table_remove_all(indexes_p->filetree_cache_ht);
+	debug(3, "g_hash_table_remove_all(indexes_p)");
+	return 0;
+}
+
+static inline int indexes_filetreecache_remove(indexes_t *indexes_p, const char *fpath) {
+	g_hash_table_remove(indexes_p->filetree_cache_ht, fpath);
+	debug(3, "indexes_filetreecache_remove(indexes_p, \"%s\")", fpath);
+	return 0;
+}
+
+static inline void *indexes_filetreecache_get(indexes_t *indexes_p, const char *path) {
+	return g_hash_table_lookup(indexes_p->filetree_cache_ht, path);
+}
+
+static inline int indexes_filetreecache_del(indexes_t *indexes_p, const char *path) {
+	return g_hash_table_remove(indexes_p->filetree_cache_ht, path);
+}
+
+#include "filetree_cache.h"
+
+static inline int indexes_filetreecache_add(indexes_t *indexes_p, filetree_cache_entry_t *entry) {
+	debug(4, "indexes_filetreecache_add(indexes_p, \"%s\", %p)", entry->dat.path, entry);
+	g_hash_table_insert(indexes_p->filetree_cache_ht, entry->dat.path, entry);
+	return 0;
+}
 
 // Removes necessary rows from hash_tables if some watching descriptor closed
 // Return: 0 on success, non-zero on fail
@@ -173,19 +198,10 @@ static inline int indexes_outaggr_add(indexes_t *indexes_p, char *outline, event
 	return 0;
 }
 
-static inline fileinfo_t *indexes_fileinfo(indexes_t *indexes_p, const char *fpath) {
-	return (fileinfo_t *)g_hash_table_lookup(indexes_p->fileinfo_ht, fpath);
-}
+static inline int indexes_walkoutaggr_add(indexes_t *indexes_p, char *outline) {
+	g_hash_table_replace(indexes_p->out_walklines_aggr_ht, outline, GINT_TO_POINTER(EVIF_NONE));
 
-static inline int indexes_fileinfo_add(indexes_t *indexes_p, const char *fpath_const, fileinfo_t *fi) {
-	size_t fpathlen = strlen(fpath_const);
-	debug(4, "indexes_add_wd(indexes_p, \"%s\", %p)", fpath_const, fpathlen);
-
-	char *fpath = xmalloc(fpathlen+1);
-	memcpy(fpath, fpath_const, fpathlen+1);
-
-	g_hash_table_insert(indexes_p->fileinfo_ht, fpath, fi);
-
+	debug(3, "indexes_walkoutaggr_aggr(indexes_p, \"%s\").", outline);
 	return 0;
 }
 

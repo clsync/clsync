@@ -6,12 +6,12 @@ bin_PROGRAMS = clsync gencompilerflags
 
 gencompilerflags_SOURCES = gencompilerflags.c
 
-clsync_SOURCES = calc.c cluster.c error.c fileutils.c glibex.c		\
-	indexes.c main.c malloc.c rules.c stringex.c sync.c		\
+clsync_SOURCES = calc.c cluster.c error.c filetree_cache.c fileutils.c	\
+	glibex.c indexes.c main.c malloc.c rules.c stringex.c sync.c	\
 	posix-hacks.c privileged.c pthreadex.c calc.h cluster.h		\
-	fileutils.h glibex.h main.h port-hacks.h posix-hacks.h		\
-	pthreadex.h stringex.h sync.h common.h control.h privileged.h	\
-	rules.h syscalls.h
+	filetree_cache.h fileutils.h glibex.h main.h port-hacks.h	\
+	posix-hacks.h pthreadex.h stringex.h sync.h common.h control.h	\
+	privileged.h rules.h syscalls.h
 
 clsync_CFLAGS  = $(AM_CFLAGS)
 clsync_LDFLAGS = $(AM_LDFLAGS)

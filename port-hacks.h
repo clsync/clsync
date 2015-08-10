@@ -60,10 +60,49 @@
 	}
 #	else
 	typedef struct stat64 stat64_t;
+#		define USE_STAT64
 #	endif
 
 #else
 	typedef struct stat64 stat64_t;
+#	define USE_STAT64
+#endif
+
+#ifdef USE_STAT64
+	static inline void assign_stat64_stat(stat64_t *dst, struct stat *src) {
+#	ifdef PARANOID
+		critical_on (src == NULL);
+		critical_on (dst == NULL);
+#	endif
+
+#	define STAT_ASSIGN(field) \
+		dst->st_ ## field = src->st_ ## field ;
+
+		STAT_ASSIGN(dev);
+		STAT_ASSIGN(ino);
+		STAT_ASSIGN(mode);
+		STAT_ASSIGN(nlink);
+		STAT_ASSIGN(uid);
+		STAT_ASSIGN(gid);
+		STAT_ASSIGN(rdev);
+		STAT_ASSIGN(size);
+		STAT_ASSIGN(blksize);
+		STAT_ASSIGN(blocks);
+		//STAT_ASSIGN(attr);
+
+		memcpy(&dst->st_atime, &src->st_atime, sizeof(dst->st_atime));
+		memcpy(&dst->st_mtime, &src->st_mtime, sizeof(dst->st_mtime));
+		memcpy(&dst->st_ctime, &src->st_ctime, sizeof(dst->st_ctime));
+
+#	undef STAT_ASSIGN
+
+		return;
+	}
+#else
+	static inline void assign_stat64_stat(stat64_t *dst, struct stat *src) {
+		memcpy(dst, src, sizeof(*dst));
+		return;
+	}
 #endif
 
 #ifdef CLSYNC_ITSELF

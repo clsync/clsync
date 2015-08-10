@@ -1,7 +1,7 @@
 /*
     clsync - file tree sync utility based on inotify
 
-    Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
+    Copyright (C) 2013-2015 Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -130,6 +130,9 @@ enum flags_enum {
 	DETACH_IPC		= 46|OPTION_LONGOPTONLY,
 	PRIVILEGEDUID		= 47|OPTION_LONGOPTONLY,
 	PRIVILEGEDGID		= 48|OPTION_LONGOPTONLY,
+
+	FILETREE_CACHE		= 49|OPTION_LONGOPTONLY,
+	FILETREE_CACHE_SAVEINTERVAL = 50|OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -232,11 +235,12 @@ struct notifyenginefuncts {
 };
 
 enum shflags {
-	SHFL_NONE		= 0x00,
-	SHFL_RSYNC_ARGS		= 0x01,
-	SHFL_INCLUDE_LIST	= 0x02,
-	SHFL_INCLUDE_LIST_PATH	= 0x04,
-	SHFL_EXCLUDE_LIST_PATH	= 0x08,
+	SHFL_NONE			= 0x00,
+	SHFL_RSYNC_ARGS			= 0x01,
+	SHFL_INCLUDE_LIST		= 0x02,
+	SHFL_INCLUDE_LIST_PATH		= 0x04,
+	SHFL_EXCLUDE_LIST_PATH		= 0x08,
+	SHFL_INCLUDE_WALK_LIST_PATH	= 0x10,
 };
 typedef enum shflags shflags_t;
 
@@ -294,6 +298,10 @@ enum syscall_bitmask {
 };
 
 #define CAP_PRESERVE_TRY (1<<16)
+
+#define FILETREECACHE_ENABLED(ctx_p) (ctx_p->filetree_cache != NULL)
+
+struct filetree_cache_entry;
 
 struct ctx {
 #ifndef LIBCLSYNC
@@ -355,6 +363,12 @@ struct ctx {
 	uint16_t cluster_scan_dl_max;
 	unsigned int cluster_timeout;
 #endif
+	struct filetree_cache_entry	*filetree_cache;
+	size_t				 filetree_cache_size;
+	size_t				 filetree_cache_len;
+	char				*filetree_cache_path;
+	long				 filetree_cache_interval;
+
 	size_t watchdirlen;
 	size_t destdirlen;
 	size_t watchdirsize;

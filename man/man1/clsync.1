@@ -209,6 +209,53 @@ The default value is "default".
 .PP
 .RE
 
+.B \-\-file\-tree\-cache
+.I path
+.RS
+1. Read file tree cache to memory from file
+.I path
+to be able to use syscall
+.BR lstat (2)
+to find modified files/dirs.
+
+2. Save the last answer of
+.BR lstat (2)
+syscall for every file/dir into memory and into file
+.IR path .
+
+3. Use the memory cache to bypass
+.BR getdents (2)
+if possible.
+
+Summary. This helps to bypass calling
+.BR getdents (2)
+syscall if it's unnecessary (if directory is modified it will
+be scanned anyway). In turn that helps to bypass some performance
+issues on file systems with big
+.BR getdents (2)
+latencies (like NFS, CephFS and so on).
+
+Use case use value "/dev/null" to enable runtime cache but don't save
+it.
+
+The default value is "".
+.PP
+.RE
+
+.B \-\-file\-tree\-cache\-save\-interval
+.I interval
+.RS
+Sets interval (in seconds) to save file tree information into the cache file
+(see
+.BR \-\-file\-tree\-cache 
+option).
+
+You can set "-1". To do not save the cache by interval (only on quit).
+
+The default value is "3600".
+.PP
+.RE
+
 .B \-\-custom\-signals
 .I custom\-signals
 .RS
@@ -1773,11 +1820,13 @@ Recommendations to improve the perfomance:
 - Use option "\-p safe" or "\-p full".
 .br
 - Disable debugging with "\-d0" or better disable debugging support at all
-with "./configure" option "\-\-enable\-debug=no"
+with "./configure" option "\-\-enable\-debug=no".
 .br
-- Don't use option "\-\-exclude\-mount\-points"
+- Don't use option "\-\-exclude\-mount\-points".
 .br
-- Free memory for disk cache
+- Free memory for disk cache.
+.br
+- If you use network or/and distributed file system then try option "\-\-file\-tree\-cache". This may help on next run.
 .br
 .RE
 
@@ -1951,14 +2000,16 @@ Default
 .I sync\-handler\-arguments
 are:
 .RS
-\-aH \-\-delete \-\-exclude\-from %EXCLUDE\-LIST\-PATH% \-\-include\-from
+\-aH \-\-delete \-\-include\-from %INCLUDE\-WALK\-LIST\-PATH%
+\-\-exclude\-from %EXCLUDE\-LIST\-PATH% \-\-include\-from
 %INCLUDE\-LIST\-PATH% \-\-exclude='*' %watch\-dir%/ %destination\-dir%/
 .RE
 if option
 .I \-\-rsync\-\-prefer\-include
 is not set and
 .RS
-\-aH \-\-delete \-\-include\-from %INCLUDE\-LIST\-PATH% \-\-exclude='*'
+\-aH \-\-delete \-\-include\-from %INCLUDE\-WALK\-LIST\-PATH% 
+\-\-include\-from %INCLUDE\-LIST\-PATH% \-\-exclude='*'
 %watch\-dir%/ %destination\-dir%/
 .RE
 if the option is set
@@ -1969,9 +2020,13 @@ will be ignored in this case. We also recommend to ignore exitcode "23".
 
 Additional substitutions:
 .RS
+.B %INCLUDE\-WALK\-LIST\-PATH%
+.RS
+Is replaced by the path of the include list file of directories to walk into.
+.RE
 .B %INCLUDE\-LIST\-PATH%
 .RS
-Is replaced by the path of the include list file
+Is replaced by the path of the include list file of files/dirs to sync
 .RE
 .B %EXCLUDE\-LIST\-PATH%
 .RS
@@ -2000,14 +2055,18 @@ Default
 .I sync\-handler\-arguments
 are:
 .RS
-rsynclist %label% %INCLUDE\-LIST\-PATH% [%EXCLUDE\-LIST\-PATH%]
+rsynclist %label% %INCLUDE\-LIST\-PATH% %INCLUDE\-WALK\-LIST\-PATH%
+[%EXCLUDE\-LIST\-PATH%]
 .RE
 
 In this case,
 .I sync\-handler
 is supposed to run "rsync" application with parameters: 
 
-\-aH \-\-delete\-before \-\-include\-from
+\-aH \-\-delete\-before
+\-\-include\-from
+.I %INCLUDE\-WALK\-LIST\-PATH%
+\-\-include\-from
 .I %INCLUDE\-LIST\-PATH%
 \-\-exclude '*'
 
@@ -2017,7 +2076,10 @@ is enabled.
 
 And with parameters:
 
-\-aH \-\-delete\-before \-\-exclude\-from
+\-aH \-\-delete\-before
+\-\-include\-from
+.I %INCLUDE\-WALK\-LIST\-PATH%
+\-\-exclude\-from
 .I %EXCLUDE\-LIST\-PATH%
 \-\-include\-from
 .I %INCLUDE\-LIST\-PATH%
@@ -2029,9 +2091,13 @@ is disabled.
 
 Additional substitutions:
 .RS
+.B %INCLUDE\-WALK\-LIST\-PATH%
+.RS
+Is replaced by the path of the include list file of directories to walk into.
+.RE
 .B %INCLUDE\-LIST\-PATH%
 .RS
-Is replaced by the path of the rsync include list file
+Is replaced by the path of the include list file of files/dirs to sync
 .RE
 .B %EXCLUDE\-LIST\-PATH%
 .RS
@@ -2051,21 +2117,23 @@ loads
 .I sync-handler
 as a shared library with
 .BR dlopen (3)
-and calls function "int clsyncapi_rsync(const char *inclist, const char
-*exclist)" from it
-for every sync.
-.br
+and calls function "
+.B "int clsyncapi_rsync(const char *inclist, const char *incwalklist, const char *exclist)"
+" from it for every sync.
+
 .B inclist
-is a path to file with rules for "\-\-include\-from" option of rsync.
-This argument is always not NULL.
+is a path to file with rules for "\-\-include\-from" option (after
+"\-\-exclude\-from") of rsync. This argument is always not NULL.
+.br
+.B incwalklist
+is a path to file with rules for "\-\-include\-from" option (before
+"\-\-exclude\-from") of rsync. This argument is always not NULL.
 .br
 .B exclist
 is a path to file with rules for "\-\-exclude\-from" option of rsync.
 This argument is NULL if
 .B \-\-rsync\-prefer\-include
 is set.
-.br
-.I "Excludes takes precedence over includes."
 
 Also may be defined functions "int clsyncapi_init(ctx_t *, indexes_t *)"
 and "int clsyncapi_deinit()" to initialize and deinitialize the syncing

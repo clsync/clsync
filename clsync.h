@@ -50,7 +50,7 @@ struct ctx;
 struct indexes;
 typedef int(*api_funct_init)  (struct ctx *, struct indexes *);
 typedef int(*api_funct_sync)  (int n, api_eventinfo_t *);
-typedef int(*api_funct_rsync) (const char *inclist, const char *exclist);
+typedef int(*api_funct_rsync) (const char *inclist, const char *incwalklist, const char *exclist);
 typedef int(*api_funct_deinit)();
 
 enum eventinfo_flags {

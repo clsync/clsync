@@ -156,19 +156,25 @@ enum pthread_mutex_id {
 	PTHREAD_MUTEX_MAX
 };
 
+enum dosync_listid {
+	DOSYNC_LIST_WALK = 0,
+	DOSYNC_LIST_INCLUDE,
+	DOSYNC_LIST_EXCLUDE,
+	DOSYNC_LIST__MAX,
+};
+typedef enum dosync_listid dosync_listid_t;
 
 struct dosync_arg {
-	int evcount;
-	char excf_path[PATH_MAX+1];
-	char outf_path[PATH_MAX+1];
-	FILE *outf;
-	ctx_t *ctx_p;
-	struct indexes *indexes_p;
-	void *data;
-	int linescount;
-	api_eventinfo_t *api_ei;
-	int api_ei_count;
-	char buf[BUFSIZ+1];
+	int		 evcount;
+	char		 outf_path[DOSYNC_LIST__MAX][PATH_MAX+1];
+	FILE		*outf[DOSYNC_LIST__MAX];
+	ctx_t		*ctx_p;
+	struct indexes	*indexes_p;
+	void		*data;
+	int		 linescount;
+	api_eventinfo_t	*api_ei;
+	int		 api_ei_count;
+	char		 buf[DOSYNC_LIST__MAX][BUFSIZ+1];
 
 // for be read by sync_parameter_get():
 	const char *include_list[MAXARGUMENTS+2];
@@ -206,10 +212,18 @@ struct pushentry_arg {
 	struct myentry	*entry;
 };
 
+enum initsync_flags {
+	INITSYNC_NONE		= 0x00,
+	INITSYNC_FULL		= 0x02,
+	INITSYNC_DIR		= 0x04,
+	INITSYNC_INSTANT	= 0x08,
+};
+
 enum initsync {
-	INITSYNC_UNKNOWN = 0,
-	INITSYNC_FULL,
-	INITSYNC_SUBDIR
+	INITSYNC_UNKNOWN = 0,						// Error
+	INITSYNC_FULL_NONINSTANT= INITSYNC_FULL,			// With grandchildren,		non-instant
+	INITSYNC_FULL_INSTANT	= INITSYNC_FULL|INITSYNC_INSTANT,	// With grandchildren,		instant
+	INITSYNC_DIR_INSTANT	= INITSYNC_DIR|INITSYNC_INSTANT,	// Without grandchildren,	instant
 };
 typedef enum initsync initsync_t;
 
