@@ -214,9 +214,11 @@ struct pushentry_arg {
 
 enum initsync_flags {
 	INITSYNC_NONE		= 0x00,
-	INITSYNC_FULL		= 0x02,
-	INITSYNC_DIR		= 0x04,
+	INITSYNC_FILE		= 0x01,
+	INITSYNC_DIR		= 0x03,
+	INITSYNC_FULL		= 0x07,
 	INITSYNC_INSTANT	= 0x08,
+	INITSYNC_CACHE		= 0x10,
 };
 
 enum initsync {

@@ -30,8 +30,10 @@ typedef struct filetree_cache_entry_data filetree_cache_entry_data_t;
 
 struct filetree_cache_entry {
 	size_t		id;
+	char		to_delete;
 	char		is_synced;
 	char		is_saved;
+	char		is_marked;
 	filetree_cache_entry_data_t dat;
 };
 typedef struct filetree_cache_entry filetree_cache_entry_t;
@@ -44,6 +46,9 @@ extern int filetree_cache_add(ctx_t *ctx_p, filetree_cache_entry_data_t *entry);
 extern int filetree_cache_update(ctx_t *ctx_p, filetree_cache_entry_data_t *entry);
 extern int filetree_cache_set(ctx_t *ctx_p, filetree_cache_entry_data_t *entry);
 extern int filetree_cache_del(ctx_t *ctx_p, const char *path);
+extern int filetree_cache_queueadd(ctx_t *ctx_p, const char *path, stat64_t *st_p);
+extern int filetree_cache_queuedel(ctx_t *ctx_p, const char *path);
+extern int filetree_cache_queueflush(ctx_t *ctx_p);
 
 static inline filetree_cache_entry_t *filetree_cache_get(ctx_t *ctx_p, const char *path) {
 	return indexes_filetreecache_get(ctx_p->indexes_p, path);

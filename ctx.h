@@ -302,6 +302,7 @@ enum syscall_bitmask {
 #define FILETREECACHE_ENABLED(ctx_p) (ctx_p->filetree_cache != NULL)
 
 struct filetree_cache_entry;
+struct filetree_cache_entry_data;
 
 struct ctx {
 #ifndef LIBCLSYNC
@@ -363,11 +364,14 @@ struct ctx {
 	uint16_t cluster_scan_dl_max;
 	unsigned int cluster_timeout;
 #endif
-	struct filetree_cache_entry	*filetree_cache;
-	size_t				 filetree_cache_size;
-	size_t				 filetree_cache_len;
-	char				*filetree_cache_path;
-	long				 filetree_cache_interval;
+	struct filetree_cache_entry		*filetree_cache;
+	size_t					 filetree_cache_size;
+	size_t					 filetree_cache_len;
+	char					*filetree_cache_path;
+	long					 filetree_cache_interval;
+	struct filetree_cache_entry_data	*filetree_cache_queued_add;
+	size_t					 filetree_cache_queued_add_size;
+	size_t					 filetree_cache_queued_add_len;
 
 	size_t watchdirlen;
 	size_t destdirlen;
