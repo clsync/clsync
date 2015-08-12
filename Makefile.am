@@ -152,4 +152,7 @@ if CLSYNC
 CLEANFILES += examples/rules
 clean-local:
 	-rm -rf examples/testdir examples/*.o examples/*.so examples/*.xz doc/doxygen
+
+format:
+	astyle --style=linux --indent=tab --indent-cases --indent-switches --indent-preproc-define --break-blocks --pad-oper --pad-paren --delete-empty-lines *.c *.h | grep -v Unchanged || true
 endif

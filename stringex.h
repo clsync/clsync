@@ -17,5 +17,5 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-extern int str_splitargs(const char *const instr, int (*handler)(char *outstr, size_t outstr_len, void *arg), void *arg);
+extern int str_splitargs ( const char *const instr, int ( *handler ) ( char *outstr, size_t outstr_len, void *arg ), void *arg );
 

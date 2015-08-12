@@ -19,21 +19,21 @@
 
 #include <sys/types.h>
 
-extern void *xmalloc(size_t size);
-extern void *xcalloc(size_t nmemb, size_t size);
-extern void *xrealloc(void *oldptr, size_t size);
+extern void *xmalloc ( size_t size );
+extern void *xcalloc ( size_t nmemb, size_t size );
+extern void *xrealloc ( void *oldptr, size_t size );
 #ifdef CAPABILITIES_SUPPORT
-extern void *malloc_align(size_t size);
-extern void *calloc_align(size_t nmemb, size_t size);
-extern char *strdup_protect(const char *src, int prot);
+extern void *malloc_align ( size_t size );
+extern void *calloc_align ( size_t nmemb, size_t size );
+extern char *strdup_protect ( const char *src, int prot );
 # ifdef SECCOMP_SUPPORT
-extern int is_protected(void *addr);
+extern int is_protected ( void *addr );
 # endif
 #endif
-extern void *shm_malloc(size_t size);
-extern void *shm_malloc_try(size_t size);
-extern void *shm_calloc(size_t nmemb, size_t size);
-extern void shm_free(void *ptr);
+extern void *shm_malloc ( size_t size );
+extern void *shm_malloc_try ( size_t size );
+extern void *shm_calloc ( size_t nmemb, size_t size );
+extern void shm_free ( void *ptr );
 
 extern int memory_init();
 

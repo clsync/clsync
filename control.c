@@ -1,18 +1,18 @@
 /*
     clsync - file tree sync utility based on inotify
-    
+
     Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
-    
+
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
-    
+
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-    
+
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -37,128 +37,130 @@
 static pthread_t pthread_control;
 
 
-static inline int control_error(clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p, const char *const funct, const char *const args) {
-	debug(3, "%s(%s): %u: %s", funct, args, errno, strerror(errno));
-	return socket_reply(clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_ECUSTOM, funct, args, errno, strerror(errno));
+static inline int control_error ( clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p, const char *const funct, const char *const args )
+{
+	debug ( 3, "%s(%s): %u: %s", funct, args, errno, strerror ( errno ) );
+	return socket_reply ( clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_ECUSTOM, funct, args, errno, strerror ( errno ) );
 }
 
 
-int control_dump(ctx_t *ctx_p, clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p) {
+int control_dump ( ctx_t *ctx_p, clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p )
+{
 	sockcmd_dat_dump_t *dat		= sockcmd_p->data;
-
-	debug(3, "%s", dat->dir_path);
-
-	return (sync_dump(ctx_p, dat->dir_path)) ? 
-		control_error(clsyncsock_p, sockcmd_p, "sync_dump", dat->dir_path) :
-		socket_reply(clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_DUMP);
+	debug ( 3, "%s", dat->dir_path );
+	return ( sync_dump ( ctx_p, dat->dir_path ) ) ?
+	       control_error ( clsyncsock_p, sockcmd_p, "sync_dump", dat->dir_path ) :
+	       socket_reply ( clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_DUMP );
 }
 
-int control_procclsyncsock(socket_sockthreaddata_t *arg, sockcmd_t *sockcmd_p) {
+int control_procclsyncsock ( socket_sockthreaddata_t *arg, sockcmd_t *sockcmd_p )
+{
 	int rc;
 	clsyncsock_t	*clsyncsock_p =          arg->clsyncsock_p;
-	ctx_t		*ctx_p        = (ctx_t *)arg->arg;
+	ctx_t		*ctx_p        = ( ctx_t * ) arg->arg;
 
-	switch(sockcmd_p->cmd_id) {
+	switch ( sockcmd_p->cmd_id ) {
 		case SOCKCMD_REQUEST_DUMP:
-			rc = control_dump(ctx_p, clsyncsock_p, sockcmd_p);
+			rc = control_dump ( ctx_p, clsyncsock_p, sockcmd_p );
 			break;
+
 		case SOCKCMD_REQUEST_INFO:
-			rc = socket_reply(clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_INFO, ctx_p->config_block, ctx_p->label, ctx_p->flags, ctx_p->flags_set);
+			rc = socket_reply ( clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_INFO, ctx_p->config_block, ctx_p->label, ctx_p->flags, ctx_p->flags_set );
 			break;
+
 		case SOCKCMD_REQUEST_SET: {
-			sockcmd_dat_set_t *dat = sockcmd_p->data;
-			rc = ctx_set(ctx_p, dat->key, dat->value);
-			if (rc) {
-				control_error(clsyncsock_p, sockcmd_p, "ctx_set", dat->key);
+				sockcmd_dat_set_t *dat = sockcmd_p->data;
+				rc = ctx_set ( ctx_p, dat->key, dat->value );
+
+				if ( rc ) {
+					control_error ( clsyncsock_p, sockcmd_p, "ctx_set", dat->key );
+					break;
+				}
+
+				rc = socket_reply ( clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_SET );
 				break;
 			}
-			rc = socket_reply(clsyncsock_p, sockcmd_p, SOCKCMD_REPLY_SET);
-			break;
-		}
+
 		case SOCKCMD_REQUEST_DIE:
-			rc = sync_term(SIGTERM);
+			rc = sync_term ( SIGTERM );
 			break;
+
 		default:
 			return EINVAL;
 	}
 
-	debug(3, "rc == %u", rc);
+	debug ( 3, "rc == %u", rc );
 	return rc;
 }
 
-static inline void closecontrol(ctx_t *ctx_p) {
-	if(ctx_p->socket) {
-		close(ctx_p->socket);
+static inline void closecontrol ( ctx_t *ctx_p )
+{
+	if ( ctx_p->socket ) {
+		close ( ctx_p->socket );
 		ctx_p->socket = 0;
 	}
 }
 
-int control_loop(ctx_t *ctx_p) {
-
+int control_loop ( ctx_t *ctx_p )
+{
 	// Starting
-
-	debug(1, "started (ctx_p->socket == %u)", ctx_p->socket);
+	debug ( 1, "started (ctx_p->socket == %u)", ctx_p->socket );
 	int s;
 
-	while((s=ctx_p->socket)) {
-
+	while ( ( s = ctx_p->socket ) ) {
 		// Check if the socket is still alive
-		if(socket_check_bysock(s)) {
-			error("Control socket closed [case 0]");
-			closecontrol(ctx_p);
+		if ( socket_check_bysock ( s ) ) {
+			error ( "Control socket closed [case 0]" );
+			closecontrol ( ctx_p );
 			continue;
 		}
 
 		// Waiting for event
-		debug(3, "waiting for events on the socket");
+		debug ( 3, "waiting for events on the socket" );
 		fd_set rfds;
-
-		FD_ZERO(&rfds);
-		FD_SET(s, &rfds);
-
-		int count = select(s+1, &rfds, NULL, NULL, NULL);
-
+		FD_ZERO ( &rfds );
+		FD_SET ( s, &rfds );
+		int count = select ( s + 1, &rfds, NULL, NULL, NULL );
 		// Processing the events
-		debug(2, "got %i events with select()", count);
+		debug ( 2, "got %i events with select()", count );
 
 		// Processing the events: checks
-		if(count == 0) {
-			debug(2, "select() timed out.");
+		if ( count == 0 ) {
+			debug ( 2, "select() timed out." );
 			continue;
 		}
 
-		if(count < 0) {
-			debug(1, "Got negative events count. Closing the socket.");
-			closecontrol(ctx_p);
+		if ( count < 0 ) {
+			debug ( 1, "Got negative events count. Closing the socket." );
+			closecontrol ( ctx_p );
 			continue;
 		}
 
-		if(!FD_ISSET(s, &rfds)) {
-			error("Got event, but not on the control socket. Closing the socket (cannot use \"select()\").");
-			closecontrol(ctx_p);
+		if ( !FD_ISSET ( s, &rfds ) ) {
+			error ( "Got event, but not on the control socket. Closing the socket (cannot use \"select()\")." );
+			closecontrol ( ctx_p );
 			continue;
 		}
 
 		// Processing the events: accepting new clsyncsock
+		clsyncsock_t *clsyncsock_p = socket_accept ( s );
 
-		clsyncsock_t *clsyncsock_p = socket_accept(s);
-		if(clsyncsock_p == NULL) {
-
-			if(errno == EUSERS)	// Too many connections. Just ignoring the new one.
+		if ( clsyncsock_p == NULL ) {
+			if ( errno == EUSERS )	// Too many connections. Just ignoring the new one.
 				continue;
 
 			// Got unknown error. Closing control socket just in case.
-			error("Cannot socket_accept()");
-			closecontrol(ctx_p);
+			error ( "Cannot socket_accept()" );
+			closecontrol ( ctx_p );
 			continue;
 		}
 
-		debug(2, "Starting new thread for new connection.");
-		socket_sockthreaddata_t *threaddata_p = socket_thread_attach(clsyncsock_p);
+		debug ( 2, "Starting new thread for new connection." );
+		socket_sockthreaddata_t *threaddata_p = socket_thread_attach ( clsyncsock_p );
 
-		if (threaddata_p == NULL) {
-			error("Cannot create a thread for connection");
-			closecontrol(ctx_p);
+		if ( threaddata_p == NULL ) {
+			error ( "Cannot create a thread for connection" );
+			closecontrol ( ctx_p );
 			continue;
 		}
 
@@ -169,83 +171,85 @@ int control_loop(ctx_t *ctx_p) {
 		threaddata_p->authtype		=  ctx_p->flags[SOCKETAUTH];
 		threaddata_p->flags		=  0;
 
-		if (socket_thread_start(threaddata_p)) {
-			error("Cannot start a thread for connection");
-			closecontrol(ctx_p);
+		if ( socket_thread_start ( threaddata_p ) ) {
+			error ( "Cannot start a thread for connection" );
+			closecontrol ( ctx_p );
 			continue;
 		}
+
 #ifdef DEBUG
 		// To prevent too often connections
-		sleep(1);
+		sleep ( 1 );
 #endif
 	}
 
 	// Cleanup
-
-	debug(1, "control_loop() finished");
+	debug ( 1, "control_loop() finished" );
 	return 0;
 }
 
-int control_run(ctx_t *ctx_p) {
-	if(ctx_p->socketpath != NULL) {
+int control_run ( ctx_t *ctx_p )
+{
+	if ( ctx_p->socketpath != NULL ) {
 		int ret =  0;
 		int s   = -1;
 
 		// initializing clsync-socket subsystem
-		if ((ret = socket_init()))
-			error("Cannot init clsync-sockets subsystem.");
+		if ( ( ret = socket_init() ) )
+			error ( "Cannot init clsync-sockets subsystem." );
 
+		if ( !ret ) {
+			clsyncsock_t *clsyncsock = socket_listen_unix ( ctx_p->socketpath );
 
-		if (!ret) {
-			clsyncsock_t *clsyncsock = socket_listen_unix(ctx_p->socketpath);
-			if (clsyncsock == NULL) {
+			if ( clsyncsock == NULL ) {
 				ret = errno;
 			} else {
 				s = clsyncsock->sock;
-				socket_cleanup(clsyncsock);
+				socket_cleanup ( clsyncsock );
 			}
 		}
 
 		// fixing privileges
-		if (!ret) {
-			if(ctx_p->flags[SOCKETMOD])
-				if(chmod(ctx_p->socketpath, ctx_p->socketmod)) {
-					error("Error, Cannot chmod(\"%s\", %o)", 
-						ctx_p->socketpath, ctx_p->socketmod);
+		if ( !ret ) {
+			if ( ctx_p->flags[SOCKETMOD] )
+				if ( chmod ( ctx_p->socketpath, ctx_p->socketmod ) ) {
+					error ( "Error, Cannot chmod(\"%s\", %o)",
+					        ctx_p->socketpath, ctx_p->socketmod );
 					ret = errno;
 				}
-			if(ctx_p->flags[SOCKETOWN])
-				if(chown(ctx_p->socketpath, ctx_p->socketuid, ctx_p->socketgid)) {
-					error("Error, Cannot chown(\"%s\", %u, %u)", 
-						ctx_p->socketpath, ctx_p->socketuid, ctx_p->socketgid);
+
+			if ( ctx_p->flags[SOCKETOWN] )
+				if ( chown ( ctx_p->socketpath, ctx_p->socketuid, ctx_p->socketgid ) ) {
+					error ( "Error, Cannot chown(\"%s\", %u, %u)",
+					        ctx_p->socketpath, ctx_p->socketuid, ctx_p->socketgid );
 					ret = errno;
 				}
 		}
 
 		// finish
-		if (ret) {
-			close(s);
+		if ( ret ) {
+			close ( s );
 			return ret;
 		}
 
 		ctx_p->socket = s;
-
-		debug(2, "ctx_p->socket = %u", ctx_p->socket);
-
-		ret = pthread_create(&pthread_control, NULL, (void *(*)(void *))control_loop, ctx_p);
+		debug ( 2, "ctx_p->socket = %u", ctx_p->socket );
+		ret = pthread_create ( &pthread_control, NULL, ( void * ( * ) ( void * ) ) control_loop, ctx_p );
 	}
-	
+
 	return 0;
 }
 
-int control_cleanup(ctx_t *ctx_p) {
-	if(ctx_p->socketpath != NULL) {
-		unlink(ctx_p->socketpath);
-		closecontrol(ctx_p);
+int control_cleanup ( ctx_t *ctx_p )
+{
+	if ( ctx_p->socketpath != NULL ) {
+		unlink ( ctx_p->socketpath );
+		closecontrol ( ctx_p );
 		// TODO: kill pthread_control and join
 //		pthread_join(pthread_control, NULL);
 		socket_deinit();
 	}
+
 	return 0;
 }
 

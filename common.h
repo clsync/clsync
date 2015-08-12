@@ -166,7 +166,7 @@ typedef enum dosync_listid dosync_listid_t;
 
 struct dosync_arg {
 	int		 evcount;
-	char		 outf_path[DOSYNC_LIST__MAX][PATH_MAX+1];
+	char		 outf_path[DOSYNC_LIST__MAX][PATH_MAX + 1];
 	FILE		*outf[DOSYNC_LIST__MAX];
 	ctx_t		*ctx_p;
 	struct indexes	*indexes_p;
@@ -174,10 +174,10 @@ struct dosync_arg {
 	int		 linescount;
 	api_eventinfo_t	*api_ei;
 	int		 api_ei_count;
-	char		 buf[DOSYNC_LIST__MAX][BUFSIZ+1];
+	char		 buf[DOSYNC_LIST__MAX][BUFSIZ + 1];
 
 // for be read by sync_parameter_get():
-	const char *include_list[MAXARGUMENTS+2];
+	const char *include_list[MAXARGUMENTS + 2];
 	size_t      include_list_count;
 	const char *list_type_str;
 	const char *evmask_str;
@@ -223,9 +223,9 @@ enum initsync_flags {
 
 enum initsync {
 	INITSYNC_UNKNOWN = 0,						// Error
-	INITSYNC_FULL_NONINSTANT= INITSYNC_FULL,			// With grandchildren,		non-instant
-	INITSYNC_FULL_INSTANT	= INITSYNC_FULL|INITSYNC_INSTANT,	// With grandchildren,		instant
-	INITSYNC_DIR_INSTANT	= INITSYNC_DIR|INITSYNC_INSTANT,	// Without grandchildren,	instant
+	INITSYNC_FULL_NONINSTANT = INITSYNC_FULL,			// With grandchildren,		non-instant
+	INITSYNC_FULL_INSTANT	= INITSYNC_FULL | INITSYNC_INSTANT,	// With grandchildren,		instant
+	INITSYNC_DIR_INSTANT	= INITSYNC_DIR | INITSYNC_INSTANT,	// Without grandchildren,	instant
 };
 typedef enum initsync initsync_t;
 
