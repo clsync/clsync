@@ -24,6 +24,11 @@
 #define ETIME ETIMEDOUT
 #endif
 
+
+#ifndef __USE_LARGEFILE64
+#	define __USE_LARGEFILE64
+#endif
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <assert.h>
@@ -52,23 +57,24 @@ static inline int pthread_tryjoin_np ( pthread_t thread, void **retval )
 }
 #	endif
 
-#	ifndef __USE_LARGEFILE64
+#	ifdef __USE_LARGEFILE64
+#		define USE_STAT64
+#	endif
+
+#else
+#	define USE_STAT64
+#endif
+
+#ifndef USE_STAT64
 typedef struct stat stat64_t;
 static inline int lstat64 ( const char *pathname, struct stat *buf )
 {
 	return lstat ( pathname, buf );
 }
-#	else
-typedef struct stat64 stat64_t;
-#		define USE_STAT64
-#	endif
-
-#else
-typedef struct stat64 stat64_t;
-#	define USE_STAT64
 #endif
 
 #ifdef USE_STAT64
+typedef struct stat64 stat64_t;
 static inline void assign_stat64_stat ( stat64_t *dst, struct stat *src )
 {
 #	ifdef PARANOID
@@ -76,7 +82,7 @@ static inline void assign_stat64_stat ( stat64_t *dst, struct stat *src )
 	assert ( dst != NULL );
 #	endif
 #	define STAT_ASSIGN(field) \
-	dst->st_ ## field = src->st_ ## field ;
+		dst->st_ ## field = src->st_ ## field ;
 	STAT_ASSIGN ( dev );
 	STAT_ASSIGN ( ino );
 	STAT_ASSIGN ( mode );
