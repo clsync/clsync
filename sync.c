@@ -2383,9 +2383,9 @@ gboolean sync_trylocked(gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp) 
 
 	if (!sync_islocked(fpath)) {
 		if (sync_prequeue_loadmark(0, ctx_p, indexes_p, NULL, fpath, NULL,
-				evinfo->evmask,
 				evinfo->objtype_old,
 				evinfo->objtype_new,
+				evinfo->evmask,
 				0, 0, 0, &data->path_full, &data->path_full_len, evinfo)) {
 			critical("Cannot re-queue \"%s\" to be synced", fpath);
 			return FALSE;
