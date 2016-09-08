@@ -161,19 +161,20 @@ expire-after:20M\n\
 #define DEFAULT_SYNCHANDLER_ARGS_DIRECT		"\%INCLUDE-LIST\% \%destination-dir\%/"
 #define DEFAULT_SYNCHANDLER_ARGS_SHELL_NR	"synclist \%label\% \%INCLUDE-LIST-PATH\%"
 #define DEFAULT_SYNCHANDLER_ARGS_SHELL_R	"initialsync \%label\% \%INCLUDE-LIST\%"
-#define DEFAULT_SYNCHANDLER_ARGS_RDIRECT_E	"-aH --delete --exclude-from \%EXCLUDE-LIST-PATH\% --include-from \%INCLUDE-LIST-PATH\% --exclude=* \%watch-dir\%/ \%destination-dir\%/"
-#define DEFAULT_SYNCHANDLER_ARGS_RDIRECT_I	"-aH --delete --include-from \%INCLUDE-LIST-PATH\% --exclude=* \%watch-dir\%/ \%destination-dir\%/"
+#define DEFAULT_SYNCHANDLER_ARGS_RDIRECT_E	"-aH --delete --filter=\"merge,p- \%EXCLUDE-LIST-PATH\%\" --include-from \%INCLUDE-LIST-PATH\% --filter=\"-,p *\" \%watch-dir\%/ \%destination-dir\%/"
+#define DEFAULT_SYNCHANDLER_ARGS_RDIRECT_I	"-aH --delete --include-from \%INCLUDE-LIST-PATH\% --filter=\"-,p *\" \%watch-dir\%/ \%destination-dir\%/"
 #define DEFAULT_SYNCHANDLER_ARGS_RSHELL_E	"rsynclist \%label% \%INCLUDE-LIST-PATH\% %EXCLUDE-LIST-PATH%"
 #define DEFAULT_SYNCHANDLER_ARGS_RSHELL_I	"rsynclist \%label% \%INCLUDE-LIST-PATH\%"
 
 #define RSYNC_ARGS_E	{ 		\
 		"-aH", 			\
 		"--delete", 		\
-		"--exclude-from",	\
-		"\%EXCLUDE-LIST-PATH\%",\
+		"--filter=\"merge,p- ",	\
+		"\%EXCLUDE-LIST-PATH\%\"",\
 		"--include-from",	\
 		"\%INCLUDE-LIST-PATH\%",\
 		"--exclude=*",		\
+		"--filter=\"-,p *\"",	\
 		NULL }
 
 #define RSYNC_ARGS_I	{ 		\
@@ -181,7 +182,7 @@ expire-after:20M\n\
 		"--delete", 		\
 		"--include-from",	\
 		"\%INCLUDE-LIST-PATH\%",\
-		"--exclude=*",		\
+		"--filter=\"-,p *\"",	\
 		NULL }
 
 #define DEFAULT_PRESERVE_CAPABILITIES	( CAP_TO_MASK(CAP_DAC_READ_SEARCH) | CAP_TO_MASK(CAP_SETUID) | CAP_TO_MASK(CAP_SETGID) | CAP_TO_MASK(CAP_KILL) )

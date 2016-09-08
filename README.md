@@ -20,6 +20,7 @@ Contents
 12. Developing
 13. Articles
 14. See also
+15. Users' notes
 
 
 1. Name
@@ -381,4 +382,21 @@ LVEE (Russian):
 
 
                                                -- Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
+
+15. Users' notes
+----------------
+```
+To up the number of inode watchers:
+echo fs.inotify.max_user_watches=524288 | sudo tee -a /etc/sysctl.conf && sudo sysctl -p
+
+To avoid "cannot delete non-empty directory":
+http://www.arronwoods.com/blog/2015/03/getting-rsync-to-delete-old-non-empty-directories-containing-excluded-files/
+
+To filter out "file has vanished" etc from output:
+./clsync-start-rsyncdirect.sh 2>&1 | grep -v vanished | grep -v "^$"
+
+-L dir must be defined as an absolute path, this is different from -D -W -R
+
+             -- Giovanni Maruzzelli <gmaruzz@OpenTelecom.IT>
+```
 
