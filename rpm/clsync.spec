@@ -99,6 +99,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Thu Sep 29 2016 Andrew A. Savchenko <bircoph@gmail.com> - 0.4.2-1
+- Maintenance release, many bug fixes
+
 * Thu Nov 6 2014 Dmitry Yu Okunev <dyokunev@ut.mephi.ru> - 0.4-1
 - A lot of fixes
 
