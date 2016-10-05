@@ -1090,7 +1090,7 @@ This monitor subsystem cannot determine file creation event, but it can
 determine a directory where something happened. So
 .B clsync
 is have to rescan whole dir every time on any content change. Moreover, kqueue
-requires an open() on every watched file/dir. But FreeBSD doesn't allow to
+requires an open() on every watched file/dir. But FreeBSD doesn't allow one to
 open() symlink itself (without following) and it's highly invasively to open()
 pipes and devices. So
 .B clsync
@@ -2455,7 +2455,7 @@ equals to 23 and you're using
 .B clsync
 in conjunction with
 .BR rsync ,
-this may happend, for example in next cases:
+this may happen, for example, in the following cases:
 
 .RS
 
@@ -2500,7 +2500,7 @@ tries to read next files (in specified order):
 /etc/clsync/clsync.conf
 .RE
 
-This may be overrided with option
+This may be overridden with option
 .IR \-\-config\-file .
 
 .B clsync

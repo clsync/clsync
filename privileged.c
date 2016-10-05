@@ -632,7 +632,7 @@ int privileged_execvp_check_arguments(struct pa_options *opts, const char *u_fil
 	}
 
 	debug(1, "a_i == %i; SHARGS_MAX == %i; u_argc == %i", SHARGS_MAX, a_i, u_argc);
-	critical("Arguments are wrong. This should happend only on hacking attack.");
+	critical("Arguments are wrong. This should happen only on hacking attack.");
 	return EPERM;
 }
 
