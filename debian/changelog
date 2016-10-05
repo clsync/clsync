@@ -1,3 +1,12 @@
+clsync (0.4.2-1) unstable; urgency=medium
+
+  * New upstream release
+  * Bump standards version
+  * Harden
+  * Fix some typos
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Wed, 05 Oct 2016 11:31:46 +0100
+
 clsync (0.4.1-1) unstable; urgency=medium
 
   * New upstream release with a lot of fixes
