@@ -6,9 +6,9 @@ Uploaders: Barak A. Pearlmutter <bap@debian.org>, Dmitry Yu Okunev <dyokunev@ut.
 Build-Depends: debhelper (>= 9), libglib2.0-dev (>= 2.0.0),
 	       dh-autoreconf, libcgroup-dev, libcap-dev
 Standards-Version: 3.9.8
-Homepage: http://ut.mephi.ru/oss
+Homepage: https://ut.mephi.ru/oss
 Vcs-Git: git://anonscm.debian.org/collab-maint/clsync.git
-Vcs-Browser: http://anonscm.debian.org/gitweb/?p=collab-maint/clsync.git
+Vcs-Browser: https://anonscm.debian.org/gitweb/?p=collab-maint/clsync.git
 
 Package: clsync
 Recommends: rsync
