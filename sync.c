@@ -1247,9 +1247,59 @@ static inline int sync_exec_thread(ctx_t *ctx_p, indexes_t *indexes_p, thread_ca
 
 // } === SYNC_EXEC() ===
 
-static int sync_queuesync ( const char *fpath_rel, eventinfo_t *evinfo, ctx_t *ctx_p, indexes_t *indexes_p, queue_id_t queue_id )
+int fileischanged ( ctx_t *ctx_p, indexes_t *indexes_p, const char *path_rel, stat64_t *lstat_p, int is_deleted )
+{
+	if ( lstat_p == NULL || ( !ctx_p->flags[MODSIGN] && !FILETREECACHE_ENABLED ( ctx_p ) ) )
+		return 1;
+
+	debug ( 9, "Checking modification signature" );
+	filetree_cache_entry_t *finfo = indexes_filetreecache_get ( indexes_p, path_rel );
+
+	if ( finfo != NULL ) {
+		uint32_t diff;
+
+		if ( ! ( diff = stat_diff ( &finfo->dat.stat, lstat_p ) ) ) {
+			debug ( 8, "Modification signature: File not changed: \"%s\"", path_rel );
+			return 0;	// Skip file syncing if it's metadata not changed enough (according to "--modification-signature" setting)
+		}
+
+		debug ( 8, "Modification signature: stat_diff == 0x%o; significant diff == 0x%o (ctx_p->flags[MODSIGN] == 0x%o)", diff, diff & ctx_p->flags[MODSIGN], ctx_p->flags[MODSIGN] );
+
+		if ( is_deleted ) {
+			debug ( 8, "Modification signature: Deleting information about \"%s\"", path_rel );
+			filetree_cache_del ( ctx_p, path_rel );
+		} else {
+			debug ( 8, "Modification signature: Updating information about \"%s\"", path_rel );
+			memcpy ( &finfo->dat.stat, lstat_p, sizeof ( finfo->dat.stat ) );
+		}
+	} else {
+		filetree_cache_entry_data_t finfodat;
+		debug ( 8, "There's no information about this file/dir: \"%s\". Just remembering the current state.", path_rel );
+		// Adding file/dir information
+		filetree_cache_setdatato ( &finfodat, path_rel, lstat_p );
+		filetree_cache_add ( ctx_p, &finfodat );
+	}
+
+	return 1;
+}
+
+static int sync_queuesync ( const char *fpath_rel, eventinfo_t *evinfo, ctx_t *ctx_p, indexes_t *indexes_p, queue_id_t queue_id, stat64_t *st_p )
 {
 	debug ( 3, "sync_queuesync(\"%s\", ...): fsize == %lu; tres == %lu, queue_id == %u", fpath_rel, evinfo->fsize, ctx_p->bfilethreshold, queue_id );
+
+#ifdef VERYPARANOID
+	critical_on (fpath_rel == NULL);
+#endif
+#ifdef PARANOID
+	critical_on (evinfo == NULL);
+#endif
+
+	if ( ctx_p->flags[MODSIGN] && FILETREECACHE_ENABLED ( ctx_p ) ) {
+		if ( !fileischanged ( ctx_p, indexes_p, fpath_rel, st_p, evinfo->objtype_new == EOT_DOESNTEXIST ) ) {
+			debug ( 4, "The file/dir is not changed. Returning." );
+			return 0;
+		}
+	}
 
 	if ( queue_id == QUEUE_AUTO )
 		queue_id = ( evinfo->fsize > ctx_p->bfilethreshold ) ? QUEUE_BIGFILE : QUEUE_NORMAL;
@@ -1486,6 +1536,7 @@ int sync_initialsync_walk ( ctx_t *ctx_p, const char *dirpath, indexes_t *indexe
 			}
 		}
 
+		stat64_t *st_p = NULL;
 		if ( use_cache ) {
 			stat64_t *st_p, st;
 			filetree_cache_entry_data_t entry_dat;
@@ -1544,7 +1595,7 @@ int sync_initialsync_walk ( ctx_t *ctx_p, const char *dirpath, indexes_t *indexe
 			evinfo.objtype_new  = node->fts_info == FTS_D ? EOT_DIR : EOT_FILE;
 			evinfo.fsize        = fts_no_stat ? 0 : node->fts_statp->st_size;
 			debug ( 3, "queueing \"%s\" (depth: %i) with int-flags %p", node->fts_path, node->fts_level, ( void * ) ( unsigned long ) evinfo.flags );
-			int _ret = sync_queuesync ( path_rel, &evinfo, ctx_p, indexes_p, queue_id );
+			int _ret = sync_queuesync ( path_rel, &evinfo, ctx_p, indexes_p, queue_id, st_p );
 
 			if ( _ret ) {
 				error ( "Got error while queueing \"%s\".", node->fts_path );
@@ -1839,23 +1890,26 @@ int sync_initialsync ( const char *path, ctx_t *ctx_p, indexes_t *indexes_p, ini
 int sync_initialsync_use_cache ( const char *path, ctx_t *ctx_p, indexes_t *indexes_p, initsync_t initsync )
 {
 	debug ( 8, "\"%s\"", path );
+	rule_t *rules_p = ctx_p->rules;
 
 	if ( !FILETREECACHE_ENABLED ( ctx_p ) ) {		// No cache available
 		debug ( 3, "file tree cache is disabled" );
 		return sync_initialsync ( path, ctx_p, indexes_p, initsync );
 	}
 
-	char *path_rel = sync_path_abs2rel ( ctx_p, path, -1, NULL, NULL );
+	{
+		char *path_rel = sync_path_abs2rel ( ctx_p, path, -1, NULL, NULL );
 
-	if ( filetree_cache_get ( ctx_p, path_rel ) == NULL ) {	// If due to some reason the root directory is absent in the cache
+		if ( filetree_cache_get ( ctx_p, path_rel ) == NULL ) {	// If due to some reason the root directory is absent in the cache
+			free ( path_rel );
+			debug ( 3, "file tree cache is not filled" );
+			return sync_initialsync ( path, ctx_p, indexes_p, initsync | INITSYNC_CACHE );
+		}
+
 		free ( path_rel );
-		debug ( 3, "file tree cache is not filled" );
-		return sync_initialsync ( path, ctx_p, indexes_p, initsync | INITSYNC_CACHE );
 	}
 
-	free ( path_rel );
 	queue_id_t queue_id;
-
 	if ( initsync == INITSYNC_FULL_INSTANT )
 		queue_id = QUEUE_INSTANT;
 	else
@@ -1868,7 +1922,8 @@ int sync_initialsync_use_cache ( const char *path, ctx_t *ctx_p, indexes_t *inde
 	while ( i < cache_len ) {
 		stat64_t st;
 		filetree_cache_entry_t *entry = &ctx_p->filetree_cache[i++];
-		char *acc_path = entry->dat.path;
+		char *path_rel = entry->dat.path;
+		char *acc_path = path_rel;
 
 		if ( *acc_path == 0 )
 			acc_path = ".";
@@ -1897,11 +1952,18 @@ int sync_initialsync_use_cache ( const char *path, ctx_t *ctx_p, indexes_t *inde
 					debug ( 7, "Directory" );
 
 					if ( is_changed ) {
-						int rc = sync_initialsync ( acc_path, ctx_p, indexes_p, initsync | INITSYNC_CACHE );
 
-						if ( rc ) {
-							//filetree_cache_queueflush(ctx_p);
-							return rc;
+						ruleaction_t perm = rules_getperm ( path_rel, st.st_mode, rules_p, RA_WALK | RA_SYNC );
+
+						if ( ! ( perm & (RA_WALK | RA_SYNC) ) ) {
+							debug ( 3, "Rejecting walking and syncing \"%s\".", path_rel );
+						} else {
+							int rc = sync_initialsync ( acc_path, ctx_p, indexes_p, initsync | INITSYNC_CACHE );
+
+							if ( rc ) {
+								//filetree_cache_queueflush(ctx_p);
+								return rc;
+							}
 						}
 
 						continue;
@@ -1917,36 +1979,56 @@ int sync_initialsync_use_cache ( const char *path, ctx_t *ctx_p, indexes_t *inde
 		}
 
 		{
-			debug ( 7, "Sync a single object" );
-			eventinfo_t evinfo;
-			evinfo_initialevmask ( ctx_p, &evinfo, 0 );
+			ruleaction_t perm = rules_getperm ( path_rel, st.st_mode, rules_p, RA_SYNC );
 
-			switch ( ctx_p->flags[MODE] ) {
-				case MODE_SIMPLE:
-					SAFE ( sync_dosync ( entry->dat.path, evinfo.evmask, ctx_p, indexes_p ), debug ( 1, "fpath == \"%s\"; evmask == 0x%o", entry->dat.path, evinfo.evmask ); return -1; );
-					memcpy ( &entry->dat.stat, &st, sizeof ( st ) );
-					continue;
+			if ( ! ( perm & RA_SYNC ) ) {
+				debug ( 3, "Reject syncing file: \"%s\".", path_rel );
+			} else {
+				debug ( 7, "Sync a single file: \"%s\".", path_rel );
 
-				default:
-					break;
+#ifdef CACHESYNC_PREQUEUE
+				if ( sync_prequeue_loadmark ( 0, ctx_p, indexes_p, path_rel, path, &st,
+							EOT_FILE,
+							(st.st_mode & S_IFMT) == S_IFDIR ? EOT_DIR : EOT_FILE,
+							0, 0,
+							st.st_mode, st.st_size, NULL, NULL, NULL ) ) {
+					critical ( "Cannot re-queue \"%s\" to be synced", path );
+					return FALSE;
+				}
+
+#else
+				eventinfo_t evinfo;
+				evinfo_initialevmask ( ctx_p, &evinfo, 0 );
+
+				switch ( ctx_p->flags[MODE] ) {
+					case MODE_SIMPLE:
+						SAFE ( sync_dosync ( entry->dat.path, evinfo.evmask, ctx_p, indexes_p ), debug ( 1, "fpath == \"%s\"; evmask == 0x%o", entry->dat.path, evinfo.evmask ); return -1; );
+						memcpy ( &entry->dat.stat, &st, sizeof ( st ) );
+						continue;
+
+					default:
+						break;
+				}
+
+				evinfo.flags        = EVIF_NONE;
+				evinfo.seqid_min    = sync_seqid();
+				evinfo.seqid_max    = evinfo.seqid_min;
+				evinfo.objtype_old  = ( ( entry->dat.stat.st_mode & S_IFMT ) == S_IFDIR ) ? EOT_DIR : EOT_FILE;
+				evinfo.objtype_new  = ( ( st.st_mode & S_IFMT ) == S_IFDIR ) ? EOT_DIR : EOT_FILE;
+				evinfo.fsize        = st.st_size;
+				debug ( 3, "queueing \"%s\" with int-flags 0x%x", entry->dat.path, evinfo.flags );
+				int rc = sync_queuesync ( entry->dat.path, &evinfo, ctx_p, indexes_p, queue_id, &st );
+		
+				if ( rc ) {
+					error ( "Got error while queueing \"%s\".", entry->dat.path );
+					//filetree_cache_queueflush(ctx_p);
+					return rc;
+				}
+#endif
+
+
+				memcpy ( &entry->dat.stat, &st, sizeof ( st ) );
 			}
-
-			evinfo.flags        = EVIF_NONE;
-			evinfo.seqid_min    = sync_seqid();
-			evinfo.seqid_max    = evinfo.seqid_min;
-			evinfo.objtype_old  = ( ( entry->dat.stat.st_mode & S_IFMT ) == S_IFDIR ) ? EOT_DIR : EOT_FILE;
-			evinfo.objtype_new  = ( ( st.st_mode & S_IFMT ) == S_IFDIR ) ? EOT_DIR : EOT_FILE;
-			evinfo.fsize        = st.st_size;
-			debug ( 3, "queueing \"%s\" with int-flags 0x%x", entry->dat.path, evinfo.flags );
-			int rc = sync_queuesync ( entry->dat.path, &evinfo, ctx_p, indexes_p, queue_id );
-
-			if ( rc ) {
-				error ( "Got error while queueing \"%s\".", entry->dat.path );
-				//filetree_cache_queueflush(ctx_p);
-				return rc;
-			}
-
-			memcpy ( &entry->dat.stat, &st, sizeof ( st ) );
 		}
 	}
 
@@ -2231,9 +2313,15 @@ int sync_mark_walk_use_cache ( ctx_t *ctx_p, const char *dirpath, indexes_t *ind
 					path_abs = sync_path_rel2abs ( ctx_p, entry->dat.path,  -1, &path_abs_bufsize, path_abs );
 
 					if ( is_changed ) {
-						rc = sync_mark_walk ( ctx_p, path_abs, indexes_p );
-					} else {
 						ruleaction_t perm = rules_search_getperm ( entry->dat.path, S_IFDIR, rules_p, RA_WALK, NULL );
+
+						if ( ! ( perm & RA_WALK ) ) {
+							debug ( 2, "don't walking into the directory" );
+						} else {
+							rc = sync_mark_walk ( ctx_p, path_abs, indexes_p );
+						}
+					} else {
+						ruleaction_t perm = rules_search_getperm ( entry->dat.path, S_IFDIR, rules_p, RA_MONITOR, NULL );
 
 						if ( ! ( perm & RA_MONITOR ) ) {
 							debug ( 2, "don't mark the directory" );
@@ -2397,42 +2485,6 @@ int sync_dosync ( const char *fpath, uint32_t evmask, ctx_t *ctx_p, indexes_t *i
 	ret = cluster_unlock_all();
 #endif
 	return ret;
-}
-
-int fileischanged ( ctx_t *ctx_p, indexes_t *indexes_p, const char *path_rel, stat64_t *lstat_p, int is_deleted )
-{
-	if ( lstat_p == NULL || ( !ctx_p->flags[MODSIGN] && !FILETREECACHE_ENABLED ( ctx_p ) ) )
-		return 1;
-
-	debug ( 9, "Checking modification signature" );
-	filetree_cache_entry_t *finfo = indexes_filetreecache_get ( indexes_p, path_rel );
-
-	if ( finfo != NULL ) {
-		uint32_t diff;
-
-		if ( ! ( diff = stat_diff ( &finfo->dat.stat, lstat_p ) ) ) {
-			debug ( 8, "Modification signature: File not changed: \"%s\"", path_rel );
-			return 0;	// Skip file syncing if it's metadata not changed enough (according to "--modification-signature" setting)
-		}
-
-		debug ( 8, "Modification signature: stat_diff == 0x%o; significant diff == 0x%o (ctx_p->flags[MODSIGN] == 0x%o)", diff, diff & ctx_p->flags[MODSIGN], ctx_p->flags[MODSIGN] );
-
-		if ( is_deleted ) {
-			debug ( 8, "Modification signature: Deleting information about \"%s\"", path_rel );
-			filetree_cache_del ( ctx_p, path_rel );
-		} else {
-			debug ( 8, "Modification signature: Updating information about \"%s\"", path_rel );
-			memcpy ( &finfo->dat.stat, lstat_p, sizeof ( finfo->dat.stat ) );
-		}
-	} else {
-		filetree_cache_entry_data_t finfodat;
-		debug ( 8, "There's no information about this file/dir: \"%s\". Just remembering the current state.", path_rel );
-		// Adding file/dir information
-		filetree_cache_setdatato ( &finfodat, path_rel, lstat_p );
-		filetree_cache_add ( ctx_p, &finfodat );
-	}
-
-	return 1;
 }
 
 static inline int sync_indexes_fpath2ei_addfixed ( ctx_t *ctx_p, indexes_t *indexes_p, const char *fpath, eventinfo_t *evinfo )
@@ -2752,7 +2804,7 @@ void _sync_idle_dosync_collectedevents ( gpointer fpath_gp, gpointer evinfo_gp, 
 			debug ( 3, "\"%s\" is locked, dropping to waitlock queue", fpath );
 			eventinfo_t *evinfo_dup = xmalloc ( sizeof ( *evinfo_dup ) );
 			memcpy ( evinfo_dup, evinfo, sizeof ( *evinfo ) );
-			sync_queuesync ( fpath, evinfo_dup, ctx_p, indexes_p, QUEUE_LOCKWAIT );
+			sync_queuesync ( fpath, evinfo_dup, ctx_p, indexes_p, QUEUE_LOCKWAIT, NULL );
 			return;
 		}
 
@@ -2825,9 +2877,9 @@ gboolean sync_trylocked ( gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp
 
 	if ( !sync_islocked ( fpath ) ) {
 		if ( sync_prequeue_loadmark ( 0, ctx_p, indexes_p, NULL, fpath, NULL,
-		                              evinfo->evmask,
 		                              evinfo->objtype_old,
 		                              evinfo->objtype_new,
+		                              evinfo->evmask,
 		                              0, 0, 0, &data->path_full, &data->path_full_len, evinfo ) ) {
 			critical ( "Cannot re-queue \"%s\" to be synced", fpath );
 			return FALSE;
@@ -2881,7 +2933,7 @@ void sync_queuesync_wrapper ( gpointer fpath_gp, gpointer evinfo_gp, gpointer ar
 	eventinfo_t *evinfo	  = ( eventinfo_t * ) evinfo_gp;
 	ctx_t *ctx_p 		  = ( ( struct dosync_arg * ) arg_gp )->ctx_p;
 	indexes_t *indexes_p 	  = ( ( struct dosync_arg * ) arg_gp )->indexes_p;
-	sync_queuesync ( fpath_rel, evinfo, ctx_p, indexes_p, QUEUE_AUTO );
+	sync_queuesync ( fpath_rel, evinfo, ctx_p, indexes_p, QUEUE_AUTO, NULL );
 	return;
 }
 
