@@ -243,5 +243,7 @@ expire-after:20M\n\
 #define BSM_QUEUE_LENGTH_MAX		(1024*1024)
 #define GIO_QUEUE_LENGTH_MAX		BSM_QUEUE_LENGTH_MAX
 
+// see --file-tree-cache-save-interval in the manpage
+#define DEFAULT_FILETREE_CACHE_SAVE_INTERVAL	-1
 
 #endif

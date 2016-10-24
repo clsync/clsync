@@ -1538,6 +1538,10 @@ int sync_initialsync_walk ( ctx_t *ctx_p, const char *dirpath, indexes_t *indexe
 
 		stat64_t *st_p = NULL;
 		if ( use_cache ) {
+			const char *path_rel_cache = path_rel;
+
+			if (*path_rel_cache == '/') path_rel_cache++;
+
 			stat64_t *st_p, st;
 			filetree_cache_entry_data_t entry_dat;
 
@@ -4398,6 +4402,10 @@ int sync_sighandler ( sighandler_arg_t *sighandler_arg_p )
 				sync_dump ( ctx_p, ctx_p->dump_path );
 				break;
 
+			case SIGUSR_SAVE_FILETREECACHE:
+				filetree_cache_save ( ctx_p );
+				break;
+
 			default:
 				error ( "Unknown signal: %i. Exit.", signal );
 				sync_switch_state ( ctx_p, pthread_parent, STATE_TERM );
@@ -4436,6 +4444,7 @@ int sync_run ( ctx_t *ctx_p )
 		sigaddset ( &sigset_sighandler, SIGUSR_THREAD_GC );
 		sigaddset ( &sigset_sighandler, SIGUSR_INITSYNC );
 		sigaddset ( &sigset_sighandler, SIGUSR_DUMP );
+		sigaddset ( &sigset_sighandler, SIGUSR_SAVE_FILETREECACHE );
 		i = 0;
 
 		while ( i < MAXSIGNALNUM ) {
@@ -4495,25 +4504,8 @@ int sync_run ( ctx_t *ctx_p )
 	}
 	debug ( 9, "Loading file tree cache, if required" );
 
-	if ( FILETREECACHE_ENABLED ( ctx_p ) ) {
-		ret = filetree_cache_load ( ctx_p );
-
-		switch ( ret ) {
-			case ENOENT:
-				ret = 0;
-
-			case 0:
-				break;
-
-			default:
-				errno = ret;
-				error ( "Cannot load file-tree cache: \"%s\"", ctx_p->filetree_cache_path );
-				break;
-		}
-
-		if ( ret )
-			return ret;
-	}
+	if ( FILETREECACHE_ENABLED ( ctx_p ) )
+		SAFE ( filetree_cache_load ( ctx_p ), return _SAFE_rc );
 
 	debug ( 9, "Loading dynamical libraries" );
 
@@ -4780,10 +4772,9 @@ int sync_run ( ctx_t *ctx_p )
 	rsync_escape_cleanup();
 	debug ( 9, "Saving file tree cache if required" );
 
-	if ( FILETREECACHE_ENABLED ( ctx_p ) ) {
-		if ( ret == 0 )
-			ret = filetree_cache_save ( ctx_p );
-	}
+	// Saving current filetree_cache to disk
+	if ( FILETREECACHE_ENABLED ( ctx_p ) )
+		SAFE ( filetree_cache_save ( ctx_p ),	ret = _SAFE_rc );
 
 	// Removing hash-tables
 	{

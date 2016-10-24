@@ -108,6 +108,24 @@ static inline void assign_stat64_stat ( stat64_t *dst, struct stat *src )
 }
 #endif
 
+/*
+#ifndef INIT_STRUCT_STAT64_PADDING
+#	define INIT_STRUCT_STAT64_PADDING INIT_STRUCT_STAT_PADDING
+#endif
+#ifndef INIT_STRUCT_STAT_PADDING
+#	define INIT_STRUCT_STAT_PADDING(st) _init_struct_stat_padding(&st)
+static inline void _init_struct_stat_padding(stat64_t *st) {
+#	ifdef __x86_64__
+	st->__pad0 = 0;
+	memset(st->__syscall_slong_t, 0, sizeof(st->__syscall_slong_t));
+#	else
+	st->__pad1 = 0;
+	st->__pad2 = 0;
+#	endif
+}
+#endif
+*/
+
 #ifdef CLSYNC_ITSELF
 #	ifndef O_PATH
 #		warning O_PATH is not set

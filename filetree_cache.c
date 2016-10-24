@@ -52,7 +52,7 @@ filetree_cache_flush (
 	return 0;
 }
 
-int
+filetree_cache_entry_t *
 _filetree_cache_update (
     ctx_t *ctx_p,
     filetree_cache_entry_t *entry_old,
@@ -70,7 +70,7 @@ _filetree_cache_update (
 		if ( entry_old == NULL ) {
 			errno = ENOENT;
 			critical ( "Cannot find a file tree cache entry \"%s\"", entry_data_new->path );
-			return errno;
+			return NULL;
 		}
 	}
 
@@ -79,11 +79,11 @@ _filetree_cache_update (
 	entry_old = filetree_cache_get ( ctx_p, entry_data_new->path );
 	debug ( 12, "\"%s\" (%p, %i): mtime: %u", entry_old->dat.path, entry_old, entry_old->id, entry_old->dat.stat.st_mtime );
 #endif
-	return 0;
+	return entry_old;
 }
 
 
-int
+filetree_cache_entry_t *
 _filetree_cache_add (
     ctx_t *ctx_p,
     filetree_cache_entry_data_t *data_entry
@@ -109,7 +109,8 @@ _filetree_cache_add (
 		debug ( 8, "reallocating buffer to item-size: %u", ctx_p->filetree_cache_size );
 		ctx_p->filetree_cache = xrealloc ( ctx_p->filetree_cache, sizeof ( *ctx_p->filetree_cache ) * ctx_p->filetree_cache_size );
 
-		if ( old_ptr != ctx_p->filetree_cache ) {	// rebuilding indexes if the pointer changed
+		if ( old_ptr != ctx_p->filetree_cache ) {
+			debug ( 8, "rebuilding indexes because the pointer has changed" );
 			indexes_filetreecache_flush ( ctx_p->indexes_p );
 			size_t i = 0;
 
@@ -131,7 +132,7 @@ _filetree_cache_add (
 	entry->id = entry_id;
 	indexes_filetreecache_add ( ctx_p->indexes_p, entry );
 	debug ( 8, "end" );
-	return 0;
+	return entry;
 }
 
 
@@ -147,7 +148,7 @@ filetree_cache_add (
 #endif
 	debug ( 8, "" );
 	pthread_mutex_lock ( &filetree_cache_mutex );
-	int rc = _filetree_cache_add ( ctx_p, data_entry );
+	int rc = _filetree_cache_add ( ctx_p, data_entry ) == NULL ? (errno?errno:-1) : 0;
 	pthread_mutex_unlock ( &filetree_cache_mutex );
 	return rc;
 }
@@ -163,7 +164,7 @@ filetree_cache_update (
 #endif
 	debug ( 8, "" );
 	pthread_mutex_lock ( &filetree_cache_mutex );
-	int rc = _filetree_cache_update ( ctx_p, NULL, data_entry );
+	int rc = _filetree_cache_update ( ctx_p, NULL, data_entry ) == NULL ? (errno?errno:-1) : 0;
 	pthread_mutex_unlock ( &filetree_cache_mutex );
 	return rc;
 }
@@ -184,9 +185,9 @@ filetree_cache_set (
 	filetree_cache_entry_t *entry_old = filetree_cache_get ( ctx_p, data_entry->path );
 
 	if ( entry_old == NULL )
-		rc = _filetree_cache_add ( ctx_p, data_entry );
+		rc = _filetree_cache_add ( ctx_p, data_entry ) == NULL ? (errno?errno:-1) : 0;
 	else
-		rc = _filetree_cache_update ( ctx_p, entry_old, data_entry );
+		rc = _filetree_cache_update ( ctx_p, entry_old, data_entry ) == NULL ? (errno?errno:-1) : 0;
 
 	pthread_mutex_unlock ( &filetree_cache_mutex );
 	return rc;
@@ -301,7 +302,7 @@ filetree_cache_queueflush (
 
 	while ( queuedentry_id < ctx_p->filetree_cache_queued_add_len ) {
 		filetree_cache_entry_data_t *entrydata = &ctx_p->filetree_cache_queued_add[queuedentry_id];
-		critical_on ( _filetree_cache_add ( ctx_p, entrydata ) );
+		critical_on ( _filetree_cache_add ( ctx_p, entrydata ) == NULL );
 		queuedentry_id++;
 	}
 
@@ -310,31 +311,123 @@ filetree_cache_queueflush (
 	return 0;
 }
 
+pthread_t filetree_cache_saver_thread;
+static char filetree_cache_saver_handler_running = 0;
+
+int
+filetree_cache_saver_handler (
+    ctx_t *ctx_p
+)
+{
+	if (ctx_p->filetree_cache_save_interval <= 0) {
+		debug ( 5, "ctx_p->filetree_cache_save_interval <= 0" );
+		return 0;
+	}
+
+	debug ( 5, "started" );
+
+	while ( filetree_cache_saver_handler_running ) {
+		debug ( 9, "sleeping for %i second(s)", ctx_p->filetree_cache_save_interval );
+		sleep ( ctx_p->filetree_cache_save_interval );
+		debug ( 9, "wake up" );
+		filetree_cache_save ( ctx_p );
+	}
+	return 0;
+}
+
+int
+filetree_cache_init (	// TODO: Implement mmap() support
+    ctx_t *ctx_p
+)
+{
+	debug ( 7, "\"%s\"", ctx_p->filetree_cache_path );
+	SAFE ( pthread_mutex_lock ( &filetree_cache_mutex ), return errno );
+
+	stat64_t st;
+	int rc = lstat64 ( ctx_p->filetree_cache_path, &st );
+
+	if ( rc == -1 ) {
+		FILE *f = fopen ( ctx_p->filetree_cache_path, "w" );
+		if ( f == NULL )
+			goto filetree_cache_init_error;
+
+		SAFE ( fclose ( f ), goto filetree_cache_init_error );
+	}
+
+	FILE *f = fopen ( ctx_p->filetree_cache_path, "r+" );
+
+	if ( f == NULL )
+		goto filetree_cache_init_error;
+
+	ctx_p->filetree_cache_f = f;
+
+	filetree_cache_saver_handler_running = 1;
+	SAFE ( pthread_create ( &filetree_cache_saver_thread, NULL, ( void * ( * ) ( void * ) ) filetree_cache_saver_handler, ctx_p ), goto filetree_cache_init_error );
+
+	pthread_mutex_unlock ( &filetree_cache_mutex );
+	debug ( 9, "end" );
+	return 0;
+
+filetree_cache_init_error:
+	if (f != NULL)
+		fclose ( f );
+
+	pthread_mutex_unlock ( &filetree_cache_mutex );
+	debug ( 7, "end (error)" );
+	return errno;
+}
+
+int
+filetree_cache_deinit (	// TODO: Implement mmap() support
+    ctx_t *ctx_p
+)
+{
+	debug ( 7, "waiting for filetree_cache_saver_thread to quit" );
+
+	filetree_cache_saver_handler_running = 0;
+	SAFE ( pthread_join ( filetree_cache_saver_thread, NULL ), return errno );
+
+	debug ( 7, "cleaning up" );
+
+	SAFE ( pthread_mutex_lock ( &filetree_cache_mutex ), return errno );
+
+	SAFE ( fclose ( ctx_p->filetree_cache_f ), goto filetree_cache_deinit_error );
+
+	ctx_p->filetree_cache_f = NULL;
+
+	pthread_mutex_unlock ( &filetree_cache_mutex );
+	debug ( 9, "end" );
+	return 0;
+
+filetree_cache_deinit_error:
+	pthread_mutex_unlock ( &filetree_cache_mutex );
+	debug ( 7, "end (error)" );
+	return errno;
+}
+
 int
 filetree_cache_load (	// TODO: Implement mmap() support
     ctx_t *ctx_p
 )
 {
 	debug ( 8, "\"%s\"", ctx_p->filetree_cache_path );
+
 	filetree_cache_flush ( ctx_p, 1 );
+
+	FILE *f = ctx_p->filetree_cache_f;
+
+#ifdef PARANOID
+	assert ( f != NULL );
+#endif
+
 	stat64_t st;
-	int rc = lstat64 ( ctx_p->filetree_cache_path, &st );
-
-	if ( rc == -1 ) {
-		pthread_mutex_unlock ( &filetree_cache_mutex );
-		return errno;
-	}
-
-	FILE *f = fopen ( ctx_p->filetree_cache_path, "r" );
-
-	if ( f == NULL ) {
-		pthread_mutex_unlock ( &filetree_cache_mutex );
-		return errno;
-	}
+	SAFE ( fstat64 ( fileno ( f ), &st ),	goto filetree_cache_load_error );
+	SAFE ( fflush( f ),			goto filetree_cache_load_error );
+	SAFE ( fseek(f, 0L, SEEK_SET),		goto filetree_cache_load_error );
 
 	ctx_p->filetree_cache_len  = 0;
 	ctx_p->filetree_cache_size = ( st.st_size / sizeof ( *ctx_p->filetree_cache ) ) + 1 + ALLOC_PORTION;
-	ctx_p->filetree_cache      = xmalloc ( st.st_size * sizeof ( *ctx_p->filetree_cache ) );
+	ctx_p->filetree_cache      = xmalloc ( ctx_p->filetree_cache_size * sizeof ( *ctx_p->filetree_cache ) );
 
 	do {
 		filetree_cache_entry_data_t buf[ALLOC_PORTION];
@@ -344,8 +437,7 @@ filetree_cache_load (	// TODO: Implement mmap() support
 #ifdef PARANOID
 			assert ( errno != 0 );
 #endif
-			pthread_mutex_unlock ( &filetree_cache_mutex );
-			return errno;
+			goto filetree_cache_load_error;
 		}
 
 		debug ( 8, "Got %i records", r );
@@ -353,19 +445,24 @@ filetree_cache_load (	// TODO: Implement mmap() support
 		i = 0;
 
 		while ( i < r ) {
+			filetree_cache_entry_t *entry;
 			debug ( 8, "adding record %i (mtime: %u)", i, buf[i].stat.st_mtime );
-			rc = _filetree_cache_add ( ctx_p, &buf[i++] );
+			SAFE ( ( entry = _filetree_cache_add ( ctx_p, &buf[i] ) ) == NULL , goto filetree_cache_load_error );
 
-			if ( rc ) {
-				pthread_mutex_unlock ( &filetree_cache_mutex );
-				return rc;
-			}
+			entry->is_saved = 1;
+
+			i++;
 		}
 	} while ( !feof ( f ) );
 
-	rc = fclose ( f );
 	pthread_mutex_unlock ( &filetree_cache_mutex );
-	return rc;
+	debug ( 9, "end" );
+	return 0;
+
+filetree_cache_load_error:
+	pthread_mutex_unlock ( &filetree_cache_mutex );
+	debug ( 7, "end (error)" );
+	return errno;
 }
 
 int
@@ -374,11 +471,15 @@ filetree_cache_save (	// TODO: Implement mmap() support [much faster]
 )
 {
 	debug ( 7, "" );
-	pthread_mutex_lock ( &filetree_cache_mutex );
-	FILE *f = fopen ( ctx_p->filetree_cache_path, "w" );
+	SAFE ( pthread_mutex_lock ( &filetree_cache_mutex ), return errno );
 
-	if ( f == NULL )
-		return errno;
+	FILE *f = ctx_p->filetree_cache_f;
+
+#ifdef PARANOID
+	assert ( f != NULL );
+#endif
+
+	//SAFE ( fseek(f, 0L, SEEK_SET), goto filetree_cache_save_error );
 
 	size_t entry_id = 0;
 
@@ -386,25 +487,43 @@ filetree_cache_save (	// TODO: Implement mmap() support [much faster]
 		filetree_cache_entry_t *entry = &ctx_p->filetree_cache[entry_id++];
 		debug ( 8, "Saving entry #%i \"%s\" (%p, mtime: %u)", entry->id, entry->dat.path, entry, entry->dat.stat.st_mtime );
 
-		if ( entry->is_saved )
+		if ( entry->is_saved ) {
+			debug ( 9, "Already on the disk, skipping" );
 			continue;
+		}
 
 		int rc = fseek ( f, entry->id * sizeof ( entry->dat ), SEEK_SET );
 
-		if ( rc == -1 )
-			return errno;
+		if ( rc == -1 ) {
+			error ( "Got error from fseek()" );
+			goto filetree_cache_save_error;
+		}
 
+		entry->is_saved = 1;
+
+		debug ( 9, "Writting to the disk" );
 		size_t w = fwrite ( &entry->dat, sizeof ( entry->dat ), 1, f );
 
 		if ( w != 1 ) {
 #ifdef PARANOID
 			assert ( errno != 0 );
 #endif
-			return errno;
+			error ( "Got error from fwrite()" );
+			goto filetree_cache_save_error;
 		}
 	};
 
+	SAFE ( ftruncate ( fileno ( f ) , ftell ( f ) ),	goto filetree_cache_save_error );
+	SAFE ( fflush( f ),					goto filetree_cache_save_error );
+
 	pthread_mutex_unlock ( &filetree_cache_mutex );
 
+	debug ( 9, "end" );
 	return 0;
+
+filetree_cache_save_error:
+	pthread_mutex_unlock ( &filetree_cache_mutex );
+
+	debug ( 7, "end (error)" );
+	return errno;
 }

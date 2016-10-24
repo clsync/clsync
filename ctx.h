@@ -202,6 +202,7 @@ enum sigusr_enum {
 	SIGUSR_THREAD_GC	= 10,
 	SIGUSR_INITSYNC  	= 12,
 	SIGUSR_BLOPINT		= 16,
+	SIGUSR_SAVE_FILETREECACHE = 22,
 	SIGUSR_DUMP		= 29,
 };
 
@@ -368,10 +369,11 @@ struct ctx {
 	size_t					 filetree_cache_size;
 	size_t					 filetree_cache_len;
 	char					*filetree_cache_path;
-	long					 filetree_cache_interval;
+	long					 filetree_cache_save_interval;
 	struct filetree_cache_entry_data	*filetree_cache_queued_add;
 	size_t					 filetree_cache_queued_add_size;
 	size_t					 filetree_cache_queued_add_len;
+	FILE                                    *filetree_cache_f;
 
 	size_t watchdirlen;
 	size_t destdirlen;

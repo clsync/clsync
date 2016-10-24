@@ -235,8 +235,10 @@ issues on file systems with big
 .BR getdents (2)
 latencies (like NFS, CephFS and so on).
 
-Use case use value "/dev/null" to enable runtime cache but don't save
-it.
+.B "An use case:"
+use value "/dev/null" to enable runtime cache but don't save it.
+
+Keep in mind every record (for every scanned directory) takes more than 4KiB on disk.
 
 The default value is "".
 .PP
@@ -250,9 +252,11 @@ Sets interval (in seconds) to save file tree information into the cache file
 .BR \-\-file\-tree\-cache 
 option).
 
-You can set "-1". To do not save the cache by interval (only on quit).
+You can set "-1". To do not save the cache by interval (only on quit). You
+can manually trigger a cache saving by signal 22 (see
+.BR SIGNALS )
 
-The default value is "3600".
+The default value is "-1".
 .PP
 .RE
 
@@ -2467,6 +2471,9 @@ for children)
 kills children)
 
 16 \- interrupts sleep()/select() and wait() [for debugging and internal uses]
+
+22 \- save file tree cache (see option
+.IR \-\-file\-tree\-cache )
 
 29 \- dump information to
 .IR dump\-dir

@@ -348,6 +348,30 @@ void _debug ( int debug_level, const char *const function_name, const char *fmt,
 }
 #endif
 
+#ifdef _DEBUG_FORCE
+int _dmemcmp(const void *p1, const void *p2, size_t n)
+{
+	size_t i = 0;
+	const char *s1 = p1;
+	const char *s2 = p2;
+
+	char diff;
+
+	while ( i < n ) {
+		diff = s2[i] - s1[i];
+
+		debug ( 95, "%i: %i %i: %i", i, s1[i], s2[i], diff );
+
+		if ( diff )
+			return diff;
+
+		i++;
+	}
+
+	return 0;
+}
+#endif
+
 void error_init ( void *_outputmethod, int *_quiet, int *_verbose, int *_debug )
 {
 	outputmethod 	= _outputmethod;

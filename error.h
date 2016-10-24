@@ -35,6 +35,7 @@ extern void _critical ( const char *const function_name, const char *fmt, ... );
 extern void _error ( const char *const function_name, const char *fmt, ... );
 #define error(...) 				_error(__FUNCTION__, __VA_ARGS__)
 #define error_on(cond)	  {if (unlikely(cond)) {error("Error: ("TOSTR(cond)") != 0");}}
+#define error_noerrno(...) { int old_errno = errno; errno = 0; error(__VA_ARGS__); errno = old_errno; }
 
 extern void _warning ( const char *const function_name, const char *fmt, ... );
 #define warning(...) 				_warning(__FUNCTION__, __VA_ARGS__)
@@ -55,6 +56,13 @@ extern void _debug ( int debug_level, const char *const function_name, const cha
 #define debug_call(debug_level, code)			debug(debug_level, "%s -> %i", TOSTR(code), code)
 
 #define critical_or_warning(cond, ...) ((cond) ? _critical : _warning)(__FUNCTION__, __VA_ARGS__)
+
+#ifdef _DEBUG_FORCE
+extern int _dmemcmp(const void *p1, const void *p2, size_t n);
+#	define dmemcmp(...) _dmemcmp(__VA_ARGS__)
+#else
+#	define dmemcmp(...)   memcmp(__VA_ARGS__)
+#endif
 
 enum ipc_type {
 	IPCT_PRIVATE,

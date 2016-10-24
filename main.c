@@ -1062,7 +1062,10 @@ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char *arg, paramso
 			break;
 
 		case FILETREE_CACHE_SAVEINTERVAL:
-			ctx_p->filetree_cache_interval	= ( unsigned int ) xstrtol ( arg, &ret );
+			ctx_p->filetree_cache_save_interval	= ( unsigned int ) xstrtol ( arg, &ret );
+			if (ctx_p->filetree_cache_save_interval <= 0 && ctx_p->filetree_cache_save_interval != -1) {
+				return EINVAL;
+			}
 			break;
 
 		case CUSTOMSIGNALS:
@@ -2668,6 +2671,8 @@ int main ( int _argc, char *_argv[] )
 	ctx_p->bfilethreshold			 = DEFAULT_BFILETHRESHOLD;
 	ctx_p->rsyncinclimit			 = DEFAULT_RSYNCINCLUDELINESLIMIT;
 	ctx_p->synctimeout			 = DEFAULT_SYNCTIMEOUT;
+	ctx_p->filetree_cache_f			 = NULL;
+	ctx_p->filetree_cache_save_interval	 = DEFAULT_FILETREE_CACHE_SAVE_INTERVAL;
 #ifdef CLUSTER_SUPPORT
 	ctx_p->cluster_hash_dl_min		 = DEFAULT_CLUSTERHDLMIN;
 	ctx_p->cluster_hash_dl_max		 = DEFAULT_CLUSTERHDLMAX;
@@ -3184,6 +3189,9 @@ int main ( int _argc, char *_argv[] )
 		}
 	}
 
+	if ( FILETREECACHE_ENABLED ( ctx_p ) )
+		SAFE ( filetree_cache_init ( ctx_p ), ret = _SAFE_rc );
+
 #ifdef CAPABILITIES_SUPPORT
 	debug ( 1, "Preserving Linux capabilities" );
 
@@ -3386,6 +3394,9 @@ int main ( int _argc, char *_argv[] )
 		}
 	}
 
+	if ( FILETREECACHE_ENABLED ( ctx_p ) )
+		SAFE ( filetree_cache_deinit ( ctx_p ),	ret = _SAFE_rc );
+
 	if ( ( !ctx_p->flags[DONTUNLINK] ) && ( ctx_p->listoutdir != NULL ) && rm_listoutdir ) {
 		debug ( 2, "rmdir(\"%s\")", ctx_p->listoutdir );
 
@@ -3412,6 +3423,9 @@ int main ( int _argc, char *_argv[] )
 
 	if ( ctx_p->rulfpathsize )
 		free ( ctx_p->rulfpath );
+
+	if ( ret )
+		error ( "exiting with an error" );
 
 	error_deinit();
 	ctx_cleanup ( ctx_p );

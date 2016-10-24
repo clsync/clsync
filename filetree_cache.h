@@ -39,6 +39,8 @@ struct filetree_cache_entry {
 typedef struct filetree_cache_entry filetree_cache_entry_t;
 
 extern int filetree_cache_flush ( ctx_t *ctx_p, char dontunlock );
+extern int filetree_cache_init ( ctx_t *ctx_p );
+extern int filetree_cache_deinit ( ctx_t *ctx_p );
 extern int filetree_cache_load ( ctx_t *ctx_p );
 extern int filetree_cache_save ( ctx_t *ctx_p );
 
@@ -55,6 +57,8 @@ static inline filetree_cache_entry_t *filetree_cache_get ( ctx_t *ctx_p, const c
 #ifdef PARANOID
 	assert ( path != NULL );
 #endif
+	if (*path == '/') path++;
+
 	filetree_cache_entry_t *r = indexes_filetreecache_get ( ctx_p->indexes_p, path );
 	debug ( 8, "\"%s\" => %p", path, r );
 	return r;
@@ -66,13 +70,43 @@ static inline char filetree_cache_comparestat ( filetree_cache_entry_t *entry, s
 	assert ( entry != NULL );
 	assert ( stat != NULL );
 #endif
-	stat64_t  stcmp_a, stcmp_b;
+
+	stat64_t *stat_a = stat, *stat_b = &entry->dat.stat;
+
+#define ST_CMP( field ) { if (stat_a->field != stat_b->field) { debug ( 20, "field \"" XTOSTR ( field ) "\" doesn't match (%lu != %lu)", stat_a->field, stat_b->field ); return stat_b->field - stat_a->field; } }
+
+	ST_CMP ( st_dev		);
+	ST_CMP ( st_ino		);
+	ST_CMP ( st_mode	);
+	ST_CMP ( st_uid		);
+	ST_CMP ( st_gid		);
+	ST_CMP ( st_rdev	);
+	ST_CMP ( st_size	);
+	ST_CMP ( st_atime	);
+	//ST_CMP ( st_atime_nsec	);
+	ST_CMP ( st_mtime	);
+	//ST_CMP ( st_mtime_nsec	);
+	ST_CMP ( st_ctime	);
+	//ST_CMP ( st_ctime_nsec	);
+
+#undef ST_CMP
+
+	return 0;
+
+/*	stat64_t  stcmp_a, stcmp_b;
 	memcpy ( &stcmp_a,  stat,	     sizeof ( *stat ) );
 	memcpy ( &stcmp_b, &entry->dat.stat, sizeof ( entry->dat.stat ) );
 	stcmp_a.st_nlink   = stcmp_b.st_nlink   = 0; // Do not compare amount of hard links
 	stcmp_a.st_blksize = stcmp_b.st_blksize = 0; // Do not compare block size (it's FS-depended thing, not content-depended)
 	stcmp_a.st_blocks  = stcmp_b.st_blocks  = 0; // Do not compare amount of blocks (it's FS-depended thing, not content-depended), there's st_size for content-depended compare
-	return memcmp ( &stcmp_a, &stcmp_b,  sizeof ( stcmp_a ) );
+	INIT_STRUCT_STAT64_PADDING ( stcmp_a );      // Do not compare padding (there's random data)
+	INIT_STRUCT_STAT64_PADDING ( stcmp_b );      // Do not compare padding (there's random data)
+
+	char result = dmemcmp ( &stcmp_a, &stcmp_b,  sizeof ( stcmp_a ) );
+
+	debug (9, "result == %i", result);
+
+	return result;*/
 }
 
 static inline void filetree_cache_setdatato ( filetree_cache_entry_data_t *entrydat, const char *path, stat64_t *st_p )
@@ -82,6 +116,9 @@ static inline void filetree_cache_setdatato ( filetree_cache_entry_data_t *entry
 	assert ( path     != NULL );
 	assert ( st_p     != NULL );
 #endif
+
+	if (*path == '/') path++;
+
 	memcpy ( &entrydat->stat, st_p, sizeof ( entrydat->stat ) );
 	entrydat->path_len = strlen ( path );
 	memcpy (  entrydat->path, path, entrydat->path_len );
