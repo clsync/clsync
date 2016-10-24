@@ -1065,9 +1065,11 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 
 		case FILETREE_CACHE_SAVEINTERVAL:
 			ctx_p->filetree_cache_save_interval	= ( unsigned int ) xstrtol ( arg, &ret );
-			if (ctx_p->filetree_cache_save_interval <= 0 && ctx_p->filetree_cache_save_interval != -1) {
+
+			if ( ctx_p->filetree_cache_save_interval <= 0 && ctx_p->filetree_cache_save_interval != -1 ) {
 				return EINVAL;
 			}
+
 			break;
 
 		case CUSTOMSIGNALS:

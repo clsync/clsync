@@ -716,7 +716,6 @@ int pa_setup ( struct pa_options *opts, ctx_t *ctx_p, uid_t *exec_uid_p, gid_t *
 int pa_unsetup ( struct pa_options *opts )
 {
 	( void ) opts;
-
 #ifdef TODO_FIX
 	// segfaults: gdb --args clsync -K lxc-brother-atomic-sync -l jabber --pre-exit-hook wlxc-stop --chroot= --pivot-root=off -d9 -b0 -Ystderr
 	free ( opts->exithookfile );
@@ -2098,7 +2097,6 @@ int privileged_deinit ( ctx_t *ctx_p )
 #  define ARGS	            PA_DIE, NULL
 # endif
 	SAFE ( privileged_action ( ARGS ), ret = errno );
-
 # ifdef HL_LOCK_TRIES_AUTO
 	{
 		int i = 0;

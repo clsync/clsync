@@ -480,7 +480,6 @@ int thread_gc ( ctx_t *ctx_p )
 int thread_cleanup ( ctx_t *ctx_p )
 {
 	( void ) ctx_p;
-
 	debug ( 3, "" );
 	threadsinfo_t *threadsinfo_p = thread_info_lock();
 #ifdef PARANOID
@@ -555,7 +554,6 @@ int exec_argv ( char **argv, int *child_pid )
 	int status;
 	// Forking
 	pid = privileged_fork_execvp ( argv[0], ( char *const * ) argv );
-
 //	debug ( 3, "After fork thread %p"")".", pthread_self() );
 	debug ( 3, "Child pid is %u", pid );
 
@@ -586,7 +584,6 @@ int exec_argv ( char **argv, int *child_pid )
 	}
 
 //	debug ( 3, "After-wait thread %p"")".", pthread_self() );
-
 #ifdef VERYPARANOID
 	pthread_sigmask ( SIG_SETMASK, &sigset_old, NULL );
 #endif
@@ -823,7 +820,6 @@ int so_call_rsync_thread ( threadinfo_t *threadinfo_p )
 	do {
 		try_again = 0;
 		threadinfo_p->try_n++;
-
 		rc = ctx_p->handler_funct.rsync ( argv[0], argv[1], argv[2] );
 
 		if ( ( err = exitcode_process ( threadinfo_p->ctx_p, rc ) ) ) {
@@ -877,7 +873,6 @@ static inline int so_call_rsync ( ctx_t *ctx_p, indexes_t *indexes_p, const char
 		do {
 			try_again = 0;
 			try_n++;
-
 			alarm ( ctx_p->synctimeout );
 			rc = ctx_p->handler_funct.rsync ( walkinclist, inclistfile, exclistfile );
 			alarm ( 0 );
@@ -1067,7 +1062,6 @@ pid_t clsyncapi_fork ( ctx_t *ctx_p )
 {
 //	if(ctx_p->flags[THREADING])
 //		return fork();
-
 // Cleaning stale pids. TODO: Optimize this. Remove this GC.
 	int i = 0;
 
@@ -1294,12 +1288,11 @@ int fileischanged ( ctx_t *ctx_p, indexes_t *indexes_p, const char *path_rel, st
 static int sync_queuesync ( const char *fpath_rel, eventinfo_t *evinfo, ctx_t *ctx_p, indexes_t *indexes_p, queue_id_t queue_id, stat64_t *st_p )
 {
 	debug ( 3, "sync_queuesync(\"%s\", ...): fsize == %lu; tres == %lu, queue_id == %u", fpath_rel, evinfo->fsize, ctx_p->bfilethreshold, queue_id );
-
 #ifdef VERYPARANOID
-	critical_on (fpath_rel == NULL);
+	critical_on ( fpath_rel == NULL );
 #endif
 #ifdef PARANOID
-	critical_on (evinfo == NULL);
+	critical_on ( evinfo == NULL );
 #endif
 
 	if ( ctx_p->flags[MODSIGN] && FILETREECACHE_ENABLED ( ctx_p ) ) {
@@ -1332,7 +1325,6 @@ static int sync_queuesync ( const char *fpath_rel, eventinfo_t *evinfo, ctx_t *c
 		cluster_capture ( fpath_rel );
 
 #endif
-
 	eventinfo_t *evinfo_q = indexes_lookupinqueue ( indexes_p, fpath_rel, queue_id );
 
 	if ( evinfo_q == NULL ) {
@@ -1410,11 +1402,9 @@ int sync_initialsync_walk ( ctx_t *ctx_p, const char *dirpath, indexes_t *indexe
 	FTS *tree;
 	rule_t *rules_p = ctx_p->rules;
 	debug ( 2, "(ctx_p, \"%s\", indexes_p, %i, %i).", dirpath, queue_id, initsync );
-
 	char is_full_instant = ( initsync & ( INITSYNC_FULL | INITSYNC_INSTANT ) ) == INITSYNC_FULL_INSTANT;
 	char use_cache       =  initsync &  INITSYNC_CACHE;
 	char skip_rules = is_full_instant && ctx_p->flags[INITFULL];
-
 	char rsync_and_prefer_excludes =
 	    (
 	        ( ctx_p->flags[MODE] == MODE_RSYNCDIRECT ) ||
@@ -1548,10 +1538,11 @@ int sync_initialsync_walk ( ctx_t *ctx_p, const char *dirpath, indexes_t *indexe
 		}
 
 		stat64_t *st_p = NULL;
+
 		if ( use_cache ) {
 			const char *path_rel_cache = path_rel;
 
-			if (*path_rel_cache == '/') path_rel_cache++;
+			if ( *path_rel_cache == '/' ) path_rel_cache++;
 
 			stat64_t *st_p, st;
 			filetree_cache_entry_data_t entry_dat;
@@ -1773,7 +1764,6 @@ static void argv_free ( char **argv )
 static inline int sync_initialsync_finish ( ctx_t *ctx_p, initsync_t initsync, int ret )
 {
 	( void ) initsync;
-
 	finish_iteration ( ctx_p );
 	return ret;
 }
@@ -1927,6 +1917,7 @@ int sync_initialsync_use_cache ( const char *path, ctx_t *ctx_p, indexes_t *inde
 	}
 
 	queue_id_t queue_id;
+
 	if ( initsync == INITSYNC_FULL_INSTANT )
 		queue_id = QUEUE_INSTANT;
 	else
@@ -1969,10 +1960,9 @@ int sync_initialsync_use_cache ( const char *path, ctx_t *ctx_p, indexes_t *inde
 					debug ( 7, "Directory" );
 
 					if ( is_changed ) {
-
 						ruleaction_t perm = rules_getperm ( path_rel, st.st_mode, rules_p, RA_WALK | RA_SYNC );
 
-						if ( ! ( perm & (RA_WALK | RA_SYNC) ) ) {
+						if ( ! ( perm & ( RA_WALK | RA_SYNC ) ) ) {
 							debug ( 3, "Rejecting walking and syncing \"%s\".", path_rel );
 						} else {
 							int rc = sync_initialsync ( acc_path, ctx_p, indexes_p, initsync | INITSYNC_CACHE );
@@ -2002,13 +1992,13 @@ int sync_initialsync_use_cache ( const char *path, ctx_t *ctx_p, indexes_t *inde
 				debug ( 3, "Reject syncing file: \"%s\".", path_rel );
 			} else {
 				debug ( 7, "Sync a single file: \"%s\".", path_rel );
-
 #ifdef CACHESYNC_PREQUEUE
+
 				if ( sync_prequeue_loadmark ( 0, ctx_p, indexes_p, path_rel, path, &st,
-							EOT_FILE,
-							(st.st_mode & S_IFMT) == S_IFDIR ? EOT_DIR : EOT_FILE,
-							0, 0,
-							st.st_mode, st.st_size, NULL, NULL, NULL ) ) {
+				                              EOT_FILE,
+				                              ( st.st_mode & S_IFMT ) == S_IFDIR ? EOT_DIR : EOT_FILE,
+				                              0, 0,
+				                              st.st_mode, st.st_size, NULL, NULL, NULL ) ) {
 					critical ( "Cannot re-queue \"%s\" to be synced", path );
 					return FALSE;
 				}
@@ -2035,15 +2025,14 @@ int sync_initialsync_use_cache ( const char *path, ctx_t *ctx_p, indexes_t *inde
 				evinfo.fsize        = st.st_size;
 				debug ( 3, "queueing \"%s\" with int-flags 0x%x", entry->dat.path, evinfo.flags );
 				int rc = sync_queuesync ( entry->dat.path, &evinfo, ctx_p, indexes_p, queue_id, &st );
-		
+
 				if ( rc ) {
 					error ( "Got error while queueing \"%s\".", entry->dat.path );
 					//filetree_cache_queueflush(ctx_p);
 					return rc;
 				}
+
 #endif
-
-
 				memcpy ( &entry->dat.stat, &st, sizeof ( st ) );
 			}
 		}
@@ -2090,8 +2079,8 @@ int sync_notify_mark ( ctx_t *ctx_p, const char *accpath, const char *path_abs, 
 		entry->is_marked = 1;
 	}
 
-	debug ( 6, "endof ctx_p->notifyenginefunct.add_watch_dir(ctx_p, indexes_p, \"%s\")", accpath );
-	indexes_add_wd ( indexes_p, wd, path, pathlen );
+	//debug ( 6, "endof ctx_p->notifyenginefunct.add_watch_dir(ctx_p, indexes_p, \"%s\")", accpath );
+	//indexes_add_wd ( indexes_p, wd, path, pathlen );
 	return wd;
 }
 
@@ -3902,9 +3891,9 @@ int sync_loop ( ctx_t *ctx_p, indexes_t *indexes_p )
 			case STATE_PREEXIT:
 			case STATE_RUNNING:
 				if ( ( !ctx_p->flags[THREADING] ) && ctx_p->flags[MAXITERATIONS] ) {
-					if ( ctx_p->flags[MAXITERATIONS] == ctx_p->iteration_num - 1 )
+					if ( ( typeof ( ctx_p->iteration_num ) ) ctx_p->flags[MAXITERATIONS] == ctx_p->iteration_num - 1 )
 						ctx_p->state = STATE_PREEXIT;
-					else if ( ctx_p->flags[MAXITERATIONS] <= ctx_p->iteration_num )
+					else if ( ( typeof ( ctx_p->iteration_num ) ) ctx_p->flags[MAXITERATIONS] <= ctx_p->iteration_num )
 						ctx_p->state = STATE_EXIT;
 				}
 
@@ -3994,7 +3983,6 @@ int _sync_tryforcecycle_i;
 int sync_tryforcecycle ( ctx_t *ctx_p, pthread_t pthread_parent )
 {
 	( void ) pthread_parent;
-
 	debug ( 3, "sending signal to interrupt blocking operations like select()-s and so on (ctx_p->blockthread_count == %i)", ctx_p->blockthread_count );
 	//pthread_kill(pthread_parent, SIGUSR_BLOPINT);
 	int i, count;

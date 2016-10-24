@@ -83,7 +83,6 @@ static int vprintf_stdout ( const char *fmt, va_list args )
 static void flush_stderr ( int level )
 {
 	( void ) level;
-
 	fprintf ( stderr, "\n" );
 	fflush ( stderr );
 }
@@ -91,7 +90,6 @@ static void flush_stderr ( int level )
 static void flush_stdout ( int level )
 {
 	( void ) level;
-
 	fprintf ( stdout, "\n" );
 	fflush ( stdout );
 }
@@ -353,17 +351,15 @@ void _debug ( int debug_level, const char *const function_name, const char *fmt,
 #endif
 
 #ifdef _DEBUG_FORCE
-int _dmemcmp(const void *p1, const void *p2, size_t n)
+int _dmemcmp ( const void *p1, const void *p2, size_t n )
 {
 	size_t i = 0;
 	const char *s1 = p1;
 	const char *s2 = p2;
-
 	char diff;
 
 	while ( i < n ) {
 		diff = s2[i] - s1[i];
-
 		debug ( 95, "%i: %i %i: %i", i, s1[i], s2[i], diff );
 
 		if ( diff )

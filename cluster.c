@@ -103,7 +103,6 @@ static inline int clustercmd_window_add ( window_t *window_p, clustercmd_t *clus
 	size_t required_space  = sizeof ( clustercmdqueuedpackethdr_t ) + clustercmd_size;
 	// Searching occupied boundaries in the window_p->buffer
 	size_t occupied_left = SIZE_MAX, occupied_right = 0;
-
 	unsigned int i;
 	i = 0;
 
@@ -1291,7 +1290,6 @@ int cluster_deinit()
 int cluster_lock ( const char *fpath )
 {
 	( void ) fpath;
-
 	return 0;
 }
 
@@ -1644,7 +1642,6 @@ int cluster_initialsync()
 int cluster_capture ( const char *path )
 {
 	( void ) path;
-
 	return 0;
 }
 

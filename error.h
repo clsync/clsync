@@ -58,7 +58,7 @@ extern void _debug ( int debug_level, const char *const function_name, const cha
 #define critical_or_warning(cond, ...) ((cond) ? _critical : _warning)(__FUNCTION__, __VA_ARGS__)
 
 #ifdef _DEBUG_FORCE
-extern int _dmemcmp(const void *p1, const void *p2, size_t n);
+extern int _dmemcmp ( const void *p1, const void *p2, size_t n );
 #	define dmemcmp(...) _dmemcmp(__VA_ARGS__)
 #else
 #	define dmemcmp(...)   memcmp(__VA_ARGS__)

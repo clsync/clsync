@@ -82,7 +82,7 @@ static inline void assign_stat64_stat ( stat64_t *dst, struct stat *src )
 	assert ( dst != NULL );
 #	endif
 #	define STAT_ASSIGN(field) \
-		dst->st_ ## field = src->st_ ## field ;
+	dst->st_ ## field = src->st_ ## field ;
 	STAT_ASSIGN ( dev );
 	STAT_ASSIGN ( ino );
 	STAT_ASSIGN ( mode );
