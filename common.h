@@ -159,8 +159,8 @@ enum pthread_mutex_id {
 
 struct dosync_arg {
 	int evcount;
-	char excf_path[PATH_MAX+1];
-	char outf_path[PATH_MAX+1];
+	char excf_path[PATH_MAX + 1];
+	char outf_path[PATH_MAX + 1];
 	FILE *outf;
 	ctx_t *ctx_p;
 	struct indexes *indexes_p;
@@ -168,10 +168,10 @@ struct dosync_arg {
 	unsigned int linescount;
 	api_eventinfo_t *api_ei;
 	int api_ei_count;
-	char buf[BUFSIZ+1];
+	char buf[BUFSIZ + 1];
 
 // for be read by sync_parameter_get():
-	const char *include_list[MAXARGUMENTS+2];
+	const char *include_list[MAXARGUMENTS + 2];
 	size_t      include_list_count;
 	const char *list_type_str;
 	const char *evmask_str;

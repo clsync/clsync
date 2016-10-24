@@ -51,14 +51,14 @@
 #define require_strlen_le(str, limit) \
 	if (strlen(str) >= limit)\
 		critical("length of "TOSTR(str)" (\"%s\") >= "TOSTR(limit));\
-
+	 
 #define SAFE(code, onfail) __extension__({\
-	long _SAFE_rc;\
-	if ((_SAFE_rc = code)) {\
-		error("Got error while "TOSTR(code));\
-		onfail;\
-	} \
-	_SAFE_rc;\
-})
+		long _SAFE_rc;\
+		if ((_SAFE_rc = code)) {\
+			error("Got error while "TOSTR(code));\
+			onfail;\
+		} \
+		_SAFE_rc;\
+	})
 
 #endif

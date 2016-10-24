@@ -1,18 +1,18 @@
 /*
     clsync - file tree sync utility based on inotify
-    
+
     Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
-    
+
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
-    
+
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-    
+
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -53,7 +53,7 @@
 struct socket_sockthreaddata;
 struct sockcmd;
 
-typedef int (*clsyncsock_cb_funct_t)(struct socket_sockthreaddata *thread, struct sockcmd *sockcmd_p, void *arg);
+typedef int ( *clsyncsock_cb_funct_t ) ( struct socket_sockthreaddata *thread, struct sockcmd *sockcmd_p, void *arg );
 struct clsynccbqueue {
 	uint64_t		 cmd_num;
 
@@ -70,8 +70,8 @@ struct clsyncsock {
 	uint64_t cmd_num;
 
 	size_t		 cbqueue_len;
-	clsynccbqueue_t  cbqueue[CLSYNCSOCK_WINDOW+1];
-	clsynccbqueue_t *cbqueue_cache[4*CLSYNCSOCK_WINDOW+1];	// It's a hacky hash-table of size "CLSYNCSOCK_WINDOW*2"
+	clsynccbqueue_t  cbqueue[CLSYNCSOCK_WINDOW + 1];
+	clsynccbqueue_t *cbqueue_cache[4 * CLSYNCSOCK_WINDOW + 1];	// It's a hacky hash-table of size "CLSYNCSOCK_WINDOW*2"
 };
 typedef struct clsyncsock clsyncsock_t;
 
@@ -150,13 +150,13 @@ typedef struct sockcmd_dat_invalidcmd sockcmd_dat_invalidcmd_t;
 struct sockcmd_dat_version {
 	int		major;
 	int		minor;
-	char		revision[1<<8];
+	char		revision[1 << 8];
 };
 typedef struct sockcmd_dat_version sockcmd_dat_version_t;
 
 struct sockcmd_dat_info {
-	char		config_block[1<<8];
-	char		label[1<<8];
+	char		config_block[1 << 8];
+	char		label[1 << 8];
 	char		flags[OPTION_FLAGS];
 	char		flags_set[OPTION_FLAGS];
 };
@@ -204,8 +204,8 @@ enum sockauth_id {
 typedef enum sockauth_id sockauth_id_t;
 
 struct socket_sockthreaddata;
-typedef int (*clsyncsock_procfunct_t)(struct socket_sockthreaddata *, sockcmd_t *);
-typedef void (*freefunct_t)(void *);
+typedef int ( *clsyncsock_procfunct_t ) ( struct socket_sockthreaddata *, sockcmd_t * );
+typedef void ( *freefunct_t ) ( void * );
 struct socket_sockthreaddata {
 	int			 id;
 	clsyncsock_procfunct_t	 procfunct;
@@ -220,23 +220,23 @@ struct socket_sockthreaddata {
 };
 typedef struct socket_sockthreaddata socket_sockthreaddata_t;
 
-extern int socket_reply(clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p, sockcmd_id_t cmd_id, ...);
-extern int socket_send(clsyncsock_t *clsyncsock, sockcmd_id_t cmd_id, ...);
-extern int socket_send_cb(clsyncsock_t *clsyncsock_p, sockcmd_id_t cmd_id, clsyncsock_cb_funct_t cb, void *cb_arg, ...);
-extern int socket_sendinvalid(clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p);
-extern int socket_recv(clsyncsock_t *clsyncsock, sockcmd_t *sockcmd);
-extern int socket_check_bysock(int sock);
-extern clsyncsock_t *socket_accept(int sock);
-extern int socket_cleanup(clsyncsock_t *clsyncsock_p);
-extern int socket_close(clsyncsock_t *clsyncsock_p);
+extern int socket_reply ( clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p, sockcmd_id_t cmd_id, ... );
+extern int socket_send ( clsyncsock_t *clsyncsock, sockcmd_id_t cmd_id, ... );
+extern int socket_send_cb ( clsyncsock_t *clsyncsock_p, sockcmd_id_t cmd_id, clsyncsock_cb_funct_t cb, void *cb_arg, ... );
+extern int socket_sendinvalid ( clsyncsock_t *clsyncsock_p, sockcmd_t *sockcmd_p );
+extern int socket_recv ( clsyncsock_t *clsyncsock, sockcmd_t *sockcmd );
+extern int socket_check_bysock ( int sock );
+extern clsyncsock_t *socket_accept ( int sock );
+extern int socket_cleanup ( clsyncsock_t *clsyncsock_p );
+extern int socket_close ( clsyncsock_t *clsyncsock_p );
 extern int socket_init();
 extern int socket_deinit();
-extern int socket_procclsyncsock(socket_sockthreaddata_t *arg);
-extern clsyncsock_t *socket_connect_unix(const char *const socket_path);
-extern clsyncsock_t *socket_listen_unix (const char *const socket_path);
+extern int socket_procclsyncsock ( socket_sockthreaddata_t *arg );
+extern clsyncsock_t *socket_connect_unix ( const char *const socket_path );
+extern clsyncsock_t *socket_listen_unix ( const char *const socket_path );
 
-extern socket_sockthreaddata_t *socket_thread_attach(clsyncsock_t *clsyncsock_p);
-extern int socket_thread_start(socket_sockthreaddata_t *threaddata_p);
+extern socket_sockthreaddata_t *socket_thread_attach ( clsyncsock_t *clsyncsock_p );
+extern int socket_thread_start ( socket_sockthreaddata_t *threaddata_p );
 
 extern int clsyncsocks_num;
 extern int clsyncsocks_count;

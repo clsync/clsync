@@ -44,116 +44,117 @@ int  devzero_fd;
 # endif
 #endif
 
-void *xmalloc(size_t size) {
-	debug(20, "(%li)", size);
+void *xmalloc ( size_t size )
+{
+	debug ( 20, "(%li)", size );
 #ifdef PARANOID
 	size++;	// Just in case
 #endif
+	void *ret = malloc ( size );
 
-	void *ret = malloc(size);
-
-	if (ret == NULL)
-		critical("(%li): Cannot allocate memory.", size);
+	if ( ret == NULL )
+		critical ( "(%li): Cannot allocate memory.", size );
 
 #ifdef PARANOID
-	memset(ret, 0, size);
+	memset ( ret, 0, size );
 #endif
 	return ret;
 }
 
-void *xcalloc(size_t nmemb, size_t size) {
-	debug(20, "(%li, %li)", nmemb, size);
+void *xcalloc ( size_t nmemb, size_t size )
+{
+	debug ( 20, "(%li, %li)", nmemb, size );
 #ifdef PARANOID
 	nmemb++; // Just in case
 	size++;	 // Just in case
 #endif
+	void *ret = calloc ( nmemb, size );
 
-	void *ret = calloc(nmemb, size);
-
-	if (ret == NULL)
-		critical("(%li): Cannot allocate memory.", size);
+	if ( ret == NULL )
+		critical ( "(%li): Cannot allocate memory.", size );
 
 //	memset(ret, 0, nmemb*size);	// Just in case
 	return ret;
 }
 
-void *xrealloc(void *oldptr, size_t size) {
-	debug(20, "(%p, %li)", oldptr, size);
+void *xrealloc ( void *oldptr, size_t size )
+{
+	debug ( 20, "(%p, %li)", oldptr, size );
 #ifdef PARANOID
 	size++;	// Just in case
 #endif
+	void *ret = realloc ( oldptr, size );
 
-	void *ret = realloc(oldptr, size);
-
-	if (ret == NULL)
-		critical("(%p, %li): Cannot reallocate memory.", oldptr, size);
+	if ( ret == NULL )
+		critical ( "(%p, %li): Cannot reallocate memory.", oldptr, size );
 
 	return ret;
 }
 
 #ifdef CAPABILITIES_SUPPORT
-void *malloc_align(size_t size) {
+void *malloc_align ( size_t size )
+{
 	size_t total_size;
 	void *ret = NULL;
-	debug(20, "(%li)", size);
+	debug ( 20, "(%li)", size );
 # ifdef PARANOID
 	size++;	 // Just in case
 # endif
-
 	total_size  = size;
-
 	// Rounding total_size up to a number of times pagesize
-	total_size += pagesize-1;
+	total_size += pagesize - 1;
 	total_size /= pagesize;
 	total_size *= pagesize;
 
-	if (posix_memalign(&ret, pagesize, total_size))
-		critical("(%li): Cannot allocate memory.", size);
+	if ( posix_memalign ( &ret, pagesize, total_size ) )
+		critical ( "(%li): Cannot allocate memory.", size );
 
 # ifdef PARANOID
-	if (ret == NULL)
-		critical("(%li): ptr == NULL.", size);
-# endif
 
+	if ( ret == NULL )
+		critical ( "(%li): ptr == NULL.", size );
+
+# endif
 //	memset(ret, 0, nmemb*size);	// Just in case
 	return ret;
 }
 
-void *calloc_align(size_t nmemb, size_t size) {
+void *calloc_align ( size_t nmemb, size_t size )
+{
 	size_t total_size;
 	void *ret;
-	debug(20, "(%li, %li)", nmemb, size);
+	debug ( 20, "(%li, %li)", nmemb, size );
 # ifdef PARANOID
 	nmemb++; // Just in case
 	size++;	 // Just in case
 # endif
-
-	total_size = nmemb*size;
-	ret = malloc_align(total_size);
-	memset(ret, 0, total_size);
-
+	total_size = nmemb * size;
+	ret = malloc_align ( total_size );
+	memset ( ret, 0, total_size );
 	return ret;
 }
 
-char *strdup_protect(const char *src, int prot) {
-	size_t len = strlen(src)+1;
-	char *dst  = malloc_align(len);
-	strcpy(dst, src);
-	if (mprotect(dst, len, prot))
-		critical("(%p, 0x%o): Got error from mprotect(%p, %lu, 0x%o)", src, prot, dst, len, prot);
+char *strdup_protect ( const char *src, int prot )
+{
+	size_t len = strlen ( src ) + 1;
+	char *dst  = malloc_align ( len );
+	strcpy ( dst, src );
+
+	if ( mprotect ( dst, len, prot ) )
+		critical ( "(%p, 0x%o): Got error from mprotect(%p, %lu, 0x%o)", src, prot, dst, len, prot );
 
 	return dst;
 }
 
 # ifdef SECCOMP_SUPPORT
-int is_protected(void *addr) {
+int is_protected ( void *addr )
+{
 	char *_addr = addr, t;
 	int is_protected;
 	t = *_addr;
+	is_protected = ( read ( devzero_fd, addr, 1 ) == -1 );
 
-	is_protected = (read(devzero_fd, addr, 1) == -1);
-
-	if (!is_protected)
+	if ( !is_protected )
 		*_addr = t;
 
 	return is_protected;
@@ -162,81 +163,83 @@ int is_protected(void *addr) {
 
 #endif
 
-int memory_init() {
+int memory_init()
+{
 #ifdef CAPABILITIES_SUPPORT
-	pagesize   = sysconf(_SC_PAGE_SIZE);
+	pagesize   = sysconf ( _SC_PAGE_SIZE );
 
-	if (pagesize == -1)
-		critical("Got error from sysconf(_SC_PAGE_SIZE)");
+	if ( pagesize == -1 )
+		critical ( "Got error from sysconf(_SC_PAGE_SIZE)" );
 
 # ifdef SECCOMP_SUPPORT
-	devzero_fd = open(DEVZERO, O_RDONLY);
+	devzero_fd = open ( DEVZERO, O_RDONLY );
 
-	if (devzero_fd == -1)
-		critical("Got error while open(\""DEVZERO"\", O_RDONLY)");
+	if ( devzero_fd == -1 )
+		critical ( "Got error while open(\""DEVZERO"\", O_RDONLY)" );
+
 # endif
 #endif
-
 	return 0;
 }
 
-void *shm_malloc_try(size_t size) {
+void *shm_malloc_try ( size_t size )
+{
 	void *ret;
 #ifdef PARANOID
 	size++;
 #endif
-	int privileged_shmid = shmget(0, size, IPC_PRIVATE|IPC_CREAT|0600);
+	int privileged_shmid = shmget ( 0, size, IPC_PRIVATE | IPC_CREAT | 0600 );
 	struct shmid_ds shmid_ds;
-	if (privileged_shmid == -1) return NULL;
 
-	ret = shmat(privileged_shmid, NULL, 0);
-	if ((long)ret == -1) return NULL;
-	debug(15, "ret == %p", ret);
+	if ( privileged_shmid == -1 ) return NULL;
 
+	ret = shmat ( privileged_shmid, NULL, 0 );
+
+	if ( ( long ) ret == -1 ) return NULL;
+
+	debug ( 15, "ret == %p", ret );
 	// Forbidding access for others to the pointer
-	shmctl(privileged_shmid, IPC_STAT, &shmid_ds);
+	shmctl ( privileged_shmid, IPC_STAT, &shmid_ds );
 	shmid_ds.shm_perm.mode = 0;
-	shmctl(privileged_shmid, IPC_SET,  &shmid_ds);
-
+	shmctl ( privileged_shmid, IPC_SET,  &shmid_ds );
 	// Checking that nobody else attached to the shared memory before access forbidding
-	shmctl(privileged_shmid, IPC_STAT, &shmid_ds);
-	if (shmid_ds.shm_lpid != shmid_ds.shm_cpid) {
-		error("A process (pid %u) attached to my shared memory. It's a security problem. Emergency exit.");
-		shmdt (ret);
+	shmctl ( privileged_shmid, IPC_STAT, &shmid_ds );
+
+	if ( shmid_ds.shm_lpid != shmid_ds.shm_cpid ) {
+		error ( "A process (pid %u) attached to my shared memory. It's a security problem. Emergency exit." );
+		shmdt ( ret );
 		return NULL;
 	}
 
 	return ret;
 }
 
-void *shm_malloc(size_t size) {
+void *shm_malloc ( size_t size )
+{
 	void *ret;
-
-	ret = shm_malloc_try(size);
-	critical_on (ret == NULL);
-
+	ret = shm_malloc_try ( size );
+	critical_on ( ret == NULL );
 	return ret;
 }
 
-void *shm_calloc(size_t nmemb, size_t size) {
+void *shm_calloc ( size_t nmemb, size_t size )
+{
 	void *ret;
 	size_t total_size;
 #ifdef PARANOID
 	nmemb++;
 	size++;
 #endif
-
 	total_size = nmemb * size;
-
-	ret = shm_malloc(total_size);
-	critical_on (ret == NULL);
-
-	memset(ret, 0, total_size);
+	ret = shm_malloc ( total_size );
+	critical_on ( ret == NULL );
+	memset ( ret, 0, total_size );
 	return ret;
 }
 
-void shm_free(void *ptr) {
-	debug(25, "(%p)", ptr);
-	shmdt(ptr);
+void shm_free ( void *ptr )
+{
+	debug ( 25, "(%p)", ptr );
+	shmdt ( ptr );
 }
 

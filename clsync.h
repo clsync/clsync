@@ -48,10 +48,10 @@ typedef struct api_eventinfo api_eventinfo_t;
 
 struct ctx;
 struct indexes;
-typedef int(*api_funct_init)  (struct ctx *, struct indexes *);
-typedef int(*api_funct_sync)  (int n, api_eventinfo_t *);
-typedef int(*api_funct_rsync) (const char *inclist, const char *exclist);
-typedef int(*api_funct_deinit)();
+typedef int ( *api_funct_init )  ( struct ctx *, struct indexes * );
+typedef int ( *api_funct_sync )  ( int n, api_eventinfo_t * );
+typedef int ( *api_funct_rsync ) ( const char *inclist, const char *exclist );
+typedef int ( *api_funct_deinit ) ();
 
 enum eventinfo_flags {
 	EVIF_NONE		= 0x00000000,	// No modifier
@@ -62,23 +62,23 @@ typedef enum eventinfo_flags eventinfo_flags_t;
 
 /**
  * @brief 			Writes the list to list-file for "--include-from" option of rsync using array of api_eventinfo_t
- * 
+ *
  * @param[in]	indexes_p	Pointer to "indexes"
  * @param[in]	listfile	File identifier to write to
  * @param[in]	n		Number of records in apievinfo
  * @param[in]	apievinfo	Pointer to api_eventinfo_t records
- * 
+ *
  * @retval	zero		Successful
  * @retval	non-zero	If got error while deleting the message. The error-code is placed into returned value.
- * 
+ *
  */
-extern int apievinfo2rsynclist(struct indexes *indexes_p, FILE *listfile, int n, api_eventinfo_t *apievinfo); // Not tested, yet
+extern int apievinfo2rsynclist ( struct indexes *indexes_p, FILE *listfile, int n, api_eventinfo_t *apievinfo ); // Not tested, yet
 
 /**
  * @brief 			Returns currect API version
- * 
+ *
  * @retval	api_version	Version of clsync's API
- * 
+ *
  */
 extern int clsyncapi_getapiversion();
 
@@ -86,13 +86,13 @@ extern int clsyncapi_getapiversion();
  * @brief 			clsync's wrapper for function "fork()". Should be used instead of "fork()" directly, to notify clsync about child's pid.
  *
  * @param[in]	ctx_p	Pointer to "ctx"
- * 
+ *
  * @retval	-1		If error (see "man 2 fork", added error code "ECANCELED" if too many children)
  * @retval	0		If child
  * @retval	pid		Pid of child of parent. (see "man 2 fork")
- * 
+ *
  */
-extern pid_t clsyncapi_fork(struct ctx *ctx_p);
+extern pid_t clsyncapi_fork ( struct ctx *ctx_p );
 
 #endif
 

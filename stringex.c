@@ -24,121 +24,137 @@
 #include "malloc.h"
 #include "error.h"
 
-static int _str_splitargs(
-		char *ptr,
-		char **arg_start_p,
-		int quotes,
-		int (*handler)(char *, size_t, void *),
-		char *additional_arg
-) {
+static int _str_splitargs (
+    char *ptr,
+    char **arg_start_p,
+    int quotes,
+    int ( *handler ) ( char *, size_t, void * ),
+    char *additional_arg
+)
+{
 	char  *arg_start, *arg;
 	size_t arg_len;
 	int rc;
-
-	 arg_start       = *arg_start_p;
+	arg_start       = *arg_start_p;
 	*arg_start_p     = &ptr[1];
-
 	arg_len = ptr - arg_start;
 
-	if (arg_len == 0)  // Skipping nearby spaces
+	if ( arg_len == 0 ) // Skipping nearby spaces
 		return 0;
 
-	arg = xmalloc(arg_len+1);
-	if (quotes) {
+	arg = xmalloc ( arg_len + 1 );
+
+	if ( quotes ) {
 		size_t s, d;
 		s = d = 0;
-		while (s < arg_len) {
-			if (arg_start[s])
+
+		while ( s < arg_len ) {
+			if ( arg_start[s] )
 				arg[d++] = arg_start[s];
+
 			s++;
 		}
+
 		arg_len = d;
 	} else
-		memcpy(arg, arg_start, arg_len);
+		memcpy ( arg, arg_start, arg_len );
 
 #ifdef _DEBUG
-	debug(15, "%p %p %i: <%s>", arg_start, ptr, arg_len, arg);
+	debug ( 15, "%p %p %i: <%s>", arg_start, ptr, arg_len, arg );
 #endif
-
 	arg[arg_len] = 0;
 
-	if ((rc = handler(arg, arg_len, additional_arg))) {
-		free(arg);
+	if ( ( rc = handler ( arg, arg_len, additional_arg ) ) ) {
+		free ( arg );
 		return rc;
 	}
+
 	return 0;
 }
 
-int str_splitargs(
-		char *_instr,
-		int (*handler)(char *, size_t, void *),
-		void *arg
-) {
-	debug(9, "");
+int str_splitargs (
+    char *_instr,
+    int ( *handler ) ( char *, size_t, void * ),
+    void *arg
+)
+{
+	debug ( 9, "" );
 	char *arg_start, *ptr, *instr;
 	int quotes = 0;
-
-	instr     = strdup(_instr);
+	instr     = strdup ( _instr );
 	ptr       = instr;
 	arg_start = instr;
-	while (1) {
-		ptr = strpbrk(ptr, " \t\"\'");
+
+	while ( 1 ) {
+		ptr = strpbrk ( ptr, " \t\"\'" );
 #ifdef _DEBUG
-		debug(10, "ptr == %p", ptr);
+		debug ( 10, "ptr == %p", ptr );
 #endif
-		if (ptr == NULL)
+
+		if ( ptr == NULL )
 			break;
 
 #ifdef _DEBUG
-		debug(10, "*ptr == \"%c\" (%i)", *ptr, *ptr);
+		debug ( 10, "*ptr == \"%c\" (%i)", *ptr, *ptr );
 #endif
-		switch (*(ptr++)) {
+
+		switch ( * ( ptr++ ) ) {
 			case ' ':
 			case '\t': {
-				int rc;
+					int rc;
 
-				if ((rc = _str_splitargs(&ptr[-1], &arg_start, quotes, handler, arg)))
-					return rc;
-				quotes = 0;
-				break;
-			}
+					if ( ( rc = _str_splitargs ( &ptr[-1], &arg_start, quotes, handler, arg ) ) )
+						return rc;
+
+					quotes = 0;
+					break;
+				}
+
 			case '"':
 				ptr[-1] = 0;
 				quotes++;
-				while ((ptr = strchr(ptr, '"')) != NULL) {
+
+				while ( ( ptr = strchr ( ptr, '"' ) ) != NULL ) {
 					// Checking for escaping
 					char *p;
-
 					p = &ptr[-1];
-					while (*p == '\\') {
+
+					while ( *p == '\\' ) {
 						p--;
 #ifdef PARANOID
-						if (p < instr)
-							critical("Dangerous internal error");
+
+						if ( p < instr )
+							critical ( "Dangerous internal error" );
+
 #endif
 					}
 
-					if ((ptr-p)%2)
+					if ( ( ptr - p ) % 2 )
 						break;
 				}
-				if (ptr == NULL) {
+
+				if ( ptr == NULL ) {
 					errno = EINVAL;
-					error("Unterminated quote <\"> in string: <%s>", instr);
+					error ( "Unterminated quote <\"> in string: <%s>", instr );
 					return errno;
 				}
+
 				*ptr = 0;
 				quotes++;
 				ptr++;
 				break;
+
 			case '\'':
 				ptr[-1] = 0;
 				quotes++;
-				ptr = strchr(ptr, '\'');
-				if (ptr == NULL) {
+				ptr = strchr ( ptr, '\'' );
+
+				if ( ptr == NULL ) {
 					errno = EINVAL;
-					error("Unterminated quote <'> in string: <%s>", instr);
+					error ( "Unterminated quote <'> in string: <%s>", instr );
 					return errno;
 				}
+
 				*ptr = 0;
 				quotes++;
 				ptr++;
@@ -146,7 +162,7 @@ int str_splitargs(
 		}
 	}
 
-	int rc = _str_splitargs(strchr(arg_start, 0), &arg_start, quotes, handler, arg);
-	free(instr);
+	int rc = _str_splitargs ( strchr ( arg_start, 0 ), &arg_start, quotes, handler, arg );
+	free ( instr );
 	return rc;
 }

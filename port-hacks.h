@@ -35,35 +35,34 @@
 #	include <pthread.h>
 
 #	ifdef THREADING_SUPPORT
-	static inline int pthread_tryjoin_np(pthread_t thread, void **retval) {
-		struct timespec abstime;
-		int rc;
+static inline int pthread_tryjoin_np ( pthread_t thread, void **retval )
+{
+	struct timespec abstime;
+	int rc;
+	abstime.tv_sec  = 0;
+	abstime.tv_nsec = 0;
+	extern int pthread_timedjoin_np ( pthread_t thread, void **value_ptr, const struct timespec * abstime );
+	rc = pthread_timedjoin_np ( thread, retval, &abstime );
 
-		abstime.tv_sec  = 0;
-		abstime.tv_nsec = 0;
+	if ( rc == ETIMEDOUT )
+		rc = EBUSY;
 
-		extern int pthread_timedjoin_np(pthread_t thread, void **value_ptr, const struct timespec *abstime);
-
-		rc = pthread_timedjoin_np(thread, retval, &abstime);
-
-		if (rc == ETIMEDOUT)
-			rc = EBUSY;
-
-		return rc;
-	}
+	return rc;
+}
 #	endif
 
 #	ifndef __USE_LARGEFILE64
-	typedef struct stat stat64_t;
-	static inline int lstat64(const char *pathname, struct stat *buf) {
-		return lstat(pathname, buf);
-	}
+typedef struct stat stat64_t;
+static inline int lstat64 ( const char *pathname, struct stat *buf )
+{
+	return lstat ( pathname, buf );
+}
 #	else
-	typedef struct stat64 stat64_t;
+typedef struct stat64 stat64_t;
 #	endif
 
 #else
-	typedef struct stat64 stat64_t;
+typedef struct stat64 stat64_t;
 #endif
 
 #ifdef CLSYNC_ITSELF

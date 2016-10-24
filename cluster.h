@@ -1,18 +1,18 @@
 /*
     clsync - file tree sync utility based on inotify
-    
+
     Copyright (C) 2013  Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
-    
+
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
-    
+
     This program is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
-    
+
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
@@ -32,11 +32,11 @@
 			error("CLUSTER_LOOP_EXPECTCMD()"); \
 			return errno; \
 		}\
-\
+		\
 		/* Is that the command we are expecting? Skipping if not. */\
 		if(clustercmd_p->h.cmd_id != clustercmd_id)\
 			continue;\
-}
+	}
 
 // Macros for writing messages
 
@@ -249,19 +249,19 @@ struct window {
 };
 typedef struct window window_t;
 
-typedef int (*cluster_recvproc_funct_t)(clustercmd_t *clustercmd_p);
+typedef int ( *cluster_recvproc_funct_t ) ( clustercmd_t *clustercmd_p );
 
 // Externs
 
-extern int cluster_init(struct ctx *ctx_p, struct indexes *indexes_p);
+extern int cluster_init ( struct ctx *ctx_p, struct indexes *indexes_p );
 extern int cluster_deinit();
 
-extern int cluster_lock(const char *fpath);
+extern int cluster_lock ( const char *fpath );
 extern int cluster_lock_byindexes();
 extern int cluster_unlock_all();
-extern int cluster_capture(const char *fpath);
+extern int cluster_capture ( const char *fpath );
 
-extern int cluster_modtime_update(const char *dirpath, short int dirlevel, mode_t st_mode);
+extern int cluster_modtime_update ( const char *dirpath, short int dirlevel, mode_t st_mode );
 extern int cluster_initialsync();
 
 #endif
