@@ -151,10 +151,12 @@ if true; then
 	# Functionality test
 
 	build_test --enable-cluster --enable-debug --enable-paranoid=0 --enable-capabilities --without-mhash
-	run_example rsyncdirect
+	run_example rsyncdirect --splitting=process --threading=safe --file-tree-cache=/dev/shm/clsync-ftc.db
+	run_example rsyncdirect --file-tree-cache=/dev/shm
 	run_example rsyncdirect --splitting=thread --threading=off
-	run_example rsyncdirect --splitting=process --threading=off
 	run_example rsyncdirect --threading=safe
+	run_example rsyncdirect --splitting=process --threading=off
+	run_example rsyncdirect
 #	run_example rsyncshell
 #	run_example rsyncso
 	#run_example so
