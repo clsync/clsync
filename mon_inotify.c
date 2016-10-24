@@ -51,12 +51,16 @@ static inline void recognize_event ( struct recognize_event_return *r, uint32_t 
 
 int inotify_add_watch_dir ( ctx_t *ctx_p, indexes_t *indexes_p, const char *const accpath )
 {
+	( void ) indexes_p;
+
 	int inotify_d = ( int ) ( long ) ctx_p->fsmondata;
 	return privileged_inotify_add_watch ( inotify_d, accpath, INOTIFY_MARKMASK, PC_INOTIFY_ADD_WATCH_DIR );
 }
 
 int inotify_wait ( ctx_t *ctx_p, struct indexes *indexes_p, struct timeval *tv_p )
 {
+	( void ) indexes_p;
+
 	int inotify_d = ( int ) ( long ) ctx_p->fsmondata;
 	debug ( 3, "select with timeout %li secs (fd == %u).", tv_p->tv_sec, inotify_d );
 	fd_set rfds;

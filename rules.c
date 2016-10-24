@@ -71,7 +71,8 @@ int parse_rules_fromfile ( ctx_t *ctx_p )
 
 	GHashTable *autowrules_ht = g_hash_table_new_full ( g_str_hash,	g_str_equal,	free,    0 );
 	int i = 0;
-	size_t linelen, size = 0;
+	ssize_t linelen;
+	size_t size = 0;
 
 	while ( ( linelen = getline ( &line_buf, &size, f ) ) != -1 ) {
 		if ( linelen > 1 ) {

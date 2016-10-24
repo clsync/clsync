@@ -48,16 +48,14 @@ make
 make install DESTDIR=%{buildroot}
 install -D -p -m 0750 %{SOURCE1} %{buildroot}/etc/init.d/clsync
 mkdir -p %{buildroot}/etc/clsync/rules
-mkdir -p %{buildroot}/var/tmp/clsync/from
-mkdir -p %{buildroot}/var/tmp/clsync/to
-mkdir -p %{buildroot}/var/run/clsync
 
 cat > %{buildroot}/etc/clsync/clsync.conf <<EOF
 # This configuration is a simple test
+# set appropriate dirs for testing yourself :)
 [default]
-watch-dir = /var/tmp/clsync/from
+#watch-dir = /var/tmp/clsync/from
+#destination-dir = /var/tmp/clsync/to
 rules-file = /etc/clsync/rules/default
-destination-dir = /var/tmp/clsync/to
 mode = rsyncdirect
 sync-handler = /usr/bin/rsync
 background = 1
@@ -79,9 +77,6 @@ rm -rf %{buildroot}
 %{_bindir}/*
 %doc %{_docdir}/* 
 %doc %{_mandir}/man1/clsync.1.gz
-%dir /var/tmp/clsync/from
-%dir /var/tmp/clsync/to
-%dir /var/run/clsync
 %config(noreplace) /etc/clsync/clsync.conf
 /etc/clsync/rules/default
 /etc/init.d/clsync
@@ -99,6 +94,9 @@ rm -rf %{buildroot}
 
 
 %changelog
+* Thu Sep 29 2016 Andrew A. Savchenko <bircoph@gmail.com> - 0.4.2-1
+- Maintenance release, many bug fixes
+
 * Thu Nov 6 2014 Dmitry Yu Okunev <dyokunev@ut.mephi.ru> - 0.4-1
 - A lot of fixes
 

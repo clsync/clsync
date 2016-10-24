@@ -498,65 +498,67 @@ pid_t fork_helper()
 
 int version()
 {
-	info ( PROGRAM" v%i.%i.%i"REVISION"\n\t"AUTHOR"\n\nCompiled with options"
+	char flags[] =
 #ifdef _DEBUG_SUPPORT
-	       " -D_DEBUG_SUPPORT"
+	    " -D_DEBUG_SUPPORT"
 #endif
 #ifdef _DEBUG_FORCE
-	       " -D_DEBUG_FORCE"
+	    " -D_DEBUG_FORCE"
 #endif
 #ifdef KQUEUE_SUPPORT
-	       " -DKQUEUE_SUPPORT"
+	    " -DKQUEUE_SUPPORT"
 #endif
 #ifdef INOTIFY_SUPPORT
-	       " -DINOTIFY_SUPPORT"
+	    " -DINOTIFY_SUPPORT"
 #endif
 #ifdef INOTIFY_OLD
-	       " -DINOTIFY_OLD"
+	    " -DINOTIFY_OLD"
 #endif
 #ifdef FANOTIFY_SUPPORT
-	       " -DFANOTIFY_SUPPORT"
+	    " -DFANOTIFY_SUPPORT"
 #endif
 #ifdef BSM_SUPPORT
-	       " -DBSM_SUPPORT"
+	    " -DBSM_SUPPORT"
 #endif
 #ifdef GIO_SUPPORT
-	       " -DGIO_SUPPORT"
+	    " -DGIO_SUPPORT"
 #endif
 #ifdef DTRACEPIPE_SUPPORT
-	       " -DDTRACEPIPE_SUPPORT"
+	    " -DDTRACEPIPE_SUPPORT"
 #endif
 #ifdef BACKTRACE_SUPPORT
-	       " -DBACKTRACE_SUPPORT"
+	    " -DBACKTRACE_SUPPORT"
 #endif
 #ifdef CAPABILITIES_SUPPORT
-	       " -DCAPABILITIES_SUPPORT"
+	    " -DCAPABILITIES_SUPPORT"
 #endif
 #ifdef SECCOMP_SUPPORT
-	       " -DSECCOMP_SUPPORT"
+	    " -DSECCOMP_SUPPORT"
 #endif
 #ifdef GETMNTENT_SUPPORT
-	       " -DGETMNTENT_SUPPORT"
+	    " -DGETMNTENT_SUPPORT"
 #endif
 #ifdef UNSHARE_SUPPORT
-	       " -DUNSHARE_SUPPORT"
+	    " -DUNSHARE_SUPPORT"
 #endif
 #ifdef PIVOTROOT_OPT_SUPPORT
-	       " -DPIVOTROOT_OPT_SUPPORT"
+	    " -DPIVOTROOT_OPT_SUPPORT"
 #endif
 #ifdef CGROUP_SUPPORT
-	       " -DCGROUP_SUPPORT"
+	    " -DCGROUP_SUPPORT"
 #endif
 #ifdef TRE_SUPPORT
-	       " -DTRE_SUPPORT"
+	    " -DTRE_SUPPORT"
 #endif
 #ifdef THREADING_SUPPORT
-	       " -DTHREADING_SUPPORT"
+	    " -DTHREADING_SUPPORT"
 #endif
 #ifdef HL_LOCKS
-	       " -DHL_LOCKS"
+	    " -DHL_LOCKS"
 #endif
-	       , VERSION_MAJ, VERSION_MID, VERSION_MIN );
+	    ;
+	info ( PROGRAM" v%i.%i.%i"REVISION"\n\t"AUTHOR"\n\nCompiled with options: %s"
+	       , VERSION_MAJ, VERSION_MID, VERSION_MIN, flags );
 	exit ( 0 );
 }
 
@@ -885,7 +887,7 @@ static inline long xstrtol ( const char *str, int *err )
 	return res;
 }
 
-static inline int parse_customsignals ( ctx_t *ctx_p, char *arg )
+__extension__ static inline int parse_customsignals ( ctx_t *ctx_p, char *arg )
 {
 	char *ptr = arg, *start = arg;
 	int ret = 0;
@@ -977,7 +979,7 @@ static inline int parse_customsignals ( ctx_t *ctx_p, char *arg )
 	return 0;
 }
 
-static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t paramsource )
+__extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t paramsource )
 {
 	int ret = 0;
 #ifdef _DEBUG_FORCE
@@ -2031,7 +2033,7 @@ int configs_parse ( ctx_t *ctx_p, paramsource_t paramsource )
 				config_path_real      = xmalloc ( config_path_real_size );
 			}
 
-			if ( ( *config_path_p[0] != '/' ) && ( homedir_len >= 0 ) ) {
+			if ( *config_path_p[0] != '/' ) {
 				memcpy ( config_path_real, homedir, homedir_len );
 				config_path_real[homedir_len] = '/';
 				memcpy ( &config_path_real[homedir_len + 1], *config_path_p, config_path_len + 1 );
@@ -2396,28 +2398,30 @@ int ctx_check ( ctx_t *ctx_p )
 #endif
 				break;
 
-			default:
-				ret = errno = EINVAL;
-				error ( "Required one of the next options:"
+			default: {
+					ret = errno = EINVAL;
+					char monitor_types[] =
 #ifdef INOTIFY_SUPPORT
-				        " \"--monitor=inotify\""
+					    " \"--monitor=inotify\""
 #endif
 #ifdef FANOTIFY_SUPPORT
-				        " \"--monitor=fanotify\""
+					    " \"--monitor=fanotify\""
 #endif
 #ifdef KQUEUE_SUPPORT
-				        " \"--monitor=kqueue\""
+					    " \"--monitor=kqueue\""
 #endif
 #ifdef BSM_SUPPORT
-				        " \"--monitor=bsm\""
+					    " \"--monitor=bsm\""
 #endif
 #ifdef GIO_SUPPORT
-				        " \"--monitor=gio\""
+					    " \"--monitor=gio\""
 #endif
 #ifdef DTRACEPIPE_SUPPORT
-				        " \"--monitor=dtracepipe\""
+					    " \"--monitor=dtracepipe\""
 #endif
-				      );
+					    ;
+					error ( "Required one of the next options: %s", monitor_types );
+				}
 		}
 
 	if ( ctx_p->flags[EXITHOOK] ) {

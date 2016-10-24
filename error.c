@@ -82,12 +82,16 @@ static int vprintf_stdout ( const char *fmt, va_list args )
 
 static void flush_stderr ( int level )
 {
+	( void ) level;
+
 	fprintf ( stderr, "\n" );
 	fflush ( stderr );
 }
 
 static void flush_stdout ( int level )
 {
+	( void ) level;
+
 	fprintf ( stdout, "\n" );
 	fflush ( stdout );
 }

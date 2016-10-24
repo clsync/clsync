@@ -83,7 +83,7 @@ static inline void setenv_iteration ( uint32_t iteration_num )
 
 static inline void finish_iteration ( ctx_t *ctx_p )
 {
-	if ( ctx_p->iteration_num < ~0 ) // ~0 is the max value for unsigned variables
+	if ( ctx_p->iteration_num < ( typeof ( ctx_p->iteration_num ) ) ~0 ) // ~0 is the max value for unsigned variables
 		ctx_p->iteration_num++;
 
 #ifdef THREADING_SUPPORT
@@ -189,7 +189,7 @@ int exitcode_process ( ctx_t *ctx_p, int exitcode )
 
 threadsinfo_t *thread_info()  	// TODO: optimize this
 {
-	static threadsinfo_t threadsinfo = {{{{0}}}, {{{0}}}, 0};
+	static threadsinfo_t threadsinfo = {{{{0}}}, {{{0}}}, 0, 0, 0, NULL, NULL, 0};
 
 	if ( !threadsinfo.mutex_init ) {
 		int i = 0;
@@ -479,6 +479,8 @@ int thread_gc ( ctx_t *ctx_p )
 
 int thread_cleanup ( ctx_t *ctx_p )
 {
+	( void ) ctx_p;
+
 	debug ( 3, "" );
 	threadsinfo_t *threadsinfo_p = thread_info_lock();
 #ifdef PARANOID
@@ -491,7 +493,7 @@ int thread_cleanup ( ctx_t *ctx_p )
 	debug ( 1, "There're %i opened threads. Waiting.", threadsinfo_p->used );
 
 	while ( threadsinfo_p->used ) {
-		//		int err;
+//		int err;
 		threadinfo_t *threadinfo_p = &threadsinfo_p->threads[--threadsinfo_p->used];
 
 		if ( threadinfo_p->state == STATE_EXIT )
@@ -503,9 +505,9 @@ int thread_cleanup ( ctx_t *ctx_p )
 		pthread_join ( threadinfo_p->pthread, NULL );
 		debug ( 2, "thread #%i exitcode: %i", threadsinfo_p->used, threadinfo_p->exitcode );
 		/*
-			if(threadinfo_p->callback)
-				if((err=threadinfo_p->callback(ctx_p, threadinfo_p->argv)))
-					warning("Got error from callback function.", strerror(err), err);
+		if(threadinfo_p->callback)
+			if((err=threadinfo_p->callback(ctx_p, threadinfo_p->argv)))
+				warning("Got error from callback function.", strerror(err), err);
 		*/
 		char **ptr = threadinfo_p->argv;
 
@@ -553,7 +555,8 @@ int exec_argv ( char **argv, int *child_pid )
 	int status;
 	// Forking
 	pid = privileged_fork_execvp ( argv[0], ( char *const * ) argv );
-	//	debug(3, "After fork thread %p"")".", pthread_self() );
+
+//	debug ( 3, "After fork thread %p"")".", pthread_self() );
 	debug ( 3, "Child pid is %u", pid );
 
 	// Setting *child_pid value
@@ -568,7 +571,8 @@ int exec_argv ( char **argv, int *child_pid )
 	pthread_sigmask ( SIG_BLOCK, &sigset_exec, &sigset_old );
 #endif
 
-	//	debug(3, "Pre-wait thread %p"")".", pthread_self() );
+//	debug( 3, "Pre-wait thread %p"")".", pthread_self() );
+
 	if ( privileged_waitpid ( pid, &status, 0 ) != pid ) {
 		switch ( errno ) {
 			case ECHILD:
@@ -581,7 +585,8 @@ int exec_argv ( char **argv, int *child_pid )
 		}
 	}
 
-	//	debug(3, "After-wait thread %p"")".", pthread_self() );
+//	debug ( 3, "After-wait thread %p"")".", pthread_self() );
+
 #ifdef VERYPARANOID
 	pthread_sigmask ( SIG_SETMASK, &sigset_old, NULL );
 #endif
@@ -707,7 +712,7 @@ static inline int so_call_sync ( ctx_t *ctx_p, indexes_t *indexes_p, int n, api_
 		int rc = 0, ret = 0, err = 0;
 		int try_n = 0, try_again;
 		state_t status = STATE_UNKNOWN;
-		//		indexes_p->nonthreaded_syncing_fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
+//		indexes_p->nonthreaded_syncing_fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
 		indexes_p->nonthreaded_syncing_fpath2ei_ht = indexes_p->fpath2ei_ht;
 
 		do {
@@ -818,6 +823,7 @@ int so_call_rsync_thread ( threadinfo_t *threadinfo_p )
 	do {
 		try_again = 0;
 		threadinfo_p->try_n++;
+
 		rc = ctx_p->handler_funct.rsync ( argv[0], argv[1], argv[2] );
 
 		if ( ( err = exitcode_process ( threadinfo_p->ctx_p, rc ) ) ) {
@@ -862,7 +868,7 @@ static inline int so_call_rsync ( ctx_t *ctx_p, indexes_t *indexes_p, const char
 	if ( !SHOULD_THREAD ( ctx_p ) ) {
 #endif
 		debug ( 3, "ctx_p->handler_funct.rsync == %p", ctx_p->handler_funct.rsync );
-		//		indexes_p->nonthreaded_syncing_fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
+//		indexes_p->nonthreaded_syncing_fpath2ei_ht = g_hash_table_dup(indexes_p->fpath2ei_ht, g_str_hash, g_str_equal, free, free, (gpointer(*)(gpointer))strdup, eidup);
 		indexes_p->nonthreaded_syncing_fpath2ei_ht = indexes_p->fpath2ei_ht;
 		int rc = 0, err = 0;
 		int try_n = 0, try_again;
@@ -871,6 +877,7 @@ static inline int so_call_rsync ( ctx_t *ctx_p, indexes_t *indexes_p, const char
 		do {
 			try_again = 0;
 			try_n++;
+
 			alarm ( ctx_p->synctimeout );
 			rc = ctx_p->handler_funct.rsync ( walkinclist, inclistfile, exclistfile );
 			alarm ( 0 );
@@ -984,7 +991,7 @@ static inline void argv_dump ( int debug_level, char **argv )
 		va_end(arglist);\
 	}
 
-char *sync_path_rel2abs ( ctx_t *ctx_p, const char *path_rel, size_t path_rel_len, size_t *path_abs_len_p, char *path_abs_oldptr )
+char *sync_path_rel2abs ( ctx_t *ctx_p, const char *path_rel, ssize_t path_rel_len, size_t *path_abs_len_p, char *path_abs_oldptr )
 {
 	if ( path_rel == NULL )
 		return NULL;
@@ -1014,7 +1021,7 @@ char *sync_path_rel2abs ( ctx_t *ctx_p, const char *path_rel, size_t path_rel_le
 	return path_abs;
 }
 
-char *sync_path_abs2rel ( ctx_t *ctx_p, const char *path_abs, size_t path_abs_len, size_t *path_rel_len_p, char *path_rel_oldptr )
+char *sync_path_abs2rel ( ctx_t *ctx_p, const char *path_abs, ssize_t path_abs_len, size_t *path_rel_len_p, char *path_rel_oldptr )
 {
 	if ( path_abs == NULL )
 		return NULL;
@@ -1060,6 +1067,7 @@ pid_t clsyncapi_fork ( ctx_t *ctx_p )
 {
 //	if(ctx_p->flags[THREADING])
 //		return fork();
+
 // Cleaning stale pids. TODO: Optimize this. Remove this GC.
 	int i = 0;
 
@@ -1324,6 +1332,7 @@ static int sync_queuesync ( const char *fpath_rel, eventinfo_t *evinfo, ctx_t *c
 		cluster_capture ( fpath_rel );
 
 #endif
+
 	eventinfo_t *evinfo_q = indexes_lookupinqueue ( indexes_p, fpath_rel, queue_id );
 
 	if ( evinfo_q == NULL ) {
@@ -1401,9 +1410,11 @@ int sync_initialsync_walk ( ctx_t *ctx_p, const char *dirpath, indexes_t *indexe
 	FTS *tree;
 	rule_t *rules_p = ctx_p->rules;
 	debug ( 2, "(ctx_p, \"%s\", indexes_p, %i, %i).", dirpath, queue_id, initsync );
+
 	char is_full_instant = ( initsync & ( INITSYNC_FULL | INITSYNC_INSTANT ) ) == INITSYNC_FULL_INSTANT;
 	char use_cache       =  initsync &  INITSYNC_CACHE;
 	char skip_rules = is_full_instant && ctx_p->flags[INITFULL];
+
 	char rsync_and_prefer_excludes =
 	    (
 	        ( ctx_p->flags[MODE] == MODE_RSYNCDIRECT ) ||
@@ -1761,6 +1772,8 @@ static void argv_free ( char **argv )
 
 static inline int sync_initialsync_finish ( ctx_t *ctx_p, initsync_t initsync, int ret )
 {
+	( void ) initsync;
+
 	finish_iteration ( ctx_p );
 	return ret;
 }
@@ -2077,6 +2090,8 @@ int sync_notify_mark ( ctx_t *ctx_p, const char *accpath, const char *path_abs, 
 		entry->is_marked = 1;
 	}
 
+	debug ( 6, "endof ctx_p->notifyenginefunct.add_watch_dir(ctx_p, indexes_p, \"%s\")", accpath );
+	indexes_add_wd ( indexes_p, wd, path, pathlen );
 	return wd;
 }
 
@@ -2835,7 +2850,7 @@ void _sync_idle_dosync_collectedevents ( gpointer fpath_gp, gpointer evinfo_gp, 
 	} else
 		evinfo_merge ( ctx_p, evinfo_idx, evinfo );
 
-	int _queue_id = 0;
+	queue_id_t _queue_id = 0;
 
 	while ( _queue_id < QUEUE_MAX ) {
 		if ( _queue_id == queue_id ) {
@@ -3201,7 +3216,7 @@ gboolean rsync_aggrout ( gpointer outline_gp, gpointer flags_gp, gpointer arg_gp
  * @brief 			Push path to aggregated hash tables of output lines
  */
 
-static inline int rsync_listpush ( indexes_t *indexes_p, const char *fpath, size_t fpath_len, eventinfo_flags_t flags, int *linescount_p )
+static inline int rsync_listpush ( indexes_t *indexes_p, const char *fpath, size_t fpath_len, eventinfo_flags_t flags, unsigned int *linescount_p )
 {
 	char *fpathwslash;
 
@@ -3424,7 +3439,7 @@ void sync_idle_dosync_collectedevents_listpush ( gpointer fpath_gp, gpointer evi
 	//int *evcount_p		  =&dosync_arg_p->evcount;
 	FILE *outf		   =  dosync_arg_p->outf[DOSYNC_LIST_INCLUDE];
 	ctx_t *ctx_p 		   =  dosync_arg_p->ctx_p;
-	int *linescount_p	   = &dosync_arg_p->linescount;
+	unsigned int *linescount_p = &dosync_arg_p->linescount;
 	indexes_t *indexes_p 	   =  dosync_arg_p->indexes_p;
 	api_eventinfo_t **api_ei_p = &dosync_arg_p->api_ei;
 	int *api_ei_count_p 	   = &dosync_arg_p->api_ei_count;
@@ -3451,7 +3466,7 @@ void sync_idle_dosync_collectedevents_listpush ( gpointer fpath_gp, gpointer evi
 		dosync_arg_p->include_list[dosync_arg_p->include_list_count++] = strdup ( fpath );
 
 		if (
-		    dosync_arg_p->include_list_count >=
+		    dosync_arg_p->include_list_count >= ( size_t )
 		    ( MAXARGUMENTS -
 		      MAX (
 		          ctx_p->synchandler_args[SHARGS_PRIMARY].c,
@@ -3978,6 +3993,8 @@ int _sync_tryforcecycle_i;
 #endif
 int sync_tryforcecycle ( ctx_t *ctx_p, pthread_t pthread_parent )
 {
+	( void ) pthread_parent;
+
 	debug ( 3, "sending signal to interrupt blocking operations like select()-s and so on (ctx_p->blockthread_count == %i)", ctx_p->blockthread_count );
 	//pthread_kill(pthread_parent, SIGUSR_BLOPINT);
 	int i, count;
@@ -4122,8 +4139,8 @@ struct sync_dump_arg {
 
 void sync_dump_liststep ( gpointer fpath_gp, gpointer evinfo_gp, gpointer arg_gp )
 {
-	char *fpath			= ( char * ) fpath_gp;
-	eventinfo_t *evinfo		= ( eventinfo_t * ) evinfo_gp;
+	char *fpath			=         ( char * ) fpath_gp;
+	eventinfo_t *evinfo		=  ( eventinfo_t * ) evinfo_gp;
 	struct sync_dump_arg *arg 	= 		  arg_gp;
 	char act, num;
 
@@ -4424,7 +4441,7 @@ int sync_term ( int exitcode )
 }
 
 
-int sync_run ( ctx_t *ctx_p )
+__extension__ int sync_run ( ctx_t *ctx_p )
 {
 	int ret;
 	sighandler_arg_t sighandler_arg = {0};

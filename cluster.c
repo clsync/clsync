@@ -103,7 +103,8 @@ static inline int clustercmd_window_add ( window_t *window_p, clustercmd_t *clus
 	size_t required_space  = sizeof ( clustercmdqueuedpackethdr_t ) + clustercmd_size;
 	// Searching occupied boundaries in the window_p->buffer
 	size_t occupied_left = SIZE_MAX, occupied_right = 0;
-	int i;
+
+	unsigned int i;
 	i = 0;
 
 	while ( i < window_p->packets_len ) {
@@ -483,13 +484,13 @@ static inline int cluster_read ( int sock, clustercmd_t **cmd_pp, cluster_read_f
 
 	debug ( 2, "Got message from %s (len: %i).", inet_ntoa ( sa_in.sin_addr ), readret );
 
-	if ( readret < sizeof ( clustercmdhdr_t ) ) {
+	if ( ( unsigned int ) readret < sizeof ( clustercmdhdr_t ) ) {
 		// Too short message
 		error ( "Warning: cluster_read(): Got too short message from node (no header [or too short]). Ignoring it." );
 		return -1;
 	}
 
-	if ( readret < CLUSTERCMD_SIZE ( cmd_p ) ) {
+	if ( ( unsigned int ) readret < CLUSTERCMD_SIZE ( cmd_p ) ) {
 		// Too short message
 		error ( "Warning: cluster_read(): Got too short message from node (no data [or too short]). Ignoring it." );
 		return -1;
@@ -583,7 +584,7 @@ static int _cluster_recv ( clustercmd_t **clustercmd_pp, struct timeval *timeout
 		return 0;
 	}
 
-	debug ( 3,  "got new message(s)." );
+	debug ( 3, "got new message(s)." );
 	debug ( 10, "Reading new message's header" );
 	clustercmdadler32_t adler32;
 	//clustercmd_t *clustercmd_p = (clustercmd_t *)mmap(NULL, sizeof(clustercmdhdr_t), PROT_NONE,
@@ -1289,6 +1290,8 @@ int cluster_deinit()
 
 int cluster_lock ( const char *fpath )
 {
+	( void ) fpath;
+
 	return 0;
 }
 
@@ -1640,6 +1643,8 @@ int cluster_initialsync()
 
 int cluster_capture ( const char *path )
 {
+	( void ) path;
+
 	return 0;
 }
 

@@ -21,7 +21,7 @@
 #include "common.h"
 #include "glibex.h"
 
-struct keyvalue_copy_arg {
+__extension__ struct keyvalue_copy_arg {
 	union {
 		GHashTable *ht_dst;
 		GTree      *bt_dst;

@@ -171,7 +171,7 @@ struct dosync_arg {
 	ctx_t		*ctx_p;
 	struct indexes	*indexes_p;
 	void		*data;
-	int		 linescount;
+	unsigned int	 linescount;
 	api_eventinfo_t	*api_ei;
 	int		 api_ei_count;
 	char		 buf[DOSYNC_LIST__MAX][BUFSIZ + 1];

@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.59])
-AC_INIT([clsync],[0.4.1],[Dmitry Yu Okunev <dyokunev@ut.mephi.ru>],,[https://github.com/xaionaro/clsync])
+AC_INIT([clsync],[0.4.2],[Dmitry Yu Okunev <dyokunev@ut.mephi.ru>],,[https://github.com/xaionaro/clsync])
 AC_CONFIG_SRCDIR([sync.c])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([1.11 foreign -Wall -Wno-portability])
@@ -116,10 +116,10 @@ esac],
 [debug=1])
 
 AS_IF([ test "$debug" -ge 1 ],
-[CFLAGS="${CFLAGS} -pipe -Wall -O0 -ggdb3" CPPFLAGS="${CPPFLAGS} -D_DEBUG_SUPPORT"])
+[CFLAGS="${CFLAGS} -pipe -Wall" CPPFLAGS="${CPPFLAGS} -D_DEBUG_SUPPORT"])
 
 AS_IF([ test "$debug" -ge 2 ],
-[CPPFLAGS="${CPPFLAGS} -D_DEBUG_FORCE"])
+[CFLAGS="${CFLAGS} -Wextra -pedantic -O0 -ggdb3" CPPFLAGS="${CPPFLAGS} -D_DEBUG_FORCE"])
 
 dnl --paranoid
 AC_ARG_ENABLE(paranoid,

@@ -494,7 +494,8 @@ int socket_recv ( clsyncsock_t *clsyncsock, sockcmd_t *sockcmd_p )
 	static char bufs[SOCKET_MAX][SOCKET_BUFSIZ];
 	char *buf, *ptr, *start, *end;
 	int clsyncsock_sock;
-	size_t filled_length, rest_length, recv_length, filled_length_new;
+	size_t filled_length, rest_length, filled_length_new;
+	ssize_t recv_length;
 	errno = 0;
 	clsyncsock_sock = clsyncsock->sock;
 	buf = bufs[clsyncsock_sock];

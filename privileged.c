@@ -282,7 +282,7 @@ enum highload_lock_id {
 
 	HLLOCK_MAX
 };
-typedef enum highlock_lock_id hllockid_t;
+typedef enum highload_lock_id hllockid_t;
 
 enum highlock_lock_state {
 	HLLS_UNREADY	= 0x00,
@@ -582,10 +582,9 @@ int privileged_execvp_check_arguments ( struct pa_options *opts, const char *u_f
 	a_i = 0;
 
 	do {
-		int i;
-		int    argc;
-		char **argv;
-		char  *isexpanded;
+		size_t   argc, i;
+		char   **argv;
+		char    *isexpanded;
 		argc       = args[a_i].c;
 		argv       = args[a_i].v;
 		isexpanded = args[a_i].isexpanded;
@@ -716,6 +715,8 @@ int pa_setup ( struct pa_options *opts, ctx_t *ctx_p, uid_t *exec_uid_p, gid_t *
 
 int pa_unsetup ( struct pa_options *opts )
 {
+	( void ) opts;
+
 #ifdef TODO_FIX
 	// segfaults: gdb --args clsync -K lxc-brother-atomic-sync -l jabber --pre-exit-hook wlxc-stop --chroot= --pivot-root=off -d9 -b0 -Ystderr
 	free ( opts->exithookfile );
@@ -839,7 +840,7 @@ static inline int hl_wait (
 )
 {
 
-	volatile long try = 0;
+	volatile unsigned long try = 0;
 
 	debug ( 15, "" );
 
@@ -2091,15 +2092,13 @@ int privileged_deinit ( ctx_t *ctx_p )
 	if ( ctx_p->flags[SPLITTING] == SM_OFF )
 		return 0;
 
-	SAFE ( privileged_action (
 # ifdef HL_LOCK_TRIES_AUTO
-	           PC_DEFAULT,
+#  define ARGS	PC_DEFAULT, PA_DIE, NULL
+# else
+#  define ARGS	            PA_DIE, NULL
 # endif
-	           PA_DIE,
-	           NULL
-	       ),
-	       ret = errno
-	     );
+	SAFE ( privileged_action ( ARGS ), ret = errno );
+
 # ifdef HL_LOCK_TRIES_AUTO
 	{
 		int i = 0;

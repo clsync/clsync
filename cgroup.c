@@ -31,7 +31,7 @@ int clsync_cgroup_init ( ctx_t *ctx_p )
 	return 0;
 }
 
-int clsync_cgroup_forbid_extra_devices()
+__extension__ int clsync_cgroup_forbid_extra_devices()
 {
 	int rc;
 	char *allowed_devices[] = CG_ALLOWED_DEVICES, **allowed_device_i;
@@ -77,6 +77,8 @@ int clsync_cgroup_attach ( ctx_t *ctx_p )
 
 int clsync_cgroup_deinit ( ctx_t *ctx_p )
 {
+	( void ) ctx_p;
+
 	debug ( 2, "" );
 	error_on ( cgroup_delete_cgroup_ext ( cgroup, CGFLAG_DELETE_IGNORE_MIGRATION | CGFLAG_DELETE_RECURSIVE ) );
 	cgroup_free ( &cgroup );
