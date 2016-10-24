@@ -48,7 +48,7 @@ uint32_t adler32_calc ( const unsigned char *const data, uint32_t len ) // where
 	debug ( 70, "%p, %i", data, len );
 	const int MOD_ADLER = 65521;
 	uint32_t a = 1, b = 0;
-	int32_t index;
+	uint32_t index;
 
 	// Process each byte of the data in order
 	for ( index = 0; index < len; ++index ) {
