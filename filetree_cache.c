@@ -346,16 +346,18 @@ filetree_cache_init (	// TODO: Implement mmap() support
 	stat64_t st;
 	int rc = lstat64 ( ctx_p->filetree_cache_path, &st );
 
-	if ( rc == -1 ) {
-		FILE *f = fopen ( ctx_p->filetree_cache_path, "w" );
+	FILE *f = NULL;
 
-		if ( f == NULL )
+	if ( rc == -1 ) {
+		FILE *_f = fopen ( ctx_p->filetree_cache_path, "w" );
+
+		if ( _f == NULL )
 			goto filetree_cache_init_error;
 
-		SAFE ( fclose ( f ), goto filetree_cache_init_error );
+		SAFE ( fclose ( _f ), goto filetree_cache_init_error );
 	}
 
-	FILE *f = fopen ( ctx_p->filetree_cache_path, "r+" );
+	f = fopen ( ctx_p->filetree_cache_path, "r+" );
 
 	if ( f == NULL )
 		goto filetree_cache_init_error;

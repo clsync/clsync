@@ -3009,6 +3009,10 @@ int sync_idle_dosync_collectedevents_aggrqueue ( queue_id_t queue_id, ctx_t *ctx
 
 int sync_idle_dosync_collectedevents_uniqfname ( ctx_t *ctx_p, char *fpath, char *name )
 {
+#ifdef PARANOID
+	assert ( name != NULL );
+#endif
+
 	pid_t pid = getpid();
 	time_t tm = time ( NULL );
 	stat64_t stat64;
@@ -3030,7 +3034,7 @@ int sync_idle_dosync_collectedevents_uniqfname ( ctx_t *ctx_p, char *fpath, char
 
 int sync_idle_dosync_collectedevents_listcreate ( struct dosync_arg *dosync_arg_p, dosync_listid_t listid )
 {
-	char *name;
+	char *name = NULL;
 
 	switch ( listid ) {
 		case DOSYNC_LIST_WALK:
