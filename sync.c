@@ -82,7 +82,7 @@ static inline void setenv_iteration(uint32_t iteration_num)
 }
 
 static inline void finish_iteration(ctx_t *ctx_p) {
-	if (ctx_p->iteration_num < ~0) // ~0 is the max value for unsigned variables
+	if (ctx_p->iteration_num < (typeof(ctx_p->iteration_num))~0) // ~0 is the max value for unsigned variables
 		ctx_p->iteration_num++;
 
 #ifdef THREADING_SUPPORT
@@ -180,7 +180,7 @@ int exitcode_process(ctx_t *ctx_p, int exitcode) {
 
 
 threadsinfo_t *thread_info() {	// TODO: optimize this
-	static threadsinfo_t threadsinfo={{{{0}}},{{{0}}},0};
+	static threadsinfo_t threadsinfo={{{{0}}},{{{0}}},0,0,0,NULL,NULL,0};
 	if (!threadsinfo.mutex_init) {
 		int i=0;
 		while (i < PTHREAD_MUTEX_MAX) {
@@ -446,6 +446,8 @@ int thread_gc(ctx_t *ctx_p) {
 }
 
 int thread_cleanup(ctx_t *ctx_p) {
+	(void) ctx_p;
+
 	debug(3, "");
 	threadsinfo_t *threadsinfo_p = thread_info_lock();
 
@@ -930,7 +932,7 @@ static inline void argv_dump(int debug_level, char **argv) {
 	va_end(arglist);\
 }
 
-char *sync_path_rel2abs(ctx_t *ctx_p, const char *path_rel, size_t path_rel_len, size_t *path_abs_len_p, char *path_abs_oldptr) {
+char *sync_path_rel2abs(ctx_t *ctx_p, const char *path_rel, ssize_t path_rel_len, size_t *path_abs_len_p, char *path_abs_oldptr) {
 	if (path_rel == NULL)
 		return NULL;
 
@@ -960,7 +962,7 @@ char *sync_path_rel2abs(ctx_t *ctx_p, const char *path_rel, size_t path_rel_len,
 	return path_abs;
 }
 
-char *sync_path_abs2rel(ctx_t *ctx_p, const char *path_abs, size_t path_abs_len, size_t *path_rel_len_p, char *path_rel_oldptr) {
+char *sync_path_abs2rel(ctx_t *ctx_p, const char *path_abs, ssize_t path_abs_len, size_t *path_rel_len_p, char *path_rel_oldptr) {
 	if (path_abs == NULL)
 		return NULL;
 
@@ -1581,6 +1583,8 @@ static void argv_free(char **argv) {
 }
 
 static inline int sync_initialsync_finish(ctx_t *ctx_p, initsync_t initsync, int ret) {
+	(void) initsync;
+
 	finish_iteration(ctx_p);
 	return ret;
 }
@@ -2337,7 +2341,7 @@ void _sync_idle_dosync_collectedevents(gpointer fpath_gp, gpointer evinfo_gp, gp
 		evinfo_merge(ctx_p, evinfo_idx, evinfo);
 
 
-	int _queue_id = 0;
+	queue_id_t _queue_id = 0;
 	while (_queue_id < QUEUE_MAX) {
 		if(_queue_id == queue_id) {
 			_queue_id++;
@@ -2630,7 +2634,7 @@ gboolean rsync_aggrout(gpointer outline_gp, gpointer flags_gp, gpointer arg_gp) 
 	return TRUE;
 }
 
-static inline int rsync_listpush(indexes_t *indexes_p, const char *fpath, size_t fpath_len, eventinfo_flags_t flags, int *linescount_p) {
+static inline int rsync_listpush(indexes_t *indexes_p, const char *fpath, size_t fpath_len, eventinfo_flags_t flags, unsigned int *linescount_p) {
 	char *fpathwslash;
 	if(fpath_len>0) {
 		// Prepending with the slash
@@ -2834,7 +2838,7 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 	//int *evcount_p		  =&dosync_arg_p->evcount;
 	FILE *outf		   =  dosync_arg_p->outf;
 	ctx_t *ctx_p 		   =  dosync_arg_p->ctx_p;
-	int *linescount_p	   = &dosync_arg_p->linescount;
+	unsigned int *linescount_p = &dosync_arg_p->linescount;
 	indexes_t *indexes_p 	   =  dosync_arg_p->indexes_p;
 	api_eventinfo_t **api_ei_p = &dosync_arg_p->api_ei;
 	int *api_ei_count_p 	   = &dosync_arg_p->api_ei_count;
@@ -2860,7 +2864,7 @@ void sync_idle_dosync_collectedevents_listpush(gpointer fpath_gp, gpointer evinf
 	if (ctx_p->synchandler_argf & SHFL_INCLUDE_LIST) {
 		dosync_arg_p->include_list[dosync_arg_p->include_list_count++] = strdup(fpath);
 		if (
-			dosync_arg_p->include_list_count >= 
+			dosync_arg_p->include_list_count >= (size_t)
 				(MAXARGUMENTS - 
 					MAX(
 						ctx_p->synchandler_args[SHARGS_PRIMARY].c,
@@ -3280,10 +3284,10 @@ int sync_loop(ctx_t *ctx_p, indexes_t *indexes_p) {
 			case STATE_PREEXIT:
 			case STATE_RUNNING:
 				if ((!ctx_p->flags[THREADING]) && ctx_p->flags[MAXITERATIONS]) {
-					if (ctx_p->flags[MAXITERATIONS] == ctx_p->iteration_num-1)
+					if ( ( typeof ( ctx_p->iteration_num ) ) ctx_p->flags[MAXITERATIONS] == ctx_p->iteration_num-1)
 						ctx_p->state = STATE_PREEXIT;
 					else
-					if (ctx_p->flags[MAXITERATIONS] <= ctx_p->iteration_num)
+					if ( ( typeof ( ctx_p->iteration_num ) ) ctx_p->flags[MAXITERATIONS] <= ctx_p->iteration_num)
 						ctx_p->state = STATE_EXIT;
 				}
 
@@ -3362,6 +3366,8 @@ void sync_sig_int(int signal) {
 int _sync_tryforcecycle_i;
 #endif
 int sync_tryforcecycle(ctx_t *ctx_p, pthread_t pthread_parent) {
+	(void) pthread_parent;
+
 	debug(3, "sending signal to interrupt blocking operations like select()-s and so on (ctx_p->blockthread_count == %i)", ctx_p->blockthread_count);
 	//pthread_kill(pthread_parent, SIGUSR_BLOPINT);
 	int i, count;
@@ -3784,7 +3790,7 @@ int sync_term(int exitcode) {
 }
 
 
-int sync_run(ctx_t *ctx_p) {
+__extension__ int sync_run(ctx_t *ctx_p) {
 	int ret;
 	sighandler_arg_t sighandler_arg = {0};
 	indexes_t        indexes        = {NULL};

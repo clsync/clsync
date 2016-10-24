@@ -45,7 +45,7 @@ static int _str_splitargs(
 
 	arg = xmalloc(arg_len+1);
 	if (quotes) {
-		int s, d;
+		size_t s, d;
 		s = d = 0;
 		while (s < arg_len) {
 			if (arg_start[s])

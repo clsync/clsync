@@ -489,7 +489,7 @@ pid_t fork_helper() {
 }
 
 int version() {
-	info(PROGRAM" v%i.%i.%i"REVISION"\n\t"AUTHOR"\n\nCompiled with options"
+	char flags[] =
 #ifdef _DEBUG_SUPPORT
 		" -D_DEBUG_SUPPORT"
 #endif
@@ -547,7 +547,11 @@ int version() {
 #ifdef HL_LOCKS
 		" -DHL_LOCKS"
 #endif
-		, VERSION_MAJ, VERSION_MID, VERSION_MIN);
+		;
+
+	info(PROGRAM" v%i.%i.%i"REVISION"\n\t"AUTHOR"\n\nCompiled with options: %s"
+		, VERSION_MAJ, VERSION_MID, VERSION_MIN, flags);
+
 	exit(0);
 }
 
@@ -838,7 +842,7 @@ static inline long xstrtol(const char *str, int *err) {
 	return res;
 }
 
-static inline int parse_customsignals(ctx_t *ctx_p, char *arg) {
+__extension__ static inline int parse_customsignals(ctx_t *ctx_p, char *arg) {
 	char *ptr = arg, *start = arg;
 	int ret = 0;
 	unsigned int signal;
@@ -921,7 +925,7 @@ static inline int parse_customsignals(ctx_t *ctx_p, char *arg) {
 	return 0;
 }
 
-static int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t paramsource) {
+__extension__ static int parse_parameter(ctx_t *ctx_p, uint16_t param_id, char *arg, paramsource_t paramsource) {
 	int ret = 0;
 #ifdef _DEBUG_FORCE
 	fprintf(stderr, "Force-Debug: parse_parameter(): %i: %i = \"%s\"\n", paramsource, param_id, arg);
@@ -1830,7 +1834,7 @@ int configs_parse(ctx_t *ctx_p, paramsource_t paramsource) {
 				config_path_real      = xmalloc(config_path_real_size);
 			}
 
-			if ((*config_path_p[0] != '/') && (homedir_len >= 0)) {
+			if (*config_path_p[0] != '/') {
 				memcpy(config_path_real, homedir, homedir_len);
 				config_path_real[homedir_len] = '/';
 				memcpy(&config_path_real[homedir_len+1], *config_path_p, config_path_len+1);
@@ -2162,9 +2166,9 @@ int ctx_check(ctx_t *ctx_p) {
 		case NE_DTRACEPIPE:
 #endif
 			break;
-		default:
+		default: {
 			ret = errno = EINVAL;
-			error("Required one of the next options:"
+			char monitor_types[] =
 #ifdef INOTIFY_SUPPORT
 				" \"--monitor=inotify\""
 #endif
@@ -2183,7 +2187,10 @@ int ctx_check(ctx_t *ctx_p) {
 #ifdef DTRACEPIPE_SUPPORT
 				" \"--monitor=dtracepipe\""
 #endif
-			);
+				;
+
+			error("Required one of the next options: %s", monitor_types);
+		}
 	}
 
 	if (ctx_p->flags[EXITHOOK]) {

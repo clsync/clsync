@@ -113,7 +113,7 @@ static void dir_gotevent(
 	GFileType      filetype = g_file_query_file_type(file, G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, NULL);
 	debug(10, "%p %p %p %i %p %i", filemon, file, file_other, event, arg, filetype);
 
-	char *path_full, *path_rel;
+	char *path_full, *path_rel = NULL;
 	switch (event) {
 		case G_FILE_MONITOR_EVENT_DELETED:
 		case G_FILE_MONITOR_EVENT_CREATED:
@@ -159,6 +159,10 @@ static void dir_gotevent(
 		case G_FILE_MONITOR_EVENT_CREATED:
 		case G_FILE_MONITOR_EVENT_CHANGED:
 		case G_FILE_MONITOR_EVENT_ATTRIBUTE_CHANGED:
+#ifdef PARANOID
+			critical_on (path_rel == NULL);
+#endif
+
 			debug(20, "event_push(\"%s\", %i, %i, %i, %i, %i)", path_rel, fmdat->handle_id, event, objtype, objtype_old, objtype_new);
 			critical_on (event_push(path_rel, fmdat->handle_id, event, objtype, objtype_old, objtype_new));
 			break;
@@ -170,6 +174,8 @@ static void dir_gotevent(
 }
 
 int gio_add_watch_dir(ctx_t *ctx_p, indexes_t *indexes_p, const char *const accpath) {
+	(void) indexes_p;
+
 	filemondata_t *fmdat;
 	GError        *error = NULL;
 	debug(3, "\"%s\"", accpath);
@@ -236,6 +242,8 @@ void *g_iteration_stop(void *_timeout_p) {
 }
 
 static inline int gio_wait_now(ctx_t *ctx_p, struct indexes *indexes_p, struct timeval *tv_p) {
+	(void) ctx_p; (void) indexes_p;
+
 	void *ret;
 	int result;
 	debug(3, "(ctx_p, indexes_p, %p {%u, %u})", tv_p, tv_p == NULL?-1:tv_p->tv_sec, tv_p == NULL?0:tv_p->tv_usec);
@@ -284,6 +292,8 @@ static inline int gio_wait_now(ctx_t *ctx_p, struct indexes *indexes_p, struct t
 	return queue_length;
 }
 int gio_wait(ctx_t *ctx_p, struct indexes *indexes_p, struct timeval *tv_p) {
+	(void) ctx_p;
+
 	int ret;
 
 	debug(30, "pthread_spin_lock(&queue_lock);");
@@ -354,6 +364,8 @@ void free_filemondat(void *_fmdat) {
 
 GMainLoop *gio_loop = NULL;
 int gio_init(ctx_t *ctx_p) {
+	(void) ctx_p;
+
 	queue_length = 0;
 	queue_alloc  = 0;
 	pthread_mutex_init (&gio_mutex_prefetcher, NULL);
@@ -367,6 +379,8 @@ int gio_init(ctx_t *ctx_p) {
 }
 
 int gio_deinit(ctx_t *ctx_p) {
+	(void) ctx_p;
+
 /*
 	g_main_loop_quit(gio_loop);
 	g_hash_table_destroy  (mondirs_ht);

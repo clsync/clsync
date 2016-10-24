@@ -24,7 +24,7 @@
 // Macros for reading messages
 
 #define CLUSTER_RESTDATALEN(clustercmd_p, data_type) \
-	((clustercmd_p)->h.data_len - sizeof(data_type) + sizeof(char *))
+	__extension__((clustercmd_p)->h.data_len - sizeof(data_type) + sizeof(char *))
 
 #define CLUSTER_LOOP_EXPECTCMD(clustercmd_p, clustercmd_id, ret) {\
 		/* Exit if error */ \
@@ -42,7 +42,7 @@
 
 //	calculated required memory for clustercmd packet
 #define CLUSTER_REQMEM(data_type, restdata_len) \
-	(sizeof(clustercmdhdr_t) + sizeof(data_type) + (restdata_len) + 2)
+	__extension__(sizeof(clustercmdhdr_t) + sizeof(data_type) + (restdata_len) + 2)
 
 //	calculated required memory for clustercmd packet with padding
 #define CLUSTER_REQMEM_PADDED(data_type, restdata_len) \
@@ -129,21 +129,21 @@ enum clustercmd_id {
 };
 typedef enum clustercmd_id clustercmd_id_t;
 
-struct clustercmd_hello {
+__extension__ struct clustercmd_hello {
 	char      node_name[0];
 };
 typedef struct clustercmd_hello clustercmd_hello_t;
 
 #define    welcome_to_node_name_len(cmd_p) ((cmd_p)->h.data_len-(((clustercmd_welcome_t *)&(cmd_p)->data)->from_node_name_len)-sizeof(clustercmd_welcome_t))
 #define    welcome_to_node_name(cmddata_p) (&cmddata_p->from_node_name[cmddata_p->from_node_name_len])
-struct clustercmd_welcome {
+__extension__ struct clustercmd_welcome {
 	size_t    from_node_name_len;
 	char      from_node_name[0];
 //                to_node_name  ==  my_node_name+my_node_name_len
 };
 typedef struct clustercmd_welcome clustercmd_welcome_t;
 
-struct clustercmd_reg {
+__extension__ struct clustercmd_reg {
 	char      node_name[0];
 };
 typedef struct clustercmd_reg clustercmd_reg_t;
@@ -165,7 +165,7 @@ struct clustercmd_rej {
 };
 typedef struct clustercmd_rej clustercmd_rej_t;
 
-struct clustercmd_ht_exch {
+__extension__ struct clustercmd_ht_exch {
 	time_t	 ctime;
 	size_t	 path_length;
 	char	 path[0];
@@ -192,7 +192,7 @@ typedef struct clustercmdhdr clustercmdhdr_t;
 
 typedef char clustercmd_die_t;
 
-struct clustercmd {
+__extension__ struct clustercmd {
 	clustercmdhdr_t h;
 	union data {
 		char 			p[0];

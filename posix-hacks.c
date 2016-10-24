@@ -95,3 +95,5 @@ int posixhacks_deinit() {
 
 #endif
 
+extern int make_iso_compilers_happy; // anti-warning
+

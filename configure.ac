@@ -116,10 +116,10 @@ esac],
 [debug=1])
 
 AS_IF([ test "$debug" -ge 1 ],
-[CFLAGS="${CFLAGS} -pipe -Wall -O0 -ggdb3" CPPFLAGS="${CPPFLAGS} -D_DEBUG_SUPPORT"])
+[CFLAGS="${CFLAGS} -pipe -Wall" CPPFLAGS="${CPPFLAGS} -D_DEBUG_SUPPORT"])
 
 AS_IF([ test "$debug" -ge 2 ],
-[CPPFLAGS="${CPPFLAGS} -D_DEBUG_FORCE"])
+[CFLAGS="${CFLAGS} -Wextra -pedantic -O0 -ggdb3" CPPFLAGS="${CPPFLAGS} -D_DEBUG_FORCE"])
 
 dnl --paranoid
 AC_ARG_ENABLE(paranoid,
