@@ -24,8 +24,14 @@
 #define ETIME ETIMEDOUT
 #endif
 
+
+#ifndef __USE_LARGEFILE64
+#	define __USE_LARGEFILE64
+#endif
+
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <assert.h>
 
 #if __FreeBSD__ || __FreeBSD_kernel__
 #	include <sys/syslimits.h>
@@ -51,19 +57,74 @@ static inline int pthread_tryjoin_np ( pthread_t thread, void **retval )
 }
 #	endif
 
-#	ifndef __USE_LARGEFILE64
+#	ifdef __USE_LARGEFILE64
+#		define USE_STAT64
+#	endif
+
+#else
+#	define USE_STAT64
+#endif
+
+#ifndef USE_STAT64
 typedef struct stat stat64_t;
 static inline int lstat64 ( const char *pathname, struct stat *buf )
 {
 	return lstat ( pathname, buf );
 }
-#	else
-typedef struct stat64 stat64_t;
-#	endif
-
-#else
-typedef struct stat64 stat64_t;
 #endif
+
+#ifdef USE_STAT64
+typedef struct stat64 stat64_t;
+static inline void assign_stat64_stat ( stat64_t *dst, struct stat *src )
+{
+#	ifdef PARANOID
+	assert ( src != NULL );
+	assert ( dst != NULL );
+#	endif
+#	define STAT_ASSIGN(field) \
+	dst->st_ ## field = src->st_ ## field ;
+	STAT_ASSIGN ( dev );
+	STAT_ASSIGN ( ino );
+	STAT_ASSIGN ( mode );
+	STAT_ASSIGN ( nlink );
+	STAT_ASSIGN ( uid );
+	STAT_ASSIGN ( gid );
+	STAT_ASSIGN ( rdev );
+	STAT_ASSIGN ( size );
+	STAT_ASSIGN ( blksize );
+	STAT_ASSIGN ( blocks );
+	//STAT_ASSIGN(attr);
+	memcpy ( &dst->st_atime, &src->st_atime, sizeof ( dst->st_atime ) );
+	memcpy ( &dst->st_mtime, &src->st_mtime, sizeof ( dst->st_mtime ) );
+	memcpy ( &dst->st_ctime, &src->st_ctime, sizeof ( dst->st_ctime ) );
+#	undef STAT_ASSIGN
+	return;
+}
+#else
+static inline void assign_stat64_stat ( stat64_t *dst, struct stat *src )
+{
+	memcpy ( dst, src, sizeof ( *dst ) );
+	return;
+}
+#endif
+
+/*
+#ifndef INIT_STRUCT_STAT64_PADDING
+#	define INIT_STRUCT_STAT64_PADDING INIT_STRUCT_STAT_PADDING
+#endif
+#ifndef INIT_STRUCT_STAT_PADDING
+#	define INIT_STRUCT_STAT_PADDING(st) _init_struct_stat_padding(&st)
+static inline void _init_struct_stat_padding(stat64_t *st) {
+#	ifdef __x86_64__
+	st->__pad0 = 0;
+	memset(st->__syscall_slong_t, 0, sizeof(st->__syscall_slong_t));
+#	else
+	st->__pad1 = 0;
+	st->__pad2 = 0;
+#	endif
+}
+#endif
+*/
 
 #ifdef CLSYNC_ITSELF
 #	ifndef O_PATH
