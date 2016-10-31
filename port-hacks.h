@@ -62,7 +62,9 @@ static inline int pthread_tryjoin_np ( pthread_t thread, void **retval )
 #	endif
 
 #else
-#	define USE_STAT64
+#	ifdef __GLIBC__
+#		define USE_STAT64
+#	endif
 #endif
 
 #ifndef USE_STAT64
