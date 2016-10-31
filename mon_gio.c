@@ -316,22 +316,22 @@ int gio_handle ( ctx_t *ctx_p, indexes_t *indexes_p )
 
 	while ( gio_wait ( ctx_p, indexes_p, &tv ) ) {
 		event_t *ev = event_pop();
-		stat64_t lstat, *lstat_p;
+		stat64_t lst, *lst_p;
 		mode_t st_mode;
 		size_t st_size;
 
-		if ( ( ev->objtype_new == EOT_DOESNTEXIST ) || ( ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT ) || lstat64 ( ev->path, &lstat ) ) {
-			debug ( 2, "Cannot lstat64(\"%s\", lstat). Seems, that the object had been deleted (%i) or option \"--cancel-syscalls mon_stat\" (%i) is set.", ev->path, ev->objtype_new == EOT_DOESNTEXIST, ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT );
+		if ( ( ev->objtype_new == EOT_DOESNTEXIST ) || ( ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT ) || lstat64 ( ev->path, &lst ) ) {
+			debug ( 2, "Cannot lstat64(\"%s\", &lst). Seems, that the object had been deleted (%i) or option \"--cancel-syscalls mon_stat\" (%i) is set.", ev->path, ev->objtype_new == EOT_DOESNTEXIST, ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT );
 			st_mode = ( ev->objtype_event == EOT_DIR ? S_IFDIR : S_IFREG );
 			st_size = 0;
-			lstat_p = NULL;
+			lst_p   = NULL;
 		} else {
-			st_mode = lstat.st_mode;
-			st_size = lstat.st_size;
-			lstat_p = &lstat;
+			st_mode = lst.st_mode;
+			st_size = lst.st_size;
+			lst_p   = &lst;
 		}
 
-		if ( sync_prequeue_loadmark ( 1, ctx_p, indexes_p, NULL, ev->path, lstat_p, ev->objtype_old, ev->objtype_new, ev->event_id, ev->handle_id, st_mode, st_size, &path_full, &path_full_len, NULL ) ) {
+		if ( sync_prequeue_loadmark ( 1, ctx_p, indexes_p, NULL, ev->path, lst_p, ev->objtype_old, ev->objtype_new, ev->event_id, ev->handle_id, st_mode, st_size, &path_full, &path_full_len, NULL ) ) {
 			event_free ( ev );
 			count = -1;
 			break;
