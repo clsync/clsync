@@ -2,9 +2,7 @@ ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = examples
 
 if CLSYNC
-bin_PROGRAMS = clsync gencompilerflags
-
-gencompilerflags_SOURCES = gencompilerflags.c
+bin_PROGRAMS = clsync
 
 clsync_SOURCES = calc.c cluster.c error.c fileutils.c glibex.c		\
 	indexes.c main.c malloc.c rules.c stringex.c sync.c		\
@@ -87,6 +85,9 @@ main.o: compilerflags.h
 
 compilerflags.h: gencompilerflags
 	./gencompilerflags > compilerflags.h
+
+gencompilerflags:
+	$(CC) $(gencompilerflags_CFLAGS) gencompilerflags.c -o gencompilerflags
 
 dist_man_MANS = man/man1/clsync.1
 endif
