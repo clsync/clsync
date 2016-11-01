@@ -70,10 +70,10 @@ static inline int indexes_filetreecache_del ( indexes_t *indexes_p, const char *
 
 #include "filetree_cache.h"
 
-static inline int indexes_filetreecache_add ( indexes_t *indexes_p, filetree_cache_entry_t *entry )
+static inline int indexes_filetreecache_add ( indexes_t *indexes_p, char *path, filetree_cache_entry_t *entry )
 {
-	debug ( 4, "indexes_filetreecache_add(indexes_p, \"%s\", %p)", entry->dat.path, entry );
-	g_hash_table_insert ( indexes_p->filetree_cache_ht, entry->dat.path, entry );
+	debug ( 4, "indexes_filetreecache_add(indexes_p, \"%s\", %p)", path, entry );
+	g_hash_table_insert ( indexes_p->filetree_cache_ht, path, entry );
 	return 0;
 }
 

@@ -93,6 +93,7 @@ _filetree_cache_add (
 	assert ( data_entry != NULL );
 #endif
 	debug ( 8, "start" );
+#ifdef PARANOID
 	{
 		filetree_cache_entry_t *entry_old = filetree_cache_get ( ctx_p, data_entry->path );
 
@@ -101,6 +102,7 @@ _filetree_cache_add (
 			return _filetree_cache_update ( ctx_p, entry_old, data_entry );
 		}
 	}
+#endif
 	size_t entry_id = ctx_p->filetree_cache_len++;
 
 	if ( ctx_p->filetree_cache_len >= ctx_p->filetree_cache_size ) {
@@ -114,8 +116,14 @@ _filetree_cache_add (
 			indexes_filetreecache_flush ( ctx_p->indexes_p );
 			size_t i = 0;
 
-			while ( i < ctx_p->filetree_cache_len - 1 )
-				indexes_filetreecache_add ( ctx_p->indexes_p, &ctx_p->filetree_cache[i++] );
+			while ( i < ctx_p->filetree_cache_len - 1 ) {
+				filetree_cache_entry_t *entry = &ctx_p->filetree_cache[i++];
+				char *path = entry->dat.path;
+				/*if ( *path == '/' )
+					path++;*/
+
+				indexes_filetreecache_add ( ctx_p->indexes_p, path, entry );
+			}
 		}
 	}
 
@@ -130,7 +138,13 @@ _filetree_cache_add (
 #endif
 	memcpy ( &entry->dat, data_entry, sizeof ( *data_entry ) );
 	entry->id = entry_id;
-	indexes_filetreecache_add ( ctx_p->indexes_p, entry );
+	{
+		char *path = entry->dat.path;
+		if ( *path == '/' )
+			path++;
+
+		indexes_filetreecache_add ( ctx_p->indexes_p, path, entry );
+	}
 	debug ( 8, "end" );
 	return entry;
 }
@@ -209,7 +223,7 @@ _filetree_cache_del (
 	size_t entry_id = entry_del->id;
 	memcpy ( entry_del, entry_move, sizeof ( *entry_del ) );
 	ctx_p->filetree_cache[entry_id].id = entry_id;
-	indexes_filetreecache_add ( ctx_p->indexes_p, entry_move );
+	indexes_filetreecache_add ( ctx_p->indexes_p, entry_move->dat.path, entry_move );
 	return 0;
 }
 

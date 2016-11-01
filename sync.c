@@ -1010,8 +1010,13 @@ char *sync_path_rel2abs ( ctx_t *ctx_p, const char *path_rel, ssize_t path_rel_l
 
 	memcpy ( &path_abs[watchdirlen + 1], path_rel, path_rel_len + 1 );
 
+	if ( watchdirlen != 0 && path_rel_len == 0 )	// Cut off an extra slash if [path_rel == ""]: "/watch/dir/" -> "/watch/dir"
+		path_abs[--path_abs_len] = 0;
+
 	if ( path_abs_len_p != NULL )
 		*path_abs_len_p = path_abs_len;
+
+	debug( 10, "sync_path_rel2abs() -> \"%s\"", path_abs );
 
 	return path_abs;
 }
@@ -2051,7 +2056,7 @@ int sync_initialsync_use_cache_iterations ( const char *path, ctx_t *ctx_p, inde
 
 int sync_notify_mark ( ctx_t *ctx_p, const char *accpath, const char *path_abs, size_t path_abs_len, const char *path_rel, indexes_t *indexes_p )  	// TODO: remove path_abs (replace it with path_rel)
 {
-	debug ( 3, "(..., \"%s\", %i,...)", path_abs, path_abs_len );
+	debug ( 3, "(..., \"%s\", %i, \"%s\", ...)", path_abs, path_abs_len, path_rel );
 	int wd = indexes_fpath2wd ( indexes_p, path_abs );
 
 	if ( wd != -1 ) {
@@ -3196,9 +3201,11 @@ gboolean rsync_aggrout ( gpointer outline_gp, gpointer flags_gp, gpointer arg_gp
 	}
 
 	if ( FILETREECACHE_ENABLED ( dosync_arg_p->ctx_p ) ) {
-		filetree_cache_entry_t *entry = filetree_cache_get ( dosync_arg_p->ctx_p, strlen ( outline ) > 0 ? &outline[1] : "" );
-		critical_on ( entry == NULL );
-		entry->is_synced = 1;
+		filetree_cache_entry_t *entry = filetree_cache_get ( dosync_arg_p->ctx_p, outline );
+		//if ( entry == NULL )
+		//	critical ( "entry == NULL: cannot find cache entry for path \"%s\"", outline );
+		if ( entry != NULL )
+			entry->is_synced = 1;
 	}
 
 	return TRUE;
@@ -3213,14 +3220,14 @@ static inline int rsync_listpush ( indexes_t *indexes_p, const char *fpath, size
 {
 	char *fpathwslash;
 
+	fpathwslash = ( char * ) fpath;
 	if ( fpath_len > 0 ) {
-		// Prepending with the slash
-		fpathwslash = alloca ( fpath_len + 2 );
-		fpathwslash[0] = '/';
-		memcpy ( &fpathwslash[1], fpath, fpath_len + 1 );
-	} else {
-		// In this case slash is not required
-		fpathwslash = ( char * ) fpath;
+		// Prepending with the slash if required
+		if ( *fpathwslash != '/' ) {
+			fpathwslash = alloca ( fpath_len + 2 );
+			fpathwslash[0] = '/';
+			memcpy ( &fpathwslash[1], fpath, fpath_len + 1 );
+		}
 	}
 
 	fpathwslash = ( char * ) rsync_escape ( fpathwslash );
