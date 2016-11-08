@@ -2648,7 +2648,7 @@ clsync \-Msimple \-S echo \-W /opt/global \-b0 \-\- pdcp \-a %INCLUDE\-LIST% %IN
 
 .B Automatically run 'make build' if any '*.c' file changed
 .RS
-printf "%s\n" "+f\.c$" "\-f" | clsync \-\-have-recursive-sync \-W . \-R /dev/stdin \-Mdirect \-r1 \-\-ignore\-failures \-t1 \-w1 \-Smake \-\- build
+printf "%s\\n" "+f\.c$" "\-f" | clsync \-\-have-recursive-sync \-W . \-R /dev/stdin \-Mdirect \-r1 \-\-ignore\-failures \-t1 \-w1 \-Smake \-\- build
 .RE
 
 More working examples you can try out in "/usr/share/doc/clsync/examples/"
