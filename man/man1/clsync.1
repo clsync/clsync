@@ -2409,6 +2409,12 @@ signal.
 
 .SH DIAGNOSTICS
 
+.B clsync
+misses events:
+.RS
+Try to run command: sysctl fs.inotify.max_queued_events=1048576
+.RE
+
 Initial rsync process works very slow on clsync start
 .RS
 Probably there's too huge exclude list is passed to rsync. This can happened
