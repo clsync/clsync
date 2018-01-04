@@ -9,4 +9,4 @@ v0.1 -> v0.2:
 * sync-handler mode is selectable via "--mode" option (not "-R", "-d", "-M", "-S")
 * Removed shorthands for "--synclist-simplify", "--rsync-inclimit", "--rsync-prefer-include"
 * Option "--initialsync-enable" renamed to "--have-recursive-sync"
-
+* this is Eric's tag
