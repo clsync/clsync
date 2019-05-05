@@ -600,6 +600,39 @@ const char *parameter_get ( const char *variable_name, void *_ctx_p )
 }
 
 /**
+ * @brief 			Gets the name of the parameter by it's id
+ *
+ * @param[in]	param_id	The id of the parameter
+ *
+ * @retval	char *		Pointer to newly allocated string, if successful
+ * @retval	NULL		On error
+ *
+ */
+const char *parameter_get_name_by_id ( const uint16_t param_id )
+{
+	const struct option *long_option_p = long_options;
+	const char *param_name = NULL;
+	debug ( 8, "(%u)", param_id );
+
+	while ( long_option_p->name != NULL ) {
+		if ( long_option_p->val == param_id ) {
+			param_name = long_option_p->name;
+			break;
+		}
+
+		long_option_p++;
+	}
+
+	if ( param_name == NULL ) {
+		errno = ENOENT;
+		return NULL;
+	}
+
+	debug ( 9, "param: %u -> \"%s\"", param_id, param_name );
+	return param_name;
+}
+
+/**
  * @brief 			Gets raw (string) an option value by an option name and
  * 				updates ctx_p->synchandler_argf
  *
@@ -809,6 +842,40 @@ char *parameter_expand (
 	return arg;
 }
 
+/**
+ * @brief 			Gets the name of the parameter source by it's id
+ *
+ * @param[in]	paramsource	The id of the parameter source
+ *
+ * @retval	char *		Pointer to newly allocated string, if successful
+ * @retval	NULL		On error
+ *
+ */
+const char *parametersource_get_name ( paramsource_t paramsource )
+{
+	switch ( paramsource ) {
+		case PS_UNKNOWN:
+			return "unknown_case_0";
+
+		case PS_ARGUMENT:
+			return "cli_arguments";
+
+		case PS_CONFIG:
+			return "config";
+
+		case PS_CONTROL:
+			return "control";
+
+		case PS_DEFAULTS:
+			return "defaults";
+
+		case PS_CORRECTION:
+			return "correction";
+	}
+
+	return "unknown_case_1";
+}
+
 static inline int synchandler_arg ( char *arg, size_t arg_len, void *_ctx_p, enum shargsid shargsid )
 {
 	ctx_t *ctx_p = _ctx_p;
@@ -877,6 +944,27 @@ static inline long xstrtol ( const char *str, int *err )
 	}
 
 	return res;
+}
+
+// a wrapper for xstrtol with a trimming of leading and tailing whitespaces
+static inline long xstrtol_trim ( char *str, int *err )
+{
+	// Removing whitespace from the beginning
+	while ( *str == ' ' || *str == '\t' || *str == '\r' || *str == '\n' ) str++;
+
+	// Removing whitespaces from the ending
+	char *end = str;
+
+	while ( *end != '\0' ) end++; // find the end of the string
+
+	end--;
+
+	while ( *end == ' ' || *end == '\t' || *end == '\r' || *end == '\n' ) end--; // find the end of the string excluding whitespaces
+
+	end++;
+	*end = '\0';
+	// Calling xstrtol(), obviously :)
+	return xstrtol ( str, err );
 }
 
 __extension__ static inline int parse_customsignals ( ctx_t *ctx_p, char *arg )
@@ -1067,7 +1155,7 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 				ctx_p->flags[param_id]++;
 
 				if ( pwd == NULL ) {
-					ctx_p->uid = ( unsigned int ) xstrtol ( arg, &ret );
+					ctx_p->uid = ( unsigned int ) xstrtol_trim ( arg, &ret );
 					break;
 				}
 
@@ -1080,7 +1168,7 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 				ctx_p->flags[param_id]++;
 
 				if ( grp == NULL ) {
-					ctx_p->gid = ( unsigned int ) xstrtol ( arg, &ret );
+					ctx_p->gid = ( unsigned int ) xstrtol_trim ( arg, &ret );
 					break;
 				}
 
@@ -1155,7 +1243,7 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 				ctx_p->flags[param_id]++;
 
 				if ( pwd == NULL ) {
-					ctx_p->privileged_uid = ( unsigned int ) xstrtol ( arg, &ret );
+					ctx_p->privileged_uid = ( unsigned int ) xstrtol_trim ( arg, &ret );
 					break;
 				}
 
@@ -1168,7 +1256,7 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 				ctx_p->flags[param_id]++;
 
 				if ( grp == NULL ) {
-					ctx_p->privileged_gid = ( unsigned int ) xstrtol ( arg, &ret );
+					ctx_p->privileged_gid = ( unsigned int ) xstrtol_trim ( arg, &ret );
 					break;
 				}
 
@@ -1181,7 +1269,7 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 				ctx_p->flags[param_id]++;
 
 				if ( pwd == NULL ) {
-					ctx_p->synchandler_uid = ( unsigned int ) xstrtol ( arg, &ret );
+					ctx_p->synchandler_uid = ( unsigned int ) xstrtol_trim ( arg, &ret );
 					break;
 				}
 
@@ -1194,7 +1282,7 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 				ctx_p->flags[param_id]++;
 
 				if ( grp == NULL ) {
-					ctx_p->synchandler_gid = ( unsigned int ) xstrtol ( arg, &ret );
+					ctx_p->synchandler_gid = ( unsigned int ) xstrtol_trim ( arg, &ret );
 					break;
 				}
 
@@ -1416,7 +1504,7 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 			break;
 
 		case RETRIES:
-			ctx_p->retries		= ( unsigned int ) xstrtol ( arg, &ret );
+			ctx_p->retries		= ( unsigned int ) xstrtol_trim ( arg, &ret );
 			break;
 #ifdef THREADING_SUPPORT
 
@@ -1473,11 +1561,11 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 			break;
 
 		case CLUSTERMCASTIPPORT:
-			ctx_p->cluster_mcastipport	= ( uint16_t ) xstrtol ( arg, &ret );
+			ctx_p->cluster_mcastipport	= ( uint16_t ) xstrtol_trim ( arg, &ret );
 			break;
 
 		case CLUSTERTIMEOUT:
-			ctx_p->cluster_timeout		= ( unsigned int ) xstrtol ( arg, &ret );
+			ctx_p->cluster_timeout		= ( unsigned int ) xstrtol_trim ( arg, &ret );
 			break;
 
 		case CLUSTERNODENAME:
@@ -1485,15 +1573,15 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 			break;
 
 		case CLUSTERHDLMIN:
-			ctx_p->cluster_hash_dl_min	= ( uint16_t ) xstrtol ( arg, &ret );
+			ctx_p->cluster_hash_dl_min	= ( uint16_t ) xstrtol_trim ( arg, &ret );
 			break;
 
 		case CLUSTERHDLMAX:
-			ctx_p->cluster_hash_dl_max	= ( uint16_t ) xstrtol ( arg, &ret );
+			ctx_p->cluster_hash_dl_max	= ( uint16_t ) xstrtol_trim ( arg, &ret );
 			break;
 
 		case CLUSTERSDLMAX:
-			ctx_p->cluster_scan_dl_max	= ( uint16_t ) xstrtol ( arg, &ret );
+			ctx_p->cluster_scan_dl_max	= ( uint16_t ) xstrtol_trim ( arg, &ret );
 			break;
 #endif
 
@@ -1540,19 +1628,19 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 			}
 
 		case SYNCDELAY:
-			ctx_p->syncdelay		= ( unsigned int ) xstrtol ( arg, &ret );
+			ctx_p->syncdelay		= ( unsigned int ) xstrtol_trim ( arg, &ret );
 			break;
 
 		case DELAY:
-			ctx_p->_queues[QUEUE_NORMAL].collectdelay  = ( unsigned int ) xstrtol ( arg, &ret );
+			ctx_p->_queues[QUEUE_NORMAL].collectdelay  = ( unsigned int ) xstrtol_trim ( arg, &ret );
 			break;
 
 		case BFILEDELAY:
-			ctx_p->_queues[QUEUE_BIGFILE].collectdelay = ( unsigned int ) xstrtol ( arg, &ret );
+			ctx_p->_queues[QUEUE_BIGFILE].collectdelay = ( unsigned int ) xstrtol_trim ( arg, &ret );
 			break;
 
 		case BFILETHRESHOLD:
-			ctx_p->bfilethreshold = ( unsigned long ) xstrtol ( arg, &ret );
+			ctx_p->bfilethreshold = ( unsigned long ) xstrtol_trim ( arg, &ret );
 			break;
 
 		case CANCEL_SYSCALLS: {
@@ -1628,11 +1716,11 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 			}
 
 		case RSYNCINCLIMIT:
-			ctx_p->rsyncinclimit = ( unsigned int ) xstrtol ( arg, &ret );
+			ctx_p->rsyncinclimit = ( unsigned int ) xstrtol_trim ( arg, &ret );
 			break;
 
 		case SYNCTIMEOUT:
-			ctx_p->synctimeout   = ( unsigned int ) xstrtol ( arg, &ret );
+			ctx_p->synctimeout   = ( unsigned int ) xstrtol_trim ( arg, &ret );
 			break;
 
 		case PREEXITHOOK:
@@ -1872,12 +1960,20 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 			if ( arg == NULL )
 				ctx_p->flags[param_id]++;
 			else
-				ctx_p->flags[param_id] = xstrtol ( arg, &ret );
+				ctx_p->flags[param_id] = xstrtol_trim ( arg, &ret );
 
 #ifdef _DEBUG_FORCE
 			fprintf ( stderr, "Force-Debug: flag %i is set to %i\n", param_id & 0xff, ctx_p->flags[param_id] );
 #endif
 			break;
+	}
+
+	if ( ret != 0 ) {
+		if ( arg == NULL ) {
+			error ( "Unable to process option \"%s\" from \"%s\"", parameter_get_name_by_id ( param_id ), parametersource_get_name ( paramsource ) );
+		} else {
+			error ( "Unable to process option \"%s\" (with argument: \"%s\") from \"%s\"", parameter_get_name_by_id ( param_id ), arg, parametersource_get_name ( paramsource ) );
+		}
 	}
 
 	return ret;

@@ -362,6 +362,11 @@ You can look there if you wish. ;)
 
 I'll be glad to receive code contribution :)
 
+The astyle command:
+```
+astyle --style=linux --indent=tab --indent-cases --indent-switches --indent-preproc-define --break-blocks --pad-oper --pad-paren --delete-empty-lines
+```
+
 13. Articles
 ------------
 
