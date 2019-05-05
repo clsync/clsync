@@ -570,7 +570,7 @@ int clsyncapi_getapiversion()
  * @param[in]	_ctx_p		Context
  @ @param[in]	variable_name	The name of the option
  *
- * @retval	char *		Pointer to newly allocated string, if successful
+ * @retval	char *		Pointer to constant string, if successful
  * @retval	NULL		On error
  *
  */
@@ -604,7 +604,7 @@ const char *parameter_get ( const char *variable_name, void *_ctx_p )
  *
  * @param[in]	param_id	The id of the parameter
  *
- * @retval	char *		Pointer to newly allocated string, if successful
+ * @retval	char *		Pointer to a constant string, if successful
  * @retval	NULL		On error
  *
  */
@@ -847,7 +847,7 @@ char *parameter_expand (
  *
  * @param[in]	paramsource	The id of the parameter source
  *
- * @retval	char *		Pointer to newly allocated string, if successful
+ * @retval	char *		Pointer to a constant string, if successful
  * @retval	NULL		On error
  *
  */
