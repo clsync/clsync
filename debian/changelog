@@ -1,8 +1,16 @@
 clsync (0.4.3-1) unstable; urgency=low
 
+  * Fixed mode "simple": use absolute paths
+  * Better error reporting on bad arguments/configuration.
+  * Disabled "seccomp" features to make the package buildable
+    on non-x86 platforms
+  * Updated the manpage
+
+ -- Dmitry Yu Okunev <xaionaro@gmail.com>  Mon, 06 May 2019 11:26:23 +0300
+clsync (0.4.2-1) unstable; urgency=medium
+
   [ Dmitry Yu Okunev ]
   * Fixed building on Debian/kFreeBSD.
-  * Better error reporting on bad arguments/configuration.
   * Fixed "Permission denied" caused by "--enable-debug=no".
   * Option "check-execvp-args" renamed to "check-execvp-arguments".
   * Fixed building and running on i386 with enabled seccomp.
@@ -13,18 +21,12 @@ clsync (0.4.3-1) unstable; urgency=low
   * Forbidded option "--debug" if compiled with "--enabled-debug=no"
   * Added rule types: "m", "s" and "W"
   * Fixed a bug related to sync retries
-  * Fixed mode "simple": use absolute paths
 
   [ Barak A. Pearlmutter ]
   * New upstream release
   * Bump standards version
   * Fix some typos
   * Harden
-
- -- Dmitry Yu Okunev <xaionaro@gmail.com>  Mon, 06 May 2019 11:26:23 +0300
-clsync (0.4.2-1) unstable; urgency=medium
-
-  * New upstream release with a lot of fixes
 
  -- Barak A. Pearlmutter <bap@debian.org>  Tue, 12 May 2015 08:53:54 +0100
 
