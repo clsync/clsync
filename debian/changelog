@@ -1,3 +1,21 @@
+clsync (0.4.3-1) unstable; urgency=low
+
+  * Fixed building on Debian/kFreeBSD.
+  * Better error reporting on bad arguments/configuration.
+  * Fixed "Permission denied" caused by "--enable-debug=no".
+  * Option "check-execvp-args" renamed to "check-execvp-arguments".
+  * Fixed building and running on i386 with enabled seccomp.
+  * Fixed a "Segmentation fault" and a deadlock on high load with
+    enabled "thread splitting".
+  * Forbidded to enable together: "--theading" and "--seccomp-filter"
+    (bug: https://github.com/xaionaro/clsync/issues/139).
+  * Forbidded option "--debug" if compiled with "--enabled-debug=no"
+  * Added rule types: "m", "s" and "W"
+  * Fixed a bug related to sync retries
+  * Fixed mode "simple": use absolute paths
+
+ -- Dmitry Yu Okunev <xaionaro@gmail.com>  Mon, 06 May 2019 11:26:23 +0300
+
 clsync (0.4.1-1) unstable; urgency=medium
 
   * New upstream release with a lot of fixes
