@@ -2274,6 +2274,7 @@ int sync_prequeue_loadmark
 				*path_buf_p   = sync_path_rel2abs ( ctx_p, path_rel,  -1, path_buf_len_p, *path_buf_p );
 				path_full    = *path_buf_p;
 			}
+
 			return SAFE ( sync_dosync ( path_full, event_mask, ctx_p, indexes_p ), debug ( 1, "fpath == \"%s\"; evmask == 0x%o", path_full, event_mask ); return -1; );
 
 		default:

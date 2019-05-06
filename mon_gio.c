@@ -282,7 +282,7 @@ static inline int gio_wait_now ( ctx_t *ctx_p, struct indexes *indexes_p, struct
 		}
 	*/
 	debug_call  ( 40, pthread_spin_unlock ( &queue_lock ) );
-	debug ( 20 , "g_main_context_iteration(NULL, TRUE); queue_length == %i", queue_length );
+	debug ( 20, "g_main_context_iteration(NULL, TRUE); queue_length == %i", queue_length );
 	result  = g_main_context_iteration ( NULL, TRUE );
 	debug ( 10, "g_main_context_iteration() -> %i", result );
 	debug_call  ( 40, pthread_spin_lock ( &queue_lock ) );

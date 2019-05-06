@@ -184,7 +184,7 @@ void _critical ( const char *const function_name, const char *fmt, ... )
 		return;
 
 	struct timespec abs_time;
-	clock_gettime ( CLOCK_REALTIME , &abs_time );
+	clock_gettime ( CLOCK_REALTIME, &abs_time );
 	abs_time.tv_sec += 1;
 
 	if ( error_mutex_p != NULL )

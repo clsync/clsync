@@ -111,11 +111,11 @@
 	SECCOMP_ALLOW_ACCUM_SYSCALL(nanosleep),				\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(shmdt),				\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(clone),		/* for --threading */		\
-	                            SECCOMP_ALLOW_ACCUM_SYSCALL(set_robust_list),	/* for --threading? */		\
-	                            SECCOMP_ALLOW_ACCUM_SYSCALL(madvise),				\
-	                            SECCOMP_ALLOW_ACCUM_SYSCALL(exit),				\
-	                            SECCOMP_ALLOW_ACCUM_SYSCALL(clock_gettime),			\
-	                             
+	SECCOMP_ALLOW_ACCUM_SYSCALL(set_robust_list),	/* for --threading? */		\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(madvise),				\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(exit),				\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(clock_gettime),			\
+
 # ifdef __i386__
 #  define FILTER_TABLE_ARCHDEPENDED			/* unused */	\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(fstat64),				\
@@ -125,14 +125,14 @@
 	SECCOMP_ALLOW_ACCUM_SYSCALL(mmap2),				\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(gettimeofday),			\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(_newselect),			\
-	 
+
 # else
 #  define FILTER_TABLE_ARCHDEPENDED					\
 	SECCOMP_ALLOW_ACCUM_SYSCALL(fstat),		/* unused */	\
-	                            SECCOMP_ALLOW_ACCUM_SYSCALL(lstat),				\
-	                            SECCOMP_ALLOW_ACCUM_SYSCALL(stat),		/* unused */	\
-	                            SECCOMP_ALLOW_ACCUM_SYSCALL(mmap),				\
-	                             
+	SECCOMP_ALLOW_ACCUM_SYSCALL(lstat),				\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(stat),		/* unused */	\
+	SECCOMP_ALLOW_ACCUM_SYSCALL(mmap),				\
+
 # endif
 
 
@@ -649,7 +649,7 @@ int privileged_execvp_check_arguments ( struct pa_options *opts, const char *u_f
 	}
 
 	debug ( 1, "a_i == %i; SHARGS_MAX == %i; u_argc == %i", SHARGS_MAX, a_i, u_argc );
-	critical ( "Arguments are wrong. This should happend only on hacking attack." );
+	critical ( "Arguments are wrong. This should happen only on hacking attack." );
 	return EPERM;
 }
 

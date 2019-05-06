@@ -468,7 +468,7 @@ static inline int cluster_read ( int sock, clustercmd_t **cmd_pp, cluster_read_f
 #ifdef PARANOID
 
 	if ( !readret ) {
-		error ( "recvfrom() returned 0. This shouldn't happend. Exit." );
+		error ( "recvfrom() returned 0. This shouldn't happen. Exit." );
 		return EINVAL;
 	}
 
