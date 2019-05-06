@@ -9,7 +9,7 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 	dh $@
 
 override_dh_auto_configure:
-	dh_auto_configure -- --enable-socket --enable-socket-library --enable-highload-locks
+	dh_auto_configure -- --enable-socket --enable-socket-library --enable-highload-locks --disable-seccomp
 
 override_dh_auto_install:
 	dh_auto_install
