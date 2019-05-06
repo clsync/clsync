@@ -13,7 +13,7 @@ Vcs-Browser: https://salsa.debian.org/debian/clsync
 Package: clsync
 Recommends: rsync
 Architecture: any
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends: lsb-base, ${shlibs:Depends}, ${misc:Depends}
 Description: live sync tool based on inotify, written in GNU C
  Clsync recursively watches for source directory and executes external
  program to sync the changes. Clsync is adapted to use together with rsync.
