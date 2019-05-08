@@ -1,10 +1,10 @@
-[![Build Status](https://travis-ci.org/xaionaro/clsync.png?branch=master)](https://travis-ci.org/xaionaro/clsync)
+``[![Build Status](https://travis-ci.org/xaionaro/clsync.png?branch=master)](https://travis-ci.org/xaionaro/clsync)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/xaionaro/clsync?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 clsync
 ======
-Contents
---------
+0 - Contents
+------------
 
 1.  Name
 2.  Motivation
@@ -14,43 +14,38 @@ Contents
 6.  Example of usage
 7.  Other uses
 8.  Clustering
-9.  Known building issues
-10. FreeBSD support
-11. Support
-12. Developing
-13. Articles
-14. See also
+9.  FreeBSD support
+10. Support
+11. Developing
+12. Articles
+13. See also
 
 
-1. Name
--------
+1 - Name
+--------
 
-Why "clsync"? The first name of the utility was "insync" (due to inotify) but
-then I suggested to use "fanotify" instead of "inotify" and utility has been
-renamed to "fasync". After that I started to intensively write the program and
-I faced with some problems in "fanotify". So I was have to temporary fallback
-to "inotify" then I decided that the best name is "Runtime Sync" or
-"Live Sync" but "rtsync" is a name of some corporation and "lsync" is busy
-by "[lsyncd](https://github.com/axkibe/lsyncd)". So I called it
-"clsync" that should be interpreted as "lsync but on c" due to "lsyncd" that
-written on "LUA" and may be used for the same purposes.
+Why `clsync`? The first name of the utility was `insync` (due to `inotify`) but
+then I was suggested to use `fanotify` instead of `inotify` and utility has been
+renamed to `fasync`. Then I started to intensively write the program and
+I faced with some problems in `fanotify` (see "inotify vs fanotify"). So I was
+have to temporary fallback to `inotify`, so I decided that the best name is
+"Runtime Sync" or "Live Sync" but `rtsync` is a name of some corporation and
+`lsync` is busy by "[lsyncd](https://github.com/axkibe/lsyncd)". So I called it
+`clsync` that should be interpreted as "lsync but on c" due to "lsyncd" that
+written on "LUA" and may be used for similar purposes.
 
-UPD: Also I was have to add somekind of clustering support. It's a multicast
-notifing subsystem to prevent loops on bidirection syncing. So "clsync" also
-can be interpreted as "cluster live sync". ;)
-
-2. Motivation
--------------
+2 - Motivation
+--------------
 
 This utility has been written for two purposes:
 - for making high availability clusters
 - for making backups of them
 
-To do a HA cluster I've tried a lot of different solutions, like "simple 
-rsync by cron", "glusterfs", "ocfs2 over drbd", "common mirrorable external 
-storage", "incron + perl + rsync", "inosync", "lsyncd" and so on. When I 
+To do a HA cluster I've tried a lot of different solutions, like "simple
+rsync by cron", "glusterfs", "ocfs2 over drbd", "shared replicated external
+storage", "incron + perl + rsync", "inosync", "lsyncd" and so on. When I
 started to write the utility we were using "lsyncd", "ceph" and
-"ocfs2 over drbd". However all of this solutions doesn't arrange me, so I
+"ocfs2 over drbd". However all of this solutions doesn't satisfy me, so I
 was have to write own utility for this purpose.
 
 To do backups we also tried a lot of different solution, and again I was have
@@ -65,32 +60,35 @@ for example:
 of our systems.
 - It's a little buggy (it crashed on our cases).
 - Sometimes, it's too complex in configuration for our situation (not flexible
-enough). For example it can't set another event-collecting delay for big files.
+enough). For example it doesn't have another event-collecting delay for big files.
 We don't want to sync big files (`>1GiB`) so often as ordinary files.
 - Shared object (.so file) cannot be used as rsync-wrapper.
-- It doesn't support kqueue/bsm
+- It doesn't support kqueue/bsm (we also had a FreeBSD-based system).
 - It's not secure enough. No builtin containerization support to reduce risks.
+- ... and other tiny problems...
 
-"lsyncd" - is really good and useful utility, just did not fit to our needs.
-We spent enough much time on tuning "lsyncd" that realized we could write own
-solution sharpened by our tasks. So there it is :)
+"lsyncd" - is a good and useful utility, just did not fit to our needs will
+enough. And we spent enough much time on tuning "lsyncd" to realize that we
+could've write an new solution sharpened by our tasks. So there it is :)
 
-Also clsync had been used to replace incron/csync2/etc in HPC-clusters for
-syncing /etc/{passwd,shadow,group,shells} files and running post-scripts.
+Also `clsync` had been used for some other tiny tasks, like to replace
+incron/csync2/etc in our HPC-clusters for syncing /etc/{passwd,shadow,group,shells}
+files and running post-scripts.
 
-3. inotify vs fanotify:
------------------------
+3 - inotify vs fanotify
+------------------------
 
-It's said that fanotify is much better than inotify. So I started to write 
+It's said that fanotify is much better than inotify. So I started to write
 this program with using of fanotify. However I encountered the problem, that
 fanotify was unable to catch some important events at the moment of writing
 the program, like "directory creation" or "file deletion". So I switched to
 "inotify", leaving the code for "fanotify" in the safety... So, don't use
 "fanotify" in this utility ;).
 
+UPD: Starting with kernels 5.1 we will be able to use fanotify for all events ;)
 
-4. Installing
--------------
+4 - Installing
+--------------
 
 Debian/ubuntu-users can try to install it directly with apt-get:
 
@@ -115,14 +113,15 @@ Next step is installing. To install usually it's enough to execute:
     su -c 'make install'
 
 
-5. How to use
--------------
+5 - How to use
+--------------
 
 How to use is described in "man" ;). What is not described, you can ask me
 personally (see "Support").
 
+See also section 7 of this document.
 
-6. An examples from scratch
+6 - An example from scratch
 ---------------------------
 
 Example of usage, that works on my PC is in directory "examples". Just run
@@ -185,8 +184,8 @@ For really dummies or/and lazy users, there's a video demonstration:
 [http://ut.mephi.ru/oss/clsync](http://ut.mephi.ru/oss/clsync)
 
 
-7. More examples
-----------------
+7 - More examples (use cases)
+-----------------------------
 
 Mirroring a directory:
 ```
@@ -256,8 +255,8 @@ Automatically run `make build` if any `*.c` file changed
 printf "%s\n" "+f.c$" "-f" | clsync --have-recursive-sync -W . -R /dev/stdin -Mdirect -r1 --ignore-failures -t1 -w1 -Smake -- build
 ```
 
-8. Clustering
--------------
+8 - Clustering
+--------------
 
 I've started to implement support of bi-directional syncing with using
 multicast notifing of other nodes. However it became a long task, so it was
@@ -289,15 +288,7 @@ determine which side has the latest changes :)
 
 UPD: I've added option "--modification-signature" that helps to prevent syncing file, that is not changed. You can easily use it to prevent sync-loops for bi-directional syncing.
 
-9. Known building issues
-------------------------
-
-May be problems with "configuring" or compilation. In this case just try
-next command:
-    echo '#define REVISION "-custom"' > revision.h; gcc -std=gnu99 -D\_FORTIFY\_SOURCE=2 -DPARANOID -pipe -Wall -ggdb3 --param ssp-buffer-size=4 -fstack-check -fstack-protector-all -Xlinker -zrelro -pthread $(pkg-config --cflags glib-2.0) $(pkg-config --libs glib-2.0) -ldl \*.c -o /tmp/clsync
-
-
-10. FreeBSD support
+9 - FreeBSD support
 -------------------
 
 clsync has been ported to FreeBSD.
@@ -307,27 +298,28 @@ FreeBSD doesn't support inotify, so there're 3.5 ways to use clsync on it:
 * using BSM API (with or without a prefetcher thread);
 * using kqueue/kevent directly.
 
-Here's an excerpt from the manpage:
+And any of this methods is bad (in it's own way), see the excerpt from the
+manpage:
 
      Possible values:
             inotify
                    inotify(7) [Linux, (FreeBSD via libinotify)]
-    
+
                    Native, fast, reliable and well tested Linux FS monitor subsystem.
-    
+
                    There's no essential performance profit to use "inotify"  instead  of
                    "kevent"  on FreeBSD using "libinotify". It backends to "kevent" any‐
                    way.
-    
+
                    FreeBSD users: The libinotify on FreeBSD is still not ready and unus‐
                    able for clsync to sync a lot of files and directories.
-    
+
             kqueue
                    kqueue(2) [FreeBSD, (Linux via libkqueue)]
-    
+
                    A  *BSD  kernel  event  notification  mechanism (inc. timer, sockets,
                    files etc).
-    
+
                    This monitor subsystem cannot determine file creation event,  but  it
                    can determine a directory where something happened. So clsync is have
                    to rescan whole dir every  time  on  any  content  change.  Moreover,
@@ -339,30 +331,30 @@ Here's an excerpt from the manpage:
                    link/pipe/socket and so on.  However it still  can  determine  if  it
                    will  be created or deleted by watching the parent directory and res‐
                    caning it on every appropriate event.
-    
+
                    Also this API requires to open every monitored file and directory. So
                    it  may  produce  a  huge  amount  of  file descriptors. Be sure that
                    kern.maxfiles is big enough (in FreeBSD).
-    
+
                    CPU/HDD expensive way.
-    
+
                    Not well tested. Use with caution!
-    
+
                    Linux users: The libkqueue on Linux is not working. He-he :)
-    
+
             bsm
                    bsm(3) [FreeBSD]
-    
+
                    Basic Security Module (BSM) Audit API.
-    
+
                    This is not a FS monitor subsystem, actually. It's  just  an  API  to
                    access  to  audit information (inc. logs).  clsync can setup audit to
                    watch FS events and report it into log. After that clsync  will  just
                    parse the log via auditpipe(4) [FreeBSD].
-    
+
                    Reliable,  but  hacky  way.  It requires global audit reconfiguration
                    that may hopple audit analysis.
-    
+
                    Warning!  FreeBSD has a limit for queued events. In  default  FreeBSD
                    kernel it's only 1024 events. So choose one of:
                           - To patch the kernel to increase the limit.
@@ -370,11 +362,11 @@ Here's an excerpt from the manpage:
                           - Use bsm_prefetch mode (but there's no guarantee in this case
                           anyway).
                    See also option --exit-on-sync-skip.
-    
+
                    Not  well  tested.  Use   with   caution!    Also   file   /etc/secu‐
                    rity/audit_control will be overwritten with:
                           #clsync
-    
+
                           dir:/var/audit
                           flags:fc,fd,fw,fm,cl
                           minfree:0
@@ -383,21 +375,20 @@ Here's an excerpt from the manpage:
                           filesz:1M
                    unless it's already starts with "#clsync\n" ("\n" is a new line char‐
                    acter).
-    
+
             bsm_prefetch
                    The same as bsm but all BSM events will be  prefetched  by  an  addi‐
                    tional  thread  to prevent BSM queue overflow. This may utilize a lot
                    of memory on systems with a high FS events frequency.
-    
+
                    However the thread may be not fast enough to unload  the  kernel  BSM
                    queue. So it may overflow anyway.
-    
+
      The default value on Linux is "inotify". The default value on FreeBSD is "kqueue".
 
 I hope you will send me bugreports to make me able to improve the FreeBSD support :)
 
-
-11. Support
+10 - Support
 -----------
 
 To get support, you can contact with me this ways:
@@ -405,7 +396,7 @@ To get support, you can contact with me this ways:
 - Where else can you find me: IRC:SSL+UTF-8 irc.campus.mephi.ru:6695#mephi,xaionaro,xai
 - And e-mail: <dyokunev@ut.mephi.ru>, <xaionaro@gmail.com>; PGP pubkey: 0x8E30679C
 
-12. Developing
+11 - Developing
 --------------
 
 I started to write "DEVELOPING" and "PROTOCOL" files.
@@ -418,7 +409,7 @@ The astyle command:
 astyle --style=linux --indent=tab --indent-cases --indent-switches --indent-preproc-define --break-blocks --pad-oper --pad-paren --delete-empty-lines
 ```
 
-13. Articles
+12 - Articles
 ------------
 
 Russian:
@@ -430,7 +421,7 @@ LVEE (Russian):
 - [clsync - live sync utility (abstract)](http://lvee.org/en/abstracts/118) [presentation](http://lvee.org/uploads/image_upload/file/337/winter_2014_15_clsync.pdf)
 - [clsync progress: security and porting to freebsd](http://lvee.org/en/abstracts/138)
 
-14. See also
+13 - See also
 ------------
 
 - [lrsync](https://github.com/xaionaro/lrsync)
