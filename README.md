@@ -63,23 +63,20 @@ for example:
     - It really eats 100% CPU sometimes.
     - It requires LUA libs, that cannot be easily installed to few
 of our systems.
-- It's a little buggy. That may be easily fixed for our cases,
-but LUA. :(
-- It doesn't support pthread or something like that. It's necessary
-to serve huge directories with a lot of containers right.
-- It cannot run rsync for a pack of files. It runs rsync for every
-event. :(
-- Sometimes, it's too complex in configuration for our situation.
-- It can't set another event-collecting delay for big files. We don't
-want to sync big files (`>1GiB`) so often as ordinary files.
+- It's a little buggy (it crashed on our cases).
+- Sometimes, it's too complex in configuration for our situation (not flexible
+enough). For example it can't set another event-collecting delay for big files.
+We don't want to sync big files (`>1GiB`) so often as ordinary files.
 - Shared object (.so file) cannot be used as rsync-wrapper.
 - It doesn't support kqueue/bsm
+- It's not secure enough. No builtin containerization support to reduce risks.
 
-Sorry, if I'm wrong. Let me know if it is, please :). "lsyncd" - is really
-interesting and useful utility, just it's not appropriate for us.
+"lsyncd" - is really good and useful utility, just did not fit to our needs.
+We spent enough much time on tuning "lsyncd" that realized we could write own
+solution sharpened by our tasks. So there it is :)
 
-UPD.: Also clsync had been used to replace incron/csync2/etc in HPC-clusters for
-syncing /etc/{passwd,shadow,group,shells} files.
+Also clsync had been used to replace incron/csync2/etc in HPC-clusters for
+syncing /etc/{passwd,shadow,group,shells} files and running post-scripts.
 
 3. inotify vs fanotify:
 -----------------------
@@ -125,8 +122,8 @@ How to use is described in "man" ;). What is not described, you can ask me
 personally (see "Support").
 
 
-6. Example of usage
--------------------
+6. An examples from scratch
+---------------------------
 
 Example of usage, that works on my PC is in directory "examples". Just run
 "clsync-start-rsyncdirect.sh" and try to create/modify/delete files/dirs in
@@ -188,22 +185,76 @@ For really dummies or/and lazy users, there's a video demonstration:
 [http://ut.mephi.ru/oss/clsync](http://ut.mephi.ru/oss/clsync)
 
 
-7. Other uses
--------------
+7. More examples
+----------------
 
-For example, command
+Mirroring a directory:
+```
+clsync -Mrsyncdirect -W/path/to/source_dir -D/path/to/destination_dir
+```
 
-    ionice -c 3 clsync -L /dev/shm/clsync --exit-on-no-events -x 23 -x 24 -M rsyncdirect -S $(which rsync) -W /path/from -D /path/to -d1
+Syncing `authorized_keys` files:
+```
+mkdir -p /etc/clsync/rules
+printf "+w^$\n+w^[^/]+$\n+W^[^/]+/.ssh$\n+f^[^/]+/.ssh/authorized_keys$\n-*" > /etc/clsync/rules/authorized_files_only
+clsync  -Mdirect -Scp -W/mnt/master/home/ -D/home -R/etc/clsync/rules/authorized_files_only -- -Pfp --parents %INCLUDE-LIST% %destination-dir%
+```
 
-may be used to copy "/path/from" into "/path/to" with sync up of changes made (in "/path/from") while the copying. It will copy new changes over and over until there will be no changes, and then clsync will exit. It may be used as atomicity-like recursive copy.
+Mirroring a directory, but faster:
+```
+clsync -w5 -t5 -T5 -Mrsyncdirect -W/path/to/source_dir -D/path/to/destination_dir
+```
 
+Instant mirroring of a directory:
+```
+clsync -w0 -t0 -T0 -Mrsyncdirect -W/path/to/source_dir -D/path/to/destination_dir
+```
 
+Making two directories synchronous:
+```
+clsync -Mrsyncdirect --background -z /var/run/clsync0.pid --output syslog -Mrsyncdirect -W/path/to/dir1 -D/path/to/dir2 --modification-signature '*'
+clsync -Mrsyncdirect --background -z /var/run/clsync1.pid --output syslog -Mrsyncdirect -W/path/to/dir2 -D/path/to/dir1 --modification-signature '*'
+```
 
-Or command
+Fixing privileges of a web-site:
+```
+clsync -w3 -t3 -T3 -x1 -W/var/www/site.example.org/root -Mdirect -Schown --uid  0  --gid  0  -Ysyslog  -b1  --modification-signature uid,gid -- --from=root www-data:www-data %INCLUDE-LIST%
+```
 
-    clsync -w5 -t5 -T5 -x1 -W /var/www/site.example.org/root -Mdirect -Schown --uid 0 --gid 0 -Ysyslog -b1 -- --from=root www-data:www-data %INCLUDE-LIST%
+'Atomic' sync:
+```
+clsync --exit-on-no-events --max-iterations=20 --mode=rsyncdirect -W/var/www_new -Srsync -- %RSYNC-ARGS% /var/www_new/ /var/www/
+```
 
-may be used to fix files owner in runtime. This may be used as a temporary solution for fixing file privileges of misconfigured web-servers (it's well-known problem of apache users).
+Moving a web-server:
+```
+clsync  --exit-on-no-events  --max-iterations=20 --pre-exit-hook=/root/stop-here.sh --exit-hook=/root/start-there.sh --mode=rsyncdirect --ignore-exitcode=23,24 --retries=3 -W /var/www -S rsync -- %RSYNC-ARGS% /var/www/ rsync://clsync@another-host/var/www/
+```
+
+Copying files to slave-nodes using pdcp(1):
+```
+clsync -Msimple -S pdcp -W /opt/global -b -Y syslog -- -a %INCLUDE-LIST% %INCLUDE-LIST%
+```
+
+Copying files to slave-nodes using uftp(1):
+```
+clsync -Mdirect -S uftp -W/opt/global --background=1 --output=syslog -- -M 248.225.233.1 %INCLUDE-LIST%
+```
+
+A dry running to see rsync(1) arguments that clsync will use:
+```
+clsync -Mrsyncdirect -S echo -W/path/to/source_dir -D/path/to/destination_dir
+```
+
+An another dry running to look how clsync will call pdcp(1):
+```
+clsync -Msimple -S echo -W /opt/global -b0 -- pdcp -a %INCLUDE-LIST% %INCLUDE-LIST%
+```
+
+Automatically run `make build` if any `*.c` file changed
+```
+printf "%s\n" "+f.c$" "-f" | clsync --have-recursive-sync -W . -R /dev/stdin -Mdirect -r1 --ignore-failures -t1 -w1 -Smake -- build
+```
 
 8. Clustering
 -------------
@@ -383,7 +434,3 @@ LVEE (Russian):
 ------------
 
 - [lrsync](https://github.com/xaionaro/lrsync)
-
-
-                                               -- Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
-
