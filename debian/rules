@@ -17,6 +17,3 @@ override_dh_auto_install:
 	-rm --verbose debian/tmp/usr/share/doc/clsync/LICENSE
 	-rm --verbose debian/tmp/usr/bin/gencompilerflags
 	-rm --verbose debian/tmp/usr/include/clsync/compilerflags.h
-
-override_dh_install:
-	dh_install --list-missing
