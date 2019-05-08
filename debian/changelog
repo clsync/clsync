@@ -1,12 +1,19 @@
-clsync (0.4.3-1) unstable; urgency=low
+clsync (0.4.3-1) unstable; urgency=medium
 
+  [ Dmitry Yu Okunev ]
   * Fixed mode "simple": use absolute paths
   * Better error reporting on bad arguments/configuration.
   * Disabled "seccomp" features to make the package buildable
-    on non-x86 platforms
+    on non-x86 platforms (closes: #844778)
   * Updated the manpage
 
- -- Dmitry Yu Okunev <xaionaro@gmail.com>  Mon, 06 May 2019 11:26:23 +0300
+  [ Barak A. Pearlmutter ]
+  * New Upstream Version
+  * Bump policy version
+  * Bump to debhelper 12
+  * Update uscan debian/watch file
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Wed, 08 May 2019 11:39:03 +0100
 
 clsync (0.4.2-1) unstable; urgency=medium
 
