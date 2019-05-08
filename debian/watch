@@ -1,3 +1,0 @@
-version=3
-opts="uversionmangle=s/-rc/~rc/" \
-  https://github.com/xaionaro/clsync/tags (?:.*/)?v(.+)\.tar\.gz
