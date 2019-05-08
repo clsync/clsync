@@ -14,7 +14,7 @@ Vcs-Browser: https://salsa.debian.org/debian/clsync
 Package: clsync
 Recommends: rsync
 Architecture: any
-Pre-Depends: init-system-helpers (>= 1.50)
+Pre-Depends: ${misc:Pre-Depends}
 Depends: lsb-base, ${shlibs:Depends}, ${misc:Depends}
 Description: live sync tool based on inotify, written in GNU C
  Clsync recursively watches for source directory and executes external
@@ -24,6 +24,7 @@ Description: live sync tool based on inotify, written in GNU C
  multi-threading.
 
 Package: libclsync0
+Section: libs
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends}, ${misc:Depends}
@@ -39,6 +40,7 @@ Description: clsync control socket library
 Package: libclsync-dev
 Section: libdevel
 Architecture: any
+Pre-Depends: ${misc:Pre-Depends}
 Depends: ${shlibs:Depends}, ${misc:Depends}, libclsync0 (= ${binary:Version})
 Description: development files for libclsync
  Clsync recursively watches for source directory and executes external
