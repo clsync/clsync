@@ -20,6 +20,11 @@ else
 	STATICEXCLUDE='--exclude-from=/etc/clsync/synchandler/lxc/rsync.exclude'
 fi
 
+tmpfile=$(mktemp -p "" clsync-rsync-"$LABEL"-brother.err.XXXXXXXXXX)
+cleanup() {
+	[[ -s "${tmpfile}" ]] || rm "${tmpfile}"
+}
+trap cleanup EXIT
 
 function rsynclist() {
 	LISTFILE="$1"
@@ -31,17 +36,17 @@ function rsynclist() {
 	fi
 
 #	if mount | grep "$BROTHERMNT" > /dev/null; then
-		if ping -w 1 -qc 5 -i 0.1 $BROTHERNAME > /dev/null; then
+		if ping -w 1 -qc 5 -i 0.1 "$BROTHERNAME" > /dev/null; then
 			#if [ ! -d "$TO" ]; then
 			#	mkdir -p "$TO"
 			#fi
-			exec rsync --password-file="/etc/rsyncd.pass" -aH --timeout=3600 --inplace --delete-before $STATICEXCLUDE "$excludefrom" --include-from="${LISTFILE}" --exclude='*' "$FROM"/ "$TO"/ 2>/tmp/clsync-rsync-"$LABEL"-brother.err
+			exec rsync --password-file="/etc/rsyncd.pass" -aH --timeout=3600 --inplace --delete-before $STATICEXCLUDE "$excludefrom" --include-from="${LISTFILE}" --exclude='*' "$FROM"/ "$TO"/ 2>"${tmpfile}"
 		else
-			sleep $[ 3600 + $RANDOM % 1800 ]
+			sleep $(( 3600 + RANDOM % 1800 ))
 			exit 128
 		fi
 #	else
-#		sleep $[ 3600 + $RANDOM % 1800 ]
+#		sleep $(( 3600 + RANDOM % 1800 ))
 #		exit 128
 #	fi
 }
