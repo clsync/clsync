@@ -896,7 +896,7 @@ static inline int so_call_rsync ( ctx_t *ctx_p, indexes_t *indexes_p, const char
 		if ( err && !ctx_p->flags[IGNOREFAILURES] ) {
 			error ( "Bad exitcode %i (errcode %i)", rc, err );
 			rc = err;
-		} else if ( status != STATE_UNKNOWN ) {
+		} else if ( ( status != STATE_UNKNOWN ) && ( ctx_p->state != STATE_TERM ) && ( ctx_p->state != STATE_EXIT ) ) {
 			ctx_p->state = status;
 			main_status_update ( ctx_p );
 		}
@@ -1124,7 +1124,7 @@ int sync_exec_argv ( ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t 
 	if ( err && !ctx_p->flags[IGNOREFAILURES] ) {
 		error ( "Bad exitcode %i (errcode %i)", exitcode, err );
 		ret = err;
-	} else if ( status != STATE_UNKNOWN ) {
+	} else if ( ( status != STATE_UNKNOWN ) && ( ctx_p->state != STATE_TERM ) && ( ctx_p->state != STATE_EXIT ) ) {
 		ctx_p->state = status;
 		main_status_update ( ctx_p );
 	}
@@ -3331,7 +3331,7 @@ int notify_wait ( ctx_t *ctx_p, indexes_t *indexes_p )
 	debug ( 4, "pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])" );
 	pthread_mutex_lock ( &threadsinfo_p->mutex[PTHREAD_MUTEX_STATE] );
 
-	if ( ( ctx_p->flags[EXITONNOEVENTS] ) && ( ret == 0 ) ) {
+	if ( ( ctx_p->flags[EXITONNOEVENTS] ) && ( ret == 0 ) && ( ctx_p->state != STATE_TERM ) && ( ctx_p->state != STATE_EXIT ) ) {
 		// if not events and "--exit-on-no-events" is set
 		if ( ctx_p->flags[PREEXITHOOK] )
 			ctx_p->state = STATE_PREEXIT;
@@ -3419,6 +3419,10 @@ int sync_loop ( ctx_t *ctx_p, indexes_t *indexes_p )
 				ret = sync_initialsync ( ctx_p->watchdir, ctx_p, indexes_p, INITSYNC_FULL );
 
 				if ( ret ) return ret;
+
+				if ( ( ctx_p->state == STATE_TERM ) || ( ctx_p->state == STATE_EXIT ) ) {
+					continue;
+				}
 
 				if ( ctx_p->flags[ONLYINITSYNC] ) {
 					SYNC_LOOP_IDLE;
