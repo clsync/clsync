@@ -3333,7 +3333,7 @@ int notify_wait ( ctx_t *ctx_p, indexes_t *indexes_p )
 
 	if ( ( ctx_p->flags[EXITONNOEVENTS] ) && ( ret == 0 ) && ( ctx_p->state != STATE_TERM ) && ( ctx_p->state != STATE_EXIT ) ) {
 		// if not events and "--exit-on-no-events" is set
-		if ( ctx_p->flags[PREEXITHOOK] )
+		if ( ctx_p->flags[PREEXITHOOK] || ctx_p->flags[SOFTEXITSYNC] )
 			ctx_p->state = STATE_PREEXIT;
 		else
 			ctx_p->state = STATE_EXIT;
@@ -3444,6 +3444,15 @@ int sync_loop ( ctx_t *ctx_p, indexes_t *indexes_p )
 
 				switch ( ctx_p->state ) {
 					case STATE_PREEXIT:
+						debug ( 1, "preparing to exit" );
+
+						if ( ctx_p->flags[SOFTEXITSYNC] && !(ctx_p->flags[EXITONNOEVENTS]) ) {
+							debug ( 1, "atempting a sync before exit" );
+							ctx_p->flags[EXITONNOEVENTS]=1;
+							ctx_p->state = STATE_RUNNING;
+							SYNC_LOOP_IDLE;
+						}
+
 						main_status_update ( ctx_p );
 
 						if ( ctx_p->flags[PREEXITHOOK] )
@@ -3900,7 +3909,7 @@ int sync_sighandler ( sighandler_arg_t *sighandler_arg_p )
 				*exitcode_p = ETIME;
 
 			case SIGQUIT:
-				if ( ctx_p->flags[PREEXITHOOK] )
+				if ( ctx_p->flags[PREEXITHOOK] || ctx_p->flags[SOFTEXITSYNC] )
 					sync_switch_state ( ctx_p, pthread_parent, STATE_PREEXIT );
 				else
 					sync_switch_state ( ctx_p, pthread_parent, STATE_TERM );

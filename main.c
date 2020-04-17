@@ -163,6 +163,7 @@ static const struct option long_options[] = {
 	{"exit-on-no-events",	optional_argument,	NULL,	EXITONNOEVENTS},
 	{"exit-hook",		required_argument,	NULL,	EXITHOOK},
 	{"pre-exit-hook",	required_argument,	NULL,	PREEXITHOOK},
+	{"sync-on-exit",	optional_argument,	NULL,	SOFTEXITSYNC},
 	{"verbose",		optional_argument,	NULL,	VERBOSE},
 	{"debug",		optional_argument,	NULL,	DEBUG},
 	{"dump-dir",		required_argument,	NULL,	DUMPDIR},
