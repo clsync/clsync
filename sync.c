@@ -3447,7 +3447,7 @@ int sync_loop ( ctx_t *ctx_p, indexes_t *indexes_p )
 						debug ( 1, "preparing to exit" );
 
 						if ( ctx_p->flags[SOFTEXITSYNC] && !(ctx_p->flags[EXITONNOEVENTS]) ) {
-							debug ( 1, "atempting a sync before exit" );
+							debug ( 1, "attempting a sync before exit" );
 							ctx_p->flags[EXITONNOEVENTS]=1;
 							ctx_p->state = STATE_RUNNING;
 							SYNC_LOOP_IDLE;
