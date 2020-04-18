@@ -963,10 +963,10 @@ Is not set by default.
 .RE
 
 .PP
-.B \-\-sync\-on\-exit
+.B \-\-sync\-on\-quit
 .RS
-Clsync will finish syncing all events before exiting. This does not stop
-colleciton of new events, so exiting may not happen quickly.
+On SIGQUIT: clsync will perform one more final syncing
+to empty the queue of collected events before exit.
 
 Is not set by default.
 .RE
@@ -2398,7 +2398,8 @@ Syncing /srv/lxc tree (rsync case):
 kills children)
 
 3  \- (QUIT) waits for current syncing processes and exit ("soft kill", waits
-for children)
+for children). See also
+.IR \-\-sync\-on\-quit .
 
 10 \- runs threads' GC function
 

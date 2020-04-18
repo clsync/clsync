@@ -163,7 +163,7 @@ static const struct option long_options[] = {
 	{"exit-on-no-events",	optional_argument,	NULL,	EXITONNOEVENTS},
 	{"exit-hook",		required_argument,	NULL,	EXITHOOK},
 	{"pre-exit-hook",	required_argument,	NULL,	PREEXITHOOK},
-	{"sync-on-exit",	optional_argument,	NULL,	SOFTEXITSYNC},
+	{"sync-on-quit",	optional_argument,	NULL,	SOFTEXITSYNC},
 	{"verbose",		optional_argument,	NULL,	VERBOSE},
 	{"debug",		optional_argument,	NULL,	DEBUG},
 	{"dump-dir",		required_argument,	NULL,	DUMPDIR},
@@ -355,19 +355,6 @@ static char *const modes[] = {
 	[MODE_RSYNCDIRECT]	= "rsyncdirect",
 	[MODE_RSYNCSO]		= "rsyncso",
 	[MODE_SO]		= "so",
-	NULL
-};
-
-static char *const status_descr[] = {
-	[STATE_EXIT]		= "exiting",
-	[STATE_STARTING]	= "starting",
-	[STATE_RUNNING]		= "running",
-	[STATE_SYNCHANDLER_ERR]	= "synchandler error",
-	[STATE_REHASH]		= "rehashing",
-	[STATE_TERM]		= "terminating",
-	[STATE_THREAD_GC]	= "thread gc",
-	[STATE_INITSYNC]	= "initsync",
-	[STATE_HOLDON]		= "hold on",
 	NULL
 };
 
