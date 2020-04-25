@@ -2204,6 +2204,20 @@ Recommended case.
 
 .SH ENVIRONMENT VARIABLES
 
+Recognized variables - variables used by clsync.
+
+.B "Recognized variables"
+.RS
+HOME - user's HOME directory, clsync looks for configuration file here
+.RE
+
+.RS
+TMPDIR - use this directory as a prefix to create clsync temporary directory
+inside, if unset
+.I /tmp
+will be used
+.RE
+
 Output variables - variables that are set by clsync before calling
 .IR sync-handler .
 
