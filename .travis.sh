@@ -49,7 +49,7 @@ run_example() {
 
 	export CLSYNC_PIDFILE="/tmp/clsync-example-$MODE.$$.${run_example_counter}.pid"
 
-	run_example_counter=$(( $run_example_counter + 1 ))
+	run_example_counter=$(( run_example_counter + 1 ))
 
 	rm -rf "examples/testdir"/*/*
 	mkdir -p "examples/testdir/to" "examples/testdir/from"
@@ -75,7 +75,7 @@ run_example() {
 			break
 		fi
 		sleep 1
-		i=$(( $i + 1 ))
+		i=$(( i + 1 ))
 	done
 	if [ "$i" -gt "$TIMEOUT_SYNC" ]; then
 		run_example_cleanup_failure "$MODE" "timed out on initial syncing"
@@ -96,7 +96,7 @@ run_example() {
 			return
 		fi
 		sleep 1
-		i=$(( $i + 1 ))
+		i=$(( i + 1 ))
 	done
 	run_example_cleanup_failure "$MODE" "no successful sync"
 }
