@@ -9,5 +9,5 @@ EOF
 
 cc -ggdb3 -fPIC -shared -o clsync-synchandler-rsyncso.so clsync-synchandler-rsyncso.c &&
 
-sudo "$(which clsync)" -K example-rsyncso -M rsyncso -w2 -t5 -W ./testdir/from -S ./clsync-synchandler-rsyncso.so -R rules -D ./testdir/to "$@"
+sudo "$(which clsync)" -K example-rsyncso -M rsyncso -w2 -t5 -W ./testdir/from -S ./clsync-synchandler-rsyncso.so -R rules -D ./testdir/to $@
 

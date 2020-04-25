@@ -6,17 +6,17 @@ tmpdir=$(mktemp --tmpdir -d clsync-hl-bench.XXXXXXXXXX)
 
 configuration() {
 	git checkout -- configuration.h
-	for regex in "$@"; do
+	for regex in $@; do
 		sed -i configuration.h -e "$regex"
 	done
 }
 
 configure() {
-	./configure -C "$@" >/dev/null 2>/dev/null || ./configure "$@" || exit 1
+	./configure -C $@ >/dev/null 2>/dev/null || ./configure $@ || exit 1
 }
 
 run() {
-	time ./clsync -Mso -S'doc/devel/thread-splitting/benchmark-synchandler.so' --have-recursive-sync --max-iterations 1 -W ~/clsync-test "$@" || exit 1
+	time ./clsync -Mso -S'doc/devel/thread-splitting/benchmark-synchandler.so' --have-recursive-sync --max-iterations 1 -W ~/clsync-test $@ || exit 1
 }
 
 benchmark() {
@@ -46,7 +46,7 @@ rm -f "$tmpdir/hl_auto.bin"
 	fi
 	i=0
 	while [[ "$i" -lt "$RUN_TIMES" ]]; do
-		run -d1 "$@" >> "$tmpdir/benchmark.log-$hash" 2>> "$tmpdir/benchmark.errlog-$hash"
+		run -d1 $@ >> "$tmpdir/benchmark.log-$hash" 2>> "$tmpdir/benchmark.errlog-$hash"
 		i=$(( i + 1 ))
 	done
 }
