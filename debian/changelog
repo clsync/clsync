@@ -1,3 +1,9 @@
+clsync (0.4.4-1) unstable; urgency=medium
+  * New upstream relese
+  * Added --sync-on-quit support
+  * Added $TMPDIR support
+  * Multiple bug fixes
+
 clsync (0.4.3-1) unstable; urgency=medium
 
   [ Dmitry Yu Okunev ]
