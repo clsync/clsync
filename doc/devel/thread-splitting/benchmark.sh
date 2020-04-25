@@ -12,11 +12,11 @@ configuration() {
 }
 
 configure() {
-	./configure -C "$@" >/dev/null 2>/dev/null || ./configure "$@" || exit -1
+	./configure -C "$@" >/dev/null 2>/dev/null || ./configure "$@" || exit 1
 }
 
 run() {
-	time ./clsync -Mso -S'doc/devel/thread-splitting/benchmark-synchandler.so' --have-recursive-sync --max-iterations 1 -W ~/clsync-test "$@" || exit -1
+	time ./clsync -Mso -S'doc/devel/thread-splitting/benchmark-synchandler.so' --have-recursive-sync --max-iterations 1 -W ~/clsync-test "$@" || exit 1
 }
 
 benchmark() {
