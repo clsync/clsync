@@ -18,8 +18,6 @@ rsynclist() {
 	fi
 
 	exec rsync -avH --delete-before "$excludefrom" --include-from="${LISTFILE}" --exclude='*' "$FROM"/ "$TO"/
-
-	return 0
 }
 
 case "$ACTION" in
@@ -27,6 +25,4 @@ case "$ACTION" in
 		rsynclist "$ARG0" "$ARG1"
 		;;
 esac
-
-exit $?
 
