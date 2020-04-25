@@ -88,6 +88,7 @@ rm -rf %{buildroot}
 %changelog
 * Sat Apr 25 2020 Andrew A. Savchenko <bircoph@gmail.com> - 0.4.4-1
 - Add --sync-on-quit option.
+- Support TMPDIR environment variable.
 - Multiple bug fixes.
 
 * Thu Sep 29 2016 Andrew A. Savchenko <bircoph@gmail.com> - 0.4.2-1
