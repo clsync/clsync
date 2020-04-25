@@ -3,9 +3,15 @@
 # author: Enrique Martinez <enmaca@hotmail.com>
 # license: GPL-3+
 #
-# clsync
-# chkconfig:    2345 98 02
-# pidfile:     /var/run/clsync/clsync.pid
+### BEGIN INIT INFO
+# Provides:          clsync
+# Should-Start:      $remote_fs $local_fs $syslog
+# Should-Stop:       $remote_fs $local_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start and stop clsync
+# Description:       Clsync is live file-level sync tool, written in GNU C
+### END INIT INFO
 
 # Source function library.
 . /etc/rc.d/init.d/functions

@@ -130,6 +130,7 @@ enum flags_enum {
 	DETACH_IPC		= 46 | OPTION_LONGOPTONLY,
 	PRIVILEGEDUID		= 47 | OPTION_LONGOPTONLY,
 	PRIVILEGEDGID		= 48 | OPTION_LONGOPTONLY,
+	SOFTEXITSYNC		= 49 | OPTION_LONGOPTONLY,
 };
 typedef enum flags_enum flags_t;
 
@@ -261,6 +262,7 @@ enum state_enum {
 	STATE_SYNCHANDLER_ERR,
 	STATE_REHASH,
 	STATE_PREEXIT,
+	STATE_LASTSYNC,
 	STATE_TERM,
 	STATE_THREAD_GC,
 	STATE_INITSYNC,
@@ -268,6 +270,21 @@ enum state_enum {
 	STATE_UNKNOWN
 };
 typedef enum state_enum state_t;
+
+static char *const status_descr[] = {
+	[STATE_EXIT]		= "exiting",
+	[STATE_STARTING]	= "starting",
+	[STATE_RUNNING]		= "running",
+	[STATE_SYNCHANDLER_ERR]	= "synchandler error",
+	[STATE_REHASH]		= "rehashing",
+	[STATE_PREEXIT]		= "preexit",
+	[STATE_LASTSYNC]	= "lastsync",
+	[STATE_TERM]		= "terminating",
+	[STATE_THREAD_GC]	= "thread gc",
+	[STATE_INITSYNC]	= "initsync",
+	[STATE_HOLDON]		= "hold on",
+	NULL
+};
 
 enum stat_fields {
 	STAT_FIELD_RESET		= 0x0000,

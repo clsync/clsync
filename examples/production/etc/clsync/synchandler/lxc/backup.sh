@@ -18,6 +18,12 @@ else
 	STATICEXCLUDE='--exclude-from=/etc/clsync/synchandler/lxc/rsync.exclude'
 fi
 
+tmpfile=$(mktemp -p "" clsync-rsync-"$LABEL"-backup.err.XXXXXXXXXX)
+cleanup() {
+	[[ -s "${tmpfile}" ]] || rm "${tmpfile}"
+}
+trap cleanup EXIT
+
 function rsynclist() {
 	LISTFILE="$1"
 	EXCLISTFILE="$2"
@@ -32,17 +38,17 @@ function rsynclist() {
 #	fi
 
 #	if mount | grep "$BACKUPMNT" > /dev/null; then
-		if ping -w 1 -qc 5 -i 0.1 $BACKUPHOST > /dev/null; then
+		if ping -w 1 -qc 5 -i 0.1 "$BACKUPHOST" > /dev/null; then
 			#if [ ! -d "$BACKUPDECR" ]; then
 			#	mkdir -p "$BACKUPDECR"
 			#fi
-			exec rsync --password-file="/etc/backup.pass" -aH --timeout=3600 --inplace --delete-before $STATICEXCLUDE "$excludefrom" --include-from="${LISTFILE}" --exclude='*' --backup --backup-dir="$BACKUPDECR"/ "$FROM"/ "$BACKUPMIRROR"/ 2>/tmp/clsync-rsync-"$LABEL"-backup.err
+			exec rsync --password-file="/etc/backup.pass" -aH --timeout=3600 --inplace --delete-before $STATICEXCLUDE "$excludefrom" --include-from="${LISTFILE}" --exclude='*' --backup --backup-dir="$BACKUPDECR"/ "$FROM"/ "$BACKUPMIRROR"/ 2>"${tmpfile}"
 		else
-			sleep $[ 3600 + $RANDOM % 1800 ]
+			sleep $(( 3600 + RANDOM % 1800 ))
 			return 128
 		fi
 #	else
-#		sleep $[ 3600 + $RANDOM % 1800 ]
+#		sleep $(( 3600 + RANDOM % 1800 ))
 #		return 128
 #	fi
 }

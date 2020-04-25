@@ -163,6 +163,7 @@ static const struct option long_options[] = {
 	{"exit-on-no-events",	optional_argument,	NULL,	EXITONNOEVENTS},
 	{"exit-hook",		required_argument,	NULL,	EXITHOOK},
 	{"pre-exit-hook",	required_argument,	NULL,	PREEXITHOOK},
+	{"sync-on-quit",	optional_argument,	NULL,	SOFTEXITSYNC},
 	{"verbose",		optional_argument,	NULL,	VERBOSE},
 	{"debug",		optional_argument,	NULL,	DEBUG},
 	{"dump-dir",		required_argument,	NULL,	DUMPDIR},
@@ -354,19 +355,6 @@ static char *const modes[] = {
 	[MODE_RSYNCDIRECT]	= "rsyncdirect",
 	[MODE_RSYNCSO]		= "rsyncso",
 	[MODE_SO]		= "so",
-	NULL
-};
-
-static char *const status_descr[] = {
-	[STATE_EXIT]		= "exiting",
-	[STATE_STARTING]	= "starting",
-	[STATE_RUNNING]		= "running",
-	[STATE_SYNCHANDLER_ERR]	= "synchandler error",
-	[STATE_REHASH]		= "rehashing",
-	[STATE_TERM]		= "terminating",
-	[STATE_THREAD_GC]	= "thread gc",
-	[STATE_INITSYNC]	= "initsync",
-	[STATE_HOLDON]		= "hold on",
 	NULL
 };
 
@@ -3324,12 +3312,25 @@ int main ( int _argc, char *_argv[] )
 	        )
 	    )
 	) {
-		char *template = strdup ( TMPDIR_TEMPLATE );
+		// Use $TMPDIR as the temp directory, fall back to /tmp
+		char *tempdir = getenv ( "TMPDIR" );
+		if ( !tempdir )
+			tempdir = TMPDIR_PATH;
+		const char *tempsuff = TMPDIR_TEMPLATE;
+		size_t tempdir_len = strlen(tempdir);
+		size_t tempsuff_len = strlen(tempsuff);
+
+		// template = "$tempdir$tempsuff"
+		char *template = xmalloc(tempdir_len + tempsuff_len + 1);
+		memcpy ( template, tempdir, tempdir_len);
+		memcpy ( template + tempdir_len, tempsuff, tempsuff_len);
+		template[tempdir_len + tempsuff_len] = 0;
+
 		ctx_p->listoutdir = mkdtemp ( template );
 
 		if ( ctx_p->listoutdir == NULL ) {
 			ret = errno;
-			error ( "Cannot create temporary dir for list files" );
+			error ( "Cannot create temporary dir for list files by template '%s'", template );
 		} else
 			rm_listoutdir = 2;
 	}
@@ -3483,7 +3484,7 @@ int main ( int _argc, char *_argv[] )
 	ctx_cleanup ( ctx_p );
 	debug ( 1, "finished, exitcode: %i: %s.", ret, strerror ( ret ) );
 	free ( ctx_p );
-#ifndef __FreeBSD__	// Hanging up with 100%CPU eating, https://github.com/xaionaro/clsync/issues/97
+#ifndef __FreeBSD__	// Hanging up with 100%CPU eating, https://github.com/clsync/clsync/issues/97
 	SAFE ( posixhacks_deinit(), errno = ret = _SAFE_rc );
 #endif
 	return ret;

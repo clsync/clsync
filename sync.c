@@ -896,7 +896,7 @@ static inline int so_call_rsync ( ctx_t *ctx_p, indexes_t *indexes_p, const char
 		if ( err && !ctx_p->flags[IGNOREFAILURES] ) {
 			error ( "Bad exitcode %i (errcode %i)", rc, err );
 			rc = err;
-		} else if ( status != STATE_UNKNOWN ) {
+		} else if ( ( status != STATE_UNKNOWN ) && ( ctx_p->state != STATE_TERM ) && ( ctx_p->state != STATE_EXIT ) ) {
 			ctx_p->state = status;
 			main_status_update ( ctx_p );
 		}
@@ -1124,7 +1124,7 @@ int sync_exec_argv ( ctx_t *ctx_p, indexes_t *indexes_p, thread_callbackfunct_t 
 	if ( err && !ctx_p->flags[IGNOREFAILURES] ) {
 		error ( "Bad exitcode %i (errcode %i)", exitcode, err );
 		ret = err;
-	} else if ( status != STATE_UNKNOWN ) {
+	} else if ( ( status != STATE_UNKNOWN ) && ( ctx_p->state != STATE_TERM ) && ( ctx_p->state != STATE_EXIT ) ) {
 		ctx_p->state = status;
 		main_status_update ( ctx_p );
 	}
@@ -1265,7 +1265,7 @@ static int sync_queuesync ( const char *fpath_rel, eventinfo_t *evinfo, ctx_t *c
 	// Filename can contain "" character that conflicts with event-row separator of list-files.
 	if ( strchr ( fpath_rel, '\n' ) ) {
 		// At the moment, we will just ignore events of such files :(
-		debug ( 3, "There's \"\\n\" character in path \"%s\". Ignoring it :(. Feedback to: https://github.com/xaionaro/clsync/issues/12", fpath_rel );
+		debug ( 3, "There's \"\\n\" character in path \"%s\". Ignoring it :(. Feedback to: https://github.com/clsync/clsync/issues/12", fpath_rel );
 		return 0;
 	}
 
@@ -2577,7 +2577,7 @@ int sync_idle_dosync_collectedevents_aggrqueue ( queue_id_t queue_id, ctx_t *ctx
 	time_t tm = time ( NULL );
 	queueinfo_t *queueinfo = &ctx_p->_queues[queue_id];
 
-	if ( ( queueinfo->stime + queueinfo->collectdelay > tm ) && ( queueinfo->collectdelay != COLLECTDELAY_INSTANT ) && ( !ctx_p->flags[EXITONNOEVENTS] ) ) {
+	if ( ( ctx_p->state == STATE_RUNNING ) && ( queueinfo->stime + queueinfo->collectdelay > tm ) && ( queueinfo->collectdelay != COLLECTDELAY_INSTANT ) && ( !ctx_p->flags[EXITONNOEVENTS] ) ) {
 		debug ( 3, "(%i, ...): too early (%i + %i > %i).", queue_id, queueinfo->stime, queueinfo->collectdelay, tm );
 		return 0;
 	}
@@ -3295,10 +3295,14 @@ int notify_wait ( ctx_t *ctx_p, indexes_t *indexes_p )
 
 #endif
 
-	if ( ( !delay ) || ( ctx_p->state != STATE_RUNNING ) )
+	if ( ( !delay ) || ( ctx_p->state != STATE_RUNNING && ctx_p->state != STATE_LASTSYNC ) ) {
+		debug ( 4, "forcing: no events (delay is %li, state is %s)",
+		        delay, status_descr[ctx_p->state] )
 		return 0;
+	}
 
-	if ( ctx_p->flags[EXITONNOEVENTS] ) { // zero delay if "--exit-on-no-events" is set
+	if ( ctx_p->flags[EXITONNOEVENTS] || ctx_p->state == STATE_LASTSYNC ) {
+		// zero delay if "--exit-on-no-events" is set or if it is the last sync (see "--sync-on-quit")
 		tv.tv_sec  = 0;
 		tv.tv_usec = 0;
 	} else {
@@ -3312,7 +3316,7 @@ int notify_wait ( ctx_t *ctx_p, indexes_t *indexes_p )
 	debug ( 4, "pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])" );
 	pthread_mutex_lock ( &threadsinfo_p->mutex[PTHREAD_MUTEX_STATE] );
 
-	if ( ctx_p->state != STATE_RUNNING )
+	if ( ctx_p->state != STATE_RUNNING && ctx_p->state != STATE_LASTSYNC )
 		return 0;
 
 	debug ( 4, "pthread_mutex_unlock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])" );
@@ -3331,9 +3335,9 @@ int notify_wait ( ctx_t *ctx_p, indexes_t *indexes_p )
 	debug ( 4, "pthread_mutex_lock(&threadsinfo_p->mutex[PTHREAD_MUTEX_STATE])" );
 	pthread_mutex_lock ( &threadsinfo_p->mutex[PTHREAD_MUTEX_STATE] );
 
-	if ( ( ctx_p->flags[EXITONNOEVENTS] ) && ( ret == 0 ) ) {
+	if ( ( ctx_p->flags[EXITONNOEVENTS] ) && ( ret == 0 ) && ( ctx_p->state != STATE_LASTSYNC ) && ( ctx_p->state != STATE_TERM ) && ( ctx_p->state != STATE_EXIT ) ) {
 		// if not events and "--exit-on-no-events" is set
-		if ( ctx_p->flags[PREEXITHOOK] )
+		if ( ctx_p->flags[PREEXITHOOK] || ctx_p->flags[SOFTEXITSYNC] )
 			ctx_p->state = STATE_PREEXIT;
 		else
 			ctx_p->state = STATE_EXIT;
@@ -3380,10 +3384,11 @@ int sync_loop ( ctx_t *ctx_p, indexes_t *indexes_p )
 
 	while ( ctx_p->state != STATE_EXIT ) {
 		int events;
-		debug ( 4, "pthread_mutex_lock()" );
+		debug ( 4, "pthread_mutex_lock(): PTHREAD_MUTEX_STATE" );
 		pthread_mutex_lock ( &threadsinfo_p->mutex[PTHREAD_MUTEX_STATE] );
-		debug ( 3, "current state is %i (iteration: %u/%u); threadsinfo_p->used == %u",
-		        ctx_p->state, ctx_p->iteration_num, ctx_p->flags[MAXITERATIONS], threadsinfo_p->used );
+		debug ( 3, "current state is \"%s\" (%i) (iteration: %u/%u); threadsinfo_p->used == %u",
+		        status_descr[ctx_p->state], ctx_p->state,
+		        ctx_p->iteration_num, ctx_p->flags[MAXITERATIONS], threadsinfo_p->used );
 
 		while ( ( ctx_p->flags[THREADING] == PM_OFF ) && threadsinfo_p->used ) {
 			debug ( 1, "We are in non-threading mode but have %u syncer threads. Waiting for them end.", threadsinfo_p->used );
@@ -3420,6 +3425,10 @@ int sync_loop ( ctx_t *ctx_p, indexes_t *indexes_p )
 
 				if ( ret ) return ret;
 
+				if ( ( ctx_p->state == STATE_TERM ) || ( ctx_p->state == STATE_EXIT ) ) {
+					continue;
+				}
+
 				if ( ctx_p->flags[ONLYINITSYNC] ) {
 					SYNC_LOOP_IDLE;
 					ctx_p->state = STATE_EXIT;
@@ -3429,7 +3438,6 @@ int sync_loop ( ctx_t *ctx_p, indexes_t *indexes_p )
 				ctx_p->state = STATE_RUNNING;
 				continue;
 
-			case STATE_PREEXIT:
 			case STATE_RUNNING:
 				if ( ( !ctx_p->flags[THREADING] ) && ctx_p->flags[MAXITERATIONS] ) {
 					if ( ( typeof ( ctx_p->iteration_num ) ) ctx_p->flags[MAXITERATIONS] == ctx_p->iteration_num - 1 )
@@ -3438,16 +3446,37 @@ int sync_loop ( ctx_t *ctx_p, indexes_t *indexes_p )
 						ctx_p->state = STATE_EXIT;
 				}
 
+			case STATE_PREEXIT:
+				if ( ctx_p->state == STATE_PREEXIT && ctx_p->flags[PREEXITHOOK] == 0 && ctx_p->flags[SOFTEXITSYNC] == 0 ) {
+					ctx_p->state = STATE_TERM;
+					SYNC_LOOP_IDLE;
+				}
+
+			case STATE_LASTSYNC:
 				switch ( ctx_p->state ) {
 					case STATE_PREEXIT:
+						debug ( 1, "preparing to exit" );
 						main_status_update ( ctx_p );
 
 						if ( ctx_p->flags[PREEXITHOOK] )
 							hook_preexit ( ctx_p );
 
+						if ( ctx_p->flags[SOFTEXITSYNC] ) {
+							ctx_p->state = STATE_LASTSYNC;
+						} else {
+							ctx_p->state = STATE_TERM;
+						}
+
+						break;
+
+					case STATE_LASTSYNC:
+						debug ( 3, "notify_wait ( ctx_p, indexes_p ) [lastsync]" );
+						events = notify_wait ( ctx_p, indexes_p );
 						ctx_p->state = STATE_TERM;
+						break;
 
 					case STATE_RUNNING:
+						debug ( 3, "notify_wait ( ctx_p, indexes_p )" );
 						events = notify_wait ( ctx_p, indexes_p );
 						break;
 
@@ -3478,10 +3507,11 @@ int sync_loop ( ctx_t *ctx_p, indexes_t *indexes_p )
 		}
 
 		pthread_cond_broadcast ( &threadsinfo_p->cond[PTHREAD_MUTEX_STATE] );
+		debug ( 4, "pthread_mutex_unlock(): PTHREAD_MUTEX_STATE" );
 		pthread_mutex_unlock ( &threadsinfo_p->mutex[PTHREAD_MUTEX_STATE] );
 
 		if ( events == 0 ) {
-			debug ( 2, "sync_x_wait(ctx_p, indexes_p) timed-out." );
+			debug ( 2, "events == 0" );
 			SYNC_LOOP_IDLE;
 			continue;	// Timeout
 		}
@@ -3491,6 +3521,7 @@ int sync_loop ( ctx_t *ctx_p, indexes_t *indexes_p )
 			return errno;
 		}
 
+		debug ( 3, "ctx_p->notifyenginefunct.handle" );
 		int count = ctx_p->notifyenginefunct.handle ( ctx_p, indexes_p );
 
 		if ( count  <= 0 ) {
@@ -3504,6 +3535,7 @@ int sync_loop ( ctx_t *ctx_p, indexes_t *indexes_p )
 			SYNC_LOOP_IDLE;
 	}
 
+	debug ( 1, "last SYNC_LOOP_IDLE" );
 	SYNC_LOOP_IDLE;
 	debug ( 1, "end" );
 	return exitcode;
@@ -3896,18 +3928,14 @@ int sync_sighandler ( sighandler_arg_t *sighandler_arg_p )
 				*exitcode_p = ETIME;
 
 			case SIGQUIT:
-				if ( ctx_p->flags[PREEXITHOOK] )
-					sync_switch_state ( ctx_p, pthread_parent, STATE_PREEXIT );
-				else
-					sync_switch_state ( ctx_p, pthread_parent, STATE_TERM );
-
+				sync_switch_state ( ctx_p, pthread_parent, STATE_PREEXIT );
 				break;
 
 			case SIGTERM:
 			case SIGINT:
 				sync_switch_state ( ctx_p, pthread_parent, STATE_TERM );
 
-				// bugfix of https://github.com/xaionaro/clsync/issues/44
+				// bugfix of https://github.com/clsync/clsync/issues/44
 				while ( ctx_p->children ) { // Killing children if non-pthread mode or/and (mode=="so" or mode=="rsyncso")
 					pid_t child_pid = ctx_p->child_pid[--ctx_p->children];
 

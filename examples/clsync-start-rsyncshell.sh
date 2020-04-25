@@ -16,5 +16,5 @@ case "$(uname -s)" in
 		;;
 esac
 
-sudo $(which clsync) -K example-rsync -l test -M rsyncshell -w2 -t5 -W ./testdir/from -S ./clsync-synchandler-rsyncshell.sh -R rules $OPTS $@
+sudo "$(which clsync)" -K example-rsync -l test -M rsyncshell -w2 -t5 -W ./testdir/from -S ./clsync-synchandler-rsyncshell.sh -R rules $OPTS $@
 

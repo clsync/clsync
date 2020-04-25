@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.59])
-AC_INIT([clsync],[0.4.2],[Dmitry Yu Okunev <dyokunev@ut.mephi.ru>],,[https://github.com/xaionaro/clsync])
+AC_INIT([clsync],[0.4.4],[Dmitry Yu Okunev <xaionaro@gmail.com>],,[https://github.com/clsync/clsync])
 AC_CONFIG_SRCDIR([sync.c])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([1.11 foreign -Wall -Wno-portability])

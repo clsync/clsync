@@ -3,7 +3,7 @@ MONITOMONITORR.\" Sorry for my English
 .\"
 .\" Thanks to oldlaptop [https://github.com/oldlaptop] for help with spelling
 .\"
-.TH CLSYNC 1 "JULY 2013" Linux "User Manuals"
+.TH CLSYNC 1 "APRIL 2020" Linux "User Manuals"
 .de URL
 \\$2 \(laURL: \\$1 \(ra\\$3
 ..
@@ -958,6 +958,15 @@ Is not set by default.
 .B \-\-skip\-initialsync
 .RS
 Skip initial syncing on clsync start.
+
+Is not set by default.
+.RE
+
+.PP
+.B \-\-sync\-on\-quit
+.RS
+On SIGQUIT: clsync will perform one more final syncing
+to empty the queue of collected events before exit.
 
 Is not set by default.
 .RE
@@ -2195,6 +2204,20 @@ Recommended case.
 
 .SH ENVIRONMENT VARIABLES
 
+Recognized variables - variables used by clsync.
+
+.B "Recognized variables"
+.RS
+HOME - user's HOME directory, clsync looks for configuration file here
+.RE
+
+.RS
+TMPDIR - use this directory as a prefix to create clsync temporary directory
+inside, if unset
+.I /tmp
+will be used
+.RE
+
 Output variables - variables that are set by clsync before calling
 .IR sync-handler .
 
@@ -2389,7 +2412,8 @@ Syncing /srv/lxc tree (rsync case):
 kills children)
 
 3  \- (QUIT) waits for current syncing processes and exit ("soft kill", waits
-for children)
+for children). See also
+.IR \-\-sync\-on\-quit .
 
 10 \- runs threads' GC function
 
@@ -2667,7 +2691,7 @@ Dmitry Yu Okunev <dyokunev@ut.mephi.ru> 0x8E30679C
 .SH SUPPORT
 You can get support on official IRC-channel in Freenode "#clsync" or on
 github's issue tracking system of
-.URL https://github.com/xaionaro/clsync "the clsync repository" .
+.URL https://github.com/clsync/clsync "the clsync repository" .
 
 Don't be afraid to ask about clsync configuration, ;). 
 .SH "SEE ALSO"
