@@ -3312,7 +3312,20 @@ int main ( int _argc, char *_argv[] )
 	        )
 	    )
 	) {
-		char *template = strdup ( TMPDIR_TEMPLATE );
+		// Use $TMPDIR as the temp directory, fall back to /tmp
+		char *tempdir = getenv ( "TMPDIR" );
+		if ( !tempdir )
+			tempdir = TMPDIR_PATH;
+		const char *tempsuff = TMPDIR_TEMPLATE;
+		size_t tempdir_len = strlen(tempdir);
+		size_t tempsuff_len = strlen(tempsuff);
+
+		// template = "$tempdir$tempsuff"
+		char *template = xmalloc(tempdir_len + tempsuff_len + 1);
+		memcpy ( template, tempdir, tempdir_len);
+		memcpy ( template + tempdir_len, tempsuff, tempsuff_len);
+		template[tempdir_len + tempsuff_len] = 0;
+
 		ctx_p->listoutdir = mkdtemp ( template );
 
 		if ( ctx_p->listoutdir == NULL ) {

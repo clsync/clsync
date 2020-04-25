@@ -149,7 +149,8 @@ expire-after:20M\n\
 #define DTRACE_PATH			"dtrace"
 
 #define PIVOT_AUTO_DIR			"/dev/shm/clsync-rootfs"
-#define	TMPDIR_TEMPLATE			"/tmp/clsync-XXXXXX"
+#define	TMPDIR_PATH				"/tmp"
+#define	TMPDIR_TEMPLATE			"/clsync-XXXXXX"
 
 #define SYSLOG_BUFSIZ			(1<<16)
 #define SYSLOG_FLAGS			(LOG_PID|LOG_CONS)
