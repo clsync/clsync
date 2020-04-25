@@ -23,7 +23,7 @@ build_test() {
 	echo ">>> Testing with \"$@\""
 	# make sure we test paralled build as they tend to fail when single works
 	#./configure -C $@ >/dev/null || rm -f config.cache && ./configure -C $@ >/dev/null && $MAKE -j5 >/dev/null || {
-	./configure "$@" >/dev/null && $MAKE -j5 >/dev/null || {
+	./configure $@ >/dev/null && $MAKE -j5 >/dev/null || {
 		echo "!!! test with \"$@\" configure options failed"
 		cat config.log
 		echo "!!! test with \"$@\" configure options failed"
@@ -57,7 +57,7 @@ run_example() {
 	trap run_example_cleanup_failure INT TERM
 	(
 		cd examples
-		bash -x clsync-start-"$MODE".sh --background --pid-file "$CLSYNC_PIDFILE" --config-file '/NULL/' -w1 -t1 -d0 "$@" -- --ignore-errors %RSYNC-ARGS% %watch-dir%/ %destination-dir%/
+		bash -x clsync-start-"$MODE".sh --background --pid-file "$CLSYNC_PIDFILE" --config-file '/NULL/' -w1 -t1 -d0 $@ -- --ignore-errors %RSYNC-ARGS% %watch-dir%/ %destination-dir%/
 	)
 
 	sleep 1
