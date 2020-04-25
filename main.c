@@ -3330,7 +3330,7 @@ int main ( int _argc, char *_argv[] )
 
 		if ( ctx_p->listoutdir == NULL ) {
 			ret = errno;
-			error ( "Cannot create temporary dir for list files" );
+			error ( "Cannot create temporary dir for list files by template '%s'", template );
 		} else
 			rm_listoutdir = 2;
 	}
