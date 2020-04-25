@@ -34,5 +34,5 @@ case "$(uname -s)" in
 		;;
 esac
 
-sudo $(which clsync) -K example-cluster -c "$IPADDR" -M rsyncshell -w 2 -t 5 -W ./testdir/from -S ./clsync-synchandler-rsync.sh -R rules $OPTS $@
+sudo "$(which clsync)" -K example-cluster -c "$IPADDR" -M rsyncshell -w 2 -t 5 -W ./testdir/from -S ./clsync-synchandler-rsync.sh -R rules $OPTS $@
 
