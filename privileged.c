@@ -926,7 +926,7 @@ int privileged_handler ( ctx_t *ctx_p )
 		sigset_t sigset;
 		sigemptyset ( &sigset );
 		/*	Do not uncomment this. This causes handler closing on any terminal
-			signal to parent process. In turn it causes: https://github.com/xaionaro/clsync/issues/104
+			signal to parent process. In turn it causes: https://github.com/clsync/clsync/issues/104
 
 				sigaddset(&sigset, SIGALRM);
 				sigaddset(&sigset, SIGHUP);

@@ -1265,7 +1265,7 @@ static int sync_queuesync ( const char *fpath_rel, eventinfo_t *evinfo, ctx_t *c
 	// Filename can contain "" character that conflicts with event-row separator of list-files.
 	if ( strchr ( fpath_rel, '\n' ) ) {
 		// At the moment, we will just ignore events of such files :(
-		debug ( 3, "There's \"\\n\" character in path \"%s\". Ignoring it :(. Feedback to: https://github.com/xaionaro/clsync/issues/12", fpath_rel );
+		debug ( 3, "There's \"\\n\" character in path \"%s\". Ignoring it :(. Feedback to: https://github.com/clsync/clsync/issues/12", fpath_rel );
 		return 0;
 	}
 
@@ -3935,7 +3935,7 @@ int sync_sighandler ( sighandler_arg_t *sighandler_arg_p )
 			case SIGINT:
 				sync_switch_state ( ctx_p, pthread_parent, STATE_TERM );
 
-				// bugfix of https://github.com/xaionaro/clsync/issues/44
+				// bugfix of https://github.com/clsync/clsync/issues/44
 				while ( ctx_p->children ) { // Killing children if non-pthread mode or/and (mode=="so" or mode=="rsyncso")
 					pid_t child_pid = ctx_p->child_pid[--ctx_p->children];
 

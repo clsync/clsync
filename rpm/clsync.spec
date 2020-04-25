@@ -8,7 +8,7 @@ Version:	@VERSION@
 Release:	@BUILDNUM@
 License: 	GPL-3+
 Group:		Applications/System
-URL: 		https://github.com/xaionaro/clsync
+URL: 		https://github.com/clsync/clsync
 Source0: 	clsync-%{version}.tar.gz
 Source1: 	clsync.init
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root

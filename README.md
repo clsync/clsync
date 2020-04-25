@@ -132,7 +132,7 @@ directory "example/testdir/to" ;)
 For dummies:
 
     pushd /tmp
-    git clone https://github.com/xaionaro/clsync
+    git clone https://github.com/clsync/clsync
     cd clsync
     autoreconf -fi
     ./configure
@@ -161,7 +161,7 @@ system-wide, e.g. with
 For dummies, again (with "make install"):
 
     pushd /tmp
-    git clone https://github.com/xaionaro/clsync
+    git clone https://github.com/clsync/clsync
     cd clsync
     autoreconf -fi
     ./configure
