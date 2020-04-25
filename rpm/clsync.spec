@@ -83,17 +83,13 @@ rm -rf %{buildroot}
 
 
 %files devel
-%{_includedir}/clsync/clsync.h
-%{_includedir}/clsync/compilerflags.h
-%{_includedir}/clsync/configuration.h
-%{_includedir}/clsync/ctx.h
-%{_includedir}/clsync/error.h
-%{_includedir}/clsync/indexes.h
-%{_includedir}/clsync/malloc.h
-%{_includedir}/clsync/port-hacks.h
-
+%{_includedir}/clsync/*
 
 %changelog
+* Sat Apr 25 2020 Andrew A. Savchenko <bircoph@gmail.com> - 0.4.4-1
+- Add --sync-on-quit option.
+- Multiple bug fixes.
+
 * Thu Sep 29 2016 Andrew A. Savchenko <bircoph@gmail.com> - 0.4.2-1
 - Maintenance release, many bug fixes
 
