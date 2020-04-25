@@ -9,9 +9,13 @@
 # Should-Stop:       $remote_fs $local_fs $syslog
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: Start and stop clsync
-# Description:       Clsync is live file-level sync tool, written in GNU C
+# Short-Description: clsync daemon init script
+# Description:       This script launches the clsync daemon.
 ### END INIT INFO
+#
+# clsync
+# chkconfig:    2345 98 02
+# pidfile:     /var/run/clsync/clsync.pid
 
 # Source function library.
 . /etc/rc.d/init.d/functions
