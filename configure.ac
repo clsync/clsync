@@ -33,11 +33,12 @@ AX_PTHREAD(
 )
 
 
-HAVE_BACKTRACE=1
 case $host_os in
 	*bsd*)
-		AC_SEARCH_LIBS([backtrace], [execinfo], [],
-			[HAVE_BACKTRACE=])
+		AC_SEARCH_LIBS([backtrace], [execinfo], [HAVE_BACKTRACE=1])
+		;;
+	*)
+		AC_CHECK_HEADER([execinfo.h], [HAVE_BACKTRACE=1])
 		;;
 esac
 
