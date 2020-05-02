@@ -1,16 +1,24 @@
-#
+
+# === non-systemd ===
 
 # clsync is not enabled by default. To enable it replace "false" with "true":
 CLSYNC_ENABLE=false
-
 CLSYNC_IONICE_CLASS=3
-
-
-# clsync's arguments:
-
-# proof of concept:
+# Example:
 CLSYNC_ARGS='-M rsyncdirect --output=syslog -L /dev/shm/clsync -x 23 -W /var/www -S /usr/bin/rsync -D /mnt/backup'
 
-# production example:
-#CLSYNC_ARGS='-M rsyncshell --output=syslog -L /dev/shm/clsync -x 24 -W /srv/lxc -S /opt/backup_engine/bin/sync-handler.sh -R /opt/backup_engine/etc/clsync.filter'
+# === systemd ===
+
+CLSYNC_ARGS_SYSTEMD='-b0 -Ystderr'
+# Example:
+# mkdir -p /etc/clsync
+# cat > /etc/clsync/clsync.conf <<EOF
+# [SomeConfig]
+# mode = simple
+# watch-dir = /tmp
+# sync-handler = echo
+# EOF
+# systemctl enable clsync@SomeConfig
+# systemctl start clsync@SomeConfig
+# systemctl status clsync@SomeConfig
 

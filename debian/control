@@ -3,7 +3,7 @@ Section: admin
 Priority: optional
 Maintainer: Artyom A Anikeev <anikeev@ut.mephi.ru>
 Uploaders: Barak A. Pearlmutter <bap@debian.org>, Dmitry Yu Okunev <dyokunev@ut.mephi.ru>
-Build-Depends: debhelper-compat (= 12),
+Build-Depends: debhelper-compat (= 12), dh-systemd,
 	       libglib2.0-dev (>= 2.0.0),
 	       libcgroup-dev, libcap-dev
 Standards-Version: 4.3.0

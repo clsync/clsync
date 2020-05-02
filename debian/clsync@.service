@@ -1,0 +1,13 @@
+[Unit]
+Description=clsync (live file syncer)
+After=timers.target local-fs.target cryptsetup.target remote-fs.target network.target
+
+[Service]
+Type=exec
+EnvironmentFile=-/etc/default/clsync
+EnvironmentFile=-/etc/default/clsync.d/*
+ExecStart=/usr/bin/clsync -K %i $CLSYNC_ARGS_SYSTEMD
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target
