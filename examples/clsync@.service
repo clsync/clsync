@@ -1,0 +1,11 @@
+[Unit]
+Description=clsync (live file syncer)
+After=timers.target local-fs.target cryptsetup.target remote-fs.target network.target
+
+[Service]
+Type=exec
+EnvironmentFile=-/etc/clsync/env
+ExecStart=/usr/bin/clsync -K %i
+
+[Install]
+WantedBy=multi-user.target

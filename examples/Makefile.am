@@ -4,12 +4,14 @@ exampledir=$(docdir)/examples
 #  $(wildcard $(srcdir)/*.c) \
 #  $(wildcard $(srcdir)/*.sh)
 
-dist_example_DATA = clsync-synchandler-rsyncso.c clsync-synchandler-so.c
+dist_example_DATA = clsync-synchandler-rsyncso.c clsync-synchandler-so.c \
+	clsync@.service
 
 dist_example_SCRIPTS = clsync-start-cluster.sh			\
 	clsync-start-rsyncdirect.sh clsync-start-rsyncshell.sh	\
 	clsync-start-rsyncso.sh clsync-start-so.sh		\
-	clsync-synchandler-rsyncshell.sh
+	clsync-synchandler-rsyncshell.sh \
+	clsync-systemd.sh
 
 # find production -type f -name '*.sh'
 nobase_dist_example_SCRIPTS =					\
