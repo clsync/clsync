@@ -91,9 +91,10 @@ UPD: Starting with kernels 5.1 we will be able to use fanotify for all events ;)
 --------------
 
 **Linux Distributions**
+
 Some distributions already have clsync supported in the main repo:
 
-*Debian/ubuntu:*
+*Debian/Ubuntu:*
 
     apt-get install clsync
 
@@ -117,6 +118,7 @@ in the *libclsync* package and its devel files are in the
 package and doxygen API documentation is in *clsync-apidocs*.
 
 **From the Source Code**
+
 If it's required to install clsync from the source, first of all, you should
 install dependencies to compile it. Names may vary in various
 distributions, but you'll get the idea:
@@ -138,6 +140,7 @@ Next step is generating Makefile. To do that usually it's enough to execute:
 
 You may be interested in various configuration options, so see for
 details:
+
     ./configure --help
 
 Next step is compiling. To compile usually it's enough to execute:
