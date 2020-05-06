@@ -98,7 +98,7 @@ EXTRA_DIST = .doxygen .travis.sh .travis.yml NOTES SHORTHANDS freebsd debian gen
 
 if LIBCLSYNC
 lib_LTLIBRARIES = libclsync.la
-libclsync_la_SOURCES = malloc.c libclsync.c socket.c error.c
+libclsync_la_SOURCES = malloc.c libclsync.c socket.c error.c pthreadex.c
 libclsync_la_LDFLAGS = -version-info 0:0:0
 endif
 
