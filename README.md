@@ -90,23 +90,59 @@ UPD: Starting with kernels 5.1 we will be able to use fanotify for all events ;)
 4 - Installing
 --------------
 
-Debian/ubuntu-users can try to install it directly with apt-get:
+**Linux Distributions**
+Some distributions already have clsync supported in the main repo:
+
+*Debian/ubuntu:*
 
     apt-get install clsync
 
+An optional clsync socket monitoring and control library is available
+in the *libclsync0* package and its devel files are in the
+*libclsync-dev*
+
+*Gentoo:*
+
+    emerge clsync
+
+You may customize *all* clsync features via a multitude of USE flags.
+
+*Alt Linux:*
+
+    apt-get install clsync
+
+An optional clsync socket monitoring and control library is available
+in the *libclsync* package and its devel files are in the
+*libclsync-devel*. Examples are located in the *clsync-examples*
+package and doxygen API documentation is in *clsync-apidocs*.
+
+**From the Source Code**
 If it's required to install clsync from the source, first of all, you should
-install dependencies to compile it. On debian-like systems you should
-execute something like:
+install dependencies to compile it. Names may vary in various
+distributions, but you'll get the idea:
 
-    apt-get install libglib2.0-dev autoreconf gcc
+Only the following packages are mandatory:
+    glib2-devel autoreconf gcc
 
-Next step is generating Makefile. To do that usually it's enought to execute:
+Dependencies for optional features:
+* libcap-devel — capabilities support for privilege separation
+* libcgroup-devel — cgroups support for privilege separation
+* libmhash-devel — use mhash for faster Adler-32 implementation
+  (used only in cluster and kqueue code)
+* doxygen — to build API documentation
+* graphviz — to build API documentation
+
+Next step is generating Makefile. To do that usually it's enough to execute:
 
     autoreconf -i && ./configure
 
+You may be interested in various configuration options, so see for
+details:
+    ./configure --help
+
 Next step is compiling. To compile usually it's enough to execute:
 
-    make
+    make -j$(nproc)
 
 Next step is installing. To install usually it's enough to execute:
 
