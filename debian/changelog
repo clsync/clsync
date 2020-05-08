@@ -9,7 +9,13 @@ clsync (0.4.4-1) unstable; urgency=medium
   [Dmitrii Okunev]
   * Added systemd unit-file
 
- -- Andrew Savchenko <bircoph@gmail.com>  Sat, 25 Apr 2020 20:35:42 +0300
+  [ Barak A. Pearlmutter ]
+  * Depend on newer debhelper (>= 9.20160709) rather than dh-systemd.
+  * Set upstream metadata fields: Bug-Database, Bug-Submit, Repository,
+    Repository-Browse.
+  * Update standards version to 4.5.0, no changes needed.
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Fri, 08 May 2020 16:47:15 +0100
 
 clsync (0.4.3-1) unstable; urgency=medium
 

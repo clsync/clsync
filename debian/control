@@ -3,10 +3,10 @@ Section: admin
 Priority: optional
 Maintainer: Artyom A Anikeev <anikeev@ut.mephi.ru>
 Uploaders: Barak A. Pearlmutter <bap@debian.org>, Dmitry Yu Okunev <dyokunev@ut.mephi.ru>
-Build-Depends: debhelper-compat (= 12), dh-systemd,
+Build-Depends: debhelper-compat (= 12),
 	       libglib2.0-dev (>= 2.0.0),
 	       libcgroup-dev, libcap-dev
-Standards-Version: 4.3.0
+Standards-Version: 4.5.0
 Homepage: http://ut.mephi.ru/oss
 Vcs-Git: https://salsa.debian.org/debian/clsync.git
 Vcs-Browser: https://salsa.debian.org/debian/clsync
