@@ -1,4 +1,4 @@
-clsync (0.4.4-1) unstable; urgency=medium
+clsync (0.4.5-1) unstable; urgency=medium
 
   [ Andrew Savchenko]
   * New upstream relese
@@ -14,8 +14,15 @@ clsync (0.4.4-1) unstable; urgency=medium
   * Set upstream metadata fields: Bug-Database, Bug-Submit, Repository,
     Repository-Browse.
   * Update standards version to 4.5.0, no changes needed.
+  * Merge upstream fix for symbols pthread_mutex_init_shared
+    pthread_mutex_reltimedlock pthread_mutex_destroy_shared in
+    libclsync.so.0.0.0 not found in any libraries.
+  * Bump to debhelper 13.
+  * Address lintian complaint about init.d file
+  * Git ignore some debris
+  * Tell dh_missing not to worry about the *.la file
 
- -- Barak A. Pearlmutter <bap@debian.org>  Fri, 08 May 2020 16:47:15 +0100
+ -- Barak A. Pearlmutter <bap@debian.org>  Mon, 09 Nov 2020 16:35:16 +0000
 
 clsync (0.4.3-1) unstable; urgency=medium
 
