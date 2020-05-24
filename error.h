@@ -29,32 +29,32 @@
 #endif
 
 extern void _critical ( const char *const function_name, const char *fmt, ... );
-#define critical(...) 				_critical(__FUNCTION__, __VA_ARGS__)
+#define critical(...) 				_critical(__func__, __VA_ARGS__)
 #define critical_on(cond) {debug(30, "critical_on: checking: %s", TOSTR(cond)); if (unlikely(cond)) {critical("Assert: "TOSTR(cond));}}
 
 extern void _error ( const char *const function_name, const char *fmt, ... );
-#define error(...) 				_error(__FUNCTION__, __VA_ARGS__)
+#define error(...) 				_error(__func__, __VA_ARGS__)
 #define error_on(cond)	  {if (unlikely(cond)) {error("Error: ("TOSTR(cond)") != 0");}}
 
 extern void _warning ( const char *const function_name, const char *fmt, ... );
-#define warning(...) 				_warning(__FUNCTION__, __VA_ARGS__)
+#define warning(...) 				_warning(__func__, __VA_ARGS__)
 
 extern void _info ( const char *const function_name, const char *fmt, ... );
-#define info(...) 				_info(__FUNCTION__, __VA_ARGS__)
+#define info(...) 				_info(__func__, __VA_ARGS__)
 
 #ifdef _DEBUG_SUPPORT
 extern void _debug ( int debug_level, const char *const function_name, const char *fmt, ... );
-#	define debug(debug_level, ...)			{if (debug_level < DEBUGLEVEL_LIMIT) _debug(debug_level, __FUNCTION__, __VA_ARGS__);}
-#	define error_or_debug(debug_level, ...)		((debug_level)<0 ? _error(__FUNCTION__, __VA_ARGS__) : _debug(debug_level, __FUNCTION__, __VA_ARGS__))
+#	define debug(debug_level, ...)			{if (debug_level < DEBUGLEVEL_LIMIT) _debug(debug_level, __func__, __VA_ARGS__);}
+#	define error_or_debug(debug_level, ...)		((debug_level)<0 ? _error(__func__, __VA_ARGS__) : _debug(debug_level, __func__, __VA_ARGS__))
 #else
 #	define debug(debug_level, ...)			{}
-#	define error_or_debug(debug_level, ...)		((debug_level)<0 ? _error(__FUNCTION__, __VA_ARGS__) : (void)0)
+#	define error_or_debug(debug_level, ...)		((debug_level)<0 ? _error(__func__, __VA_ARGS__) : (void)0)
 
 #endif
 
 #define debug_call(debug_level, code)			debug(debug_level, "%s -> %i", TOSTR(code), code)
 
-#define critical_or_warning(cond, ...) ((cond) ? _critical : _warning)(__FUNCTION__, __VA_ARGS__)
+#define critical_or_warning(cond, ...) ((cond) ? _critical : _warning)(__func__, __VA_ARGS__)
 
 enum ipc_type {
 	IPCT_PRIVATE,
