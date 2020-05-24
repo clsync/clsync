@@ -270,7 +270,9 @@ clsyncsock_t *socket_connect_unix ( const char *const socket_path )
 int _socket_send ( clsyncsock_t *clsyncsock, uint64_t *cmd_num_p, sockcmd_id_t cmd_id, va_list ap )
 {
 	int ret;
-	char prebuf0[SOCKET_BUFSIZ], prebuf1[SOCKET_BUFSIZ], sendbuf[SOCKET_BUFSIZ];
+	# define PREBUF0_SIZE ((SOCKET_BUFSIZ >> 1) - 128)
+	# define PREBUF1_SIZE (SOCKET_BUFSIZ >> 1)
+	char prebuf0[PREBUF0_SIZE], prebuf1[PREBUF1_SIZE], sendbuf[SOCKET_BUFSIZ];
 	ret = 0;
 
 	switch ( clsyncsock->prot ) {
@@ -282,18 +284,25 @@ int _socket_send ( clsyncsock_t *clsyncsock, uint64_t *cmd_num_p, sockcmd_id_t c
 
 						if ( textmessage_args[cmd_id] ) {
 							va_copy ( ap_copy, ap );
-							vsprintf ( prebuf0, textmessage_args[cmd_id], ap_copy );
+							vsnprintf ( prebuf0, PREBUF0_SIZE, textmessage_args[cmd_id], ap_copy );
 						} else
 							*prebuf0 = 0;
 
 						va_copy ( ap_copy, ap );
-						vsprintf ( prebuf1, textmessage_descr[cmd_id], ap );
-						size_t sendlen = sprintf (
-						                     sendbuf,
+						vsnprintf ( prebuf1, PREBUF1_SIZE, textmessage_descr[cmd_id], ap );
+#ifdef PARANOID
+						prebuf0[PREBUF0_SIZE-1] = 0;
+						prebuf1[PREBUF1_SIZE-1] = 0;
+#endif
+						size_t sendlen = snprintf (
+						                     sendbuf, SOCKET_BUFSIZ,
 						                     "%lu %u %s :%s\n",
 						                     ( *cmd_num_p )++,
 						                     cmd_id, prebuf0, prebuf1
 						                 );
+#ifdef PARANOID
+						sendbuf[SOCKET_BUFSIZ-1] = 0;
+#endif
 						debug ( 5, "send(): \"%s\"", sendbuf );
 						send ( clsyncsock->sock, sendbuf, sendlen, 0 );
 						break;
