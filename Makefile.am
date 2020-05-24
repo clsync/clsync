@@ -103,13 +103,8 @@ libclsync_la_LDFLAGS = -version-info 0:0:0
 endif
 
 REVISION=$(shell [ -d .git ] &&\
-	(echo -n \
-		'\".'$$(($$(git log 2>/dev/null \
-			| grep -c ^commit \
-			| tr -d "\n" \
-			)-1083 \
-		))'\"' \
-	) || echo -n '\"-release\"' )
+	echo -n '\".'$$(git rev-list --count $$(git tag -l 'v*' --sort='taggerdate')..HEAD)'\"'\
+	|| echo -n '\"-release\"' )
 
 AM_CFLAGS := -DREVISION=$(REVISION)
 
