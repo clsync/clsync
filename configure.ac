@@ -486,6 +486,15 @@ LIBS="${GLIB_LIBS} ${LIBS}"
 AM_CPPFLAGS="${GLIB_CFLAGS}"
 AC_SUBST(AM_CPPFLAGS)
 
+dnl Generating program.h
+VER_MAJ=$(echo $VERSION | cut -d'.' -f1)
+VER_MID=$(echo $VERSION | cut -d'.' -f2)
+VER_MIN=$(echo $VERSION | cut -d'.' -f3)
+AC_SUBST(VER_MAJ)
+AC_SUBST(VER_MID)
+AC_SUBST(VER_MIN)
+AC_SUBST(PACKAGE_BUGREPORT)
+AC_SUBST(PACKAGE_URL)
 
-AC_CONFIG_FILES([Makefile examples/Makefile pkgconfig/libclsync.pc])
+AC_CONFIG_FILES([Makefile examples/Makefile pkgconfig/libclsync.pc program.h])
 AC_OUTPUT

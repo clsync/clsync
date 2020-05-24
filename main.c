@@ -542,7 +542,7 @@ int version()
 	    " -DHL_LOCKS"
 #endif
 	    ;
-	info ( PROGRAM" v%i.%i.%i"REVISION"\n\t"AUTHOR"\n\nCompiled with options: %s"
+	info ( PROGRAM" v%i.%i.%i"REVISION"\n\t"AUTHOR"\n\t"URL"\n\nCompiled with options: %s"
 	       , VERSION_MAJ, VERSION_MID, VERSION_MIN, flags );
 	exit ( 0 );
 }
