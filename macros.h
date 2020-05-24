@@ -13,7 +13,8 @@
 #	define PARANOIDV(...)
 #endif
 
-#ifdef _GNU_SOURCE
+// gcc, clang and lcc support __builtin_expect and define __GNUC__
+#ifdef __GNUC__
 #	ifndef likely
 #		define likely(x)    __builtin_expect(!!(x), 1)
 #	endif
