@@ -91,6 +91,15 @@ void *xrealloc ( void *oldptr, size_t size )
 	return ret;
 }
 
+void *xstrncpy ( char *dest, const char *src, size_t n )
+{
+    strncpy ( dest, src, n - 1 );
+    if ( likely(n > 0) )
+        dest[n-1] = 0;
+    else
+        dest[0] = 0;
+}
+
 #ifdef CAPABILITIES_SUPPORT
 void *malloc_align ( size_t size )
 {

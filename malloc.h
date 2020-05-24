@@ -22,6 +22,7 @@
 extern void *xmalloc ( size_t size );
 extern void *xcalloc ( size_t nmemb, size_t size );
 extern void *xrealloc ( void *oldptr, size_t size );
+extern void *xstrncpy ( char *dest, const char *src, size_t n );
 #ifdef CAPABILITIES_SUPPORT
 extern void *malloc_align ( size_t size );
 extern void *calloc_align ( size_t nmemb, size_t size );
