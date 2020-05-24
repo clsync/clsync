@@ -52,7 +52,7 @@ void *xmalloc ( size_t size )
 #endif
 	void *ret = malloc ( size );
 
-	if ( ret == NULL )
+	if ( unlikely(ret == NULL) )
 		critical ( "(%li): Cannot allocate memory.", size );
 
 #ifdef PARANOID
@@ -70,7 +70,7 @@ void *xcalloc ( size_t nmemb, size_t size )
 #endif
 	void *ret = calloc ( nmemb, size );
 
-	if ( ret == NULL )
+	if ( unlikely(ret == NULL) )
 		critical ( "(%li): Cannot allocate memory.", size );
 
 //	memset(ret, 0, nmemb*size);	// Just in case
@@ -85,19 +85,21 @@ void *xrealloc ( void *oldptr, size_t size )
 #endif
 	void *ret = realloc ( oldptr, size );
 
-	if ( ret == NULL )
+	if ( unlikely(ret == NULL) )
 		critical ( "(%p, %li): Cannot reallocate memory.", oldptr, size );
 
 	return ret;
 }
 
-void *xstrncpy ( char *dest, const char *src, size_t n )
+char *xstrncpy ( char *dest, const char *src, size_t n )
 {
-    strncpy ( dest, src, n - 1 );
+    char *ret = strncpy ( dest, src, n - 1 );
     if ( likely(n > 0) )
         dest[n-1] = 0;
     else
         dest[0] = 0;
+
+    return ret;
 }
 
 #ifdef CAPABILITIES_SUPPORT
@@ -115,12 +117,12 @@ void *malloc_align ( size_t size )
 	total_size /= pagesize;
 	total_size *= pagesize;
 
-	if ( posix_memalign ( &ret, pagesize, total_size ) )
+	if ( unlikely ( posix_memalign ( &ret, pagesize, total_size ) ) )
 		critical ( "(%li): Cannot allocate memory.", size );
 
 # ifdef PARANOID
 
-	if ( ret == NULL )
+	if ( unlikely ( ret == NULL ))
 		critical ( "(%li): ptr == NULL.", size );
 
 # endif
@@ -149,7 +151,7 @@ char *strdup_protect ( const char *src, int prot )
 	char *dst  = malloc_align ( len );
 	strcpy ( dst, src );
 
-	if ( mprotect ( dst, len, prot ) )
+	if ( unlikely ( mprotect ( dst, len, prot ) ) )
 		critical ( "(%p, 0x%o): Got error from mprotect(%p, %lu, 0x%o)", src, prot, dst, len, prot );
 
 	return dst;
@@ -177,13 +179,13 @@ int memory_init()
 #ifdef CAPABILITIES_SUPPORT
 	pagesize   = sysconf ( _SC_PAGE_SIZE );
 
-	if ( pagesize == -1 )
+	if ( unlikely ( pagesize == -1 ) )
 		critical ( "Got error from sysconf(_SC_PAGE_SIZE)" );
 
 # ifdef SECCOMP_SUPPORT
 	devzero_fd = open ( DEVZERO, O_RDONLY );
 
-	if ( devzero_fd == -1 )
+	if ( unlikely ( devzero_fd == -1 ) )
 		critical ( "Got error while open(\""DEVZERO"\", O_RDONLY)" );
 
 # endif
@@ -200,11 +202,11 @@ void *shm_malloc_try ( size_t size )
 	int privileged_shmid = shmget ( 0, size, IPC_PRIVATE | IPC_CREAT | 0600 );
 	struct shmid_ds shmid_ds;
 
-	if ( privileged_shmid == -1 ) return NULL;
+	if ( unlikely ( privileged_shmid == -1 ) ) return NULL;
 
 	ret = shmat ( privileged_shmid, NULL, 0 );
 
-	if ( ( long ) ret == -1 ) return NULL;
+	if ( unlikely ( ( long ) ret == -1 ) ) return NULL;
 
 	debug ( 15, "ret == %p", ret );
 	// Forbidding access for others to the pointer
@@ -214,7 +216,7 @@ void *shm_malloc_try ( size_t size )
 	// Checking that nobody else attached to the shared memory before access forbidding
 	shmctl ( privileged_shmid, IPC_STAT, &shmid_ds );
 
-	if ( shmid_ds.shm_lpid != shmid_ds.shm_cpid ) {
+	if ( unlikely ( shmid_ds.shm_lpid != shmid_ds.shm_cpid ) ) {
 		error ( "A process (pid %u) attached to my shared memory. It's a security problem. Emergency exit." );
 		shmdt ( ret );
 		return NULL;
