@@ -1886,7 +1886,7 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 					char user[USER_LEN + 2], group[GROUP_LEN + 2];
 					memcpy ( user, arg, MIN ( USER_LEN, colon - arg ) );
 					user[colon - arg] = 0;
-					strncpy ( group, &colon[1], GROUP_LEN );
+					xstrncpy ( group, &colon[1], GROUP_LEN );
 					errno = 0;
 					struct passwd *pwent = getpwnam ( user );
 
