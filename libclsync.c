@@ -21,6 +21,7 @@
 
 #include <errno.h>
 #include <stdlib.h>
+#include <string.h>	// for memset
 #include <sys/un.h>	// for "struct sockaddr_un"
 
 #include "configuration.h"
