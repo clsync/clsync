@@ -215,7 +215,7 @@ threadsinfo_t *thread_info()  	// TODO: optimize this
 }
 
 #ifdef THREADING_SUPPORT
-#define thread_info_lock() _thread_info_lock(__FUNCTION__)
+#define thread_info_lock() _thread_info_lock(__func__)
 static inline threadsinfo_t *_thread_info_lock ( const char *const function_name )
 {
 	threadsinfo_t *threadsinfo_p = thread_info();
@@ -224,7 +224,7 @@ static inline threadsinfo_t *_thread_info_lock ( const char *const function_name
 	return threadsinfo_p;
 }
 
-#define thread_info_unlock(...) _thread_info_unlock(__FUNCTION__, __VA_ARGS__)
+#define thread_info_unlock(...) _thread_info_unlock(__func__, __VA_ARGS__)
 static inline int _thread_info_unlock ( const char *const function_name, int rc )
 {
 	threadsinfo_t *threadsinfo_p = thread_info();
