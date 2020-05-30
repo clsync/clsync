@@ -42,6 +42,13 @@ case $host_os in
 		;;
 esac
 
+case $host_os in
+	*musl*)
+		# musl uses stand-alone fts implementation
+		LDFLAGS="${LDFLAGS} -lfts"
+		;;
+esac
+
 dnl --enable-clsync
 AC_ARG_ENABLE(clsync,
 AS_HELP_STRING(--disable-clsync,
