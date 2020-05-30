@@ -23,7 +23,6 @@
  */
 
 #include <stdlib.h>
-#include <execinfo.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -38,6 +37,10 @@
 
 #include "error.h"
 #include "pthreadex.h"	/* pthread_*_shared() */
+
+#ifdef BACKTRACE_SUPPORT
+#include <execinfo.h>
+#endif
 
 static int zero     = 0;
 static int three    = 3;
