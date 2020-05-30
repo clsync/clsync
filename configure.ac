@@ -469,6 +469,9 @@ esac
 
 AS_IF([test "$HAVE_INOTIFY" != ""], [AC_CHECK_FUNC([inotify_init1], [], [INOTIFY_OLD=1])])
 
+dnl calc is used only in kqueue and cluster code
+AS_IF([test HAVE_KQUEUE -o HAVE_CLUSTER], [HAVE_CALC=1])
+
 AM_CONDITIONAL([HAVE_KQUEUE],       [test "x$HAVE_KQUEUE"       != "x"])
 AM_CONDITIONAL([HAVE_INOTIFY],      [test "x$HAVE_INOTIFY"      != "x"])
 AM_CONDITIONAL([INOTIFY_OLD],       [test "x$INOTIFY_OLD"       != "x"])
@@ -486,6 +489,7 @@ AM_CONDITIONAL([HAVE_SECCOMP],      [test "x$HAVE_SECCOMP"      != "x"])
 AM_CONDITIONAL([HAVE_TRE],          [test "x$HAVE_TRE"          != "x"])
 AM_CONDITIONAL([HAVE_LIBCGROUP],    [test "x$HAVE_LIBCGROUP"    != "x"])
 AM_CONDITIONAL([HAVE_PTHREAD_TIMEDJOIN_NP], [test "x$HAVE_PTHREAD_TIMEDJOIN_NP" != "x"])
+AM_CONDITIONAL([HAVE_CALC],         [test "x$HAVE_CALC"         != "x"])
 
 AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' -a  "$HAVE_GIO" = ''],
 [AC_MSG_FAILURE([At least one monitoring engine must be enabled!

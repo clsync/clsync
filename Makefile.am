@@ -4,9 +4,9 @@ SUBDIRS = examples
 if CLSYNC
 bin_PROGRAMS = clsync
 
-clsync_SOURCES = calc.c error.c fileutils.c glibex.c		\
+clsync_SOURCES = error.c fileutils.c glibex.c		\
 	indexes.c main.c malloc.c rules.c stringex.c sync.c		\
-	posix-hacks.c privileged.c pthreadex.c calc.h 		\
+	posix-hacks.c privileged.c pthreadex.c  		\
 	fileutils.h glibex.h main.h port-hacks.h posix-hacks.h		\
 	pthreadex.h stringex.h sync.h common.h control.h privileged.h	\
 	rules.h syscalls.h
@@ -73,6 +73,9 @@ endif
 if HAVE_CLUSTER
 clsync_CFLAGS  += -DCLUSTER_SUPPORT
 clsync_SOURCES += cluster.c cluster.h
+endif
+if HAVE_CALC
+clsync_SOURCES += calc.c calc.h
 endif
 
 if HLLOCKS
