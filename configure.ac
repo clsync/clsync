@@ -470,7 +470,7 @@ esac
 AS_IF([test "$HAVE_INOTIFY" != ""], [AC_CHECK_FUNC([inotify_init1], [], [INOTIFY_OLD=1])])
 
 dnl calc is used only in kqueue and cluster code
-AS_IF([test HAVE_KQUEUE -o HAVE_CLUSTER], [HAVE_CALC=1])
+AS_IF([test "$HAVE_KQUEUE" != "" -o "$HAVE_CLUSTER" != ""], [HAVE_CALC=1])
 
 AM_CONDITIONAL([HAVE_KQUEUE],       [test "x$HAVE_KQUEUE"       != "x"])
 AM_CONDITIONAL([HAVE_INOTIFY],      [test "x$HAVE_INOTIFY"      != "x"])
