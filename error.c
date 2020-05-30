@@ -159,9 +159,9 @@ static void syslog_flush ( int level )
 	_syslog_buffer_filled = 0;
 }
 
-typedef int  * (  *outfunct_t ) ( const char *format, ... );
-typedef int  * ( *voutfunct_t ) ( const char *format, va_list ap );
-typedef void * ( *flushfunct_t ) ( int level );
+typedef int  (  *outfunct_t ) ( const char *format, ... );
+typedef int  ( *voutfunct_t ) ( const char *format, va_list ap );
+typedef void ( *flushfunct_t ) ( int level );
 
 static outfunct_t outfunct[] = {
 	[OM_STDERR]	= ( outfunct_t ) printf_stderr,
