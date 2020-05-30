@@ -491,7 +491,7 @@ AM_CONDITIONAL([HAVE_LIBCGROUP],    [test "x$HAVE_LIBCGROUP"    != "x"])
 AM_CONDITIONAL([HAVE_PTHREAD_TIMEDJOIN_NP], [test "x$HAVE_PTHREAD_TIMEDJOIN_NP" != "x"])
 AM_CONDITIONAL([HAVE_CALC],         [test "x$HAVE_CALC"         != "x"])
 
-AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' -a  "$HAVE_GIO" = ''],
+AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' -a "$HAVE_GIO" = '' -a "x$enable_clsync" != "xno"],
 [AC_MSG_FAILURE([At least one monitoring engine must be enabled!
 Available (depending on system): inotify, kqueue, gio, bsm])])
 
