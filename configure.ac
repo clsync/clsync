@@ -66,6 +66,7 @@ AS_HELP_STRING(--enable-cluster,
 [enable clustering support (not yet implemented), default: no]))
 
 AS_IF([test "x$enable_cluster" = "xyes"], [CPPFLAGS="${CPPFLAGS} -DCLUSTER_SUPPORT"
+	HAVE_CLUSTER=1
 	dnl mhash check
 	AC_ARG_WITH(mhash,
 	AS_HELP_STRING(--with-mhash,
@@ -479,6 +480,7 @@ AM_CONDITIONAL([HAVE_BACKTRACE],    [test "x$HAVE_BACKTRACE"    != "x"])
 AM_CONDITIONAL([HAVE_CAPABILITIES], [test "x$HAVE_CAPABILITIES" != "x"])
 AM_CONDITIONAL([HAVE_GETMNTENT],    [test "x$HAVE_GETMNTENT"    != "x"])
 AM_CONDITIONAL([HAVE_PIVOTROOT],    [test "x$HAVE_PIVOTROOT"    != "x"])
+AM_CONDITIONAL([HAVE_CLUSTER],      [test "x$HAVE_CLUSTER"      != "x"])
 AM_CONDITIONAL([HAVE_UNSHARE],      [test "x$HAVE_UNSHARE"      != "x"])
 AM_CONDITIONAL([HAVE_SECCOMP],      [test "x$HAVE_SECCOMP"      != "x"])
 AM_CONDITIONAL([HAVE_TRE],          [test "x$HAVE_TRE"          != "x"])
