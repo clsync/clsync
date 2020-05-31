@@ -666,11 +666,21 @@ const char *parameter_get_wmacro ( const char *variable_name, void *_ctx_p )
 	return NULL;
 }
 
+/* Parameter exception flags */
+#define PEF_NONE                0
+#define PEF_UNEXPECTED_END      1
+#define PEF_UNSET_VARIABLE      2
+#define PEF_LAZY_SUBSTITUTION   4
 /**
  * @brief 			Expands option values, e. g. "/var/log/clsync-%label%.pid" -> "/var/log/clsync-clone.pid"
  *
  * @param[in]	ctx_p		Context
  * @param[in]	arg		An allocated string with unexpanded value. Will be free'd
+ * @param[in]	exceptionflags	A bit field of allowed exceptions during parameter expansion:
+ *        - PEF_NONE                No exceptions are allowed
+ *        - PEF_UNEXPECTED_END      Do not warn about unexpected end of macro-substitution
+ *        - PEF_UNSET_VARIABLE      Do not warn about unset variable
+ *        - PEF_LAZY_SUBSTITUTION   Perform lazy substitution preserving original value
  * @param[out]	macro_count_p	A pointer to count of found macro-s
  * @param[out]	expand_count_p	A pointer to count of expanded macro-s
  * @param[in]	parameter_get	A function to resolve macro-s
@@ -742,7 +752,7 @@ char *parameter_expand (
 							case 0:
 								ret[ret_len] = 0;
 
-								if ( ! ( exceptionflags & 1 ) )
+								if ( ! ( exceptionflags & PEF_UNEXPECTED_END ) )
 									warning ( "Unexpected end of macro-substitution \"%s\" in value \"%s\"; result value is \"%s\"", ptr, arg, ret );
 
 								free ( arg );
@@ -771,7 +781,7 @@ char *parameter_expand (
 
 										variable_value     = ctx_p->pid_str;
 										variable_value_len = ctx_p->pid_str_len;
-									} else if ( *variable_name >= 'A' && *variable_name <= 'Z' && ( exceptionflags & 4 ) ) {	// Lazy substitution, preserving the value
+									} else if ( *variable_name >= 'A' && *variable_name <= 'Z' && ( exceptionflags & PEF_LAZY_SUBSTITUTION ) ) {	// Lazy substitution, preserving the value
 										debug ( 35, "Lazy substitution", variable_name );
 										variable_value     =  ptr;
 										variable_value_len = ( ptr_nest - ptr + 1 );
@@ -782,7 +792,7 @@ char *parameter_expand (
 										variable_value = parameter_get ( variable_name, parameter_get_arg );
 
 										if ( variable_value == NULL ) {
-											if ( ! ( exceptionflags & 2 ) && ( errno != ENOENT ) )
+											if ( ! ( exceptionflags & PEF_UNSET_VARIABLE ) && ( errno != ENOENT ) )
 												warning ( "Variable \"%s\" is not set (%s)", variable_name, strerror ( errno ) );
 
 											*ptr_nest = '%';
@@ -1102,7 +1112,7 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 
 	if ( ( arg != NULL ) /*&& (paramsource != PS_REHASH)*/ ) {
 		if ( param_id != SYNCHANDLERARGS0 && param_id != SYNCHANDLERARGS1 )
-			arg = parameter_expand ( ctx_p, arg, 0, NULL, NULL, parameter_get, ctx_p );
+			arg = parameter_expand ( ctx_p, arg, PEF_NONE, NULL, NULL, parameter_get, ctx_p );
 
 		if ( ctx_p->flags_values_raw[param_id] != NULL )
 			free ( ctx_p->flags_values_raw[param_id] );
@@ -2779,14 +2789,14 @@ int main ( int _argc, char *_argv[] )
 #ifdef CGROUP_SUPPORT
 
 	if ( ctx_p->cg_groupname == NULL ) {
-		ctx_p->cg_groupname = parameter_expand ( ctx_p, strdup ( DEFAULT_CG_GROUPNAME ), 2, NULL, NULL, parameter_get, ctx_p );
+		ctx_p->cg_groupname = parameter_expand ( ctx_p, strdup ( DEFAULT_CG_GROUPNAME ), PEF_UNSET_VARIABLE, NULL, NULL, parameter_get, ctx_p );
 		ctx_p->flags_values_raw[CG_GROUPNAME] = ctx_p->cg_groupname;
 	}
 
 #endif
 
 	if ( ctx_p->dump_path == NULL ) {
-		ctx_p->dump_path = parameter_expand ( ctx_p, strdup ( DEFAULT_DUMPDIR ), 2, NULL, NULL, parameter_get, ctx_p );
+		ctx_p->dump_path = parameter_expand ( ctx_p, strdup ( DEFAULT_DUMPDIR ), PEF_UNSET_VARIABLE, NULL, NULL, parameter_get, ctx_p );
 		ctx_p->flags_values_raw[DUMPDIR] = ctx_p->dump_path;
 	}
 
@@ -3020,7 +3030,7 @@ int main ( int _argc, char *_argv[] )
 
 			while ( i < args_p->c ) {
 				int macros_count = -1, expanded = -1;
-				args_p->v[i] = parameter_expand ( ctx_p, args_p->v[i], 4, &macros_count, &expanded, parameter_get_wmacro, ctx_p );
+				args_p->v[i] = parameter_expand ( ctx_p, args_p->v[i], PEF_LAZY_SUBSTITUTION, &macros_count, &expanded, parameter_get_wmacro, ctx_p );
 				debug ( 12, "args_p->v[%u] == \"%s\" (t: %u; e: %u)", i, args_p->v[i], macros_count, expanded );
 
 				if ( macros_count == expanded )

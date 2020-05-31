@@ -1605,7 +1605,7 @@ static char **sync_customargv ( ctx_t *ctx_p, struct dosync_arg *dosync_arg_p, s
 				}
 
 #endif
-				argv[d++] = parameter_expand ( ctx_p, strdup ( include_list[i++] ), 0, NULL, NULL, sync_parameter_get, dosync_arg_p );
+				argv[d++] = parameter_expand ( ctx_p, strdup ( include_list[i++] ), PEF_NONE, NULL, NULL, sync_parameter_get, dosync_arg_p );
 #ifdef _DEBUG_FORCE
 				debug ( 19, "include-list: argv[%u] == %p", d - 1, argv[d - 1] );
 #endif
@@ -1622,7 +1622,7 @@ static char **sync_customargv ( ctx_t *ctx_p, struct dosync_arg *dosync_arg_p, s
 		}
 
 #endif
-		argv[d] = parameter_expand ( ctx_p, strdup ( arg ), 0, NULL, NULL, sync_parameter_get, dosync_arg_p );
+		argv[d] = parameter_expand ( ctx_p, strdup ( arg ), PEF_NONE, NULL, NULL, sync_parameter_get, dosync_arg_p );
 #ifdef _DEBUG_FORCE
 		debug ( 19, "argv[%u] == %p \"%s\"", d, argv[d], argv[d] );
 #endif
