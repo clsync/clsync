@@ -30,7 +30,7 @@
 /**
  * @brief 			Calculated Adler32 value for char array
  *
- * @param[in]	date		Pointer to data
+ * @param[in]	data		Pointer to data
  * @param[in]	len		Length of the data
  *
  * @retval	uint32_t	Adler32 value of data
