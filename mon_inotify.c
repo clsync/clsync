@@ -138,22 +138,22 @@ int inotify_handle ( ctx_t *ctx_p, indexes_t *indexes_p )
 			// Getting infomation about file/dir/etc
 			struct  recognize_event_return r = {0};
 			recognize_event ( &r, event->mask );
-			stat64_t lstat, *lstat_p;
+			stat64_t lst, *lst_p;
 			mode_t st_mode;
 			size_t st_size;
 
-			if ( ( r.objtype_new == EOT_DOESNTEXIST ) || ( ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT ) || privileged_lstat64 ( path_full, &lstat, PC_MON_HANDLE_LSTAT64 ) ) {
-				debug ( 2, "Cannot lstat64(\"%s\", lstat). Seems, that the object had been deleted (%i) or option \"--cancel-syscalls mon_stat\" (%i) is set.", path_full, r.objtype_new == EOT_DOESNTEXIST, ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT );
+			if ( ( r.objtype_new == EOT_DOESNTEXIST ) || ( ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT ) || privileged_lstat64 ( path_full, &lst, PC_MON_HANDLE_LSTAT64 ) ) {
+				debug ( 2, "Cannot lstat64(\"%s\", lst). Seems, that the object had been deleted (%i) or option \"--cancel-syscalls mon_stat\" (%i) is set.", path_full, r.objtype_new == EOT_DOESNTEXIST, ctx_p->flags[CANCEL_SYSCALLS]&CSC_MON_STAT );
 				st_mode = ( event->mask & IN_ISDIR ? S_IFDIR : S_IFREG );
 				st_size = 0;
-				lstat_p = NULL;
+				lst_p = NULL;
 			} else {
-				st_mode = lstat.st_mode;
-				st_size = lstat.st_size;
-				lstat_p = &lstat;
+				st_mode = lst.st_mode;
+				st_size = lst.st_size;
+				lst_p = &lst;
 			}
 
-			if ( sync_prequeue_loadmark ( 1, ctx_p, indexes_p, path_full, NULL, lstat_p, r.objtype_old, r.objtype_new, event->mask, event->wd, st_mode, st_size, &path_rel, &path_rel_len, NULL ) ) {
+			if ( sync_prequeue_loadmark ( 1, ctx_p, indexes_p, path_full, NULL, lst_p, r.objtype_old, r.objtype_new, event->mask, event->wd, st_mode, st_size, &path_rel, &path_rel_len, NULL ) ) {
 				count = -1;
 				goto l_inotify_handle_end;
 			}

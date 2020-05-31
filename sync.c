@@ -2080,9 +2080,9 @@ int sync_dosync ( const char *fpath, uint32_t evmask, ctx_t *ctx_p, indexes_t *i
 	return ret;
 }
 
-int fileischanged ( ctx_t *ctx_p, indexes_t *indexes_p, const char *path_rel, stat64_t *lstat_p, int is_deleted )
+int fileischanged ( ctx_t *ctx_p, indexes_t *indexes_p, const char *path_rel, stat64_t *lst_p, int is_deleted )
 {
-	if ( lstat_p == NULL || !ctx_p->flags[MODSIGN] )
+	if ( lst_p == NULL || !ctx_p->flags[MODSIGN] )
 		return 1;
 
 	debug ( 9, "Checking modification signature" );
@@ -2091,7 +2091,7 @@ int fileischanged ( ctx_t *ctx_p, indexes_t *indexes_p, const char *path_rel, st
 	if ( finfo != NULL ) {
 		uint32_t diff;
 
-		if ( ! ( diff = stat_diff ( &finfo->lstat, lstat_p ) & ctx_p->flags[MODSIGN] ) ) {
+		if ( ! ( diff = stat_diff ( &finfo->lst, lst_p ) & ctx_p->flags[MODSIGN] ) ) {
 			debug ( 8, "Modification signature: File not changed: \"%s\"", path_rel );
 			return 0;	// Skip file syncing if it's metadata not changed enough (according to "--modification-signature" setting)
 		}
@@ -2104,13 +2104,13 @@ int fileischanged ( ctx_t *ctx_p, indexes_t *indexes_p, const char *path_rel, st
 			free ( finfo );
 		} else {
 			debug ( 8, "Modification signature: Updating information about \"%s\"", path_rel );
-			memcpy ( &finfo->lstat, lstat_p, sizeof ( finfo->lstat ) );
+			memcpy ( &finfo->lst, lst_p, sizeof ( finfo->lst ) );
 		}
 	} else {
 		debug ( 8, "There's no information about this file/dir: \"%s\". Just remembering the current state.", path_rel );
 		// Adding file/dir information
 		finfo = xmalloc ( sizeof ( *finfo ) );
-		memcpy ( &finfo->lstat, lstat_p, sizeof ( finfo->lstat ) );
+		memcpy ( &finfo->lst, lst_p, sizeof ( finfo->lst ) );
 		indexes_fileinfo_add ( indexes_p, path_rel, finfo );
 	}
 
@@ -2149,7 +2149,7 @@ int sync_prequeue_loadmark
     const char *path_full,
     const char *path_rel,
 
-    stat64_t *lstat_p,
+    stat64_t *lst_p,
 
     eventobjtype_t objtype_old,
     eventobjtype_t objtype_new,
@@ -2171,7 +2171,7 @@ int sync_prequeue_loadmark
 	        indexes_p,
 	        path_full,
 	        path_rel,
-	        lstat_p,
+	        lst_p,
 	        objtype_old,
 	        objtype_new,
 	        event_mask,
@@ -2252,7 +2252,7 @@ int sync_prequeue_loadmark
 				}
 			}
 
-			fileischanged ( ctx_p, indexes_p, path_rel, lstat_p, is_deleted );	// Just to remember it's state
+			fileischanged ( ctx_p, indexes_p, path_rel, lst_p, is_deleted );	// Just to remember it's state
 			return 0;
 		} else if ( is_deleted ) {
 			debug ( 2, "Disappeared \".../%s\".", path_rel );
@@ -2263,7 +2263,7 @@ int sync_prequeue_loadmark
 		return 0;
 	}
 
-	if ( !fileischanged ( ctx_p, indexes_p, path_rel, lstat_p, is_deleted ) ) {
+	if ( !fileischanged ( ctx_p, indexes_p, path_rel, lst_p, is_deleted ) ) {
 		debug ( 4, "The file/dir is not changed. Returning." );
 		return 0;
 	}

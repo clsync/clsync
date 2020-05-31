@@ -81,7 +81,7 @@ extern int sync_prequeue_loadmark
     const char *path_full,
     const char *path_rel,
 
-    stat64_t *lstat_p,
+    stat64_t *lst_p,
 
     eventobjtype_t objtype_old,
     eventobjtype_t objtype_new,
