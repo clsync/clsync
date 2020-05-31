@@ -2737,12 +2737,13 @@ static inline int rsync_outline ( FILE *outf, char *outline, eventinfo_flags_t f
 	critical_on ( outf == NULL );
 #endif
 
+	// doxygen recognizes / * * as start of a doxy comment, so trick it with concatenated strings
 	if ( flags & EVIF_RECURSIVELY ) {
-		debug ( 3, "Recursively \"%s\": Writing to rsynclist: \"%s/***\".", outline, outline );
-		critical_on ( fprintf ( outf, "%s/***\n", outline ) <= 0 );
+		debug ( 3, "Recursively \"%s\": Writing to rsynclist: \"%s/*""**\".", outline, outline );
+		critical_on ( fprintf ( outf, "%s/*""**\n", outline ) <= 0 );
 	} else if ( flags & EVIF_CONTENTRECURSIVELY ) {
-		debug ( 3, "Content-recursively \"%s\": Writing to rsynclist: \"%s/**\".", outline, outline );
-		critical_on ( fprintf ( outf, "%s/**\n", outline )  <= 0 );
+		debug ( 3, "Content-recursively \"%s\": Writing to rsynclist: \"%s/*""*\".", outline, outline );
+		critical_on ( fprintf ( outf, "%s/*""*\n", outline )  <= 0 );
 	} else {
 		debug ( 3, "Non-recursively \"%s\": Writing to rsynclist: \"%s\".", outline, outline );
 		critical_on ( fprintf ( outf, "%s\n", outline )     <= 0 );
