@@ -1918,6 +1918,7 @@ int privileged_init ( ctx_t *ctx_p )
 		_privileged_fork_execvp		= __privileged_fork_execvp;
 		__privileged_fork_execvp_uid	= ctx_p->synchandler_uid;
 		__privileged_fork_execvp_gid	= ctx_p->synchandler_gid;
+		debug ( 5, "uid == %d; gid == %d", __privileged_fork_execvp_uid, __privileged_fork_execvp_gid );
 		_privileged_kill_child		= __privileged_kill_child_itself;
 #ifdef CAPABILITIES_SUPPORT
 		_privileged_lstat64		= ( typeof ( _privileged_lstat64 ) )			lstat64;
