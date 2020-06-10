@@ -11,9 +11,8 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 override_dh_auto_configure:
 	dh_auto_configure -- --enable-socket --enable-socket-library --enable-highload-locks --disable-seccomp
 
-override_dh_auto_install:
-	dh_auto_install
-	sed -i "/dependency_libs/ s/'.*'/''/" $$(find debian/tmp -name '*.la')
+execute_after_dh_auto_install:
+	sed --in-place "/dependency_libs/ s/'.*'/''/" $$(find debian/tmp -name '*.la')
 	-rm --verbose debian/tmp/usr/share/doc/clsync/LICENSE
 	-rm --verbose debian/tmp/usr/bin/gencompilerflags
 	-rm --verbose debian/tmp/usr/include/clsync/compilerflags.h
