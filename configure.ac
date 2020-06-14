@@ -213,6 +213,8 @@ case "$enable_lto" in
 		case $target_cpu in
 			*e2k*)
 				LTOFLAGS="-fwhole"
+				saved_cflags="$CFLAGS"
+				CFLAGS="${CFLAGS} -g0" # -fwhole requires -g0
 				;;
 			*)
 				LTOFLAGS="-flto=jobserver"
@@ -224,7 +226,12 @@ case "$enable_lto" in
 		# AS_IF([test "$have_lto_build" = '1' -a "$have_lto_link" = '1'],
 		AS_IF([test "$have_lto_build" = '1'],
 			[HAVE_LTO=1; AC_SUBST([LTOFLAGS])],
-			[AS_IF([test "$enable_lto" = 'yes'], [AC_MSG_ERROR([LTO is requested, but not supported by compiler])])]
+			[AS_IF([test "$enable_lto" = 'yes'], [AC_MSG_ERROR([LTO is requested, but not supported by compiler])])
+			case $target_cpu in
+				*e2k*)
+					CFLAGS="$saved_cflags"
+			esac
+			]
 		)
 		;;
 esac
