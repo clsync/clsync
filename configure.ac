@@ -210,7 +210,7 @@ AC_ARG_ENABLE(lto,
 
 case "$enable_lto" in
 	check|yes)
-		case $target_os in
+		case $target_cpu in
 			*e2k*)
 				LTOFLAGS="-fwhole"
 				;;
