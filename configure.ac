@@ -55,7 +55,7 @@ AS_HELP_STRING(--disable-clsync,
 [do not build clsync binary, default: build clsync]))
 AM_CONDITIONAL([CLSYNC], [test "x$enable_clsync" != "xno"])
 
-dnl check for glibc only if clsync is being build
+dnl check for glib only if clsync is being build
 AS_IF([test "x$enable_clsync" != "xno"], [
     PKG_CHECK_MODULES(GLIB,  [glib-2.0])
 ])
