@@ -200,6 +200,33 @@ case "$enable_seccomp" in
 		;;
 esac
 
+dnl Check for LTO support
+AC_ARG_ENABLE(lto,
+	AS_HELP_STRING(--enable-lto,
+		[Enable LTO (link time optimization) support; values: no, check, yes; default: check]),
+	,
+	[enable_lto=check]
+)
+
+case "$enable_lto" in
+	check|yes)
+		case $target_os in
+			*e2k*)
+				LTOFLAGS="-fwhole"
+				;;
+			*)
+				LTOFLAGS="-flto=jobserver"
+				;;
+		esac
+		AX_CHECK_COMPILE_FLAG([$LTOFLAGS], [have_lto_build=1])
+		AX_CHECK_LINK_FLAG([$LTOFLAGS], [have_lto_link=1])
+		AS_IF([test "$have_lto_build" = '1' -a "$have_lto_link" = '1'],
+			[HAVE_LTO=1; AC_SUBST([LTOFLAGS])],
+			[AS_IF([test "$enable_lto" = 'yes'], [AC_MSG_ERROR([LTO is requested, but not supported by compiler])])]
+		)
+		;;
+esac
+
 # Checks for programs.
 AC_PROG_CC_C99
 AC_PROG_INSTALL
@@ -489,6 +516,7 @@ AM_CONDITIONAL([HAVE_TRE],          [test "x$HAVE_TRE"          != "x"])
 AM_CONDITIONAL([HAVE_LIBCGROUP],    [test "x$HAVE_LIBCGROUP"    != "x"])
 AM_CONDITIONAL([HAVE_PTHREAD_TIMEDJOIN_NP], [test "x$HAVE_PTHREAD_TIMEDJOIN_NP" != "x"])
 AM_CONDITIONAL([HAVE_CALC],         [test "x$HAVE_CALC"         != "x"])
+AM_CONDITIONAL([HAVE_LTO],          [test "x$HAVE_LTO"          != "x"])
 
 AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' -a "$HAVE_GIO" = '' -a "x$enable_clsync" != "xno"],
 [AC_MSG_FAILURE([At least one monitoring engine must be enabled!

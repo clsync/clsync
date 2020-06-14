@@ -77,13 +77,15 @@ endif
 if HAVE_CALC
 clsync_SOURCES += calc.c calc.h
 endif
-
 if HLLOCKS
 clsync_CFLAGS  += -DHL_LOCKS
 endif
-
 if SOCKET
 clsync_SOURCES += socket.c control.c program.h
+endif
+if HAVE_LTO
+clsync_CFLAGS  += $(LTOFLAGS)
+clsync_LDFLAGS += $(LTOFLAGS)
 endif
 
 gencompilerflags_CFLAGS = $(clsync_CFLAGS)
