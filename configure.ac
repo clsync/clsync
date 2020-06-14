@@ -18,7 +18,7 @@ LT_INIT
 
 PKG_INSTALLDIR
 
-AC_CANONICAL_HOST
+AC_CANONICAL_TARGET
 
 m4_include(m4/ax_pthread.m4)
 AX_PTHREAD(
@@ -33,7 +33,7 @@ AX_PTHREAD(
 )
 
 
-case $host_os in
+case $target_os in
 	*bsd*)
 		AC_SEARCH_LIBS([backtrace], [execinfo], [HAVE_BACKTRACE=1])
 		;;
@@ -42,7 +42,7 @@ case $host_os in
 		;;
 esac
 
-case $host_os in
+case $target_os in
 	*musl*)
 		# musl uses stand-alone fts implementation
 		LDFLAGS="${LDFLAGS} -lfts"
