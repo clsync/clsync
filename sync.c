@@ -189,7 +189,7 @@ int exitcode_process ( ctx_t *ctx_p, int exitcode )
 
 threadsinfo_t *thread_info()  	// TODO: optimize this
 {
-	static threadsinfo_t threadsinfo = {{{{0}}}, {{{{0}}}}, 0, 0, 0, NULL, NULL, 0};
+	static threadsinfo_t threadsinfo = {0};
 
 	if ( !threadsinfo.mutex_init ) {
 		int i = 0;
