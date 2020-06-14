@@ -556,7 +556,7 @@ int clsyncapi_getapiversion()
  * @brief 			Gets raw (string) an option value by an option name
  *
  * @param[in]	_ctx_p		Context
- @ @param[in]	variable_name	The name of the option
+ * @param[in]	variable_name	The name of the option
  *
  * @retval	char *		Pointer to constant string, if successful
  * @retval	NULL		On error
@@ -625,7 +625,7 @@ const char *parameter_get_name_by_id ( const uint16_t param_id )
  * 				updates ctx_p->synchandler_argf
  *
  * @param[in]	_ctx_p		Context
- @ @param[in]	variable_name	The name of the option
+ * @param[in]	variable_name	The name of the option
  *
  * @retval	char *		Pointer to newly allocated string, if successful
  * @retval	NULL		On error
