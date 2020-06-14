@@ -1236,58 +1236,6 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 
 # endif
 
-		case PRIVILEGEDUID: {
-				struct passwd *pwd = getpwnam ( arg );
-				ctx_p->flags[param_id]++;
-
-				if ( pwd == NULL ) {
-					ctx_p->privileged_uid = ( unsigned int ) xstrtol_trim ( arg, &ret );
-					break;
-				}
-
-				ctx_p->privileged_uid = pwd->pw_uid;
-				break;
-			}
-
-		case PRIVILEGEDGID: {
-				struct group *grp = getgrnam ( arg );
-				ctx_p->flags[param_id]++;
-
-				if ( grp == NULL ) {
-					ctx_p->privileged_gid = ( unsigned int ) xstrtol_trim ( arg, &ret );
-					break;
-				}
-
-				ctx_p->privileged_gid = grp->gr_gid;
-				break;
-			}
-
-		case SYNCHANDLERUID: {
-				struct passwd *pwd = getpwnam ( arg );
-				ctx_p->flags[param_id]++;
-
-				if ( pwd == NULL ) {
-					ctx_p->synchandler_uid = ( unsigned int ) xstrtol_trim ( arg, &ret );
-					break;
-				}
-
-				ctx_p->synchandler_uid = pwd->pw_uid;
-				break;
-			}
-
-		case SYNCHANDLERGID: {
-				struct group *grp = getgrnam ( arg );
-				ctx_p->flags[param_id]++;
-
-				if ( grp == NULL ) {
-					ctx_p->synchandler_gid = ( unsigned int ) xstrtol_trim ( arg, &ret );
-					break;
-				}
-
-				ctx_p->synchandler_gid = grp->gr_gid;
-				break;
-			}
-
 		case CAP_PRESERVE: {
 				char *subopts = arg;
 				ctx_p->caps  = 0;
@@ -1325,6 +1273,66 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 			}
 
 #endif
+
+		case PRIVILEGEDUID: {
+				struct passwd *pwd = getpwnam ( arg );
+				ctx_p->flags[param_id]++;
+
+				if ( pwd == NULL ) {
+					ctx_p->privileged_uid = ( unsigned int ) xstrtol_trim ( arg, &ret );
+					debug ( 5, "ctx_p->privileged_uid == %d (case 0)", ctx_p->privileged_uid );
+					break;
+				}
+
+				debug ( 5, "ctx_p->privileged_uid == %d (case 1)", ctx_p->privileged_uid );
+				ctx_p->privileged_uid = pwd->pw_uid;
+				break;
+			}
+
+		case PRIVILEGEDGID: {
+				struct group *grp = getgrnam ( arg );
+				ctx_p->flags[param_id]++;
+
+				if ( grp == NULL ) {
+					ctx_p->privileged_gid = ( unsigned int ) xstrtol_trim ( arg, &ret );
+					debug ( 5, "ctx_p->privileged_gid == %d (case 0)", ctx_p->privileged_gid );
+					break;
+				}
+
+				debug ( 5, "ctx_p->privileged_gid == %d (case 1)", ctx_p->privileged_gid );
+				ctx_p->privileged_gid = grp->gr_gid;
+				break;
+			}
+
+		case SYNCHANDLERUID: {
+				struct passwd *pwd = getpwnam ( arg );
+				ctx_p->flags[param_id]++;
+
+				if ( pwd == NULL ) {
+					ctx_p->synchandler_uid = ( unsigned int ) xstrtol_trim ( arg, &ret );
+					debug ( 5, "ctx_p->synchandler_uid == %d (case 0)", ctx_p->synchandler_uid );
+					break;
+				}
+
+				debug ( 5, "ctx_p->synchandler_uid == %d (case 1)", ctx_p->synchandler_uid );
+				ctx_p->synchandler_uid = pwd->pw_uid;
+				break;
+			}
+
+		case SYNCHANDLERGID: {
+				struct group *grp = getgrnam ( arg );
+				ctx_p->flags[param_id]++;
+
+				if ( grp == NULL ) {
+					ctx_p->synchandler_gid = ( unsigned int ) xstrtol_trim ( arg, &ret );
+					debug ( 5, "ctx_p->synchandler_gid == %d (case 0)", ctx_p->synchandler_gid );
+					break;
+				}
+
+				debug ( 5, "ctx_p->synchandler_gid == %d (case 1)", ctx_p->synchandler_gid );
+				ctx_p->synchandler_gid = grp->gr_gid;
+				break;
+			}
 
 		case CHROOT:
 			if ( paramsource == PS_CONTROL ) {
@@ -2774,6 +2782,9 @@ int main ( int _argc, char *_argv[] )
 		if ( nret ) ret = nret;
 	}
 
+	debug ( 5, "after arguments_parse(): uid == %d, gid == %d, privileged_uid == %d, privileged_gid == %d, synchandler_uid == %d, synchandler_gid == %d",
+		ctx_p->uid, ctx_p->gid, ctx_p->privileged_uid, ctx_p->privileged_gid, ctx_p->synchandler_uid, ctx_p->synchandler_gid )
+
 	if ( !ctx_p->flags[PRIVILEGEDUID] )
 		ctx_p->privileged_uid = getuid();
 
@@ -2785,6 +2796,9 @@ int main ( int _argc, char *_argv[] )
 
 	if ( !ctx_p->flags[SYNCHANDLERGID] )
 		ctx_p->synchandler_gid = ctx_p->privileged_gid;
+
+	debug ( 4, "uid == %d, gid == %d, privileged_uid == %d, privileged_gid == %d, synchandler_uid == %d, synchandler_gid == %d",
+		ctx_p->uid, ctx_p->gid, ctx_p->privileged_uid, ctx_p->privileged_gid, ctx_p->synchandler_uid, ctx_p->synchandler_gid )
 
 #ifdef CGROUP_SUPPORT
 
