@@ -219,8 +219,10 @@ case "$enable_lto" in
 				;;
 		esac
 		AX_CHECK_COMPILE_FLAG([$LTOFLAGS], [have_lto_build=1])
-		AX_CHECK_LINK_FLAG([$LTOFLAGS], [have_lto_link=1])
-		AS_IF([test "$have_lto_build" = '1' -a "$have_lto_link" = '1'],
+		# not all autoconf implementations support this
+		# AX_CHECK_LINK_FLAG([$LTOFLAGS], [have_lto_link=1])
+		# AS_IF([test "$have_lto_build" = '1' -a "$have_lto_link" = '1'],
+		AS_IF([test "$have_lto_build" = '1'],
 			[HAVE_LTO=1; AC_SUBST([LTOFLAGS])],
 			[AS_IF([test "$enable_lto" = 'yes'], [AC_MSG_ERROR([LTO is requested, but not supported by compiler])])]
 		)
