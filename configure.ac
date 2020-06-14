@@ -3,6 +3,7 @@
 
 AC_PREREQ([2.59])
 AC_INIT([clsync],[0.4.4],[Dmitry Yu Okunev <xaionaro@gmail.com>],,[https://github.com/clsync/clsync])
+AC_CANONICAL_TARGET
 AC_CONFIG_SRCDIR([sync.c])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([1.11 foreign -Wall -Wno-portability])
@@ -17,8 +18,6 @@ AM_PROG_LIBTOOL
 LT_INIT
 
 PKG_INSTALLDIR
-
-AC_CANONICAL_TARGET
 
 m4_include(m4/ax_pthread.m4)
 AX_PTHREAD(
