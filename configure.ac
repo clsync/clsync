@@ -538,3 +538,7 @@ AC_SUBST(PACKAGE_URL)
 
 AC_CONFIG_FILES([Makefile examples/Makefile pkgconfig/libclsync.pc program.h])
 AC_OUTPUT
+
+# workaround automake bug with "jobserver unavailable" in lto mode
+m4_pattern_allow(AM_V_CCLD)
+[sed -i 's/$(AM_V_CCLD)/+$(AM_V_CCLD)/' Makefile]

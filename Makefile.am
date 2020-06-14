@@ -96,7 +96,7 @@ compilerflags.h: gencompilerflags
 	./gencompilerflags > compilerflags.h
 
 gencompilerflags:
-	$(CC) $(gencompilerflags_CFLAGS) gencompilerflags.c -o gencompilerflags
+	+$(CC) $(gencompilerflags_CFLAGS) gencompilerflags.c -o gencompilerflags
 
 dist_man_MANS = man/man1/clsync.1
 endif
