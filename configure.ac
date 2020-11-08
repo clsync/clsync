@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.59])
-AC_INIT([clsync],[0.4.4],[Dmitry Yu Okunev <xaionaro@gmail.com>],,[https://github.com/clsync/clsync])
+AC_INIT([clsync],[0.4.5],[Dmitry Yu Okunev <xaionaro@gmail.com>],,[https://github.com/clsync/clsync])
 AC_CANONICAL_TARGET
 AC_CONFIG_SRCDIR([sync.c])
 AC_CONFIG_MACRO_DIR([m4])
