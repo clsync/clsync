@@ -27,7 +27,7 @@
 #include "malloc.h"
 
 struct fileinfo {
-	stat64_t lstat;
+	stat64_t lst;
 };
 typedef struct fileinfo fileinfo_t;
 

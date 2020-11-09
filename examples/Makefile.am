@@ -11,7 +11,8 @@ dist_example_SCRIPTS = clsync-start-cluster.sh			\
 	clsync-start-rsyncdirect.sh clsync-start-rsyncshell.sh	\
 	clsync-start-rsyncso.sh clsync-start-so.sh		\
 	clsync-synchandler-rsyncshell.sh \
-	clsync-systemd.sh
+	clsync-systemd.sh \
+	test.sh
 
 # find production -type f -name '*.sh'
 nobase_dist_example_SCRIPTS =					\

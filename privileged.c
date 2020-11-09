@@ -1102,8 +1102,8 @@ int privileged_handler ( ctx_t *ctx_p )
 						memcpy ( &ret_buf->ftsent, ret, sizeof ( ret_buf->ftsent ) );
 						cmd_ret_p->ret = &ret_buf->ftsent;
 						debug ( 25, "fts_path == <%s>", ret_buf->fts_path );
-						strncpy ( ret_buf->fts_accpath, ret->fts_accpath, sizeof ( ret_buf->fts_accpath ) );
-						strncpy ( ret_buf->fts_path,    ret->fts_path,    sizeof ( ret_buf->fts_path ) );
+						xstrncpy ( ret_buf->fts_accpath, ret->fts_accpath, sizeof ( ret_buf->fts_accpath ) );
+						xstrncpy ( ret_buf->fts_path,    ret->fts_path,    sizeof ( ret_buf->fts_path ) );
 						ret_buf->ftsent.fts_accpath = ret_buf->fts_accpath;
 						ret_buf->ftsent.fts_path    = ret_buf->fts_path;
 					}
@@ -1485,7 +1485,7 @@ int __privileged_lstat64_procsplit (
 )
 {
 	void *ret = ( void * ) ( long ) - 1;
-	strcpy ( ( char * ) cmd_p->arg.lstat64.path_buf, path );
+	xstrncpy ( ( char * ) cmd_p->arg.lstat64.path_buf, path, PATH_MAX );
 	privileged_action (
 # ifdef HL_LOCK_TRIES_AUTO
 	    callid,
@@ -1533,7 +1533,7 @@ FTS *__privileged_fts_open_procsplit (
 	while ( path_argv[i] != NULL ) {
 		cmd_p->arg.fts_open.path_argv[i] = ( void * ) cmd_p->arg.fts_open._path_argv[i];
 		debug ( 25, "path_argv[%i] == <%s> (%p) -> %p", i, path_argv[i], path_argv[i], cmd_p->arg.fts_open.path_argv[i] );
-		strncpy ( cmd_p->arg.fts_open.path_argv[i], path_argv[i], sizeof ( cmd_p->arg.fts_open._path_argv[i] ) );
+		xstrncpy ( cmd_p->arg.fts_open.path_argv[i], path_argv[i], sizeof ( cmd_p->arg.fts_open._path_argv[i] ) );
 		i++;
 		critical_on ( i >= MAXARGUMENTS );
 	}
@@ -1674,7 +1674,7 @@ int __privileged_inotify_add_watch_procsplit (
 {
 	debug ( 25, "(%i, <%s>, o%o, ?)", fd, pathname, mask );
 	void *ret = ( void * ) ( long ) - 1;
-	strncpy ( ( void * ) cmd_p->arg.inotify_add_watch.pathname, pathname, sizeof ( cmd_p->arg.inotify_add_watch.pathname ) );
+	xstrncpy ( ( void * ) cmd_p->arg.inotify_add_watch.pathname, pathname, sizeof ( cmd_p->arg.inotify_add_watch.pathname ) );
 	cmd_p->arg.inotify_add_watch.fd		= fd;
 	cmd_p->arg.inotify_add_watch.mask	= mask;
 	privileged_action (
@@ -1728,12 +1728,12 @@ int __privileged_fork_setuid_execvp_procsplit (
 {
 	int i;
 	void *ret = ( void * ) ( long ) - 1;
-	strncpy ( ( void * ) cmd_p->arg.fork_execvp.file, file, sizeof ( cmd_p->arg.fork_execvp.file ) );
+	xstrncpy ( ( void * ) cmd_p->arg.fork_execvp.file, file, sizeof ( cmd_p->arg.fork_execvp.file ) );
 	i = 0;
 
 	while ( argv[i] != NULL ) {
 		cmd_p->arg.fork_execvp.argv[i] = ( void * ) cmd_p->arg.fork_execvp._argv[i];
-		strncpy ( cmd_p->arg.fork_execvp.argv[i], argv[i], sizeof ( cmd_p->arg.fork_execvp._argv[i] ) );
+		xstrncpy ( cmd_p->arg.fork_execvp.argv[i], argv[i], sizeof ( cmd_p->arg.fork_execvp._argv[i] ) );
 		i++;
 		critical_on ( i >= MAXARGUMENTS );
 	}
@@ -1918,6 +1918,7 @@ int privileged_init ( ctx_t *ctx_p )
 		_privileged_fork_execvp		= __privileged_fork_execvp;
 		__privileged_fork_execvp_uid	= ctx_p->synchandler_uid;
 		__privileged_fork_execvp_gid	= ctx_p->synchandler_gid;
+		debug ( 5, "uid == %d; gid == %d", __privileged_fork_execvp_uid, __privileged_fork_execvp_gid );
 		_privileged_kill_child		= __privileged_kill_child_itself;
 #ifdef CAPABILITIES_SUPPORT
 		_privileged_lstat64		= ( typeof ( _privileged_lstat64 ) )			lstat64;

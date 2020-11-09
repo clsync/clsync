@@ -542,7 +542,7 @@ int version()
 	    " -DHL_LOCKS"
 #endif
 	    ;
-	info ( PROGRAM" v%i.%i.%i"REVISION"\n\t"AUTHOR"\n\nCompiled with options: %s"
+	info ( PROGRAM" v%i.%i.%i"REVISION"\n\t"AUTHOR"\n\t"URL"\n\nCompiled with options: %s"
 	       , VERSION_MAJ, VERSION_MID, VERSION_MIN, flags );
 	exit ( 0 );
 }
@@ -556,7 +556,7 @@ int clsyncapi_getapiversion()
  * @brief 			Gets raw (string) an option value by an option name
  *
  * @param[in]	_ctx_p		Context
- @ @param[in]	variable_name	The name of the option
+ * @param[in]	variable_name	The name of the option
  *
  * @retval	char *		Pointer to constant string, if successful
  * @retval	NULL		On error
@@ -625,7 +625,7 @@ const char *parameter_get_name_by_id ( const uint16_t param_id )
  * 				updates ctx_p->synchandler_argf
  *
  * @param[in]	_ctx_p		Context
- @ @param[in]	variable_name	The name of the option
+ * @param[in]	variable_name	The name of the option
  *
  * @retval	char *		Pointer to newly allocated string, if successful
  * @retval	NULL		On error
@@ -666,11 +666,21 @@ const char *parameter_get_wmacro ( const char *variable_name, void *_ctx_p )
 	return NULL;
 }
 
+/* Parameter exception flags */
+#define PEF_NONE                0
+#define PEF_UNEXPECTED_END      1
+#define PEF_UNSET_VARIABLE      2
+#define PEF_LAZY_SUBSTITUTION   4
 /**
  * @brief 			Expands option values, e. g. "/var/log/clsync-%label%.pid" -> "/var/log/clsync-clone.pid"
  *
  * @param[in]	ctx_p		Context
  * @param[in]	arg		An allocated string with unexpanded value. Will be free'd
+ * @param[in]	exceptionflags	A bit field of allowed exceptions during parameter expansion:
+ *        - PEF_NONE                No exceptions are allowed
+ *        - PEF_UNEXPECTED_END      Do not warn about unexpected end of macro-substitution
+ *        - PEF_UNSET_VARIABLE      Do not warn about unset variable
+ *        - PEF_LAZY_SUBSTITUTION   Perform lazy substitution preserving original value
  * @param[out]	macro_count_p	A pointer to count of found macro-s
  * @param[out]	expand_count_p	A pointer to count of expanded macro-s
  * @param[in]	parameter_get	A function to resolve macro-s
@@ -742,7 +752,7 @@ char *parameter_expand (
 							case 0:
 								ret[ret_len] = 0;
 
-								if ( ! ( exceptionflags & 1 ) )
+								if ( ! ( exceptionflags & PEF_UNEXPECTED_END ) )
 									warning ( "Unexpected end of macro-substitution \"%s\" in value \"%s\"; result value is \"%s\"", ptr, arg, ret );
 
 								free ( arg );
@@ -771,7 +781,7 @@ char *parameter_expand (
 
 										variable_value     = ctx_p->pid_str;
 										variable_value_len = ctx_p->pid_str_len;
-									} else if ( *variable_name >= 'A' && *variable_name <= 'Z' && ( exceptionflags & 4 ) ) {	// Lazy substitution, preserving the value
+									} else if ( *variable_name >= 'A' && *variable_name <= 'Z' && ( exceptionflags & PEF_LAZY_SUBSTITUTION ) ) {	// Lazy substitution, preserving the value
 										debug ( 35, "Lazy substitution", variable_name );
 										variable_value     =  ptr;
 										variable_value_len = ( ptr_nest - ptr + 1 );
@@ -782,7 +792,7 @@ char *parameter_expand (
 										variable_value = parameter_get ( variable_name, parameter_get_arg );
 
 										if ( variable_value == NULL ) {
-											if ( ! ( exceptionflags & 2 ) && ( errno != ENOENT ) )
+											if ( ! ( exceptionflags & PEF_UNSET_VARIABLE ) && ( errno != ENOENT ) )
 												warning ( "Variable \"%s\" is not set (%s)", variable_name, strerror ( errno ) );
 
 											*ptr_nest = '%';
@@ -1102,7 +1112,7 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 
 	if ( ( arg != NULL ) /*&& (paramsource != PS_REHASH)*/ ) {
 		if ( param_id != SYNCHANDLERARGS0 && param_id != SYNCHANDLERARGS1 )
-			arg = parameter_expand ( ctx_p, arg, 0, NULL, NULL, parameter_get, ctx_p );
+			arg = parameter_expand ( ctx_p, arg, PEF_NONE, NULL, NULL, parameter_get, ctx_p );
 
 		if ( ctx_p->flags_values_raw[param_id] != NULL )
 			free ( ctx_p->flags_values_raw[param_id] );
@@ -1226,58 +1236,6 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 
 # endif
 
-		case PRIVILEGEDUID: {
-				struct passwd *pwd = getpwnam ( arg );
-				ctx_p->flags[param_id]++;
-
-				if ( pwd == NULL ) {
-					ctx_p->privileged_uid = ( unsigned int ) xstrtol_trim ( arg, &ret );
-					break;
-				}
-
-				ctx_p->privileged_uid = pwd->pw_uid;
-				break;
-			}
-
-		case PRIVILEGEDGID: {
-				struct group *grp = getgrnam ( arg );
-				ctx_p->flags[param_id]++;
-
-				if ( grp == NULL ) {
-					ctx_p->privileged_gid = ( unsigned int ) xstrtol_trim ( arg, &ret );
-					break;
-				}
-
-				ctx_p->privileged_gid = grp->gr_gid;
-				break;
-			}
-
-		case SYNCHANDLERUID: {
-				struct passwd *pwd = getpwnam ( arg );
-				ctx_p->flags[param_id]++;
-
-				if ( pwd == NULL ) {
-					ctx_p->synchandler_uid = ( unsigned int ) xstrtol_trim ( arg, &ret );
-					break;
-				}
-
-				ctx_p->synchandler_uid = pwd->pw_uid;
-				break;
-			}
-
-		case SYNCHANDLERGID: {
-				struct group *grp = getgrnam ( arg );
-				ctx_p->flags[param_id]++;
-
-				if ( grp == NULL ) {
-					ctx_p->synchandler_gid = ( unsigned int ) xstrtol_trim ( arg, &ret );
-					break;
-				}
-
-				ctx_p->synchandler_gid = grp->gr_gid;
-				break;
-			}
-
 		case CAP_PRESERVE: {
 				char *subopts = arg;
 				ctx_p->caps  = 0;
@@ -1315,6 +1273,66 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 			}
 
 #endif
+
+		case PRIVILEGEDUID: {
+				struct passwd *pwd = getpwnam ( arg );
+				ctx_p->flags[param_id]++;
+
+				if ( pwd == NULL ) {
+					ctx_p->privileged_uid = ( unsigned int ) xstrtol_trim ( arg, &ret );
+					debug ( 5, "ctx_p->privileged_uid == %d (case 0)", ctx_p->privileged_uid );
+					break;
+				}
+
+				debug ( 5, "ctx_p->privileged_uid == %d (case 1)", ctx_p->privileged_uid );
+				ctx_p->privileged_uid = pwd->pw_uid;
+				break;
+			}
+
+		case PRIVILEGEDGID: {
+				struct group *grp = getgrnam ( arg );
+				ctx_p->flags[param_id]++;
+
+				if ( grp == NULL ) {
+					ctx_p->privileged_gid = ( unsigned int ) xstrtol_trim ( arg, &ret );
+					debug ( 5, "ctx_p->privileged_gid == %d (case 0)", ctx_p->privileged_gid );
+					break;
+				}
+
+				debug ( 5, "ctx_p->privileged_gid == %d (case 1)", ctx_p->privileged_gid );
+				ctx_p->privileged_gid = grp->gr_gid;
+				break;
+			}
+
+		case SYNCHANDLERUID: {
+				struct passwd *pwd = getpwnam ( arg );
+				ctx_p->flags[param_id]++;
+
+				if ( pwd == NULL ) {
+					ctx_p->synchandler_uid = ( unsigned int ) xstrtol_trim ( arg, &ret );
+					debug ( 5, "ctx_p->synchandler_uid == %d (case 0)", ctx_p->synchandler_uid );
+					break;
+				}
+
+				debug ( 5, "ctx_p->synchandler_uid == %d (case 1)", ctx_p->synchandler_uid );
+				ctx_p->synchandler_uid = pwd->pw_uid;
+				break;
+			}
+
+		case SYNCHANDLERGID: {
+				struct group *grp = getgrnam ( arg );
+				ctx_p->flags[param_id]++;
+
+				if ( grp == NULL ) {
+					ctx_p->synchandler_gid = ( unsigned int ) xstrtol_trim ( arg, &ret );
+					debug ( 5, "ctx_p->synchandler_gid == %d (case 0)", ctx_p->synchandler_gid );
+					break;
+				}
+
+				debug ( 5, "ctx_p->synchandler_gid == %d (case 1)", ctx_p->synchandler_gid );
+				ctx_p->synchandler_gid = grp->gr_gid;
+				break;
+			}
 
 		case CHROOT:
 			if ( paramsource == PS_CONTROL ) {
@@ -1886,7 +1904,7 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 					char user[USER_LEN + 2], group[GROUP_LEN + 2];
 					memcpy ( user, arg, MIN ( USER_LEN, colon - arg ) );
 					user[colon - arg] = 0;
-					strncpy ( group, &colon[1], GROUP_LEN );
+					xstrncpy ( group, &colon[1], GROUP_LEN );
 					errno = 0;
 					struct passwd *pwent = getpwnam ( user );
 
@@ -2764,6 +2782,9 @@ int main ( int _argc, char *_argv[] )
 		if ( nret ) ret = nret;
 	}
 
+	debug ( 5, "after arguments_parse(): uid == %d, gid == %d, privileged_uid == %d, privileged_gid == %d, synchandler_uid == %d, synchandler_gid == %d",
+		ctx_p->uid, ctx_p->gid, ctx_p->privileged_uid, ctx_p->privileged_gid, ctx_p->synchandler_uid, ctx_p->synchandler_gid )
+
 	if ( !ctx_p->flags[PRIVILEGEDUID] )
 		ctx_p->privileged_uid = getuid();
 
@@ -2776,17 +2797,20 @@ int main ( int _argc, char *_argv[] )
 	if ( !ctx_p->flags[SYNCHANDLERGID] )
 		ctx_p->synchandler_gid = ctx_p->privileged_gid;
 
+	debug ( 4, "uid == %d, gid == %d, privileged_uid == %d, privileged_gid == %d, synchandler_uid == %d, synchandler_gid == %d",
+		ctx_p->uid, ctx_p->gid, ctx_p->privileged_uid, ctx_p->privileged_gid, ctx_p->synchandler_uid, ctx_p->synchandler_gid )
+
 #ifdef CGROUP_SUPPORT
 
 	if ( ctx_p->cg_groupname == NULL ) {
-		ctx_p->cg_groupname = parameter_expand ( ctx_p, strdup ( DEFAULT_CG_GROUPNAME ), 2, NULL, NULL, parameter_get, ctx_p );
+		ctx_p->cg_groupname = parameter_expand ( ctx_p, strdup ( DEFAULT_CG_GROUPNAME ), PEF_UNSET_VARIABLE, NULL, NULL, parameter_get, ctx_p );
 		ctx_p->flags_values_raw[CG_GROUPNAME] = ctx_p->cg_groupname;
 	}
 
 #endif
 
 	if ( ctx_p->dump_path == NULL ) {
-		ctx_p->dump_path = parameter_expand ( ctx_p, strdup ( DEFAULT_DUMPDIR ), 2, NULL, NULL, parameter_get, ctx_p );
+		ctx_p->dump_path = parameter_expand ( ctx_p, strdup ( DEFAULT_DUMPDIR ), PEF_UNSET_VARIABLE, NULL, NULL, parameter_get, ctx_p );
 		ctx_p->flags_values_raw[DUMPDIR] = ctx_p->dump_path;
 	}
 
@@ -3020,7 +3044,7 @@ int main ( int _argc, char *_argv[] )
 
 			while ( i < args_p->c ) {
 				int macros_count = -1, expanded = -1;
-				args_p->v[i] = parameter_expand ( ctx_p, args_p->v[i], 4, &macros_count, &expanded, parameter_get_wmacro, ctx_p );
+				args_p->v[i] = parameter_expand ( ctx_p, args_p->v[i], PEF_LAZY_SUBSTITUTION, &macros_count, &expanded, parameter_get_wmacro, ctx_p );
 				debug ( 12, "args_p->v[%u] == \"%s\" (t: %u; e: %u)", i, args_p->v[i], macros_count, expanded );
 
 				if ( macros_count == expanded )

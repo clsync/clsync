@@ -34,28 +34,29 @@ char *fd2fpath_malloc ( int fd )
 		return NULL;
 	}
 
-	char *fpath = xmalloc ( ( 1 << 8 ) + 2 );
-	sprintf ( fpath, "/proc/self/fd/%i", fd );
+	char *fsym = xmalloc ( ( 1 << 8 ) + 2 );
+	sprintf ( fsym, "/proc/self/fd/%i", fd );
 
-	if ( lstat64 ( fpath, &st64 ) ) {
-		error ( "Cannot lstat64(\"%s\", st64).", fpath );
+	if ( lstat64 ( fsym, &st64 ) ) {
+		error ( "Cannot lstat64(\"%s\", st64).", fsym );
 		return NULL;
 	}
 
 	ssize_t fpathlen = st64.st_size;
 
-	if ( fpathlen > ( 1 << 8 ) )
-		fpath = xrealloc ( fpath, fpathlen + 2 );
+	char *fpath = xmalloc ( fpathlen + 2 );
 
-	debug ( 3, "Getting file path from symlink \"%s\". Path length is: %i.", fpath, fpathlen );
+	debug ( 3, "Getting file path from symlink \"%s\". Path length is: %i.", fsym, fpathlen );
 
-	if ( ( fpathlen = readlink ( fpath, fpath, fpathlen + 1 ) ) < 0 ) {
-		error ( "Cannot readlink(\"%s\", fpath, bufsize).", fpath );
+	if ( ( fpathlen = readlink ( fsym, fpath, fpathlen + 1 ) ) < 0 ) {
+		error ( "Cannot readlink(\"%s\", fpath, bufsize).", fsym );
+        free(fsym);
 		return NULL;
 	}
 
-	debug ( 3, "The path is: \"%s\"", fpath );
 	fpath[fpathlen] = 0;
+	debug ( 3, "The path is: \"%s\"", fpath );
+	free(fsym);
 	return fpath;
 #else
 	critical ( "Function fd2fpath_malloc() is not supported in this OS" );
@@ -168,8 +169,8 @@ short int fileutils_calcdirlevel ( const char *path )
  * @brief 			Combination of mkdirat() and openat()
  *
  * @param[in]	dir_path	Path to directory to create and open
- @ @param[in]	dirfd_parent	File descriptor of directory for relative paths
- @ @param[in]	dir_mode	Modes for newly created directory (e.g. 750)
+ * @param[in]	dirfd_parent	File descriptor of directory for relative paths
+ * @param[in]	dir_mode	Modes for newly created directory (e.g. 750)
  *
  * @retval	dirfd		File descriptor to newly created directory
  * @retval	NULL		On error
@@ -192,11 +193,11 @@ int mkdirat_open ( const char *const dir_path, int dirfd_parent, mode_t dir_mode
 	return dirfd;
 }
 
-/**
+/*
  * @brief 			Opens a directory with open()
  *
  * @param[out]	fd_p		Pointer to the result file descriptor
- @ @param[in]	dir_path	Path to the directory
+ * @param[in]	dir_path	Path to the directory
  *
  * @retval	*fd_p		On success
  * @retval	-1		On error

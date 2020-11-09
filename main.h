@@ -27,6 +27,11 @@ extern int main_status_update ( ctx_t *ctx_p );
 extern int ctx_set ( ctx_t *ctx_p, const char *const parameter_name, const char *const parameter_value );
 extern int config_block_parse ( ctx_t *ctx_p, const char *const config_block_name );
 extern int rules_count ( ctx_t *ctx_p );
+/* Parameter exception flags */
+#define PEF_NONE                0
+#define PEF_UNEXPECTED_END      1
+#define PEF_UNSET_VARIABLE      2
+#define PEF_LAZY_SUBSTITUTION   4
 extern char *parameter_expand (
     ctx_t *ctx_p,
     char *arg,

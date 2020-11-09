@@ -86,6 +86,16 @@ rm -rf %{buildroot}
 %{_includedir}/clsync/*
 
 %changelog
+* Sun Nov 08 2020 Andrew A. Savchenko <bircoph@gmail.com> - 0.4.5-1
+- Fix build on musl, avoid glibc-specific code.
+- Do not ignore *-{uid,gid} settings if no CAPABILITIES_SUPPORT.
+- Fix potential buffer problems in string and memory operations.
+- Add LTO support, support -fwhole on E2K arch.
+- Optimize checks using (un)likely.
+- Autogenerate program.h
+- Fix doxygen issues.
+- Fix build using autoconf-2.70.
+
 * Sat Apr 25 2020 Andrew A. Savchenko <bircoph@gmail.com> - 0.4.4-1
 - Add --sync-on-quit option.
 - Support TMPDIR environment variable.

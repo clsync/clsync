@@ -4,9 +4,9 @@ SUBDIRS = examples
 if CLSYNC
 bin_PROGRAMS = clsync
 
-clsync_SOURCES = calc.c cluster.c error.c fileutils.c glibex.c		\
+clsync_SOURCES = error.c fileutils.c glibex.c		\
 	indexes.c main.c malloc.c rules.c stringex.c sync.c		\
-	posix-hacks.c privileged.c pthreadex.c calc.h cluster.h		\
+	posix-hacks.c privileged.c pthreadex.c  		\
 	fileutils.h glibex.h main.h port-hacks.h posix-hacks.h		\
 	pthreadex.h stringex.h sync.h common.h control.h privileged.h	\
 	rules.h syscalls.h
@@ -70,13 +70,22 @@ if HAVE_LIBCGROUP
 clsync_CFLAGS  += -DCGROUP_SUPPORT
 clsync_SOURCES += cgroup.c cgroup.h
 endif
-
+if HAVE_CLUSTER
+clsync_CFLAGS  += -DCLUSTER_SUPPORT
+clsync_SOURCES += cluster.c cluster.h
+endif
+if HAVE_CALC
+clsync_SOURCES += calc.c calc.h
+endif
 if HLLOCKS
 clsync_CFLAGS  += -DHL_LOCKS
 endif
-
 if SOCKET
 clsync_SOURCES += socket.c control.c program.h
+endif
+if HAVE_LTO
+clsync_CFLAGS  += $(LTOFLAGS)
+clsync_LDFLAGS += $(LTOFLAGS)
 endif
 
 gencompilerflags_CFLAGS = $(clsync_CFLAGS)
@@ -87,7 +96,7 @@ compilerflags.h: gencompilerflags
 	./gencompilerflags > compilerflags.h
 
 gencompilerflags:
-	$(CC) $(gencompilerflags_CFLAGS) gencompilerflags.c -o gencompilerflags
+	+$(CC) $(gencompilerflags_CFLAGS) gencompilerflags.c -o gencompilerflags
 
 dist_man_MANS = man/man1/clsync.1
 endif
@@ -98,18 +107,13 @@ EXTRA_DIST = .doxygen .travis.sh .travis.yml NOTES SHORTHANDS freebsd debian gen
 
 if LIBCLSYNC
 lib_LTLIBRARIES = libclsync.la
-libclsync_la_SOURCES = malloc.c libclsync.c socket.c error.c
+libclsync_la_SOURCES = malloc.c libclsync.c socket.c error.c pthreadex.c
 libclsync_la_LDFLAGS = -version-info 0:0:0
 endif
 
 REVISION=$(shell [ -d .git ] &&\
-	(echo -n \
-		'\".'$$(($$(git log 2>/dev/null \
-			| grep -c ^commit \
-			| tr -d "\n" \
-			)-1083 \
-		))'\"' \
-	) || echo -n '\"-release\"' )
+	echo -n '\".'$$(git rev-list --count $$(git tag -l 'v*' --sort='taggerdate')..HEAD)'\"'\
+	|| echo -n '\"-release\"' )
 
 AM_CFLAGS := -DREVISION=$(REVISION)
 

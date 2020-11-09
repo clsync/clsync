@@ -23,7 +23,6 @@
  */
 
 #include <stdlib.h>
-#include <execinfo.h>
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -38,6 +37,10 @@
 
 #include "error.h"
 #include "pthreadex.h"	/* pthread_*_shared() */
+
+#ifdef BACKTRACE_SUPPORT
+#include <execinfo.h>
+#endif
 
 static int zero     = 0;
 static int three    = 3;
@@ -156,9 +159,9 @@ static void syslog_flush ( int level )
 	_syslog_buffer_filled = 0;
 }
 
-typedef int  * (  *outfunct_t ) ( const char *format, ... );
-typedef int  * ( *voutfunct_t ) ( const char *format, va_list ap );
-typedef void * ( *flushfunct_t ) ( int level );
+typedef int  (  *outfunct_t ) ( const char *format, ... );
+typedef int  ( *voutfunct_t ) ( const char *format, va_list ap );
+typedef void ( *flushfunct_t ) ( int level );
 
 static outfunct_t outfunct[] = {
 	[OM_STDERR]	= ( outfunct_t ) printf_stderr,

@@ -13,7 +13,8 @@
 #	define PARANOIDV(...)
 #endif
 
-#ifdef _GNU_SOURCE
+// gcc, clang and lcc support __builtin_expect and define __GNUC__
+#ifdef __GNUC__
 #	ifndef likely
 #		define likely(x)    __builtin_expect(!!(x), 1)
 #	endif
@@ -49,12 +50,12 @@
 #define MSG_SECURITY_PROBLEM(a) "Security problem: "a". Don't use this application until the bug will be fixed. Report about the problem to: "AUTHOR
 
 #define require_strlen_le(str, limit) \
-	if (strlen(str) >= limit)\
+	if (unlikely( strlen(str) >= limit ))\
 		critical("length of "TOSTR(str)" (\"%s\") >= "TOSTR(limit));\
 	 
 #define SAFE(code, onfail) __extension__({\
 		long _SAFE_rc;\
-		if ((_SAFE_rc = code)) {\
+		if (unlikely((_SAFE_rc = code))) {\
 			error("Got error while "TOSTR(code));\
 			onfail;\
 		} \

@@ -2,7 +2,8 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.59])
-AC_INIT([clsync],[0.4.4],[Dmitry Yu Okunev <xaionaro@gmail.com>],,[https://github.com/clsync/clsync])
+AC_INIT([clsync],[0.4.5],[Dmitry Yu Okunev <xaionaro@gmail.com>],,[https://github.com/clsync/clsync])
+AC_CANONICAL_TARGET
 AC_CONFIG_SRCDIR([sync.c])
 AC_CONFIG_MACRO_DIR([m4])
 AM_INIT_AUTOMAKE([1.11 foreign -Wall -Wno-portability])
@@ -10,15 +11,12 @@ AC_CONFIG_HEADERS([config.h])
 AC_PROG_CC([gcc cc])
 AM_PROG_CC_C_O
 AC_PROG_CC_STDC
-AC_CONFIG_MACRO_DIR([m4])
 AC_PROG_LIBTOOL
 AM_PROG_LIBTOOL
 
 LT_INIT
 
 PKG_INSTALLDIR
-
-AC_CANONICAL_HOST
 
 m4_include(m4/ax_pthread.m4)
 AX_PTHREAD(
@@ -33,12 +31,19 @@ AX_PTHREAD(
 )
 
 
-case $host_os in
+case $target_os in
 	*bsd*)
 		AC_SEARCH_LIBS([backtrace], [execinfo], [HAVE_BACKTRACE=1])
 		;;
 	*)
 		AC_CHECK_HEADER([execinfo.h], [HAVE_BACKTRACE=1])
+		;;
+esac
+
+case $target_os in
+	*musl*)
+		# musl uses stand-alone fts implementation
+		LDFLAGS="${LDFLAGS} -lfts"
 		;;
 esac
 
@@ -48,7 +53,7 @@ AS_HELP_STRING(--disable-clsync,
 [do not build clsync binary, default: build clsync]))
 AM_CONDITIONAL([CLSYNC], [test "x$enable_clsync" != "xno"])
 
-dnl check for glibc only if clsync is being build
+dnl check for glib only if clsync is being build
 AS_IF([test "x$enable_clsync" != "xno"], [
     PKG_CHECK_MODULES(GLIB,  [glib-2.0])
 ])
@@ -59,6 +64,7 @@ AS_HELP_STRING(--enable-cluster,
 [enable clustering support (not yet implemented), default: no]))
 
 AS_IF([test "x$enable_cluster" = "xyes"], [CPPFLAGS="${CPPFLAGS} -DCLUSTER_SUPPORT"
+	HAVE_CLUSTER=1
 	dnl mhash check
 	AC_ARG_WITH(mhash,
 	AS_HELP_STRING(--with-mhash,
@@ -190,6 +196,42 @@ case "$enable_seccomp" in
 		AS_IF([test "$HAVE_CAPABILITIES" != ''], [
 		AC_CHECK_TYPES([struct seccomp_data], [HAVE_SECCOMP=1], ,                                                      [[#include <linux/seccomp.h>]])
 		])
+		;;
+esac
+
+dnl Check for LTO support
+AC_ARG_ENABLE(lto,
+	AS_HELP_STRING(--enable-lto,
+		[Enable LTO (link time optimization) support; values: no, check, yes; default: check]),
+	,
+	[enable_lto=check]
+)
+
+case "$enable_lto" in
+	check|yes)
+		case $target_cpu in
+			*e2k*)
+				LTOFLAGS="-fwhole"
+				saved_cflags="$CFLAGS"
+				CFLAGS="${CFLAGS} -g0" # -fwhole requires -g0
+				;;
+			*)
+				LTOFLAGS="-flto=jobserver"
+				;;
+		esac
+		AX_CHECK_COMPILE_FLAG([$LTOFLAGS], [have_lto_build=1])
+		# not all autoconf implementations support this
+		# AX_CHECK_LINK_FLAG([$LTOFLAGS], [have_lto_link=1])
+		# AS_IF([test "$have_lto_build" = '1' -a "$have_lto_link" = '1'],
+		AS_IF([test "$have_lto_build" = '1'],
+			[HAVE_LTO=1; AC_SUBST([LTOFLAGS])],
+			[AS_IF([test "$enable_lto" = 'yes'], [AC_MSG_ERROR([LTO is requested, but not supported by compiler])])
+			case $target_cpu in
+				*e2k*)
+					CFLAGS="$saved_cflags"
+			esac
+			]
+		)
 		;;
 esac
 
@@ -461,6 +503,9 @@ esac
 
 AS_IF([test "$HAVE_INOTIFY" != ""], [AC_CHECK_FUNC([inotify_init1], [], [INOTIFY_OLD=1])])
 
+dnl calc is used only in kqueue and cluster code
+AS_IF([test "$HAVE_KQUEUE" != "" -o "$HAVE_CLUSTER" != ""], [HAVE_CALC=1])
+
 AM_CONDITIONAL([HAVE_KQUEUE],       [test "x$HAVE_KQUEUE"       != "x"])
 AM_CONDITIONAL([HAVE_INOTIFY],      [test "x$HAVE_INOTIFY"      != "x"])
 AM_CONDITIONAL([INOTIFY_OLD],       [test "x$INOTIFY_OLD"       != "x"])
@@ -472,13 +517,16 @@ AM_CONDITIONAL([HAVE_BACKTRACE],    [test "x$HAVE_BACKTRACE"    != "x"])
 AM_CONDITIONAL([HAVE_CAPABILITIES], [test "x$HAVE_CAPABILITIES" != "x"])
 AM_CONDITIONAL([HAVE_GETMNTENT],    [test "x$HAVE_GETMNTENT"    != "x"])
 AM_CONDITIONAL([HAVE_PIVOTROOT],    [test "x$HAVE_PIVOTROOT"    != "x"])
+AM_CONDITIONAL([HAVE_CLUSTER],      [test "x$HAVE_CLUSTER"      != "x"])
 AM_CONDITIONAL([HAVE_UNSHARE],      [test "x$HAVE_UNSHARE"      != "x"])
 AM_CONDITIONAL([HAVE_SECCOMP],      [test "x$HAVE_SECCOMP"      != "x"])
 AM_CONDITIONAL([HAVE_TRE],          [test "x$HAVE_TRE"          != "x"])
 AM_CONDITIONAL([HAVE_LIBCGROUP],    [test "x$HAVE_LIBCGROUP"    != "x"])
 AM_CONDITIONAL([HAVE_PTHREAD_TIMEDJOIN_NP], [test "x$HAVE_PTHREAD_TIMEDJOIN_NP" != "x"])
+AM_CONDITIONAL([HAVE_CALC],         [test "x$HAVE_CALC"         != "x"])
+AM_CONDITIONAL([HAVE_LTO],          [test "x$HAVE_LTO"          != "x"])
 
-AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' -a  "$HAVE_GIO" = ''],
+AS_IF([test "$HAVE_KQUEUE" = '' -a "$HAVE_INOTIFY" = '' -a "$HAVE_FANOTIFY" = '' -a "$HAVE_BSM" = '' -a "$HAVE_GIO" = '' -a "x$enable_clsync" != "xno"],
 [AC_MSG_FAILURE([At least one monitoring engine must be enabled!
 Available (depending on system): inotify, kqueue, gio, bsm])])
 
@@ -486,6 +534,19 @@ LIBS="${GLIB_LIBS} ${LIBS}"
 AM_CPPFLAGS="${GLIB_CFLAGS}"
 AC_SUBST(AM_CPPFLAGS)
 
+dnl Generating program.h
+VER_MAJ=$(echo $VERSION | cut -d'.' -f1)
+VER_MID=$(echo $VERSION | cut -d'.' -f2)
+VER_MIN=$(echo $VERSION | cut -d'.' -f3)
+AC_SUBST(VER_MAJ)
+AC_SUBST(VER_MID)
+AC_SUBST(VER_MIN)
+AC_SUBST(PACKAGE_BUGREPORT)
+AC_SUBST(PACKAGE_URL)
 
-AC_CONFIG_FILES([Makefile examples/Makefile pkgconfig/libclsync.pc])
+AC_CONFIG_FILES([Makefile examples/Makefile pkgconfig/libclsync.pc program.h])
 AC_OUTPUT
+
+# workaround automake bug with "jobserver unavailable" in lto mode
+m4_pattern_allow(AM_V_CCLD)
+[sed -i 's/$(AM_V_CCLD)/+$(AM_V_CCLD)/' Makefile]

@@ -312,11 +312,11 @@ l_parse_rules_fromfile_end:
 /**
  * @brief 			Checks file path by rules' expressions (parsed from file)
  *
- * @param[in] 	fpath		Path to file of directory
- * @param[in] 	st_mode		st_mode received via *stat() functions
- * @param[in] 	rules_p		Pointer to start of rules array
- * @param[in] 	ruleaction	Operaton ID (see ruleaction_t)
- * @param[i/o] 	rule_pp		Pointer to pointer to rule, where the last search ended. Next search will be started from the specified rule. Can be "NULL" to disable this feature.
+ * @param[in]       fpath		Path to file of directory
+ * @param[in]       st_mode		st_mode received via *stat() functions
+ * @param[in]       rules_p		Pointer to start of rules array
+ * @param[in]       ruleaction	Operaton ID (see ruleaction_t)
+ * @param[in,out]   rule_pp		Pointer to pointer to rule, where the last search ended. Next search will be started from the specified rule. Can be "NULL" to disable this feature.
  *
  * @retval	perm		Permission bitmask
  *

@@ -1,6 +1,7 @@
 # dynamical headers:
 /revision.h
 /compilerflags.h
+/program.h
 
 # complied:
 *.o
