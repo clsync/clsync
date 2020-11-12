@@ -737,7 +737,15 @@ char *parameter_expand (
 
 			case '%': {
 					if ( ptr[1] == '%' ) {
-						ret[ret_len++] = * ( ptr++ );
+						if (likely( ret != NULL ))
+							ret[ret_len++] = * ( ptr++ );
+						else {
+							ret_size = ALLOC_PORTION + 2;
+							ret      = xrealloc ( ret, ret_size );
+							ret[0]   = '%';
+							ret_len  = 1;
+							ptr++;
+						}
 						break;
 					}
 
@@ -750,7 +758,10 @@ char *parameter_expand (
 
 						switch ( *ptr_nest ) {
 							case 0:
-								ret[ret_len] = 0;
+								if (likely( ret != NULL ))
+									ret[ret_len] = 0;
+								else
+									ret = strdup(arg);
 
 								if ( ! ( exceptionflags & PEF_UNEXPECTED_END ) )
 									warning ( "Unexpected end of macro-substitution \"%s\" in value \"%s\"; result value is \"%s\"", ptr, arg, ret );
