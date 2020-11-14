@@ -38,12 +38,12 @@ To disable string option (for example path to file) set to empty string:
 	=
 .RE
 
-Also you can use previously set values while setting new options. Substring
+Also you can use previously set values while setting new options. Macro
 .IR %option_name%
 will be substituted with previously set value of option
 .IR option_name .
 (see 
-.BR "CONFIGURATION FILE" )
+.BR "CONFIGURATION FILE" " and " "MACRO SUBSTITUTIONS" )
 
 .I sync\-handler\-arguments
 applies only to modes:
@@ -1851,7 +1851,7 @@ With
 it's passed bitmask of events with the file or directory (see 
 "/usr/include/linux/inotify.h").
 
-Additional substitutions:
+Additional macro substitutions:
 .RS
 .B %EVENT\-MASK%
 .RS
@@ -1879,7 +1879,7 @@ are:
 %INCLUDE\-LIST% %destination\-dir%/
 .RE
 
-Additional substitutions:
+Additional macro substitutions:
 .RS
 .B %INCLUDE\-LIST%
 .RS
@@ -1924,7 +1924,7 @@ Also
 is supposed to recursively sync data from directory by path
 %INCLUDE\-LIST\-PATH% with manual excluding extra files on "initialsync".
 
-Additional substitutions:
+Additional macro substitutions:
 .RS
 .B %TYPE%
 .RS
@@ -1976,7 +1976,7 @@ Error code "24" from
 .I sync\-handler
 will be ignored in this case. We also recommend to ignore exitcode "23".
 
-Additional substitutions:
+Additional macro substitutions:
 .RS
 .B %INCLUDE\-LIST\-PATH%
 .RS
@@ -2036,7 +2036,7 @@ if option
 .I \-\-rsync\-prefer\-include
 is disabled.
 
-Additional substitutions:
+Additional macro substitutions:
 .RS
 .B %INCLUDE\-LIST\-PATH%
 .RS
