@@ -2596,6 +2596,60 @@ By default
 uses block with name "default". Block name can be set by option
 .IR \-\-config\-block .
 
+.SH MACRO SUBSTITUTIONS
+
+Both configuration file and command line options may contain macros
+in the form of
+.I %name%
+substituted as follows:
+.P
+\(bu If value
+.I name
+was defined, it will be substituted in place of the
+.I %name%
+macro. Values can be defined as:
+.RS
+\(bu\ command line or config file
+.I options
+(command line takes precedence over config);
+.br
+\(bu\ clsync-generated
+.IR substitutions ,
+e.g. %INCLUDE-LIST%. Such substitutions are context dependent and
+described within appropriate options descriptions, e.g. see
+.BR "SYNC HANDLER MODES" .
+.RE
+.P
+\(bu
+.I %%
+is treated as plain
+.I %
+symbol than is not a part of a macro definition except for the case
+when first
+.I %
+symbol is the end of previous macro.
+.P
+\(bu
+All unrecognized macros and non-terminated macro definitions
+(including single
+.IR % )
+are treated as plain text without any substitution.
+
+Examples:
+.RS
+[default]
+.br
+label = default
+.br
+.RI "pid\-file = /var/run/clsync\-" %label% ".pid \-> pid\-file = /var/run/clsync-" default .pid
+.br
+watch-dir = mydir
+.br
+.RI "destination\-dir = /backup/" %label% / %watch-dir% " \-> destination\-dir = /backup/" default / mydir
+.br
+.RI "\-\- " %% file %% " %invalid%" %label% "%label \-> \-\- " % file % " %invalid%" default %label
+.RE
+
 .SH CLUSTERING
 
 Not implemented yet.
