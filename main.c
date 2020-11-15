@@ -759,7 +759,16 @@ char *parameter_expand (
 						switch ( *ptr_nest ) {
 							case 0:
 								if (likely( ret != NULL ))
+								{
+									size_t tail_len = ptr_nest - ptr;
+									if ( ret_len + tail_len + 2 >= ret_size ) {
+										ret_size += ALLOC_PORTION + 2;
+										ret       = xrealloc ( ret, ret_size );
+									}
+									memcpy ( &ret[ret_len], ptr, tail_len );
+									ret_len += tail_len;
 									ret[ret_len] = 0;
+								}
 								else
 									ret = strdup(arg);
 
