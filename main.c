@@ -736,16 +736,16 @@ char *parameter_expand (
 				return ret;
 
 			case '%': {
+					// If "%%" keep only single "%"
 					if ( ptr[1] == '%' ) {
-						if (likely( ret != NULL ))
-							ret[ret_len++] = * ( ptr++ );
-						else {
+						debug ( 20, "Replacing %%%% as plain %%");
+						if (unlikely( ret == NULL ))
+						{
 							ret_size = ALLOC_PORTION + 2;
 							ret      = xrealloc ( ret, ret_size );
-							ret[0]   = '%';
-							ret_len  = 1;
-							ptr++;
 						}
+						ret[ret_len++] = '%';
+						ptr++;
 						break;
 					}
 
