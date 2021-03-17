@@ -1,3 +1,9 @@
+clsync (0.4.5-2) unstable; urgency=medium
+
+  * Remove dependency on libcgroup-dev
+
+ -- Dmitrii Okunev <xaionaro@gmail.com>  Wed, 17 Mar 2021 20:18:47 +0000
+
 clsync (0.4.5-1) unstable; urgency=medium
 
   [ Andrew Savchenko]
