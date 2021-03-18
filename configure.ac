@@ -1,8 +1,8 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.59])
-AC_INIT([clsync],[0.4.5],[Dmitry Yu Okunev <xaionaro@gmail.com>],,[https://github.com/clsync/clsync])
+AC_PREREQ([2.69])
+AC_INIT([clsync],[0.4.5],[Dmitry Yu Okunev <xaionaro@gmail.com>],[],[https://github.com/clsync/clsync])
 AC_CANONICAL_TARGET
 AC_CONFIG_SRCDIR([sync.c])
 AC_CONFIG_MACRO_DIR([m4])
@@ -11,14 +11,11 @@ AC_CONFIG_HEADERS([config.h])
 AC_PROG_CC([gcc cc])
 AM_PROG_CC_C_O
 AC_PROG_CC_STDC
-AC_PROG_LIBTOOL
-AM_PROG_LIBTOOL
 
 LT_INIT
 
 PKG_INSTALLDIR
 
-m4_include(m4/ax_pthread.m4)
 AX_PTHREAD(
 	[
 		CC="$PTHREAD_CC"
