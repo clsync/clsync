@@ -60,16 +60,14 @@ for example:
 of our systems.
 - It's a little buggy (it crashed on our cases).
 - Sometimes, it's too complex in configuration for our situation (not flexible
-enough). For example it doesn't have another event-collecting delay for big files.
-We don't want to sync big files (`>1GiB`) so often as ordinary files.
-- Shared object (.so file) cannot be used as rsync-wrapper.
+enough).
 - It doesn't support kqueue/bsm (we also had a FreeBSD-based system).
-- It's not secure enough. No builtin containerization support to reduce risks.
-- ... and other tiny problems...
+etc
 
-"lsyncd" - is a good and useful utility, just did not fit to our needs will
-enough. And we spent enough much time on tuning "lsyncd" to realize that we
-could've write an new solution sharpened by our tasks. So there it is :)
+Long story short: "lsyncd" - is a good and useful utility, just did not
+fit to our needs well enough. And we spent enough much time on tuning
+"lsyncd" to realize that we could've already write a new tool
+specialized to our tasks. So there it is :)
 
 Also `clsync` had been used for some other tiny tasks, like to replace
 incron/csync2/etc in our HPC-clusters for syncing /etc/{passwd,shadow,group,shells}
