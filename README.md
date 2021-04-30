@@ -151,6 +151,10 @@ Next step is installing. To install usually it's enough to execute:
 
     su -c 'make install'
 
+### Static build
+
+    ./configure --without-libcgroup --without-gio --disable-shared && make clean all -j 8 LDFLAGS='-all-static' && ldd ./clsync
+
 
 5 - How to use
 --------------
