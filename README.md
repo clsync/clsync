@@ -151,9 +151,13 @@ Next step is installing. To install usually it's enough to execute:
 
     su -c 'make install'
 
-### Static build
+### Portable binary
 
-    ./configure --without-libcgroup --without-gio --disable-shared && make clean all -j 8 LDFLAGS='-all-static' && ldd ./clsync
+It is also possible to build a portable static binary:
+
+    ./configure --without-libcgroup --without-gio --disable-shared
+    make clean all -j$(nproc) LDFLAGS='-all-static'
+    ldd ./clsync
 
 
 5 - How to use
