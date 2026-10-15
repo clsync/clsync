@@ -1204,6 +1204,8 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 				arg = "process";
 			}
 
+# endif
+
 		case SPLITTING: {
 				char *value, *arg_orig = arg;
 
@@ -1244,8 +1246,6 @@ __extension__ static int parse_parameter ( ctx_t *ctx_p, uint16_t param_id, char
 
 				break;
 			}
-
-# endif
 
 		case CAP_PRESERVE: {
 				char *subopts = arg;
