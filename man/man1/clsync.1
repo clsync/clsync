@@ -1239,6 +1239,8 @@ Is set to "clsync/%PID%" by default.
 
 .B \-\-secure\-splitting
 .RS
+.B [Linux only, requires seccomp support]
+
 Implies "\-\-splitting=process \-\-check\-execvp\-arguments \-\-seccomp\-filter
 \-\-forbid\-devices"
 .RE
@@ -1522,7 +1524,7 @@ Is not set by default.
 
 .B \-\-seccomp\-filter
 .RS
-.B [Linux only]
+.B [Linux only, requires seccomp support]
 
 Use
 .B seccomp
