@@ -142,7 +142,9 @@ AS_IF(
 		CPPFLAGS="${CPPFLAGS} -D_FORTIFY_SOURCE=2 -DPARANOID"
 		CFLAGS="${CFLAGS} -fstack-protector-all -Wall --param ssp-buffer-size=4"
 		LDFLAGS="${LDFLAGS} -Xlinker -zrelro"
-		AX_CHECK_COMPILE_FLAG([-fstack-check], [CFLAGS="${CFLAGS} -fstack-check"])
+		AX_CHECK_COMPILE_FLAG([-fstack-clash-protection], [CFLAGS="${CFLAGS} -fstack-clash-protection"],
+			[AX_CHECK_COMPILE_FLAG([-fstack-check], [CFLAGS="${CFLAGS} -fstack-check"])]
+		)
 	]
 )
 AS_IF([test $paranoid -eq 2], [CPPFLAGS="${CPPFLAGS} -DVERYPARANOID"])
