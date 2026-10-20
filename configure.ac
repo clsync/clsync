@@ -1,7 +1,7 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-AC_PREREQ([2.69])
+AC_PREREQ([2.73])
 AC_INIT([clsync],[0.4.5],[Dmitry Yu Okunev <xaionaro@gmail.com>],[],[https://github.com/clsync/clsync])
 AC_CANONICAL_TARGET
 AC_CONFIG_SRCDIR([sync.c])
@@ -10,7 +10,6 @@ AM_INIT_AUTOMAKE([1.11 foreign -Wall -Wno-portability])
 AC_CONFIG_HEADERS([config.h])
 AC_PROG_CC([gcc cc])
 AM_PROG_CC_C_O
-AC_PROG_CC_STDC
 
 LT_INIT
 
@@ -143,7 +142,9 @@ AS_IF(
 		CPPFLAGS="${CPPFLAGS} -D_FORTIFY_SOURCE=2 -DPARANOID"
 		CFLAGS="${CFLAGS} -fstack-protector-all -Wall --param ssp-buffer-size=4"
 		LDFLAGS="${LDFLAGS} -Xlinker -zrelro"
-		AX_CHECK_COMPILE_FLAG([-fstack-check], [CFLAGS="${CFLAGS} -fstack-check"])
+		AX_CHECK_COMPILE_FLAG([-fstack-clash-protection], [CFLAGS="${CFLAGS} -fstack-clash-protection"],
+			[AX_CHECK_COMPILE_FLAG([-fstack-check], [CFLAGS="${CFLAGS} -fstack-check"])]
+		)
 	]
 )
 AS_IF([test $paranoid -eq 2], [CPPFLAGS="${CPPFLAGS} -DVERYPARANOID"])
@@ -233,7 +234,7 @@ case "$enable_lto" in
 esac
 
 # Checks for programs.
-AC_PROG_CC_C99
+AC_PROG_CC
 AC_PROG_INSTALL
 PKG_PROG_PKG_CONFIG([0.20])
 
