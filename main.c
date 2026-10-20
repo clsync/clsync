@@ -427,7 +427,7 @@ int parent_isalive()
 	return 1;
 }
 
-void child_sigchld()
+void child_sigchld( int )
 {
 	if ( getppid() != 1 )
 		return;
@@ -437,7 +437,7 @@ void child_sigchld()
 	return;
 }
 
-int sethandler_sigchld ( void ( *handler ) () )
+int sethandler_sigchld ( void ( *handler ) ( int ) )
 {
 	struct sigaction sa;
 	sa.sa_handler = handler;
@@ -451,7 +451,7 @@ int sethandler_sigchld ( void ( *handler ) () )
 void *watchforparent ( void *parent_pid_p )
 {
 	while ( 1 ) {
-		child_sigchld();
+		child_sigchld( 0 );
 		sleep ( SLEEP_SECONDS );
 	}
 
